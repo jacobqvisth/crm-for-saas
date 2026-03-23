@@ -1,10 +1,6 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+import { ContactDetailClient } from '@/components/contacts/contact-detail-client';
 
-export default function ContactDetailPage() {
-  return (
-    <PlaceholderPage
-      title="Contact Details"
-      description="View contact details, activity history, and sequence enrollment status."
-    />
-  );
+export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <ContactDetailClient contactId={id} />;
 }

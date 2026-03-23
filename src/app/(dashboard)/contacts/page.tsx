@@ -1,10 +1,10 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+import { Suspense } from 'react';
+import { ContactsPageClient } from '@/components/contacts/contacts-page-client';
 
 export default function ContactsPage() {
   return (
-    <PlaceholderPage
-      title="Contacts"
-      description="Manage your contacts, import from CSV, and track engagement across sequences."
-    />
+    <Suspense>
+      <ContactsPageClient />
+    </Suspense>
   );
 }

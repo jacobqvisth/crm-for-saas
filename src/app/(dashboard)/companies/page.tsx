@@ -1,10 +1,10 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+import { Suspense } from 'react';
+import { CompaniesPageClient } from '@/components/companies/companies-page-client';
 
 export default function CompaniesPage() {
   return (
-    <PlaceholderPage
-      title="Companies"
-      description="View and manage company records, track associated contacts and deals."
-    />
+    <Suspense>
+      <CompaniesPageClient />
+    </Suspense>
   );
 }
