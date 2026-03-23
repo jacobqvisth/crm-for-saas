@@ -120,201 +120,219 @@ export function CsvImportWizard() {
   })();
 
   const startImport = async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      toast.error('Workspace not loaded. Please refresh the page and try again.');
+      return;
+    }
+
+    const emailHeader = Object.entries(mapping).find(([, v]) => v === 'email')?.[0];
+    if (!emailHeader) {
+      toast.error('Email column is not mapped. Please go back and map the email column.');
+      return;
+    }
+
+    if (!file) {
+      toast.error('No file selected. Please go back and upload a CSV file.');
+      return;
+    }
+
     setImporting(true);
     setStep(4);
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    // Fetch lists for dropdown (in step 3)
-    const emailHeader = Object.entries(mapping).find(([, v]) => v === 'email')?.[0];
-    if (!emailHeader) return;
-
-    // Re-parse the full file for import
-    const allRows: CsvRow[] = [];
-    await new Promise<void>((resolve) => {
-      Papa.parse(file!, {
-        header: true,
-        skipEmptyLines: true,
-        step: (result) => { allRows.push(result.data as CsvRow); },
-        complete: () => resolve(),
+      // Re-parse the full file for import
+      const allRows: CsvRow[] = [];
+      await new Promise<void>((resolve, reject) => {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          step: (result) => { allRows.push(result.data as CsvRow); },
+          complete: () => resolve(),
+          error: (err) => reject(err),
+        });
       });
-    });
 
-    const BATCH_SIZE = 500;
-    let imported = 0;
-    let updated = 0;
-    let skipped = 0;
-    let errors = 0;
-    const errorRows: CsvRow[] = [];
+      const BATCH_SIZE = 500;
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+      let errors = 0;
+      const errorRows: CsvRow[] = [];
 
-    setProgress({ current: 0, total: allRows.length });
+      setProgress({ current: 0, total: allRows.length });
 
-    // Build reverse mapping: contact field -> csv header
-    const fieldToHeader: Record<string, string> = {};
-    Object.entries(mapping).forEach(([csvHeader, contactField]) => {
-      fieldToHeader[contactField] = csvHeader;
-    });
+      // Build reverse mapping: contact field -> csv header
+      const fieldToHeader: Record<string, string> = {};
+      Object.entries(mapping).forEach(([csvHeader, contactField]) => {
+        fieldToHeader[contactField] = csvHeader;
+      });
 
-    // Get company name mapping
-    const companyHeader = fieldToHeader['company_name'];
+      // Get company name mapping
+      const companyHeader = fieldToHeader['company_name'];
 
-    for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
-      const batch = allRows.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
+        const batch = allRows.slice(i, i + BATCH_SIZE);
 
-      try {
-        // Filter valid emails
-        const validBatch = batch.filter(row => {
-          const email = row[emailHeader];
-          return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-        });
-        const invalidBatch = batch.filter(row => {
-          const email = row[emailHeader];
-          return !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-        });
-        skipped += invalidBatch.length;
-        errorRows.push(...invalidBatch);
+        try {
+          // Filter valid emails
+          const validBatch = batch.filter(row => {
+            const email = row[emailHeader];
+            return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+          });
+          const invalidBatch = batch.filter(row => {
+            const email = row[emailHeader];
+            return !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+          });
+          skipped += invalidBatch.length;
+          errorRows.push(...invalidBatch);
 
-        if (validBatch.length === 0) {
-          setProgress({ current: Math.min(i + BATCH_SIZE, allRows.length), total: allRows.length });
-          continue;
-        }
+          if (validBatch.length === 0) {
+            setProgress({ current: Math.min(i + BATCH_SIZE, allRows.length), total: allRows.length });
+            continue;
+          }
 
-        // Handle companies if mapped
-        const companyIdMap: Record<string, string> = {};
-        if (companyHeader) {
-          const companyNames = [...new Set(validBatch.map(row => row[companyHeader]?.trim()).filter(Boolean))];
-          for (const name of companyNames) {
-            const { data: existing } = await supabase
-              .from('companies')
-              .select('id')
-              .eq('workspace_id', workspaceId)
-              .eq('name', name)
-              .single();
-
-            if (existing) {
-              companyIdMap[name] = existing.id;
-            } else {
-              const { data: created } = await supabase
+          // Handle companies if mapped
+          const companyIdMap: Record<string, string> = {};
+          if (companyHeader) {
+            const companyNames = [...new Set(validBatch.map(row => row[companyHeader]?.trim()).filter(Boolean))];
+            for (const name of companyNames) {
+              const { data: existing } = await supabase
                 .from('companies')
-                .insert({ workspace_id: workspaceId, name })
                 .select('id')
+                .eq('workspace_id', workspaceId)
+                .eq('name', name)
                 .single();
-              if (created) companyIdMap[name] = created.id;
-            }
-          }
-        }
 
-        // Check for existing contacts
-        const emails = validBatch.map(row => row[emailHeader].trim().toLowerCase());
-        const { data: existingContacts } = await supabase
-          .from('contacts')
-          .select('id, email')
-          .eq('workspace_id', workspaceId)
-          .in('email', emails);
-
-        const existingEmailMap = new Map((existingContacts || []).map(c => [c.email.toLowerCase(), c.id]));
-
-        // Build contact rows
-        const toInsert: InsertTables<'contacts'>[] = [];
-        const toUpdate: Array<{ id: string; data: Partial<InsertTables<'contacts'>> }> = [];
-
-        for (const row of validBatch) {
-          const email = row[emailHeader].trim().toLowerCase();
-          const existingId = existingEmailMap.get(email);
-
-          // Build custom fields from unmapped columns
-          const customFields: Record<string, string> = {};
-          headers.forEach(h => {
-            if (!mapping[h] && row[h]?.trim()) {
-              customFields[h] = row[h].trim();
-            }
-          });
-          // Also map columns explicitly mapped to custom_fields.*
-          Object.entries(mapping).forEach(([csvHeader, field]) => {
-            if (field.startsWith('custom_fields.') && row[csvHeader]?.trim()) {
-              customFields[field.replace('custom_fields.', '')] = row[csvHeader].trim();
-            }
-          });
-
-          const resolvedLeadStatus = defaultLeadStatus || (fieldToHeader['lead_status'] && LEAD_STATUSES.includes(row[fieldToHeader['lead_status']]?.trim().toLowerCase()) ? row[fieldToHeader['lead_status']].trim().toLowerCase() : 'new');
-
-          const contactData = {
-            email,
-            first_name: fieldToHeader['first_name'] ? row[fieldToHeader['first_name']]?.trim() || null : null,
-            last_name: fieldToHeader['last_name'] ? row[fieldToHeader['last_name']]?.trim() || null : null,
-            phone: fieldToHeader['phone'] ? row[fieldToHeader['phone']]?.trim() || null : null,
-            company_id: companyHeader && row[companyHeader]?.trim() ? companyIdMap[row[companyHeader].trim()] || null : null,
-            lead_status: resolvedLeadStatus as InsertTables<'contacts'>['lead_status'],
-            custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
-          };
-
-          if (existingId) {
-            if (duplicateMode === 'update') {
-              toUpdate.push({ id: existingId, data: contactData });
-            } else {
-              skipped++;
-            }
-          } else {
-            toInsert.push({ ...contactData, workspace_id: workspaceId });
-          }
-        }
-
-        // Bulk insert
-        if (toInsert.length > 0) {
-          const { data: insertedData, error: insertError } = await supabase
-            .from('contacts')
-            .insert(toInsert)
-            .select('id');
-
-          if (insertError) {
-            errors += toInsert.length;
-          } else {
-            imported += insertedData?.length || 0;
-
-            // Create activities for new contacts
-            if (insertedData) {
-              const activityRows = insertedData.map(c => ({
-                workspace_id: workspaceId,
-                type: 'contact_created',
-                contact_id: c.id,
-                subject: 'Imported from CSV',
-              }));
-              await supabase.from('activities').insert(activityRows);
-
-              // Add to list if selected
-              if (importListId && insertedData) {
-                const listRows = insertedData.map(c => ({
-                  list_id: importListId,
-                  contact_id: c.id,
-                }));
-                await supabase.from('contact_list_members').insert(listRows);
+              if (existing) {
+                companyIdMap[name] = existing.id;
+              } else {
+                const { data: created } = await supabase
+                  .from('companies')
+                  .insert({ workspace_id: workspaceId, name })
+                  .select('id')
+                  .single();
+                if (created) companyIdMap[name] = created.id;
               }
             }
           }
-        }
 
-        // Bulk update
-        for (const item of toUpdate) {
-          const { error: updateError } = await supabase
+          // Check for existing contacts
+          const emails = validBatch.map(row => row[emailHeader].trim().toLowerCase());
+          const { data: existingContacts } = await supabase
             .from('contacts')
-            .update(item.data)
-            .eq('id', item.id)
-            .eq('workspace_id', workspaceId);
+            .select('id, email')
+            .eq('workspace_id', workspaceId)
+            .in('email', emails);
 
-          if (updateError) errors++;
-          else updated++;
+          const existingEmailMap = new Map((existingContacts || []).map(c => [c.email.toLowerCase(), c.id]));
+
+          // Build contact rows
+          const toInsert: InsertTables<'contacts'>[] = [];
+          const toUpdate: Array<{ id: string; data: Partial<InsertTables<'contacts'>> }> = [];
+
+          for (const row of validBatch) {
+            const email = row[emailHeader].trim().toLowerCase();
+            const existingId = existingEmailMap.get(email);
+
+            // Build custom fields from unmapped columns
+            const customFields: Record<string, string> = {};
+            headers.forEach(h => {
+              if (!mapping[h] && row[h]?.trim()) {
+                customFields[h] = row[h].trim();
+              }
+            });
+            // Also map columns explicitly mapped to custom_fields.*
+            Object.entries(mapping).forEach(([csvHeader, field]) => {
+              if (field.startsWith('custom_fields.') && row[csvHeader]?.trim()) {
+                customFields[field.replace('custom_fields.', '')] = row[csvHeader].trim();
+              }
+            });
+
+            const resolvedLeadStatus = defaultLeadStatus || (fieldToHeader['lead_status'] && LEAD_STATUSES.includes(row[fieldToHeader['lead_status']]?.trim().toLowerCase()) ? row[fieldToHeader['lead_status']].trim().toLowerCase() : 'new');
+
+            const contactData = {
+              email,
+              first_name: fieldToHeader['first_name'] ? row[fieldToHeader['first_name']]?.trim() || null : null,
+              last_name: fieldToHeader['last_name'] ? row[fieldToHeader['last_name']]?.trim() || null : null,
+              phone: fieldToHeader['phone'] ? row[fieldToHeader['phone']]?.trim() || null : null,
+              company_id: companyHeader && row[companyHeader]?.trim() ? companyIdMap[row[companyHeader].trim()] || null : null,
+              lead_status: resolvedLeadStatus as InsertTables<'contacts'>['lead_status'],
+              custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
+            };
+
+            if (existingId) {
+              if (duplicateMode === 'update') {
+                toUpdate.push({ id: existingId, data: contactData });
+              } else {
+                skipped++;
+              }
+            } else {
+              toInsert.push({ ...contactData, workspace_id: workspaceId });
+            }
+          }
+
+          // Bulk insert
+          if (toInsert.length > 0) {
+            const { data: insertedData, error: insertError } = await supabase
+              .from('contacts')
+              .insert(toInsert)
+              .select('id');
+
+            if (insertError) {
+              errors += toInsert.length;
+            } else {
+              imported += insertedData?.length || 0;
+
+              // Create activities for new contacts
+              if (insertedData) {
+                const activityRows = insertedData.map(c => ({
+                  workspace_id: workspaceId,
+                  type: 'contact_created',
+                  contact_id: c.id,
+                  subject: 'Imported from CSV',
+                }));
+                await supabase.from('activities').insert(activityRows);
+
+                // Add to list if selected
+                if (importListId && insertedData) {
+                  const listRows = insertedData.map(c => ({
+                    list_id: importListId,
+                    contact_id: c.id,
+                  }));
+                  await supabase.from('contact_list_members').insert(listRows);
+                }
+              }
+            }
+          }
+
+          // Bulk update
+          for (const item of toUpdate) {
+            const { error: updateError } = await supabase
+              .from('contacts')
+              .update(item.data)
+              .eq('id', item.id)
+              .eq('workspace_id', workspaceId);
+
+            if (updateError) errors++;
+            else updated++;
+          }
+        } catch {
+          errors += batch.length;
+          errorRows.push(...batch);
         }
-      } catch {
-        errors += batch.length;
-        errorRows.push(...batch);
+
+        setProgress({ current: Math.min(i + BATCH_SIZE, allRows.length), total: allRows.length });
       }
 
-      setProgress({ current: Math.min(i + BATCH_SIZE, allRows.length), total: allRows.length });
+      setResult({ imported, updated, skipped, errors, errorRows });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed. Please try again.');
+      setStep(3);
+    } finally {
+      setImporting(false);
     }
-
-    setResult({ imported, updated, skipped, errors, errorRows });
-    setImporting(false);
   };
 
   // Fetch lists when entering step 3
@@ -563,9 +581,10 @@ export function CsvImportWizard() {
             </button>
             <button
               onClick={startImport}
-              className="inline-flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+              disabled={importing || !workspaceId}
+              className="inline-flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Start Import
+              {importing ? 'Importing...' : 'Start Import'}
             </button>
           </div>
         </div>
