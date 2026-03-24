@@ -1,10 +1,12 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+'use client';
+
+import { Suspense } from 'react';
+import { PipelineBoard } from '@/components/deals/pipeline-board';
 
 export default function DealsPage() {
   return (
-    <PlaceholderPage
-      title="Deals"
-      description="View your sales pipeline with drag-and-drop deal management."
-    />
+    <div className="h-[calc(100vh-0px)] flex flex-col">
+      <PipelineBoard />
+    </div>
   );
 }
