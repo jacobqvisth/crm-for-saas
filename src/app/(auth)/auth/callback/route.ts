@@ -24,19 +24,15 @@ export async function GET(request: Request) {
           .limit(1);
 
         if (!memberships || memberships.length === 0) {
-          // Create a default workspace for the user
           const workspaceName =
             user.user_metadata?.full_name
               ? `${user.user_metadata.full_name}'s Workspace`
               : "My Workspace";
-          const slug = workspaceName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "");
 
+          // Fixed: removed 'slug' field that doesn't exist in workspaces table
           const { data: workspace } = await supabase
             .from("workspaces")
-            .insert({ name: workspaceName, slug })
+            .insert({ name: workspaceName })
             .select("id")
             .single();
 
@@ -53,36 +49,11 @@ export async function GET(request: Request) {
               name: "Sales Pipeline",
               stages: [
                 { name: "Lead", order: 0, probability: 10, color: "#6366f1" },
-                {
-                  name: "Qualified",
-                  order: 1,
-                  probability: 25,
-                  color: "#8b5cf6",
-                },
-                {
-                  name: "Proposal",
-                  order: 2,
-                  probability: 50,
-                  color: "#a855f7",
-                },
-                {
-                  name: "Negotiation",
-                  order: 3,
-                  probability: 75,
-                  color: "#d946ef",
-                },
-                {
-                  name: "Closed Won",
-                  order: 4,
-                  probability: 100,
-                  color: "#22c55e",
-                },
-                {
-                  name: "Closed Lost",
-                  order: 5,
-                  probability: 0,
-                  color: "#ef4444",
-                },
+                { name: "Qualified", order: 1, probability: 25, color: "#8b5cf6" },
+                { name: "Proposal", order: 2, probability: 50, color: "#a855f7" },
+                { name: "Negotiation", order: 3, probability: 75, color: "#d946ef" },
+                { name: "Closed Won", order: 4, probability: 100, color: "#22c55e" },
+                { name: "Closed Lost", order: 5, probability: 0, color: "#ef4444" },
               ],
             });
           }

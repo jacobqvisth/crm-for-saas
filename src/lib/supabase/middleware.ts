@@ -1,6 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const protectedRoutes = [
+  "/dashboard",
+  "/contacts",
+  "/companies",
+  "/deals",
+  "/sequences",
+  "/lists",
+  "/templates",
+  "/settings",
+];
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -35,8 +46,13 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Redirect unauthenticated users from dashboard to login
-  if (!user && pathname.startsWith("/dashboard")) {
+  // Check if the route is protected
+  const isProtected = protectedRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  );
+
+  // Redirect unauthenticated users from protected routes to login
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
