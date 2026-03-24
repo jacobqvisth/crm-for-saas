@@ -94,6 +94,13 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - CC reads CLAUDE.md automatically for project conventions
 - CC creates a new branch, never commits to main directly
 
+## Roadmap
+See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
+- **Phase 9**: Production deployment + real data loading
+- **Phase 10**: First real email campaign
+- **Phase 11**: Sender warmup + deliverability
+- **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
+
 ## Route Structure
 Routes use (dashboard) route group — URLs are /contacts, /deals, /sequences etc. (NOT /dashboard/contacts).
 
