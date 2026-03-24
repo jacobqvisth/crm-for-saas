@@ -1,10 +1,10 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+import { Suspense } from 'react';
+import { ListTable } from '@/components/lists/list-table';
 
 export default function ListsPage() {
   return (
-    <PlaceholderPage
-      title="Lists"
-      description="Create static and dynamic contact lists for targeted outreach."
-    />
+    <Suspense>
+      <ListTable />
+    </Suspense>
   );
 }
