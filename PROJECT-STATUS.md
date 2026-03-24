@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-24 (Phase 5 complete)
+Last updated: 2026-03-24 (Phase 7 merged)
 
 ## Owner
 Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
@@ -20,7 +20,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 4 | Gmail Integration (OAuth, sending engine) | ✅ Merged | #5 |
 | 5 | Email Sequences (Lemlist-like builder + Inngest) | ✅ Merged | #6 |
 | 6 | Email Tracking (open pixel, click wrapping) | ✅ Merged | #7 |
-| 7 | Contact Lists + Smart Lists | ⏳ Pending | — |
+| 7 | Contact Lists + Smart Lists | ✅ Merged | #8 |
 | 8 | Dashboard + Reports | ⏳ Pending | — |
 
 ## Bugs Fixed (not by CC)
@@ -44,12 +44,29 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - GOOGLE_CLIENT_SECRET ✅
 - ENCRYPTION_KEY ✅
 - CRON_SECRET ✅
+- SUPABASE_SERVICE_ROLE_KEY ✅ (added Phase 6)
 
-## Process
-- Cowork (this session) handles: planning, prompts, database fixes, debugging, architecture
-- Claude Code handles: building features from prompts, creating branches/PRs
-- Each phase: new CC session → paste prompt → CC builds on new branch → PR → merge → next phase
-- CC reads CLAUDE.md for project conventions and architecture context
+## Process & Sync
+
+### Agents
+- **Cowork**: Architecture, planning, prompts, debugging, docs. Reads/writes local folder.
+- **Claude Code (CC)**: Builds features from prompts in the Claude desktop app (Code mode). One new session per phase. Creates branches, commits, pushes, opens PRs.
+
+### Sync Sequence (strict order)
+1. `git pull origin main` — sync local with GitHub
+2. Cowork writes changes (prompts, docs, CLAUDE.md updates)
+3. Commit and push — so GitHub has Cowork's changes
+4. CC starts new session — reads from GitHub, gets everything
+5. CC builds on new branch → PR
+6. Jacob merges PR on GitHub
+7. `git pull origin main` — sync local again before next round
+
+**Rule: always pull before writing, always push before CC starts.**
+
+### CC Session Practice
+- Always start a new CC session for each phase/prompt
+- CC reads CLAUDE.md automatically for project conventions
+- CC creates a new branch, never commits to main directly
 
 ## Route Structure
 Routes use (dashboard) route group — URLs are /contacts, /deals, /sequences etc. (NOT /dashboard/contacts).

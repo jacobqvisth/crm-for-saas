@@ -17,13 +17,35 @@ Work as autonomously as possible. Do not ask for clarification on small decision
 
 For everything else: make a decision, document it briefly in your commit message, and keep going.
 
-## Git Workflow
+## Development Workflow
+
+This project uses two AI agents coordinated by Jacob:
+
+- **Cowork** (Claude in Cowork mode): Architecture, planning, prompts, debugging, database management, docs. Reads/writes directly to the local repo folder.
+- **Claude Code** (CC, Claude desktop app in Code mode): Builds features from prompts. Creates branches, commits, pushes, opens PRs. Each phase = one new CC session.
+
+### The Sync Sequence (IMPORTANT)
+
+The local folder, GitHub, and both agents must stay in sync. This is the strict order:
+
+1. **Before Cowork writes anything:** `git pull origin main` to get latest from GitHub
+2. **Cowork writes** (prompts, CLAUDE.md updates, docs, etc.)
+3. **Commit and push** Cowork's changes so they're on GitHub
+4. **CC starts a new session** — it reads from GitHub, so it gets everything
+5. **CC builds** on a new branch, opens a PR
+6. **Jacob merges** the PR on GitHub
+7. **`git pull origin main`** to sync local folder before Cowork touches anything again
+
+Breaking this sequence causes conflicts. The rule: **always pull before writing, always push before CC starts.**
+
+### Git Rules for CC
 
 - **Always create a new branch** for each task. Never commit directly to `main`.
 - Branch naming: `feature/short-description`, `fix/short-description`, or `chore/short-description`
 - Commit frequently with clear messages describing what changed and why
 - After completing a task, push the branch and open a PR to `main`
 - In the PR description, briefly summarize what was done and if there is anything Jacob should review or decide
+- **Always fetch and rebase on latest `origin/main`** before starting work
 
 ## Architecture — IMPORTANT
 
@@ -95,9 +117,16 @@ All tables already exist in Supabase. Do NOT create new tables or run migrations
 
 - Phase 1: Scaffolding + Auth + Dashboard layout ✅
 - Phase 2: Contacts + Companies + CSV Import ✅
-- Phase 3: Deals Pipeline (Kanban board) ← NEXT
-- Phase 4: Gmail Integration (OAuth, sending engine)
-- Phase 5: Email Sequences (Lemlist-like builder + Inngest execution)
-- Phase 6: Email Tracking (open pixel, click wrapping, unsubscribe)
-- Phase 7: Contact Lists + Smart Lists
-- Phase 8: Dashboard + Reports
+- Phase 3: Deals Pipeline (Kanban board) ✅
+- Phase 4: Gmail Integration (OAuth, sending engine) ✅
+- Phase 5: Email Sequences (Lemlist-like builder + Inngest execution) ✅
+- Phase 6: Email Tracking (open pixel, click wrapping, unsubscribe) ✅
+- Phase 7: Contact Lists + Smart Lists ✅ (PR #8)
+- Phase 8: Dashboard + Reports ← NEXT
+
+## Key Files
+
+- `CLAUDE.md` — CC reads this automatically. Project conventions and architecture.
+- `PROJECT-STATUS.md` — Cowork's persistent memory. Updated after each phase.
+- `docs/prompts/` — All CC build prompts archived here.
+- `docs/icp/` — ICP research, personas, market data for email content.
