@@ -19,7 +19,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 3 | Deals Pipeline (Kanban board) | ✅ Merged | #4 |
 | 4 | Gmail Integration (OAuth, sending engine) | ✅ Merged | #5 |
 | 5 | Email Sequences (Lemlist-like builder + Inngest) | ✅ Merged | #6 |
-| 6 | Email Tracking (open pixel, click wrapping) | ⏳ Pending | — |
+| 6 | Email Tracking (open pixel, click wrapping) | ✅ Merged | #7 |
 | 7 | Contact Lists + Smart Lists | ⏳ Pending | — |
 | 8 | Dashboard + Reports | ⏳ Pending | — |
 
