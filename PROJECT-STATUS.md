@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-24
+Last updated: 2026-03-24 (Phase 5 complete)
 
 ## Owner
 Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
@@ -18,7 +18,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 2 | Contacts + Companies + CSV Import | ✅ Merged | #2 |
 | 3 | Deals Pipeline (Kanban board) | ✅ Merged | #4 |
 | 4 | Gmail Integration (OAuth, sending engine) | ✅ Merged | #5 |
-| 5 | Email Sequences (Lemlist-like builder + Inngest) | 🔄 In Progress | — |
+| 5 | Email Sequences (Lemlist-like builder + Inngest) | ✅ Merged | #6 |
 | 6 | Email Tracking (open pixel, click wrapping) | ⏳ Pending | — |
 | 7 | Contact Lists + Smart Lists | ⏳ Pending | — |
 | 8 | Dashboard + Reports | ⏳ Pending | — |
