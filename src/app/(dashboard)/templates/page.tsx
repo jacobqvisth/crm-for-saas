@@ -1,10 +1,11 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+"use client";
+
+import { TemplateList } from "@/components/templates/template-list";
 
 export default function TemplatesPage() {
   return (
-    <PlaceholderPage
-      title="Templates"
-      description="Create and manage reusable email templates with personalization variables."
-    />
+    <div className="p-6">
+      <TemplateList />
+    </div>
   );
 }
