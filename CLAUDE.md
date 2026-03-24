@@ -122,7 +122,9 @@ All tables already exist in Supabase. Do NOT create new tables or run migrations
 - Phase 5: Email Sequences (Lemlist-like builder + Inngest execution) ✅
 - Phase 6: Email Tracking (open pixel, click wrapping, unsubscribe) ✅
 - Phase 7: Contact Lists + Smart Lists ✅ (PR #8)
-- Phase 8: Dashboard + Reports ← NEXT
+- Phase 8: Dashboard + Reports ✅ (PR #9)
+
+**Core build complete.** See `docs/roadmap.md` for Phases 9-16 (deployment, campaigns, power features).
 
 ## Key Files
 

@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-24 (Phase 7 merged)
+Last updated: 2026-03-24 (Phase 8 merged — core build complete)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -47,7 +47,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 5 | Email Sequences (Lemlist-like builder + Inngest) | ✅ Merged | #6 |
 | 6 | Email Tracking (open pixel, click wrapping) | ✅ Merged | #7 |
 | 7 | Contact Lists + Smart Lists | ✅ Merged | #8 |
-| 8 | Dashboard + Reports | ⏳ Pending | — |
+| 8 | Dashboard + Reports | ✅ Merged | #9 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
