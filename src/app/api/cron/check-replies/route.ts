@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getGmailClient } from "@/lib/gmail/client";
+import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import type { SequenceSettings } from "@/lib/database.types";
 
 export async function POST(request: NextRequest) {
@@ -20,11 +22,12 @@ export async function POST(request: NextRequest) {
     .eq("status", "active");
 
   if (error || !enrollments || enrollments.length === 0) {
-    return NextResponse.json({ checked: 0, repliesFound: 0 });
+    return NextResponse.json({ checked: 0, repliesFound: 0, bouncesFound: 0 });
   }
 
   let checked = 0;
   let repliesFound = 0;
+  let bouncesFound = 0;
 
   for (const enrollment of enrollments) {
     checked++;
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Check for reply events on emails sent in this enrollment
     const { data: sentEmails } = await supabase
       .from("email_queue")
-      .select("id, tracking_id, contact_id")
+      .select("id, tracking_id, contact_id, sender_account_id, to_email")
       .eq("enrollment_id", enrollment.id)
       .eq("status", "sent");
 
@@ -97,5 +100,158 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ checked, repliesFound });
+  // --- Bounce Detection ---
+  // Get unique sender accounts from all sent emails in active enrollments
+  const { data: activeSentEmails } = await supabase
+    .from("email_queue")
+    .select("sender_account_id, tracking_id, id, contact_id, workspace_id, to_email")
+    .in(
+      "enrollment_id",
+      enrollments.map((e) => e.id)
+    )
+    .eq("status", "sent");
+
+  if (activeSentEmails && activeSentEmails.length > 0) {
+    const uniqueSenderIds = [...new Set(activeSentEmails.map((e) => e.sender_account_id))];
+
+    for (const senderAccountId of uniqueSenderIds) {
+      try {
+        const tokenResult = await getValidAccessToken(senderAccountId);
+        if ("error" in tokenResult) continue;
+
+        const gmail = getGmailClient(tokenResult.accessToken);
+
+        // Search for bounce messages from mailer-daemon or postmaster
+        const { data: messages } = await gmail.users.messages.list({
+          userId: "me",
+          q: "from:(mailer-daemon@* OR postmaster@*) newer_than:1d",
+          maxResults: 50,
+        });
+
+        if (!messages?.messages) continue;
+
+        for (const msg of messages.messages) {
+          if (!msg.id) continue;
+
+          const { data: fullMessage } = await gmail.users.messages.get({
+            userId: "me",
+            id: msg.id,
+            format: "full",
+          });
+
+          if (!fullMessage?.payload) continue;
+
+          // Extract bounce email body to find the bounced email address
+          const bodyText = extractMessageBody(fullMessage.payload);
+          if (!bodyText) continue;
+
+          // Find which of our sent emails bounced
+          const senderEmails = activeSentEmails.filter(
+            (e) => e.sender_account_id === senderAccountId
+          );
+
+          for (const sentEmail of senderEmails) {
+            if (
+              bodyText.toLowerCase().includes(sentEmail.to_email.toLowerCase())
+            ) {
+              // Check if we already logged a bounce for this tracking_id
+              const { data: existingBounce } = await supabase
+                .from("email_events")
+                .select("id")
+                .eq("tracking_id", sentEmail.tracking_id)
+                .eq("event_type", "bounce")
+                .limit(1);
+
+              if (existingBounce && existingBounce.length > 0) continue;
+
+              // Log bounce event
+              await supabase.from("email_events").insert({
+                tracking_id: sentEmail.tracking_id,
+                email_queue_id: sentEmail.id,
+                event_type: "bounce",
+              });
+
+              // Update contact status to bounced
+              if (sentEmail.contact_id) {
+                await supabase
+                  .from("contacts")
+                  .update({ status: "bounced" })
+                  .eq("id", sentEmail.contact_id);
+
+                // Cancel all active enrollments for this contact
+                const { data: contactEnrollments } = await supabase
+                  .from("sequence_enrollments")
+                  .select("id")
+                  .eq("contact_id", sentEmail.contact_id)
+                  .in("status", ["active", "paused"]);
+
+                if (contactEnrollments && contactEnrollments.length > 0) {
+                  const ids = contactEnrollments.map((e) => e.id);
+
+                  await supabase
+                    .from("sequence_enrollments")
+                    .update({
+                      status: "bounced",
+                      completed_at: new Date().toISOString(),
+                    })
+                    .in("id", ids);
+
+                  await supabase
+                    .from("email_queue")
+                    .update({ status: "cancelled" as const })
+                    .in("enrollment_id", ids)
+                    .eq("status", "scheduled");
+                }
+
+                // Create activity record
+                await supabase.from("activities").insert({
+                  workspace_id: sentEmail.workspace_id,
+                  type: "email_bounced",
+                  subject: "Email bounced",
+                  description: `Email to ${sentEmail.to_email} bounced`,
+                  contact_id: sentEmail.contact_id,
+                  metadata: {
+                    tracking_id: sentEmail.tracking_id,
+                    email_queue_id: sentEmail.id,
+                  },
+                });
+              }
+
+              bouncesFound++;
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Bounce check failed for account ${senderAccountId}:`, err);
+      }
+    }
+  }
+
+  return NextResponse.json({ checked, repliesFound, bouncesFound });
+}
+
+/**
+ * Extracts the text body from a Gmail message payload (recursive for multipart).
+ */
+function extractMessageBody(
+  payload: { mimeType?: string | null; body?: { data?: string | null } | null; parts?: Array<{ mimeType?: string | null; body?: { data?: string | null } | null; parts?: unknown[] }> | null }
+): string | null {
+  if (payload.mimeType === "text/plain" && payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64url").toString("utf-8");
+  }
+
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const result = extractMessageBody(part as typeof payload);
+      if (result) return result;
+    }
+  }
+
+  // Fallback: try HTML body
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    const html = Buffer.from(payload.body.data, "base64url").toString("utf-8");
+    return html.replace(/<[^>]*>/g, "");
+  }
+
+  return null;
 }

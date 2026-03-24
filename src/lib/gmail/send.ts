@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getGmailClient } from "./client";
 import { getValidAccessToken } from "./token-refresh";
+import { wrapLinks } from "@/lib/tracking/link-wrapper";
+import { injectTrackingPixel } from "@/lib/tracking/pixel";
 
 interface SendEmailParams {
   accountId: string;
@@ -20,6 +22,31 @@ interface SendEmailResult {
 
 const MIN_SEND_INTERVAL_MS = 60 * 1000; // 60 seconds between sends per account
 
+function getTrackingBaseUrl(): string {
+  return (
+    process.env.TRACKING_DOMAIN ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:3000"
+  );
+}
+
+/**
+ * Applies tracking to email HTML body:
+ * 1. Wrap links for click tracking
+ * 2. Inject tracking pixel for open tracking
+ */
+function applyTracking(htmlBody: string, trackingId: string): string {
+  const appUrl = getTrackingBaseUrl();
+
+  // Step 1: Wrap links (click tracking)
+  let tracked = wrapLinks(htmlBody, trackingId, appUrl);
+
+  // Step 2: Inject tracking pixel (open tracking)
+  tracked = injectTrackingPixel(tracked, trackingId, appUrl);
+
+  return tracked;
+}
+
 function buildMimeMessage(params: {
   from: string;
   to: string;
@@ -30,6 +57,14 @@ function buildMimeMessage(params: {
   replyToMessageId?: string;
 }): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  // Apply tracking to HTML body before building the MIME message
+  let finalHtml = params.htmlBody;
+  if (params.trackingId) {
+    finalHtml = applyTracking(params.htmlBody, params.trackingId);
+  }
+
+  // Generate text from the original (unwrapped) HTML to avoid tracking URLs in plaintext
   const textContent = params.textBody || params.htmlBody.replace(/<[^>]*>/g, "");
 
   const headers = [
@@ -45,8 +80,11 @@ function buildMimeMessage(params: {
     headers.push(`References: ${params.replyToMessageId}`);
   }
 
+  // List-Unsubscribe headers (RFC 8058) for one-click unsubscribe in Gmail/Outlook
   if (params.trackingId) {
-    headers.push(`List-Unsubscribe: <mailto:unsubscribe@wrenchlane.com?subject=unsubscribe-${params.trackingId}>`);
+    const appUrl = getTrackingBaseUrl();
+    const unsubUrl = `${appUrl}/api/tracking/unsubscribe/${params.trackingId}`;
+    headers.push(`List-Unsubscribe: <${unsubUrl}>`);
     headers.push(`List-Unsubscribe-Post: List-Unsubscribe=One-Click`);
   }
 
@@ -59,7 +97,7 @@ function buildMimeMessage(params: {
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
     ``,
-    params.htmlBody,
+    finalHtml,
     ``,
     `--${boundary}--`,
   ].join("\r\n");

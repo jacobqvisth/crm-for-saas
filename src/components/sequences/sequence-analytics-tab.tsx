@@ -24,6 +24,8 @@ interface StepAnalytics {
   opened: number;
   clicked: number;
   replied: number;
+  bounced: number;
+  unsubscribed: number;
 }
 
 interface SequenceAnalyticsTabProps {
@@ -71,6 +73,8 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
       let opened = 0;
       let clicked = 0;
       let replied = 0;
+      let bounced = 0;
+      let unsubscribed = 0;
 
       if (trackingIds.length > 0) {
         const { data: events } = await supabase
@@ -82,16 +86,22 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
           const uniqueOpened = new Set<string>();
           const uniqueClicked = new Set<string>();
           const uniqueReplied = new Set<string>();
+          const uniqueBounced = new Set<string>();
+          const uniqueUnsub = new Set<string>();
 
           for (const ev of events) {
             if (ev.event_type === "open") uniqueOpened.add(ev.tracking_id);
             if (ev.event_type === "click") uniqueClicked.add(ev.tracking_id);
             if (ev.event_type === "reply") uniqueReplied.add(ev.tracking_id);
+            if (ev.event_type === "bounce") uniqueBounced.add(ev.tracking_id);
+            if (ev.event_type === "unsubscribe") uniqueUnsub.add(ev.tracking_id);
           }
 
           opened = uniqueOpened.size;
           clicked = uniqueClicked.size;
           replied = uniqueReplied.size;
+          bounced = uniqueBounced.size;
+          unsubscribed = uniqueUnsub.size;
         }
       }
 
@@ -103,6 +113,8 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
         opened,
         clicked,
         replied,
+        bounced,
+        unsubscribed,
       });
     }
 
@@ -138,6 +150,8 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
     Opened: s.opened,
     Clicked: s.clicked,
     Replied: s.replied,
+    Bounced: s.bounced,
+    Unsubscribed: s.unsubscribed,
   }));
 
   return (
@@ -155,6 +169,8 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
               <Bar dataKey="Opened" fill="#22c55e" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Clicked" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Replied" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Bounced" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Unsubscribed" fill="#94a3b8" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -170,6 +186,8 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
               <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-3">Open %</th>
               <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-3">Click %</th>
               <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-3">Reply %</th>
+              <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-3">Bounce %</th>
+              <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-3">Unsub %</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -181,6 +199,8 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
                 <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.opened, s.sent)}%</td>
                 <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.clicked, s.sent)}%</td>
                 <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.replied, s.sent)}%</td>
+                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.bounced, s.sent)}%</td>
+                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.unsubscribed, s.sent)}%</td>
               </tr>
             ))}
           </tbody>
