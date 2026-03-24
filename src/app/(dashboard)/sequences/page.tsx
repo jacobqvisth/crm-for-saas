@@ -1,10 +1,11 @@
-import { PlaceholderPage } from "@/components/ui/placeholder-page";
+"use client";
+
+import { SequenceList } from "@/components/sequences/sequence-list";
 
 export default function SequencesPage() {
   return (
-    <PlaceholderPage
-      title="Sequences"
-      description="Create and manage email sequences with multi-step automation."
-    />
+    <div className="p-6">
+      <SequenceList />
+    </div>
   );
 }
