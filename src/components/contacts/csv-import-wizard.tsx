@@ -46,6 +46,8 @@ export function CsvImportWizard() {
   const [importListId, setImportListId] = useState('');
   const [defaultLeadStatus, setDefaultLeadStatus] = useState('');
   const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
+  const [showNewList, setShowNewList] = useState(false);
+  const [newListName, setNewListName] = useState('');
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [result, setResult] = useState<{ imported: number; updated: number; skipped: number; errors: number; errorRows: CsvRow[] } | null>(null);
@@ -549,12 +551,59 @@ export function CsvImportWizard() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Add imported contacts to list (optional)</label>
               <select
                 value={importListId}
-                onChange={(e) => setImportListId(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === '__new__') {
+                    setShowNewList(true);
+                    setImportListId('');
+                  } else {
+                    setImportListId(e.target.value);
+                  }
+                }}
                 className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">No list</option>
                 {lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                <option value="__new__">+ Create new list</option>
               </select>
+              {showNewList && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    placeholder="New list name..."
+                    className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!workspaceId || !newListName.trim()) return;
+                      const supabase = createClient();
+                      const { data, error } = await supabase
+                        .from('contact_lists')
+                        .insert({ workspace_id: workspaceId, name: newListName.trim(), type: 'static' })
+                        .select('id, name')
+                        .single();
+                      if (error) { toast.error('Failed to create list'); return; }
+                      setLists(prev => [...prev, data]);
+                      setImportListId(data.id);
+                      setShowNewList(false);
+                      setNewListName('');
+                      toast.success('List created');
+                    }}
+                    disabled={!newListName.trim()}
+                    className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    Create
+                  </button>
+                  <button
+                    onClick={() => { setShowNewList(false); setNewListName(''); }}
+                    className="px-3 py-2 text-sm text-slate-600 hover:text-slate-800"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
