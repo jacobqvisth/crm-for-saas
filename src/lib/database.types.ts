@@ -30,7 +30,8 @@ export interface Database {
         Row: {
           id: string;
           name: string;
-          slug: string;
+          domain: string | null;
+          google_workspace_domain: string | null;
           settings: Json | null;
           created_at: string;
           updated_at: string;
@@ -38,7 +39,8 @@ export interface Database {
         Insert: {
           id?: string;
           name: string;
-          slug: string;
+          domain?: string | null;
+          google_workspace_domain?: string | null;
           settings?: Json | null;
           created_at?: string;
           updated_at?: string;
@@ -46,7 +48,8 @@ export interface Database {
         Update: {
           id?: string;
           name?: string;
-          slug?: string;
+          domain?: string | null;
+          google_workspace_domain?: string | null;
           settings?: Json | null;
           updated_at?: string;
         };
