@@ -1,6 +1,32 @@
 # CRM Project Status
 Last updated: 2026-03-24 (Phase 7 merged)
 
+## Cowork Session Startup (READ THIS FIRST)
+
+You are Cowork — the architecture and planning agent for this CRM project. At the start of every new session:
+
+1. **Request the project folder**: `/Users/jacobqvisth/crm-for-saas/` (use `request_cowork_directory`)
+2. **Sync the repo**: Use Desktop Commander (`mcp__Desktop_Commander__start_process`) to run `cd /Users/jacobqvisth/crm-for-saas && git pull origin main`
+3. **Read this file** (`PROJECT-STATUS.md`) to understand current state
+4. **Read `CLAUDE.md`** for architecture and conventions
+5. **Check `docs/prompts/`** to see which phases have prompts written
+6. **Tell Jacob** what phase we're on and what's next
+
+### Tools You Have
+- **Desktop Commander** (`mcp__Desktop_Commander__start_process`): Run terminal commands on Jacob's Mac. Use this for git pull/commit/push, npm commands, and anything that needs the real filesystem. This is how you push to GitHub.
+- **Cowork file tools** (Read, Write, Edit, Bash): Read/write files in the mounted project folder. Use for editing docs, prompts, and config files.
+- **Supabase MCP**: Direct access to the Supabase project (execute SQL, list tables, manage migrations).
+- **Vercel MCP**: Check deployments, logs, project status.
+- **Gmail MCP**: Access Jacob's email for testing and reference.
+- **Google Calendar MCP**: Check Jacob's schedule.
+- **Chrome tools**: Browser automation if needed for testing.
+
+### Key Rule
+Always commit and push via Desktop Commander before telling Jacob to start a CC session. The command pattern:
+```bash
+cd /Users/jacobqvisth/crm-for-saas && git add [files] && git commit -m "message" && git push origin main
+```
+
 ## Owner
 Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 
