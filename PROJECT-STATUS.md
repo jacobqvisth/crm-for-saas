@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-26 (Phase QA complete — 8/8 smoke+API tests green, deployed to production)
+Last updated: 2026-03-26 (Phase QA fully complete — 34/34 E2E tests green against production)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -49,7 +49,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 7 | Contact Lists + Smart Lists | ✅ Merged | #8 |
 | 8 | Dashboard + Reports | ✅ Merged | #9 |
 | 9 | Production Deployment + Vercel | ✅ Complete | — |
-| QA | Playwright E2E test suite | ✅ Complete — 8 smoke+API tests passing against production. Full suite (27 tests) needs SUPABASE_SERVICE_ROLE_KEY in .env.local | #10 |
+| QA | Playwright E2E test suite | ✅ Complete — 34/34 tests passing against production | #10 |
 | 10 | First real email campaign | Next | — |
 
 ## Bugs Fixed (not by CC)
@@ -104,17 +104,15 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - **Cron jobs** (vercel.json): process-emails (*/5 min), check-replies (*/30 min), reset-daily-sends (midnight UTC)
 
 ### Pending before Phase 10
-1. Add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` (Supabase Dashboard → Settings → API → service_role key) — needed to run the full 27-test E2E suite
-2. Once added, run: `TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e`
-3. **Load real contacts** via CSV import (10,000+ workshop contacts)
-4. **Connect a Gmail account** via Settings → Email in the production app
-5. Disconnect GitHub auto-deploy in Vercel dashboard (Settings → Git) so Cowork controls deploys
+1. **Load real contacts** via CSV import (10,000+ workshop contacts)
+2. **Connect a Gmail account** via Settings → Email in the production app
+3. Disconnect GitHub auto-deploy in Vercel dashboard (Settings → Git) so Cowork controls deploys
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 9**: Production deployment + real data loading ✅ COMPLETE (2 manual steps still needed — see above)
-- **Phase QA**: ✅ Complete. 8 smoke/API tests passing against production. Full 27-test suite needs `SUPABASE_SERVICE_ROLE_KEY` added to `.env.local` (Supabase Dashboard → Settings → API → service_role key). Prompt: vault `02_Projects/wrenchlane-crm/cc-prompt-phase-qa.md`
-- **Phase 10**: First real email campaign ← NEXT (after adding SUPABASE_SERVICE_ROLE_KEY and running full E2E suite)
+- **Phase QA**: ✅ Complete. 34/34 Playwright E2E tests passing against production. Prompt: vault `02_Projects/wrenchlane-crm/cc-prompt-phase-qa.md`
+- **Phase 10**: First real email campaign ← NEXT
 - **Phase 11**: Sender warmup + deliverability
 - **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
 
