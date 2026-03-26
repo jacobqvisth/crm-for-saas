@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     if (existing) {
       // Update existing account (reconnect)
-      await supabase
+      const { error: updateError } = await supabase
         .from("gmail_accounts")
         .update({
           access_token: encryptedAccessToken,
@@ -92,9 +92,16 @@ export async function GET(request: NextRequest) {
           status: "active",
         })
         .eq("id", existing.id);
+
+      if (updateError) {
+        console.error("[gmail/callback] Update failed:", updateError);
+        return NextResponse.redirect(
+          `${baseUrl}/settings/email?error=${encodeURIComponent(`Failed to update Gmail account: ${updateError.message}`)}`
+        );
+      }
     } else {
       // Insert new account
-      await supabase.from("gmail_accounts").insert({
+      const { error: insertError } = await supabase.from("gmail_accounts").insert({
         workspace_id: stateData.workspaceId,
         user_id: user.id,
         email_address: emailAddress,
@@ -102,7 +109,15 @@ export async function GET(request: NextRequest) {
         access_token: encryptedAccessToken,
         refresh_token: encryptedRefreshToken,
         token_expires_at: tokenExpiresAt,
+        status: "active",
       });
+
+      if (insertError) {
+        console.error("[gmail/callback] Insert failed:", insertError);
+        return NextResponse.redirect(
+          `${baseUrl}/settings/email?error=${encodeURIComponent(`Failed to save Gmail account: ${insertError.message}`)}`
+        );
+      }
     }
 
     return NextResponse.redirect(
