@@ -40,3 +40,6 @@ export async function POST(request: NextRequest) {
     nextResetAt: tomorrow.toISOString(),
   });
 }
+
+// Vercel Cron Jobs send GET requests — alias POST handler
+export const GET = POST;

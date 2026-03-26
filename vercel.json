@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/check-replies",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/reset-daily-sends",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

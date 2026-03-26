@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-24 (Phase 8 merged — core build complete)
+Last updated: 2026-03-26 (Phase 9 in progress — deployed to Vercel)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -48,6 +48,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 6 | Email Tracking (open pixel, click wrapping) | ✅ Merged | #7 |
 | 7 | Contact Lists + Smart Lists | ✅ Merged | #8 |
 | 8 | Dashboard + Reports | ✅ Merged | #9 |
+| 9 | Production Deployment + Vercel | 🔄 In Progress | — |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -94,9 +95,17 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - CC reads CLAUDE.md automatically for project conventions
 - CC creates a new branch, never commits to main directly
 
+## Deployment
+- **Vercel project**: crm-for-saas (team: jacobqvisths-projects)
+- **Production URL**: https://crm-for-saas.vercel.app
+- **GitHub**: https://github.com/jacobqvisth/crm-for-saas (auto-deploys on push to main)
+- **Cron jobs** (vercel.json): process-emails (*/5 min), check-replies (*/30 min), reset-daily-sends (midnight UTC)
+- **Google OAuth redirect URI to add**: https://crm-for-saas.vercel.app/api/auth/callback/google
+- **Supabase auth redirect to add**: https://crm-for-saas.vercel.app/auth/callback
+
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
-- **Phase 9**: Production deployment + real data loading
+- **Phase 9**: Production deployment + real data loading ← IN PROGRESS
 - **Phase 10**: First real email campaign
 - **Phase 11**: Sender warmup + deliverability
 - **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
