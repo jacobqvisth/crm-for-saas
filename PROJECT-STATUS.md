@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-26 (Phase 9 in progress — deployed to Vercel)
+Last updated: 2026-03-26 (Phase 9 — deployed to Vercel, 2 manual steps remain)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -100,8 +100,14 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - **Production URL**: https://crm-for-saas.vercel.app
 - **GitHub**: https://github.com/jacobqvisth/crm-for-saas (auto-deploys on push to main)
 - **Cron jobs** (vercel.json): process-emails (*/5 min), check-replies (*/30 min), reset-daily-sends (midnight UTC)
-- **Google OAuth redirect URI to add**: https://crm-for-saas.vercel.app/api/auth/callback/google
-- **Supabase auth redirect to add**: https://crm-for-saas.vercel.app/auth/callback
+
+### Manual steps still needed (Phase 9)
+1. **Supabase dashboard** → Authentication → URL Configuration → add to Redirect URLs:
+   `https://crm-for-saas.vercel.app/auth/callback`
+2. **Google Cloud Console** → crm-for-saas project → OAuth 2.0 Credentials → add Authorized Redirect URI:
+   `https://crm-for-saas.vercel.app/api/auth/gmail/callback`
+3. **Load real contacts** via CSV import (10,000+ workshop contacts)
+4. **Connect a Gmail account** via Settings → Email in the production app
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
