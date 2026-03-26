@@ -19,8 +19,9 @@ test.describe('Contacts', () => {
 
     if (await addBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await addBtn.click();
+      // The form may render as a dialog OR as a slide-in panel (h2 heading)
       await expect(
-        page.locator('[role="dialog"]').first()
+        page.locator('[role="dialog"], h2:has-text("Add Contact"), h2:has-text("New Contact"), h2:has-text("Create Contact")').first()
       ).toBeVisible({ timeout: 5_000 });
     }
   });
