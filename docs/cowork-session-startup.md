@@ -87,7 +87,9 @@ cd /Users/jacobqvisth/crm-for-saas && git pull origin main
 
 ## Step 4: How to write a CC prompt
 
-Store prompts in `docs/prompts/` inside this repo (e.g., `docs/prompts/phase-qa.md`).
+Store prompts in the **vault** at `02_Projects/wrenchlane-crm/cc-prompt-phase-X.md` — same convention as the job application platform. Prompts are Cowork's planning artifacts, not code artifacts. They live in Obsidian where they can be wikilinked and searched.
+
+The existing phase 1–8 prompts are in `docs/prompts/` (legacy, in-repo). New prompts from Phase QA onward go in the vault.
 
 Every CC prompt must include:
 
@@ -121,7 +123,8 @@ See `docs/prompts/phase-qa.md` and `docs/process-audit.md` for the reference for
 |------|---------|
 | `/Users/jacobqvisth/crm-for-saas/CLAUDE.md` | CC's instruction file. Contains architecture rules, RLS notes, coding conventions. |
 | `/Users/jacobqvisth/crm-for-saas/PROJECT-STATUS.md` | Cowork's persistent memory. Update after every session. |
-| `/Users/jacobqvisth/crm-for-saas/docs/prompts/` | All CC build prompts (phase1.md–phase8.md, phase-qa.md, ...) |
+| `/Users/jacobqvisth/crm-for-saas/docs/prompts/` | Legacy CC build prompts (phase1.md–phase8.md, in-repo). New prompts go in vault. |
+| `Vault: 02_Projects/wrenchlane-crm/cc-prompt-phase-*.md` | CC build prompts from Phase QA onward (vault-based, Obsidian-linked) |
 | `/Users/jacobqvisth/crm-for-saas/docs/process-audit.md` | Gap analysis vs. job-app platform. Read before major decisions. |
 | `/Users/jacobqvisth/crm-for-saas/docs/roadmap.md` | Post-Phase-9 roadmap (Phases 10–16) |
 | `Vault: 02_Projects/wrenchlane-crm/` | Vault notes for this project |

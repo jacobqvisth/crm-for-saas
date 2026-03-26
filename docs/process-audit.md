@@ -116,7 +116,9 @@ There is no vault-level build document equivalent to `build-plan.md`. The phase 
 Phases are defined inside `PROJECT-STATUS.md`. There are no separate strategic planning session prompts. Phase decisions were made organically during build sessions, not in dedicated planning sessions.
 
 ### 3. Prompt Storage and Structure
-Prompts are stored in the **git repo** at `docs/prompts/phase{N}.md`. This has a trade-off: prompts are versioned with the code (good), but they're not in Obsidian (Cowork authors them without the vault's linking/search). The format is less standardized than the job-app prompts — there's no explicit convention document.
+Prompts are stored in the **git repo** at `docs/prompts/phase{N}.md`. This diverges from the job-app convention (vault-based) and means prompts aren't in Obsidian for wikilinks/search. There's also no explicit convention document for prompt structure.
+
+**Correction made this session:** Phase QA prompt and all future prompts are now stored in the vault at `02_Projects/wrenchlane-crm/cc-prompt-phase-X.md`, matching the job-app convention. The existing phase 1–8 prompts remain in the repo as historical artifacts.
 
 ### 4. CC Workflow
 CC creates a branch → commits → opens PR → **Jacob merges on GitHub**. Then `git pull origin main`. Cowork is not in the merge loop — Jacob is the integration step between CC's work and what goes to production.
@@ -152,7 +154,7 @@ No Playwright. No smoke tests. No post-deploy verification. The `package.json` h
 | Vault build document | `build-plan.md` — full phase history, workflow diagram, strategic decisions | Phases embedded in `PROJECT-STATUS.md` only | 🟡 Important |
 | Session startup file | `cowork-session-start-phase5.md` — dedicated template per major phase | Not present; `PROJECT-STATUS.md` doubles as startup guide | 🟢 Nice-to-have |
 | Strategic planning prompts | Dedicated `cowork-session-next-phase-planning.md` for architectural decisions | None — decisions made ad hoc | 🟢 Nice-to-have |
-| Prompt file location | Vault (Obsidian-linked, searchable) | Repo `docs/prompts/` (versioned but not in Obsidian) | 🟢 Nice-to-have |
+| Prompt file location | Vault (Obsidian-linked, searchable) | Repo `docs/prompts/` (legacy phases 1–8). Corrected: new prompts now go in vault. | 🟢 Fixed |
 
 ---
 
