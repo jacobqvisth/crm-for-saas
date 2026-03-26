@@ -50,7 +50,7 @@ test.describe('All Pages Load Without Crashes', () => {
     { name: 'Sequences', path: '/sequences' },
     { name: 'Lists', path: '/lists' },
     { name: 'Templates', path: '/templates' },
-    { name: 'Settings', path: '/settings' },
+    // Settings excluded — tested separately in settings.spec.ts (slow networkidle due to Gmail status calls)
   ];
 
   for (const p of pages) {
