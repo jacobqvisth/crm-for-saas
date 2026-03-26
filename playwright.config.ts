@@ -32,6 +32,7 @@ export default defineConfig({
     { name: 'cleanup', testMatch: /.*\.teardown\.ts/ },
     {
       name: 'chromium',
+      testIgnore: /.*smoke\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/user.json',

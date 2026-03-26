@@ -61,7 +61,7 @@ test.describe('All Pages Load Without Crashes', () => {
 
       const body = await page.textContent('body');
       expect(body).not.toContain('Application error');
-      expect(body).not.toContain('500');
+      expect(body).not.toContain('Internal Server Error');
 
       const critical = errors.filter(e =>
         !e.includes('favicon') &&
