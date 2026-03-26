@@ -1,53 +1,30 @@
 import { test as setup, expect } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 
 const STORAGE_STATE = 'e2e/.auth/user.json';
 
 setup('authenticate', async ({ page }) => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const baseURL = process.env.TEST_BASE_URL || 'http://localhost:3000';
+  const cronSecret = process.env.CRON_SECRET;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      'Auth setup requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. ' +
-      'Add SUPABASE_SERVICE_ROLE_KEY to your .env.local file (find it in Supabase Dashboard → Settings → API).'
-    );
+  if (!cronSecret) {
+    throw new Error('CRON_SECRET is not set in .env.local — required for E2E auth');
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  // Hit the e2e-login route which creates/ensures the test user and signs them in
+  // server-side, setting the correct auth cookies on the redirect response.
+  await page.goto(`${baseURL}/api/e2e-login?secret=${cronSecret}`);
 
-  const testEmail = process.env.TEST_USER_EMAIL || 'e2e-test@wrenchlane-test.local';
-
-  // Find or create test user
-  const { data: existingUsers } = await supabase.auth.admin.listUsers();
-  let testUser = existingUsers?.users?.find(u => u.email === testEmail);
-
-  if (!testUser) {
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: testEmail,
-      password: 'e2e-test-password-crm-2026!',
-      email_confirm: true,
-      user_metadata: { full_name: 'E2E Test User' },
-    });
-    if (error) throw new Error(`Failed to create test user: ${error.message}`);
-    testUser = data.user;
-  }
-
-  // Generate magic link to authenticate without Google OAuth
-  const { data: sessionData, error: linkError } = await supabase.auth.admin.generateLink({
-    type: 'magiclink',
-    email: testEmail,
-  });
-
-  if (linkError || !sessionData?.properties?.action_link) {
-    throw new Error(`Failed to generate magic link: ${linkError?.message}`);
-  }
-
-  await page.goto(sessionData.properties.action_link);
-
-  // Wait for redirect to dashboard
+  // Should redirect to /dashboard after successful login
   await page.waitForURL('**/dashboard**', { timeout: 20_000 });
+
+  // Verify we're actually authenticated (not bounced back to login)
+  const currentUrl = page.url();
+  if (currentUrl.includes('/login')) {
+    throw new Error(`Auth failed — redirected to login instead of dashboard. URL: ${currentUrl}`);
+  }
+
   await expect(page.locator('body')).toBeVisible();
 
+  // Save the authenticated browser state (cookies) for all subsequent tests
   await page.context().storageState({ path: STORAGE_STATE });
 });
