@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { Modal } from "@/components/ui/modal";
-import { Search, Users, UserPlus, Loader2 } from "lucide-react";
+import { Search, Users, UserPlus, Loader2, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
@@ -15,6 +15,7 @@ interface EnrollContactsModalProps {
   open: boolean;
   onClose: () => void;
   sequenceId: string;
+  sequenceStatus?: string;
   onEnrolled: () => void;
 }
 
@@ -22,6 +23,7 @@ export function EnrollContactsModal({
   open,
   onClose,
   sequenceId,
+  sequenceStatus,
   onEnrolled,
 }: EnrollContactsModalProps) {
   const { workspaceId } = useWorkspace();
@@ -124,7 +126,11 @@ export function EnrollContactsModal({
     const result = await res.json();
 
     if (!res.ok) {
-      toast.error(result.error || "Enrollment failed");
+      if (result.code === "NO_SENDER") {
+        toast.error(result.error, { duration: 6000 });
+      } else {
+        toast.error(result.error || "Enrollment failed");
+      }
     } else {
       toast.success(`Enrolled ${result.enrolled} contacts${result.skipped > 0 ? `, skipped ${result.skipped}` : ""}`);
       if (result.reasons && result.reasons.length > 0) {
@@ -153,6 +159,16 @@ export function EnrollContactsModal({
       maxWidth="max-w-xl"
     >
       <div className="space-y-4">
+        {sequenceStatus === "draft" && (
+          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              This sequence is in <strong>Draft</strong> mode. Contacts will be enrolled and emails will be queued,
+              but make sure to <strong>Activate</strong> the sequence for emails to send on schedule.
+            </span>
+          </div>
+        )}
+
         <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
           <button
             onClick={() => setTab("search")}

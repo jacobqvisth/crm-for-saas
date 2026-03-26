@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enrollContacts } from "@/lib/sequences/enrollment";
+import { getNextSender } from "@/lib/gmail/sender-rotation";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -31,6 +32,18 @@ export async function POST(request: NextRequest) {
 
   if (!membership) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  // Pre-flight: ensure at least one active Gmail account is available
+  const sender = await getNextSender(workspaceId);
+  if (!sender) {
+    return NextResponse.json(
+      {
+        error: "No Gmail account connected. Go to Settings → Email to connect your Gmail account before enrolling contacts.",
+        code: "NO_SENDER",
+      },
+      { status: 422 }
+    );
   }
 
   const result = await enrollContacts({

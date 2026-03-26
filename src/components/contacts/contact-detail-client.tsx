@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { LeadStatusBadge, ContactStatusBadge, DealStageBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
+import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import toast from 'react-hot-toast';
 import type { Tables, Json } from '@/lib/database.types';
 
@@ -68,6 +69,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [editField, setEditField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEnrollInSequence, setShowEnrollInSequence] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -631,7 +633,16 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
           {/* Sequences */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Sequences</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-700">Sequences</h3>
+              <button
+                onClick={() => setShowEnrollInSequence(true)}
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
             {sequences.length === 0 ? (
               <p className="text-sm text-slate-400">Not enrolled in any sequences</p>
             ) : (
@@ -650,6 +661,38 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Enroll in Sequence Modal */}
+      <EnrollInSequenceModal
+        open={showEnrollInSequence}
+        onClose={() => setShowEnrollInSequence(false)}
+        contactId={contactId}
+        contactEmail={contact.email}
+        onEnrolled={() => {
+          // Reload sequences section
+          if (!workspaceId) return;
+          (async () => {
+            const { data: enrollments } = await supabase
+              .from('sequence_enrollments')
+              .select('sequence_id, status, current_step')
+              .eq('contact_id', contactId)
+              .eq('workspace_id', workspaceId);
+            if (enrollments && enrollments.length > 0) {
+              const seqIds = enrollments.map(e => e.sequence_id);
+              const { data: seqData } = await supabase
+                .from('sequences')
+                .select('id, name')
+                .in('id', seqIds);
+              if (seqData) {
+                setSequences(enrollments.map(e => {
+                  const seq = seqData.find(s => s.id === e.sequence_id);
+                  return { id: e.sequence_id, name: seq?.name || 'Unknown', status: e.status, current_step: e.current_step };
+                }));
+              }
+            }
+          })();
+        }}
+      />
 
       {/* Delete Modal */}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Contact">

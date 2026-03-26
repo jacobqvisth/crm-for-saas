@@ -229,6 +229,7 @@ export default function SequenceDetailPage() {
         open={enrollOpen}
         onClose={() => setEnrollOpen(false)}
         sequenceId={sequenceId}
+        sequenceStatus={sequence?.status}
         onEnrolled={load}
       />
     </div>
