@@ -17,6 +17,17 @@ Work as autonomously as possible. Do not ask for clarification on small decision
 
 For everything else: make a decision, document it briefly in your commit message, and keep going.
 
+## Permissions
+
+You have full permission to run any of the following without asking:
+- Any shell or bash commands (`ls`, `cat`, `find`, `mkdir`, `cp`, `mv`, `rm`, etc.)
+- Any npm/npx commands (`npm install`, `npm run build`, `npm run lint`, `npm run test:e2e`, `npx playwright`, etc.)
+- Any git commands (`git status`, `git add`, `git commit`, `git push`, `git pull`, `git branch`, `git log`, etc.)
+- Any file read/write/edit operations anywhere in this project
+- Any TypeScript/Node commands needed for development
+
+You do NOT need to ask permission before running these. Just run them.
+
 ## Development Workflow
 
 This project uses two AI agents coordinated by Jacob:
