@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-26 (Phase 9 — deployed to Vercel, 2 manual steps remain)
+Last updated: 2026-03-26 (Process Audit session — QA phase prompt written, docs upgraded)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -48,7 +48,9 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 6 | Email Tracking (open pixel, click wrapping) | ✅ Merged | #7 |
 | 7 | Contact Lists + Smart Lists | ✅ Merged | #8 |
 | 8 | Dashboard + Reports | ✅ Merged | #9 |
-| 9 | Production Deployment + Vercel | 🔄 In Progress | — |
+| 9 | Production Deployment + Vercel | ✅ Complete | — |
+| QA | Playwright E2E test suite | 🔴 Next — run before Phase 10 | — |
+| 10 | First real email campaign | Planned | — |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -111,8 +113,9 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
-- **Phase 9**: Production deployment + real data loading ← IN PROGRESS
-- **Phase 10**: First real email campaign
+- **Phase 9**: Production deployment + real data loading ✅ COMPLETE (2 manual steps still needed — see above)
+- **Phase QA**: Playwright E2E test suite ← NEXT (prompt: `docs/prompts/phase-qa.md`)
+- **Phase 10**: First real email campaign (after QA)
 - **Phase 11**: Sender warmup + deliverability
 - **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
 

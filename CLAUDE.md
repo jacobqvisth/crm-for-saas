@@ -111,7 +111,27 @@ All tables already exist in Supabase. Do NOT create new tables or run migrations
 
 - Make sure the app builds without errors (`npm run build`)
 - Run the linter (`npm run lint`)
+- If E2E tests exist: run `npm run test:e2e:smoke` (if a dev server is running) to catch obvious regressions before committing
 - If you added a new page or feature, briefly describe how to test it in the PR
+
+## Testing
+
+Once the QA phase is complete, this project will have a Playwright E2E test suite.
+
+**Running tests:**
+```bash
+# Smoke tests (no auth, ~5s) — run locally during development
+npm run test:e2e:smoke
+
+# Full suite against production
+TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e
+
+# View HTML report
+npm run test:e2e:report
+```
+
+Tests live in `e2e/`. The test user is created via Supabase service role (not Google OAuth).
+Do NOT commit `e2e/.auth/user.json` — it contains session tokens and is gitignored.
 
 ## Build Phases (for reference)
 
