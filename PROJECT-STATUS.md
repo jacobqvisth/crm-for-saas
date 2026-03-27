@@ -50,7 +50,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 8 | Dashboard + Reports | ✅ Merged | #9 |
 | 9 | Production Deployment + Vercel | ✅ Complete | — |
 | QA | Playwright E2E test suite | ✅ Complete — 34/34 tests passing against production | #10 |
-| 10 | First real email campaign | Next | — |
+| **10** | **Campaign execution infrastructure** | **CC prompt written — ready to run** | — |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -103,10 +103,19 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - **GitHub**: https://github.com/jacobqvisth/crm-for-saas (auto-deploys on push to main)
 - **Cron jobs** (vercel.json): process-emails (*/5 min), check-replies (*/30 min), reset-daily-sends (midnight UTC)
 
-### Pending before Phase 10
-1. **Load real contacts** via CSV import (10,000+ workshop contacts)
-2. **Connect a Gmail account** via Settings → Email in the production app
-3. Disconnect GitHub auto-deploy in Vercel dashboard (Settings → Git) so Cowork controls deploys
+### Phase 10 — Pre-CC checklist (Jacob does these first)
+1. **Connect a Gmail account** via Settings → Email in the production app (required for pre-flight checks to pass)
+2. **Load real contacts** via CSV import — start with 100–200 Swedish workshop owners, not the full list
+3. **Disconnect GitHub auto-deploy** in Vercel dashboard (Settings → Git) so Cowork controls deploys
+4. **CC prompt:** vault `02_Projects/wrenchlane-crm/_prompts/cc-prompt-phase-10.md`
+
+### What Phase 10 CC session builds
+- Bounce detection in `check-replies` cron (hard bounces → mark contact status = 'bounced', cancel queue, suppress)
+- Campaign launch modal (select list → pre-flight checklist → confirm → enroll)
+- Pre-flight API: `GET /api/sequences/[id]/preflight?listId=...` (Gmail check, missing data counts, send estimate)
+- Sequence analytics page: bounce rate + unsubscribe rate stat cards + enrollment status table with filter
+- Bounce suppression in `process-emails` (belt-and-suspenders contact status check)
+- New E2E spec: `e2e/campaign-launch.spec.ts`
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
