@@ -159,11 +159,11 @@ export function EnrollContactsModal({
       maxWidth="max-w-xl"
     >
       <div className="space-y-4">
-        {sequenceStatus === "draft" && (
+        {(sequenceStatus === "draft" || sequenceStatus === "paused") && (
           <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>
-              This sequence is in <strong>Draft</strong> mode. Contacts will be enrolled and emails will be queued,
+              This sequence is <strong>{sequenceStatus === "draft" ? "in Draft" : "Paused"}</strong>. Contacts will be enrolled and emails will be queued,
               but make sure to <strong>Activate</strong> the sequence for emails to send on schedule.
             </span>
           </div>

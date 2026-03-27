@@ -34,8 +34,8 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence not found"] };
   }
 
-  if (!["active", "draft"].includes(sequence.status)) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active or draft"] };
+  if (!["active", "draft", "paused"].includes(sequence.status)) {
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active, draft, or paused"] };
   }
 
   // Get unsubscribed emails for this workspace
@@ -125,8 +125,8 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     }
 
     // Schedule the first step if it's an email
-    // For draft sequences, queue as "pending" — emails won't send until sequence is activated
-    const emailStatus = (sequence.status === "draft" ? "pending" : "scheduled") as "scheduled" | "pending";
+    // For draft/paused sequences, queue as "pending" — emails won't send until sequence is activated
+    const emailStatus = (["draft", "paused"].includes(sequence.status) ? "pending" : "scheduled") as "scheduled" | "pending";
 
     if (firstStep && firstStep.type === "email" && enrollment) {
       const scheduledFor = getNextSendTime(settings);
