@@ -53,32 +53,49 @@ export function SequenceBuilder({ sequenceId }: SequenceBuilderProps) {
   const addStep = async (type: Step["type"], afterIndex: number) => {
     if (!workspaceId) return;
 
+    // When adding an email step after another step, auto-insert a 3-day delay first
+    // — unless the preceding step is already a delay (no double-delays)
+    const prevStep = afterIndex >= 0 ? steps[afterIndex] : null;
+    const autoDelay = type === "email" && afterIndex >= 0 && prevStep?.type !== "delay";
+    const insertCount = autoDelay ? 2 : 1;
+
     const newOrder = afterIndex + 1;
 
-    // Shift existing steps down
+    // Shift existing steps down to make room
     const stepsToShift = steps.filter((s) => s.step_order >= newOrder);
     for (const s of stepsToShift) {
       await supabase
         .from("sequence_steps")
-        .update({ step_order: s.step_order + 1 })
+        .update({ step_order: s.step_order + insertCount })
         .eq("id", s.id);
     }
 
-    const insertData = {
+    // Insert auto-delay before the email if needed
+    if (autoDelay) {
+      await supabase.from("sequence_steps").insert({
+        sequence_id: sequenceId,
+        step_order: newOrder,
+        type: "delay",
+        delay_days: 3,
+        delay_hours: 0,
+        condition_type: null,
+      });
+    }
+
+    // Insert the actual step
+    const { error } = await supabase.from("sequence_steps").insert({
       sequence_id: sequenceId,
-      step_order: newOrder,
+      step_order: autoDelay ? newOrder + 1 : newOrder,
       type,
-      delay_days: type === "delay" ? 1 : null,
+      delay_days: type === "delay" ? 3 : null,
       delay_hours: type === "delay" ? 0 : null,
       condition_type: type === "condition" ? ("opened" as const) : null,
-    };
-
-    const { error } = await supabase.from("sequence_steps").insert(insertData);
+    });
 
     if (error) {
       toast.error("Failed to add step");
     } else {
-      toast.success(`${type} step added`);
+      toast.success(autoDelay ? "Email step added (3-day delay inserted before it)" : `${type} step added`);
       loadSteps();
     }
     setAddMenuIndex(null);
