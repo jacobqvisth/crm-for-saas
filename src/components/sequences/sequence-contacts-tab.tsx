@@ -10,9 +10,9 @@ import toast from "react-hot-toast";
 interface Enrollment {
   id: string;
   contact_id: string;
-  status: string;
-  current_step: number;
-  enrolled_at: string;
+  status: string | null;
+  current_step: number | null;
+  enrolled_at: string | null;
   contact: {
     id: string;
     first_name: string | null;
@@ -50,7 +50,6 @@ export function SequenceContactsTab({ sequenceId }: SequenceContactsTabProps) {
       .from("sequence_enrollments")
       .select("id, contact_id, status, current_step, enrolled_at, contacts(id, first_name, last_name, email)")
       .eq("sequence_id", sequenceId)
-      .eq("workspace_id", workspaceId)
       .order("enrolled_at", { ascending: false });
 
     if (!error && data) {
@@ -91,8 +90,7 @@ export function SequenceContactsTab({ sequenceId }: SequenceContactsTabProps) {
     const { error } = await supabase
       .from("sequence_enrollments")
       .update({ status })
-      .in("id", Array.from(selected))
-      .eq("workspace_id", workspaceId);
+      .in("id", Array.from(selected));
 
     if (error) {
       toast.error("Failed to update enrollments");
@@ -119,8 +117,7 @@ export function SequenceContactsTab({ sequenceId }: SequenceContactsTabProps) {
     const { error } = await supabase
       .from("sequence_enrollments")
       .delete()
-      .in("id", Array.from(selected))
-      .eq("workspace_id", workspaceId);
+      .in("id", Array.from(selected));
 
     if (error) {
       toast.error("Failed to remove enrollments");
@@ -191,7 +188,7 @@ export function SequenceContactsTab({ sequenceId }: SequenceContactsTabProps) {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {enrollments.map((e) => {
-                const badge = ENROLLMENT_STATUS[e.status] || ENROLLMENT_STATUS.active;
+                const badge = ENROLLMENT_STATUS[e.status ?? "active"] || ENROLLMENT_STATUS.active;
                 return (
                   <tr key={e.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -211,9 +208,9 @@ export function SequenceContactsTab({ sequenceId }: SequenceContactsTabProps) {
                         {badge.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center text-sm text-slate-600">{e.current_step}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{e.current_step ?? 0}</td>
                     <td className="px-4 py-3 text-sm text-slate-500">
-                      {format(new Date(e.enrolled_at), "MMM d, yyyy")}
+                      {e.enrolled_at ? format(new Date(e.enrolled_at), "MMM d, yyyy") : "—"}
                     </td>
                   </tr>
                 );

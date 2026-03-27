@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         const contactId = sentEmails[0]?.contact_id;
         if (contactId) {
           await supabase.from("activities").insert({
-            workspace_id: enrollment.workspace_id,
+            workspace_id: (enrollment.sequences as { workspace_id: string }).workspace_id,
             type: "email_received",
             subject: "Reply received",
             description: "Contact replied to sequence email",

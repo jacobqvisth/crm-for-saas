@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Advance enrollment
-        const currentStep = enrollment.current_step;
+        const currentStep = enrollment.current_step ?? 0;
         const nextStepOrder = currentStep + 1;
 
         await supabase

@@ -112,7 +112,6 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       .insert({
         sequence_id: sequenceId,
         contact_id: contact.id,
-        workspace_id: workspaceId,
         status: "active",
         current_step: 0,
       })
@@ -126,6 +125,9 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     }
 
     // Schedule the first step if it's an email
+    // For draft sequences, queue as "pending" — emails won't send until sequence is activated
+    const emailStatus = (sequence.status === "draft" ? "pending" : "scheduled") as "scheduled" | "pending";
+
     if (firstStep && firstStep.type === "email" && enrollment) {
       const scheduledFor = getNextSendTime(settings);
 
@@ -163,7 +165,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
         to_email: contact.email,
         subject,
         body_html: bodyHtml,
-        status: "scheduled",
+        status: emailStatus,
         scheduled_for: scheduledFor.toISOString(),
         tracking_id: trackingId,
       });
@@ -210,7 +212,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
           to_email: contact.email,
           subject,
           body_html: bodyHtml,
-          status: "scheduled",
+          status: emailStatus,
           scheduled_for: delayEnd.toISOString(),
           tracking_id: trackingId,
         });

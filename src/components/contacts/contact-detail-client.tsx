@@ -171,8 +171,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
       const { data: enrollments } = await supabase
         .from('sequence_enrollments')
         .select('sequence_id, status, current_step')
-        .eq('contact_id', contactId)
-        .eq('workspace_id', workspaceId!);
+        .eq('contact_id', contactId);
       if (enrollments && enrollments.length > 0) {
         const seqIds = enrollments.map(e => e.sequence_id);
         const { data: seqData } = await supabase
@@ -185,8 +184,8 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             return {
               id: e.sequence_id,
               name: seq?.name || 'Unknown',
-              status: e.status,
-              current_step: e.current_step,
+              status: e.status ?? 'active',
+              current_step: e.current_step ?? 0,
             };
           }));
         }
@@ -675,8 +674,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             const { data: enrollments } = await supabase
               .from('sequence_enrollments')
               .select('sequence_id, status, current_step')
-              .eq('contact_id', contactId)
-              .eq('workspace_id', workspaceId);
+              .eq('contact_id', contactId);
             if (enrollments && enrollments.length > 0) {
               const seqIds = enrollments.map(e => e.sequence_id);
               const { data: seqData } = await supabase
@@ -686,7 +684,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               if (seqData) {
                 setSequences(enrollments.map(e => {
                   const seq = seqData.find(s => s.id === e.sequence_id);
-                  return { id: e.sequence_id, name: seq?.name || 'Unknown', status: e.status, current_step: e.current_step };
+                  return { id: e.sequence_id, name: seq?.name || 'Unknown', status: e.status ?? 'active', current_step: e.current_step ?? 0 };
                 }));
               }
             }

@@ -607,47 +607,35 @@ export interface Database {
       sequence_enrollments: {
         Row: {
           id: string;
-          workspace_id: string;
           sequence_id: string;
           contact_id: string;
-          status: string;
-          current_step: number;
-          enrolled_at: string;
+          sender_account_id: string | null;
+          status: string | null;
+          current_step: number | null;
+          enrolled_at: string | null;
           completed_at: string | null;
-          cancelled_at: string | null;
-          cancel_reason: string | null;
         };
         Insert: {
           id?: string;
-          workspace_id: string;
           sequence_id: string;
           contact_id: string;
-          status?: string;
-          current_step?: number;
-          enrolled_at?: string;
+          sender_account_id?: string | null;
+          status?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
           completed_at?: string | null;
-          cancelled_at?: string | null;
-          cancel_reason?: string | null;
         };
         Update: {
           id?: string;
-          workspace_id?: string;
           sequence_id?: string;
           contact_id?: string;
-          status?: string;
-          current_step?: number;
+          sender_account_id?: string | null;
+          status?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
           completed_at?: string | null;
-          cancelled_at?: string | null;
-          cancel_reason?: string | null;
         };
         Relationships: [
-          {
-            foreignKeyName: "sequence_enrollments_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "sequence_enrollments_sequence_id_fkey";
             columns: ["sequence_id"];
@@ -675,7 +663,7 @@ export interface Database {
           to_email: string;
           subject: string;
           body_html: string;
-          status: "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+          status: "pending" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
           scheduled_for: string;
           sent_at: string | null;
           tracking_id: string;
@@ -693,7 +681,7 @@ export interface Database {
           to_email: string;
           subject: string;
           body_html: string;
-          status?: "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+          status?: "pending" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
           scheduled_for: string;
           sent_at?: string | null;
           tracking_id?: string;
@@ -711,7 +699,7 @@ export interface Database {
           to_email?: string;
           subject?: string;
           body_html?: string;
-          status?: "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+          status?: "pending" | "scheduled" | "sending" | "sent" | "failed" | "cancelled";
           scheduled_for?: string;
           sent_at?: string | null;
           tracking_id?: string;
