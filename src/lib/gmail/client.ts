@@ -1,15 +1,15 @@
 import { google } from "googleapis";
 
 function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.trim();
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:3000";
 }
 
 export function getOAuth2Client() {
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_CLIENT_ID?.trim(),
+    process.env.GOOGLE_CLIENT_SECRET?.trim(),
     `${getBaseUrl()}/api/auth/gmail/callback`
   );
 }

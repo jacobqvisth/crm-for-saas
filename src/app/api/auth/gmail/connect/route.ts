@@ -37,5 +37,8 @@ export async function GET() {
     state,
   });
 
+  console.log("[gmail/connect] redirect_uri:", `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/gmail/callback`);
+  console.log("[gmail/connect] authUrl:", authUrl);
+
   return NextResponse.redirect(authUrl);
 }
