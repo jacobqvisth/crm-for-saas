@@ -95,7 +95,7 @@ export function ListTable() {
         workspace_id: workspaceId,
         name: createName.trim(),
         description: createDesc.trim() || null,
-        type: createType,
+        is_dynamic: createType === 'dynamic',
         filters: createType === 'dynamic' ? (createFilters as unknown as Tables<'contact_lists'>['filters']) : null,
       })
       .select('id')
@@ -127,7 +127,7 @@ export function ListTable() {
         workspace_id: workspaceId,
         name: `${list.name} (copy)`,
         description: list.description,
-        type: list.type,
+        is_dynamic: list.is_dynamic,
         filters: list.filters,
       })
       .select('id')
