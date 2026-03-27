@@ -12,6 +12,57 @@ const PIXEL_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate",
 } as const;
 
+/**
+ * Detect bot/scanner requests that should NOT count as real opens.
+ *
+ * Google Gmail scans every incoming email image within seconds of delivery.
+ * Other mail clients (Outlook SafeLinks, Apple Mail Privacy) also pre-fetch.
+ * We filter these out so stats reflect actual human opens.
+ */
+function isBotRequest(userAgent: string | null, ipAddress: string | null): boolean {
+  // No user agent = likely a bot/scanner
+  if (!userAgent) return true;
+
+  const ua = userAgent.toLowerCase();
+
+  // Known bot/scanner UA substrings
+  const botPatterns = [
+    "googleimageproxy",
+    "googlebot",
+    "bingbot",
+    "yahoo! slurp",
+    "duckduckbot",
+    "bot/",
+    "crawler",
+    "spider",
+    "slurp",
+    "feedfetcher",
+    "mediapartners-google",
+    "facebookexternalhit",
+    "linkedinbot",
+    "twitterbot",
+    "outbrain",
+    "preview",
+    "safebrowsing",
+    "mail.ru",
+    "msnbot",
+  ];
+  if (botPatterns.some((p) => ua.includes(p))) return true;
+
+  // Google image proxy uses very old fake UAs like "Edge/12.246"
+  // Edge 12 is from 2015 — no real user has this anymore
+  if (/edge\/1[0-3]\./.test(ua)) return true;
+
+  // Check Google IP ranges (most common false-positive source)
+  // Covers: 66.102.x.x, 66.249.x.x, 72.14.x.x, 74.125.x.x, 209.85.x.x
+  if (ipAddress) {
+    const googlePrefixes = ["66.102.", "66.249.", "72.14.", "74.125.", "209.85.", "108.177.", "173.194.", "172.217.", "216.58.", "216.239."];
+    if (googlePrefixes.some((prefix) => ipAddress.startsWith(prefix))) return true;
+  }
+
+  return false;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ trackingId: string }> }
@@ -19,6 +70,17 @@ export async function GET(
   const { trackingId } = await params;
 
   try {
+    const userAgent = request.headers.get("user-agent") || null;
+    const ipAddress =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      null;
+
+    // Skip bots/scanners entirely — return pixel without recording
+    if (isBotRequest(userAgent, ipAddress)) {
+      return new NextResponse(PIXEL, { headers: PIXEL_HEADERS });
+    }
+
     const supabase = createAdminClient();
 
     // Look up email_queue by tracking_id
@@ -45,12 +107,6 @@ export async function GET(
     if (recentOpen && recentOpen.length > 0) {
       return new NextResponse(PIXEL, { headers: PIXEL_HEADERS });
     }
-
-    const userAgent = request.headers.get("user-agent") || null;
-    const ipAddress =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      null;
 
     // Check if this is the first open ever for this tracking_id (for activity record)
     const { data: anyPriorOpen } = await supabase
