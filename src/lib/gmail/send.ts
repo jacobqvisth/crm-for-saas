@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getGmailClient } from "./client";
 import { getValidAccessToken } from "./token-refresh";
 import { wrapLinks } from "@/lib/tracking/link-wrapper";
@@ -106,7 +106,7 @@ function buildMimeMessage(params: {
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   // Get the Gmail account record
   const { data: account, error: fetchError } = await supabase

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { getOAuth2Client } from "./client";
 
@@ -20,7 +20,7 @@ type RefreshResult = TokenRefreshResult | TokenRefreshError;
  * If the refresh fails (e.g., user revoked access), marks the account as 'disconnected'.
  */
 export async function getValidAccessToken(accountId: string): Promise<RefreshResult> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: account, error: fetchError } = await supabase
     .from("gmail_accounts")

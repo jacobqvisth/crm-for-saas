@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import type { Tables } from "@/lib/database.types";
 
 type GmailAccount = Tables<"gmail_accounts">;
@@ -8,7 +8,7 @@ type GmailAccount = Tables<"gmail_accounts">;
  * Only picks accounts that are active and have remaining capacity.
  */
 export async function getNextSender(workspaceId: string): Promise<GmailAccount | null> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: accounts, error } = await supabase
     .from("gmail_accounts")
@@ -33,7 +33,7 @@ export async function getNextSender(workspaceId: string): Promise<GmailAccount |
  * Returns the total remaining daily send capacity across all active accounts in a workspace.
  */
 export async function getTotalDailyCapacity(workspaceId: string): Promise<number> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: accounts, error } = await supabase
     .from("gmail_accounts")
