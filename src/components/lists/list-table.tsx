@@ -53,7 +53,7 @@ export function ListTable() {
     // Get member counts for static lists
     const listsWithCounts: ContactList[] = [];
     for (const list of data || []) {
-      if (list.type === 'dynamic') {
+      if (list.is_dynamic === true) {
         listsWithCounts.push({ ...list, contact_count: undefined });
       } else {
         const { count } = await supabase
@@ -139,7 +139,7 @@ export function ListTable() {
     }
 
     // For static lists, copy members
-    if (list.type === 'static') {
+    if (!list.is_dynamic) {
       const { data: members } = await supabase
         .from('contact_list_members')
         .select('contact_id')
@@ -261,22 +261,22 @@ export function ListTable() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        list.type === 'dynamic'
+                        list.is_dynamic === true
                           ? 'bg-purple-100 text-purple-700'
                           : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {list.type === 'dynamic' ? <Filter className="w-3 h-3" /> : <Users className="w-3 h-3" />}
-                        {list.type === 'dynamic' ? 'Dynamic' : 'Static'}
+                        {list.is_dynamic === true ? <Filter className="w-3 h-3" /> : <Users className="w-3 h-3" />}
+                        {list.is_dynamic === true ? 'Dynamic' : 'Static'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500 max-w-xs truncate">
                       {list.description || '—'}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {list.type === 'dynamic' ? '—' : (list.contact_count ?? 0)}
+                      {list.is_dynamic === true ? '—' : (list.contact_count ?? 0)}
                     </td>
                     <td className="px-4 py-3 text-slate-500">
-                      {format(new Date(list.created_at), 'MMM d, yyyy')}
+                      {list.created_at ? format(new Date(list.created_at), 'MMM d, yyyy') : '—'}
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="relative" ref={actionMenuId === list.id ? actionMenuRef : undefined}>

@@ -55,7 +55,7 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
   const [descInput, setDescInput] = useState('');
   const [editFilters, setEditFilters] = useState<ListFilter[]>([]);
 
-  const isDynamic = list?.type === 'dynamic';
+  const isDynamic = list?.is_dynamic === true;
   const filters: ListFilter[] = (list?.filters as unknown as ListFilter[]) || [];
 
   // Load list

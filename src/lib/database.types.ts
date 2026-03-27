@@ -390,29 +390,29 @@ export interface Database {
           workspace_id: string;
           name: string;
           description: string | null;
-          type: string;
+          is_dynamic: boolean | null;
           filters: Json | null;
-          created_at: string;
-          updated_at: string;
+          created_at: string | null;
+          updated_at: string | null;
         };
         Insert: {
           id?: string;
           workspace_id: string;
           name: string;
           description?: string | null;
-          type?: string;
+          is_dynamic?: boolean | null;
           filters?: Json | null;
-          created_at?: string;
-          updated_at?: string;
+          created_at?: string | null;
+          updated_at?: string | null;
         };
         Update: {
           id?: string;
           workspace_id?: string;
           name?: string;
           description?: string | null;
-          type?: string;
+          is_dynamic?: boolean | null;
           filters?: Json | null;
-          updated_at?: string;
+          updated_at?: string | null;
         };
         Relationships: [
           {
