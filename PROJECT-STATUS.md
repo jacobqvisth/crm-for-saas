@@ -106,7 +106,7 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 ### Phase 10 — Pre-CC checklist (Jacob does these first)
 1. **Connect a Gmail account** via Settings → Email in the production app (required for pre-flight checks to pass)
 2. **Load real contacts** via CSV import — start with 100–200 Swedish workshop owners, not the full list
-3. **Disconnect GitHub auto-deploy** in Vercel dashboard (Settings → Git) so Cowork controls deploys
+3. ~~Disconnect GitHub auto-deploy~~ — already disconnected ✅
 4. **CC prompt:** vault `02_Projects/wrenchlane-crm/_prompts/cc-prompt-phase-10.md`
 
 ### What Phase 10 CC session builds
