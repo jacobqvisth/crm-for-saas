@@ -76,6 +76,7 @@ export function DealActivityTimeline({ dealId }: DealActivityTimelineProps) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, dealId]);
 
   const addNote = async () => {

@@ -59,6 +59,7 @@ export default function PipelineSettingsPage() {
     if (error) toast.error('Failed to load pipelines');
     else setPipelines(data || []);
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   useEffect(() => {

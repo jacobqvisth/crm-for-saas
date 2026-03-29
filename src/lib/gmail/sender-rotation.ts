@@ -29,24 +29,3 @@ export async function getNextSender(workspaceId: string): Promise<GmailAccount |
   return available || null;
 }
 
-/**
- * Returns the total remaining daily send capacity across all active accounts in a workspace.
- */
-export async function getTotalDailyCapacity(workspaceId: string): Promise<number> {
-  const supabase = createServiceClient();
-
-  const { data: accounts, error } = await supabase
-    .from("gmail_accounts")
-    .select("daily_sends_count, max_daily_sends")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "active");
-
-  if (error || !accounts) {
-    return 0;
-  }
-
-  return accounts.reduce(
-    (total, account) => total + Math.max(0, account.max_daily_sends - account.daily_sends_count),
-    0
-  );
-}

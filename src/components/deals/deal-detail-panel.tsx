@@ -81,6 +81,7 @@ export function DealDetailPanel({ dealId, stages, open, onClose, onDealUpdated }
     }
 
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, dealId]);
 
   useEffect(() => {
@@ -112,6 +113,7 @@ export function DealDetailPanel({ dealId, stages, open, onClose, onDealUpdated }
       if (data) setCompanyResults(data);
     }, 200);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companySearch, workspaceId]);
 
   useEffect(() => {

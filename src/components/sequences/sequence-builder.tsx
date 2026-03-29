@@ -10,11 +10,58 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { Plus, Mail, Clock, GitBranch, ArrowDown } from "lucide-react";
+import { Plus, Mail, Clock, GitBranch } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
 type Step = Tables<"sequence_steps">;
+
+interface AddStepButtonProps {
+  index: number;
+  addMenuIndex: number | null;
+  setAddMenuIndex: (i: number | null) => void;
+  addStep: (type: Step["type"], afterIndex: number) => void;
+}
+
+function AddStepButton({ index, addMenuIndex, setAddMenuIndex, addStep }: AddStepButtonProps) {
+  return (
+    <div className="flex items-center justify-center py-2 relative">
+      <div className="w-0.5 h-4 bg-slate-200" />
+      <div className="absolute">
+        <div className="relative">
+          <button
+            onClick={() => setAddMenuIndex(addMenuIndex === index ? null : index)}
+            className="w-7 h-7 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          {addMenuIndex === index && (
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
+              <button
+                onClick={() => addStep("email", index)}
+                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <Mail className="w-3.5 h-3.5 text-indigo-500" /> Email
+              </button>
+              <button
+                onClick={() => addStep("delay", index)}
+                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-500" /> Delay
+              </button>
+              <button
+                onClick={() => addStep("condition", index)}
+                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <GitBranch className="w-3.5 h-3.5 text-purple-500" /> Condition
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface SequenceBuilderProps {
   sequenceId: string;
@@ -174,44 +221,6 @@ export function SequenceBuilder({ sequenceId }: SequenceBuilderProps) {
     }
   };
 
-  const AddStepButton = ({ index }: { index: number }) => (
-    <div className="flex items-center justify-center py-2 relative">
-      <div className="w-0.5 h-4 bg-slate-200" />
-      <div className="absolute">
-        <div className="relative">
-          <button
-            onClick={() => setAddMenuIndex(addMenuIndex === index ? null : index)}
-            className="w-7 h-7 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-          {addMenuIndex === index && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
-              <button
-                onClick={() => addStep("email", index)}
-                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-              >
-                <Mail className="w-3.5 h-3.5 text-indigo-500" /> Email
-              </button>
-              <button
-                onClick={() => addStep("delay", index)}
-                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-              >
-                <Clock className="w-3.5 h-3.5 text-amber-500" /> Delay
-              </button>
-              <button
-                onClick={() => addStep("condition", index)}
-                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-              >
-                <GitBranch className="w-3.5 h-3.5 text-purple-500" /> Condition
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -242,7 +251,7 @@ export function SequenceBuilder({ sequenceId }: SequenceBuilderProps) {
         </div>
       ) : (
         <>
-          <AddStepButton index={-1} />
+          <AddStepButton index={-1} addMenuIndex={addMenuIndex} setAddMenuIndex={setAddMenuIndex} addStep={addStep} />
 
           <DragDropContext onDragEnd={onDragEnd}>
             <Droppable droppableId="steps">
@@ -266,7 +275,7 @@ export function SequenceBuilder({ sequenceId }: SequenceBuilderProps) {
                           </div>
                         )}
                       </Draggable>
-                      <AddStepButton index={index} />
+                      <AddStepButton index={index} addMenuIndex={addMenuIndex} setAddMenuIndex={setAddMenuIndex} addStep={addStep} />
                     </div>
                   ))}
                   {provided.placeholder}

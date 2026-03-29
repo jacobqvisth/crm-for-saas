@@ -60,6 +60,7 @@ export function DealContacts({ dealId }: DealContactsProps) {
 
   useEffect(() => {
     fetchLinkedContacts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, dealId]);
 
   // Search contacts
@@ -84,6 +85,7 @@ export function DealContacts({ dealId }: DealContactsProps) {
       }
     }, 200);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, workspaceId, linkedContacts]);
 
   useEffect(() => {

@@ -52,8 +52,7 @@ export function EnrollListModal({ open, onClose, listId, isDynamic, filters, con
           'id',
         );
         if (error) throw error;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        contactIds = (data || []).map((c: any) => c.id);
+        contactIds = (data || []).map((c: Record<string, unknown>) => c.id as string);
       } else {
         const { data, error } = await supabase
           .from('contact_list_members')

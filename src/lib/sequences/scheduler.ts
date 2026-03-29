@@ -96,12 +96,3 @@ export function calculateStepScheduleTime(
   return getNextSendTime(settings, afterDelay);
 }
 
-/**
- * Converts day abbreviations (mon, tue, etc.) to day numbers (0-6).
- */
-export function parseSendDays(days: (string | number)[]): number[] {
-  return days.map((d) => {
-    if (typeof d === "number") return d;
-    return DAY_MAP[d.toLowerCase()] ?? 1;
-  });
-}

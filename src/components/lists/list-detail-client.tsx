@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -56,7 +56,10 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
   const [editFilters, setEditFilters] = useState<ListFilter[]>([]);
 
   const isDynamic = list?.is_dynamic === true;
-  const filters: ListFilter[] = (list?.filters as unknown as ListFilter[]) || [];
+  const filters = useMemo(
+    () => (list?.filters as unknown as ListFilter[]) || [],
+    [list?.filters],
+  );
 
   // Load list
   useEffect(() => {
@@ -140,7 +143,8 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
 
     setSelectedIds(new Set());
     setContactsLoading(false);
-  }, [workspaceId, list, page, listId, isDynamic, filters, supabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, list, page, listId, isDynamic, filters]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
