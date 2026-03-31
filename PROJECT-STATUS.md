@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-31 (Phase 10 merged — campaign launch + analytics live)
+Last updated: 2026-03-31 (Phase 12a merged — Prospector live)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -53,7 +53,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | PR #11 | Bug fix: Gmail connect errors, enrollment UX, contact-to-sequence flow | ✅ Merged | #11 |
 | Hotfixes | Post-QA production hardening (see below) | ✅ Deployed to main | — |
 | 10 | Campaign execution infrastructure | ✅ Merged | #13 |
-| **12a** | **Prospector (contact discovery via Prospeo.io)** | **CC prompt written — ready to run in parallel with Phase 10** | — |
+| 12a | Prospector (contact discovery via Prospeo.io) | ✅ Merged | #14 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
