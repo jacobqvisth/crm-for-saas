@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -17,9 +17,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Inbox,
 } from "lucide-react";
 
-const navItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  badge?: number;
+};
+
+const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },
@@ -27,20 +35,49 @@ const navItems = [
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/prospector", label: "Prospector", icon: Search },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchUnread() {
+      try {
+        const res = await fetch("/api/inbox/unread-count");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setUnreadCount(data.count ?? 0);
+      } catch {
+        // Ignore errors for badge fetch
+      }
+    }
+
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/login");
   };
+
+  const navItems: NavItem[] = staticNavItems.map((item) => ({
+    ...item,
+    badge: item.href === "/inbox" ? unreadCount : undefined,
+  }));
 
   return (
     <aside
@@ -75,7 +112,14 @@ export function Sidebar() {
               }`}
               title={collapsed ? item.label : undefined}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
+              <div className="relative flex-shrink-0">
+                <Icon className="w-5 h-5" />
+                {item.badge != null && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
+              </div>
               {!collapsed && <span>{item.label}</span>}
             </Link>
           );

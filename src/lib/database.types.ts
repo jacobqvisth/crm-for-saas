@@ -671,6 +671,7 @@ export interface Database {
           sent_at: string | null;
           tracking_id: string;
           gmail_message_id: string | null;
+          gmail_thread_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -689,6 +690,7 @@ export interface Database {
           sent_at?: string | null;
           tracking_id?: string;
           gmail_message_id?: string | null;
+          gmail_thread_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -707,6 +709,7 @@ export interface Database {
           sent_at?: string | null;
           tracking_id?: string;
           gmail_message_id?: string | null;
+          gmail_thread_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -838,6 +841,94 @@ export interface Database {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      inbox_messages: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          gmail_account_id: string;
+          gmail_message_id: string;
+          gmail_thread_id: string;
+          email_queue_id: string | null;
+          contact_id: string | null;
+          from_email: string;
+          from_name: string | null;
+          subject: string | null;
+          body_html: string | null;
+          body_text: string | null;
+          received_at: string;
+          is_read: boolean;
+          category: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          gmail_account_id: string;
+          gmail_message_id: string;
+          gmail_thread_id: string;
+          email_queue_id?: string | null;
+          contact_id?: string | null;
+          from_email: string;
+          from_name?: string | null;
+          subject?: string | null;
+          body_html?: string | null;
+          body_text?: string | null;
+          received_at: string;
+          is_read?: boolean;
+          category?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          gmail_account_id?: string;
+          gmail_message_id?: string;
+          gmail_thread_id?: string;
+          email_queue_id?: string | null;
+          contact_id?: string | null;
+          from_email?: string;
+          from_name?: string | null;
+          subject?: string | null;
+          body_html?: string | null;
+          body_text?: string | null;
+          received_at?: string;
+          is_read?: boolean;
+          category?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "inbox_messages_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inbox_messages_gmail_account_id_fkey";
+            columns: ["gmail_account_id"];
+            isOneToOne: false;
+            referencedRelation: "gmail_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inbox_messages_email_queue_id_fkey";
+            columns: ["email_queue_id"];
+            isOneToOne: false;
+            referencedRelation: "email_queue";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inbox_messages_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
             referencedColumns: ["id"];
           },
         ];

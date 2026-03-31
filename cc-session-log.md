@@ -53,3 +53,25 @@ updated: 2026-03-31
 ## Earlier Sessions (before log was established)
 
 Phases 1–9 complete. App live at https://crm-for-saas.vercel.app. Pre-10 bugs fixed (Gmail connect UX, enrollment flow). 33/33 E2E tests passing. Phase QA (Playwright suite) written and passing.
+
+---
+
+## 2026-03-31 — Phase 14: Inbox + Reply Management
+
+- **Branch**: `feature/inbox-reply-management`
+- **What was built**:
+  - **DB migration** (`supabase/migrations/20260401000000_inbox_messages.sql`): Added `gmail_thread_id TEXT` to `email_queue`; created `inbox_messages` table (16 columns, RLS, trigger, indexes); applied to prod via Supabase MCP
+  - **database.types.ts**: Added `gmail_thread_id` to email_queue Row/Insert/Update; added full `inbox_messages` table definition
+  - **process-emails cron** (`src/app/api/cron/process-emails/route.ts`): After successful send, fetches the Gmail message to get `threadId` and stores it in `email_queue.gmail_thread_id` (non-fatal if this fails)
+  - **check-replies cron** (full rewrite): Now polls Gmail threads for real replies — groups sent emails by (sender_account_id, gmail_thread_id), calls `threads.get` once per thread, skips messages from our own address, deduplicates via `inbox_messages.gmail_message_id UNIQUE`, inserts `inbox_messages` rows + `email_events` reply records, updates contact `last_contacted_at`, creates activity records; bounce detection logic preserved from previous implementation
+  - **API routes** (5 routes):
+    - `GET /api/inbox` — list messages with filter (all/unread/interested/not_interested/out_of_office), pagination, contact+queue joins
+    - `PATCH /api/inbox/[id]` — update is_read and category; auto-qualifies contact when category→'interested'
+    - `GET /api/inbox/[id]/thread` — returns unified outgoing+incoming thread sorted by timestamp
+    - `POST /api/inbox/[id]/reply` — sends reply via Gmail API with In-Reply-To header, creates activity
+    - `GET /api/inbox/unread-count` — returns `{ count }` for sidebar badge
+  - **Inbox page** (`src/app/(dashboard)/inbox/`): Two-panel layout — left: filterable conversation list with unread dot, contact avatar, preview snippet, category badge, relative timestamp; right: thread view with outgoing/incoming messages styled differently, action bar (Interested/Not Interested/OOO/Read toggle), category dropdown, contact link, collapsible reply composer
+  - **Sidebar**: Added Inbox nav item between Prospector and Templates with `Inbox` icon; polls `/api/inbox/unread-count` every 60s and shows red badge with count
+  - **E2E tests** (`e2e/inbox.spec.ts`): 3 smoke tests — GET /api/inbox, GET /api/inbox/unread-count, PATCH with nonexistent ID
+- **Build status**: TypeScript compiled clean; zero errors; all 32 routes generated
+- **Notable decisions**: Reply detection uses thread polling (not push webhooks) since no Pub/Sub setup; stop_on_reply logic in check-replies now correctly triggers off real reply events; manual replies from inbox are not tracked (no pixel/link wrapping) since they're human-initiated; lint script is pre-existing broken (no eslint.config.mjs in repo)
