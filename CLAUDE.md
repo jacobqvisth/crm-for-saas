@@ -44,10 +44,23 @@ The local folder, GitHub, and both agents must stay in sync. This is the strict 
 3. **Commit and push** Cowork's changes so they're on GitHub
 4. **CC starts a new session** — it reads from GitHub, so it gets everything
 5. **CC builds** on a new branch, opens a PR
-6. **Jacob merges** the PR on GitHub
+6. **Cowork handles the full merge/deploy loop** (see below) — Jacob does not need to do anything
 7. **`git pull origin main`** to sync local folder before Cowork touches anything again
 
 Breaking this sequence causes conflicts. The rule: **always pull before writing, always push before CC starts.**
+
+### Cowork's Autonomous Merge + Deploy Loop
+
+When Jacob pastes a CC session result (containing a PR number), Cowork handles the full loop **without asking Jacob**:
+
+1. `gh pr merge [N] --merge --repo jacobqvisth/crm-for-saas` — merge the PR
+2. `git pull origin main` — sync local repo via Desktop Commander
+3. `vercel --prod --yes` from `/Users/jacobqvisth/crm-for-saas/` — deploy to production (auto-deploy is intentionally disconnected)
+4. `TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e` — run full E2E suite
+5. Update `PROJECT-STATUS.md` to mark phase ✅ Merged + push to GitHub
+6. Report back: pass/fail count, deploy URL, what's next
+
+Only stop if tests fail or deploy errors — investigate and fix, then report.
 
 ### Git Rules for CC
 

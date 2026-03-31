@@ -103,10 +103,31 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 3. Commit and push — so GitHub has Cowork's changes
 4. CC starts new session — reads from GitHub, gets everything
 5. CC builds on new branch → PR
-6. Jacob merges PR on GitHub
+6. **Cowork handles the full merge/deploy loop** — Jacob does not touch git or Vercel
 7. `git pull origin main` — sync local again before next round
 
 **Rule: always pull before writing, always push before CC starts.**
+
+### Cowork's Autonomous Merge + Deploy Loop
+
+When Jacob pastes a CC session result (containing a PR number), Cowork runs this full sequence **without asking Jacob for approval**:
+
+```bash
+# 1. Merge the PR
+gh pr merge [N] --merge --repo jacobqvisth/crm-for-saas
+
+# 2. Pull latest
+cd /Users/jacobqvisth/crm-for-saas && git pull origin main
+
+# 3. Deploy (auto-deploy is intentionally disconnected on Vercel)
+vercel --prod --yes
+
+# 4. Run E2E tests against production
+TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e
+```
+
+Then update PROJECT-STATUS.md, push, and report back to Jacob: pass/fail counts, deploy URL, next phase.
+Only stop if tests fail or deploy errors — investigate, fix, then report.
 
 ### CC Session Practice
 - Always start a new CC session for each phase/prompt
