@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-31 (Phase 10 PR open — #13)
+Last updated: 2026-03-31 (Phase 10 merged — campaign launch + analytics live)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -52,7 +52,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | QA | Playwright E2E test suite | ✅ Complete — 34/34 tests passing against production | #10 |
 | PR #11 | Bug fix: Gmail connect errors, enrollment UX, contact-to-sequence flow | ✅ Merged | #11 |
 | Hotfixes | Post-QA production hardening (see below) | ✅ Deployed to main | — |
-| **10** | **Campaign execution infrastructure** | **PR open — review & merge** | #13 |
+| 10 | Campaign execution infrastructure | ✅ Merged | #13 |
 | **12a** | **Prospector (contact discovery via Prospeo.io)** | **CC prompt written — ready to run in parallel with Phase 10** | — |
 
 ## Bugs Fixed (not by CC)
@@ -149,7 +149,7 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 9**: Production deployment + real data loading ✅ COMPLETE (2 manual steps still needed — see above)
 - **Phase QA**: ✅ Complete. 34/34 Playwright E2E tests passing against production. Prompt: vault `02_Projects/wrenchlane-crm/cc-prompt-phase-qa.md`
-- **Phase 10**: First real email campaign ← PR #13 open, ready to merge
+- **Phase 10**: First real email campaign ✅ COMPLETE — campaign launch modal, preflight API, analytics page, bounce suppression
 - **Phase 11**: Sender warmup + deliverability
 - **Phase 12a**: Prospector — contact discovery via Prospeo.io ← READY (run parallel with Phase 10)
 - **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
