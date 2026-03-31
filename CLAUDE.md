@@ -124,6 +124,7 @@ All tables already exist in Supabase. Do NOT create new tables or run migrations
 - Run the linter (`npm run lint`)
 - If E2E tests exist: run `npm run test:e2e:smoke` (if a dev server is running) to catch obvious regressions before committing
 - If you added a new page or feature, briefly describe how to test it in the PR
+- **Append a session summary to `cc-session-log.md`** — this is how Cowork (the planning agent) knows what you built. Include: phase/task name, date, PR number, branch, bullet list of what was built, build status, and any notable decisions or skipped items. Keep it factual and brief.
 
 ## Testing
 
@@ -161,5 +162,6 @@ Do NOT commit `e2e/.auth/user.json` — it contains session tokens and is gitign
 
 - `CLAUDE.md` — CC reads this automatically. Project conventions and architecture.
 - `PROJECT-STATUS.md` — Cowork's persistent memory. Updated after each phase.
-- `docs/prompts/` — All CC build prompts archived here.
+- `cc-session-log.md` — CC appends a summary here after every session. Cowork reads this at startup to know what was last built.
+- `docs/prompts/` — CC build prompts. Local only — gitignored. CC reads these from the local filesystem.
 - `docs/icp/` — ICP research, personas, market data for email content.
