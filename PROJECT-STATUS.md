@@ -54,7 +54,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Hotfixes | Post-QA production hardening (see below) | ✅ Deployed to main | — |
 | 10 | Campaign execution infrastructure | ✅ Merged | #13 |
 | 12a | Prospector (contact discovery via Prospeo.io) | ✅ Merged | #14 |
-| 14 | Inbox + Reply Management | 🔜 Ready for CC | — |
+| 14 | Inbox + Reply Management | ✅ Merged | #15 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -153,7 +153,7 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 10**: Campaign execution infrastructure ✅ COMPLETE — campaign launch modal, preflight API, analytics page, bounce suppression
 - **Phase 12a**: Prospector — contact discovery via Prospeo.io ✅ COMPLETE — PR #14
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
-- **Phase 14**: Inbox + Reply Management 🔜 NEXT — prompt at `docs/prompts/phase14-inbox.md`
+- **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
 - **Phases 12-16**: Enrichment, AI writer, meetings, analytics
 
 ### Phase 14 — Pre-CC Checklist
