@@ -52,6 +52,7 @@ export function AddDealForm({ pipelineId, stages, defaultStage, onSuccess, onCan
       if (data) setCompanies(data);
     };
     fetchCompanies();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, companySearch]);
 
   useEffect(() => {

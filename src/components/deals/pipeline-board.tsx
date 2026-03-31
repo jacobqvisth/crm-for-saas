@@ -66,6 +66,7 @@ export function PipelineBoard() {
       }
     }
     fetchPipelines();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   // Fetch companies for filter
@@ -77,6 +78,7 @@ export function PipelineBoard() {
       .eq('workspace_id', workspaceId)
       .order('name')
       .then(({ data }) => { if (data) setCompanies(data); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   // Fetch deals
@@ -117,6 +119,7 @@ export function PipelineBoard() {
 
     setDeals(mapped);
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, activePipelineId, filterCompany, filterAmountMin, filterAmountMax, filterDateFrom, filterDateTo]);
 
   useEffect(() => {

@@ -29,8 +29,7 @@ export function ExportCsvButton({ listId, listName, isDynamic, filters }: Export
     setExporting(true);
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let contacts: any[] = [];
+      let contacts: Record<string, unknown>[] = [];
 
       if (isDynamic) {
         const { data, error } = await buildFilterQuery(
@@ -47,7 +46,7 @@ export function ExportCsvButton({ listId, listName, isDynamic, filters }: Export
           .select('contacts(*, companies(name))')
           .eq('list_id', listId);
         if (error) throw error;
-        contacts = ((data || []) as unknown as Record<string, unknown>[]).map((m) => m.contacts).filter(Boolean);
+        contacts = ((data || []) as unknown as { contacts: Record<string, unknown> }[]).map((m) => m.contacts).filter(Boolean) as Record<string, unknown>[];
       }
 
       const csvData = contacts.map((c: Record<string, unknown>) => ({

@@ -68,14 +68,3 @@ export function ensureUnsubscribeLink(bodyHtml: string, trackingId: string): str
 </div>`;
 }
 
-/**
- * Returns the list of available template variables for the UI picker.
- */
-export const TEMPLATE_VARIABLES = [
-  { key: "first_name", label: "First Name", example: "John" },
-  { key: "last_name", label: "Last Name", example: "Doe" },
-  { key: "email", label: "Email", example: "john@example.com" },
-  { key: "company_name", label: "Company Name", example: "Acme Inc" },
-  { key: "phone", label: "Phone", example: "+1 555-0123" },
-  { key: "unsubscribe_link", label: "Unsubscribe Link", example: "#" },
-] as const;

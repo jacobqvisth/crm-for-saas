@@ -134,14 +134,15 @@ All tables already exist in Supabase. Do NOT create new tables or run migrations
 ## Before Finishing a Task
 
 - Make sure the app builds without errors (`npm run build`)
-- Run the linter (`npm run lint`)
+- Run the linter (`npm run lint`) — uses `eslint src/` (note: `next lint` was removed in Next.js 16)
+- Run type check (`npx tsc --noEmit`)
 - If E2E tests exist: run `npm run test:e2e:smoke` (if a dev server is running) to catch obvious regressions before committing
 - If you added a new page or feature, briefly describe how to test it in the PR
 - **Append a session summary to `cc-session-log.md`** — this is how Cowork (the planning agent) knows what you built. Include: phase/task name, date, PR number, branch, bullet list of what was built, build status, and any notable decisions or skipped items. Keep it factual and brief.
 
 ## Testing
 
-Once the QA phase is complete, this project will have a Playwright E2E test suite.
+The QA phase is complete. The project has a Playwright E2E test suite with 33 tests — all passing against production.
 
 **Running tests:**
 ```bash
@@ -168,8 +169,25 @@ Do NOT commit `e2e/.auth/user.json` — it contains session tokens and is gitign
 - Phase 6: Email Tracking (open pixel, click wrapping, unsubscribe) ✅
 - Phase 7: Contact Lists + Smart Lists ✅ (PR #8)
 - Phase 8: Dashboard + Reports ✅ (PR #9)
+- Phase 9: Production Deployment + Vercel ✅
+- Phase QA: Playwright E2E test suite ✅ 33/33 tests passing (PR #10)
 
-**Core build complete.** See `docs/roadmap.md` for Phases 9-16 (deployment, campaigns, power features).
+**Core build + deployment complete.** Phase 10 (campaign execution infrastructure) prompt is ready. See `docs/roadmap.md` for Phases 10-16.
+
+## Maintenance Cadence
+
+Before signing off on any session, run these checks:
+
+1. `npm run build` — must pass with 0 errors
+2. `npm run lint` — fix any new warnings introduced by this session
+3. `npx tsc --noEmit` — no type errors
+
+After every deploy, the full E2E suite must pass:
+```bash
+TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e
+```
+
+Every 3–4 phases, a dedicated health check session runs: lint to zero, dead code removal, `npm audit`, `npx depcheck`, git branch cleanup, env var audit, TODO sweep, and CLAUDE.md freshness check.
 
 ## Key Files
 

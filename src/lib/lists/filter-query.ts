@@ -101,7 +101,6 @@ function daysAgo(days: number): string {
   return d.toISOString();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildFilterQuery(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
@@ -109,7 +108,6 @@ export function buildFilterQuery(
   selectClause: string = '*, companies(name)',
   opts?: { count?: 'exact'; range?: [number, number] }
 ): any {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = supabase
     .from('contacts')
     .select(selectClause, opts?.count ? { count: opts.count } : undefined)
