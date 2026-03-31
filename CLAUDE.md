@@ -163,5 +163,5 @@ Do NOT commit `e2e/.auth/user.json` — it contains session tokens and is gitign
 - `CLAUDE.md` — CC reads this automatically. Project conventions and architecture.
 - `PROJECT-STATUS.md` — Cowork's persistent memory. Updated after each phase.
 - `cc-session-log.md` — CC appends a summary here after every session. Cowork reads this at startup to know what was last built.
-- `docs/prompts/` — CC build prompts. Local only — gitignored. CC reads these from the local filesystem.
+- CC prompts are stored in Jacob's planning vault and pasted in at session start — they are not in this repo.
 - `docs/icp/` — ICP research, personas, market data for email content.
