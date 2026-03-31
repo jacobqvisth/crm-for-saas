@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail } from "@/lib/gmail/send";
+import { getGmailClient } from "@/lib/gmail/client";
+import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { resolveVariables, ensureUnsubscribeLink } from "@/lib/sequences/variables";
 import { getNextSendTime, calculateStepScheduleTime } from "@/lib/sequences/scheduler";
 import type { SequenceSettings } from "@/lib/database.types";
@@ -121,6 +123,25 @@ export async function POST(request: NextRequest) {
       });
 
       if (result.success) {
+        // Fetch the Gmail thread ID for this sent message
+        let gmailThreadId: string | null = null;
+        if (result.messageId) {
+          try {
+            const tokenResult = await getValidAccessToken(senderAccountId);
+            if (!("error" in tokenResult)) {
+              const gmail = getGmailClient(tokenResult.accessToken);
+              const { data: msg } = await gmail.users.messages.get({
+                userId: "me",
+                id: result.messageId,
+                format: "minimal",
+              });
+              gmailThreadId = msg.threadId || null;
+            }
+          } catch {
+            // Non-fatal — thread ID fetch failure shouldn't block the send
+          }
+        }
+
         // Update queue entry
         await supabase
           .from("email_queue")
@@ -128,6 +149,7 @@ export async function POST(request: NextRequest) {
             status: "sent" as const,
             sent_at: new Date().toISOString(),
             gmail_message_id: result.messageId || null,
+            gmail_thread_id: gmailThreadId,
           })
           .eq("id", item.id);
 
