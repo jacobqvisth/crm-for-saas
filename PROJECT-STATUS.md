@@ -54,6 +54,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Hotfixes | Post-QA production hardening (see below) | ✅ Deployed to main | — |
 | 10 | Campaign execution infrastructure | ✅ Merged | #13 |
 | 12a | Prospector (contact discovery via Prospeo.io) | ✅ Merged | #14 |
+| 14 | Inbox + Reply Management | 🔜 Ready for CC | — |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -147,12 +148,29 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
-- **Phase 9**: Production deployment + real data loading ✅ COMPLETE (2 manual steps still needed — see above)
-- **Phase QA**: ✅ Complete. 34/34 Playwright E2E tests passing against production. Prompt: vault `02_Projects/wrenchlane-crm/cc-prompt-phase-qa.md`
-- **Phase 10**: First real email campaign ✅ COMPLETE — campaign launch modal, preflight API, analytics page, bounce suppression
-- **Phase 11**: Sender warmup + deliverability
-- **Phase 12a**: Prospector — contact discovery via Prospeo.io ← READY (run parallel with Phase 10)
-- **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
+- **Phase 9**: Production deployment + real data loading ✅ COMPLETE
+- **Phase QA**: ✅ Complete. 34/34 Playwright E2E tests passing against production.
+- **Phase 10**: Campaign execution infrastructure ✅ COMPLETE — campaign launch modal, preflight API, analytics page, bounce suppression
+- **Phase 12a**: Prospector — contact discovery via Prospeo.io ✅ COMPLETE — PR #14
+- **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
+- **Phase 14**: Inbox + Reply Management 🔜 NEXT — prompt at `docs/prompts/phase14-inbox.md`
+- **Phases 12-16**: Enrichment, AI writer, meetings, analytics
+
+### Phase 14 — Pre-CC Checklist
+1. Make sure PRs #13 and #14 are both merged to main
+2. Run `git pull origin main` in local repo to sync
+3. No env vars needed for this phase — all infra is already in place
+4. **CC prompt:** `docs/prompts/phase14-inbox.md`
+
+### Phase 14 — What CC builds
+- DB migration: new `inbox_messages` table + `gmail_thread_id` column on `email_queue`
+- Fixes the reply detection bug in `check-replies` cron (replies were never actually being detected)
+- Stores Gmail thread ID when sending emails (process-emails cron update)
+- `/inbox` page: conversation list (left panel) + thread view + reply composer (right panel)
+- Category tagging: Interested / Not Interested / OOO / Other
+- "Mark Interested" → auto-sets contact lead_status to 'qualified'
+- Unread count badge in sidebar nav
+- 3 E2E smoke tests
 
 ## Route Structure
 Routes use (dashboard) route group — URLs are /contacts, /deals, /sequences etc. (NOT /dashboard/contacts).
