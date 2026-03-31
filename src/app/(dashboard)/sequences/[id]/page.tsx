@@ -9,8 +9,10 @@ import { SequenceContactsTab } from "@/components/sequences/sequence-contacts-ta
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
 import { SequenceSettingsPanel } from "@/components/sequences/sequence-settings";
 import { EnrollContactsModal } from "@/components/sequences/enroll-contacts-modal";
-import { ArrowLeft, Mail, Clock, GitBranch } from "lucide-react";
+import { LaunchCampaignModal } from "@/components/sequences/launch-campaign-modal";
+import { ArrowLeft, Mail, Clock, GitBranch, Rocket, BarChart2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
@@ -49,6 +51,7 @@ export default function SequenceDetailPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "contacts" | "analytics">("overview");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const [launchOpen, setLaunchOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!workspaceId) return;
@@ -113,13 +116,31 @@ export default function SequenceDetailPage() {
 
   return (
     <div className="p-6">
-      <button
-        onClick={() => router.push("/sequences")}
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Sequences
-      </button>
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => router.push("/sequences")}
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Sequences
+        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/sequences/${sequenceId}/analytics`}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <BarChart2 className="w-3.5 h-3.5" />
+            View Analytics
+          </Link>
+          <button
+            onClick={() => setLaunchOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Rocket className="w-3.5 h-3.5" />
+            Launch Campaign
+          </button>
+        </div>
+      </div>
 
       <SequenceHeader
         sequence={sequence}
@@ -232,6 +253,19 @@ export default function SequenceDetailPage() {
         sequenceStatus={sequence?.status}
         onEnrolled={load}
       />
+
+      {launchOpen && workspaceId && (
+        <LaunchCampaignModal
+          sequenceId={sequenceId}
+          workspaceId={workspaceId}
+          onClose={() => setLaunchOpen(false)}
+          onSuccess={(enrolled) => {
+            toast.success(`${enrolled} contact${enrolled !== 1 ? "s" : ""} enrolled`);
+            setLaunchOpen(false);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

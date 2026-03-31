@@ -96,6 +96,21 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Belt-and-suspenders: check contact is not bounced or unsubscribed
+      const { data: contactStatus } = await supabase
+        .from("contacts")
+        .select("status")
+        .eq("id", item.contact_id)
+        .single();
+
+      if (contactStatus?.status === "bounced" || contactStatus?.status === "unsubscribed") {
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("id", item.id);
+        continue;
+      }
+
       // Send the email
       const result = await sendEmail({
         accountId: senderAccountId,
