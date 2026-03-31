@@ -16,6 +16,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from "lucide-react";
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/deals", label: "Deals", icon: DollarSign },
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lists", label: "Lists", icon: ListChecks },
+  { href: "/prospector", label: "Prospector", icon: Search },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

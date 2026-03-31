@@ -99,6 +99,7 @@ export interface Database {
           lead_status: "new" | "contacted" | "qualified" | "customer" | "churned";
           custom_fields: Json | null;
           last_contacted_at: string | null;
+          source: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -114,6 +115,7 @@ export interface Database {
           lead_status?: "new" | "contacted" | "qualified" | "customer" | "churned";
           custom_fields?: Json | null;
           last_contacted_at?: string | null;
+          source?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -129,6 +131,7 @@ export interface Database {
           lead_status?: "new" | "contacted" | "qualified" | "customer" | "churned";
           custom_fields?: Json | null;
           last_contacted_at?: string | null;
+          source?: string | null;
           updated_at?: string;
         };
         Relationships: [

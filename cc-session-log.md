@@ -14,6 +14,22 @@ updated: 2026-03-31
 
 ---
 
+## 2026-03-31 — Phase 12a: Prospector (Contact Discovery via Prospeo.io)
+
+- **Branch**: `claude/festive-dirac` → **PR #14**
+- **What was built**: Full Prospector feature — `/prospector` page with filter panel (countries multiselect with Nordic countries at top, job title freetext comma-separated, industry pill toggles, company size pills) + results table (pagination, row checkboxes, bulk action bar), Reveal & Add to CRM modal (list assignment, skip duplicates option, progress feedback, partial success reporting)
+- **API routes** (both server-side, key never exposed to client):
+  - `POST /api/prospector/search` — proxies to Prospeo search-person; builds filters from UI state; handles all error codes (INSUFFICIENT_CREDITS → 402, RATE_LIMITED → 429, INVALID_FILTERS → 400, NO_RESULTS → empty response)
+  - `POST /api/prospector/add-contacts` — sequential processing with 100ms delays; enriches via Prospeo enrich-person (1 credit/contact); upserts company by domain; inserts contact with `source='prospector'`; handles list create or assign; returns `{added, skipped, errors}`
+- **Migration**: `supabase/migrations/20260331000000_add_contacts_source.sql` — adds `source TEXT` column to contacts; applied to prod via Supabase MCP
+- **Types**: `database.types.ts` updated with `source` field on contacts Row/Insert/Update
+- **Sidebar**: Prospector added between Lists and Templates with `Search` icon
+- **Notable decisions**: title/city/country stored in `custom_fields` (contacts table has no dedicated columns); contacts without verified email get placeholder email `prospector_noemail_{person_id}@placeholder.invalid` to satisfy NOT NULL; company upsert uses domain lookup to avoid duplicates
+- **Build status**: TypeScript compiled clean; pre-existing prerender build failures on `/settings/pipelines` and `/contacts/import` (missing Supabase env vars locally — unrelated to this PR)
+- **What Jacob needs to do**: Add `PROSPEO_API_KEY` to `.env.local` and Vercel env vars after signing up at prospeo.io
+
+---
+
 ## 2026-03-31 — Phase 10: Campaign Execution Infrastructure
 
 - **What was built**: Full campaign launch flow — `LaunchCampaignModal` (2-step: pick list → preflight checklist + send rate estimate → enroll), `GET /api/sequences/[id]/preflight` (auth-verified: checks Gmail, email steps, missing data, already-enrolled), analytics page at `/sequences/[id]/analytics` (8 stat cards: enrolled/sent/open/reply/click rate, bounce rate, unsub rate, completed; per-step bar chart via existing `SequenceAnalyticsTab`; paginated enrollment table with status filter), "Launch Campaign" primary button + "View Analytics →" link on sequence detail page, bounce suppression check in `process-emails` cron (cancels queued emails for bounced/unsubscribed contacts)
