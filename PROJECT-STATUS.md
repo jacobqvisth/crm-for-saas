@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-26 (Phase QA fully complete — 34/34 E2E tests green against production)
+Last updated: 2026-03-31 (Synced after post-QA hotfixes + PR #11; Phase 10 prompt updated)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -50,7 +50,10 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 8 | Dashboard + Reports | ✅ Merged | #9 |
 | 9 | Production Deployment + Vercel | ✅ Complete | — |
 | QA | Playwright E2E test suite | ✅ Complete — 34/34 tests passing against production | #10 |
-| **10** | **Campaign execution infrastructure** | **CC prompt written — ready to run** | — |
+| PR #11 | Bug fix: Gmail connect errors, enrollment UX, contact-to-sequence flow | ✅ Merged | #11 |
+| Hotfixes | Post-QA production hardening (see below) | ✅ Deployed to main | — |
+| **10** | **Campaign execution infrastructure** | **CC prompt updated — ready to run** | — |
+| **12a** | **Prospector (contact discovery via Prospeo.io)** | **CC prompt written — ready to run in parallel with Phase 10** | — |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -58,6 +61,18 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 - Generated TypeScript types had 'slug' instead of 'domain' and 'google_workspace_domain'
 - Middleware only protected /dashboard/* — updated to protect all app routes
 - Nested duplicate directory /crm-for-saas/crm-for-saas/ — deleted
+
+## Post-QA Hotfixes (merged to main after PR #10, before Phase 10)
+All committed directly to main or via PR #11:
+- PR #11: Gmail OAuth callback error handling improved; enrollment UX fixes; added "Enroll in Sequence" from contact detail page
+- `contact_lists.type` column renamed to `is_dynamic` (boolean) — fixed all affected queries
+- Fixed nullable `sequence_enrollments` types and stale workspace_id filters
+- Fixed Gmail env vars trimming (trailing newline caused OAuth 400)
+- Fixed sequence enrollment for paused sequences; added Enrolled stat counter
+- Fixed cron routes (`process-emails`, `check-replies`, `reset-daily-sends`) to use service-role client (bypass RLS)
+- Fixed RLS bypass for all Gmail lib functions (send, token-refresh, sender-rotation)
+- Fixed false-positive open tracking from Gmail/Google link-preview scanners
+- Auto-insert 3-day delay before every new email step in sequence builder
 
 ## Database
 18 tables with RLS, all created via Supabase migrations:
@@ -103,6 +118,19 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 - **GitHub**: https://github.com/jacobqvisth/crm-for-saas (auto-deploys on push to main)
 - **Cron jobs** (vercel.json): process-emails (*/5 min), check-replies (*/30 min), reset-daily-sends (midnight UTC)
 
+### Phase 12a — Pre-CC checklist (can run in parallel with Phase 10)
+1. **Sign up at prospeo.io** to get an API key (free trial available, then ~$25/mo)
+2. **Add `PROSPEO_API_KEY`** to `.env.local` in the repo
+3. **Add `PROSPEO_API_KEY`** as environment variable in Vercel (Settings → Environment Variables)
+4. **CC prompt:** `docs/prompts/phase12a-prospector.md`
+
+### Phase 12a — What CC builds
+- `/prospector` page with filter panel (country, job title, industry, company size) + results table
+- `POST /api/prospector/search` — server-side proxy to Prospeo search endpoint
+- `POST /api/prospector/add-contacts` — enriches selected contacts (reveals emails) then saves to Supabase
+- Sidebar nav item (Search icon)
+- DB migration: `source` column on contacts table
+
 ### Phase 10 — Pre-CC checklist (Jacob does these first)
 1. **Connect a Gmail account** via Settings → Email in the production app (required for pre-flight checks to pass)
 2. **Load real contacts** via CSV import — start with 100–200 Swedish workshop owners, not the full list
@@ -110,19 +138,20 @@ Key RLS note: workspace_members uses special non-recursive policies. Do NOT add 
 4. **CC prompt:** vault `02_Projects/wrenchlane-crm/_prompts/cc-prompt-phase-10.md`
 
 ### What Phase 10 CC session builds
-- Bounce detection in `check-replies` cron (hard bounces → mark contact status = 'bounced', cancel queue, suppress)
+- ~~Bounce detection in `check-replies` cron~~ — **already built in Phase 6, skip this step**
 - Campaign launch modal (select list → pre-flight checklist → confirm → enroll)
 - Pre-flight API: `GET /api/sequences/[id]/preflight?listId=...` (Gmail check, missing data counts, send estimate)
-- Sequence analytics page: bounce rate + unsubscribe rate stat cards + enrollment status table with filter
-- Bounce suppression in `process-emails` (belt-and-suspenders contact status check)
+- Sequence analytics page: **build from scratch** (current page is a `<PlaceholderPage>`) — use existing `sequence-analytics-tab.tsx` component + add stat cards + enrollment table
+- Bounce suppression in `process-emails` (contact status check — not yet added)
 - New E2E spec: `e2e/campaign-launch.spec.ts`
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 9**: Production deployment + real data loading ✅ COMPLETE (2 manual steps still needed — see above)
 - **Phase QA**: ✅ Complete. 34/34 Playwright E2E tests passing against production. Prompt: vault `02_Projects/wrenchlane-crm/cc-prompt-phase-qa.md`
-- **Phase 10**: First real email campaign ← NEXT
+- **Phase 10**: First real email campaign ← NEXT (CC prompt ready)
 - **Phase 11**: Sender warmup + deliverability
+- **Phase 12a**: Prospector — contact discovery via Prospeo.io ← READY (run parallel with Phase 10)
 - **Phases 12-16**: Enrichment, AI writer, inbox, meetings, analytics
 
 ## Route Structure
