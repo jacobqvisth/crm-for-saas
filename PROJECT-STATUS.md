@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-01 (Phase 12c merged — Prospector fully rebuilt with verified Prospeo API fields)
+Last updated: 2026-04-01 (Phase 12d merged — Prospector bilingual job title search live)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -57,6 +57,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 14 | Inbox + Reply Management | ✅ Merged | #15 |
 | 12b | Prospector: Bug Fix + Search UI Upgrade | ✅ Merged | #16 |
 | 12c | Prospector: Complete API rebuild (verified field names + enum values) | ✅ Merged | #17 |
+| 12d | Prospector: Bilingual job title search (EN + local language) | ✅ Merged | #18 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -177,6 +178,7 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 12a**: Prospector — contact discovery via Prospeo.io ✅ COMPLETE — PR #14
 - **Phase 12b**: Prospector upgrade — bug fix (headcount_range enum), seniority filter, tag-input, multi-select size, fixed industry values ✅ COMPLETE — PR #16
 - **Phase 12c**: Prospector complete rebuild — verified all Prospeo API field names and enum values from docs. Fixed person_location_search, industry values, headcount format. Added company_keywords, verified-email-only toggle, max-per-company. ✅ COMPLETE — PR #17
+- **Phase 12d**: Prospector bilingual job titles — English-only suggested chips with auto translation labels (e.g. "Verkstadsägare (SV)"), "local language only" checkbox. 11 countries × 8 titles. ✅ COMPLETE — PR #18
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
 - **Phases 12-16**: Enrichment, AI writer, meetings, analytics
