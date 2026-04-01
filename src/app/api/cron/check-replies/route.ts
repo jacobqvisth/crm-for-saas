@@ -339,6 +339,24 @@ export async function POST(request: NextRequest) {
                   .update({ status: "bounced" })
                   .eq("id", sentEmail.contact_id);
 
+                // Add to suppressions list
+                const { data: existingBounceSuppression } = await supabase
+                  .from("suppressions")
+                  .select("id")
+                  .eq("workspace_id", sentEmail.workspace_id)
+                  .eq("email", sentEmail.to_email)
+                  .eq("active", true)
+                  .maybeSingle();
+
+                if (!existingBounceSuppression) {
+                  await supabase.from("suppressions").insert({
+                    workspace_id: sentEmail.workspace_id,
+                    email: sentEmail.to_email,
+                    reason: "bounced",
+                    source: "bounce detected by check-replies cron",
+                  });
+                }
+
                 const { data: contactEnrollments } = await supabase
                   .from("sequence_enrollments")
                   .select("id")

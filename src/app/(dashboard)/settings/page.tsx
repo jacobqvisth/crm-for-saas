@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, Sparkles } from 'lucide-react';
+import { GitBranch, Mail, Sparkles, ShieldCheck } from 'lucide-react';
 
 const settingsItems = [
   {
@@ -21,6 +21,12 @@ const settingsItems = [
     description: 'Score Prospector results against your ICP before adding them to your CRM',
     href: '/settings/ai-filter',
     icon: Sparkles,
+  },
+  {
+    title: 'Compliance & DNC',
+    description: 'Manage suppression list, DNC imports, and GDPR compliance',
+    href: '/settings/compliance',
+    icon: ShieldCheck,
   },
 ];
 

@@ -92,6 +92,46 @@ export async function GET(
     alreadyEnrolled = count || 0;
   }
 
+  // 5. Count suppressed contacts (email or domain level)
+  let suppressedCount = 0;
+  if (validContactIds.length > 0) {
+    const { data: contactEmails } = await supabase
+      .from("contacts")
+      .select("id, email")
+      .in("id", validContactIds);
+
+    if (contactEmails && contactEmails.length > 0) {
+      const emails = contactEmails.map((c) => c.email).filter(Boolean) as string[];
+      const domains = [
+        ...new Set(
+          emails
+            .map((e) => e.split("@")[1]?.toLowerCase())
+            .filter(Boolean) as string[]
+        ),
+      ];
+
+      const { count: emailSuppressions } = await supabase
+        .from("suppressions")
+        .select("*", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("active", true)
+        .in("email", emails);
+
+      let domainSuppressions = 0;
+      if (domains.length > 0) {
+        const { count: dc } = await supabase
+          .from("suppressions")
+          .select("*", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .eq("active", true)
+          .in("domain", domains);
+        domainSuppressions = dc || 0;
+      }
+
+      suppressedCount = (emailSuppressions || 0) + domainSuppressions;
+    }
+  }
+
   const enrollableCount = Math.max(0, validContactIds.length - alreadyEnrolled);
 
   return NextResponse.json({
@@ -108,5 +148,6 @@ export async function GET(
     missingFirstName,
     alreadyEnrolled,
     enrollableCount,
+    suppressedCount,
   });
 }

@@ -173,23 +173,30 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Check contact not unsubscribed
-      const { data: unsub } = await supabase
-        .from("unsubscribes")
-        .select("id")
+      // Check suppressions: email-level OR domain-level block
+      const emailDomain = item.to_email.split("@")[1]?.toLowerCase();
+      const { data: suppression } = await supabase
+        .from("suppressions")
+        .select("id, reason")
         .eq("workspace_id", item.workspace_id)
-        .eq("email", item.to_email)
+        .eq("active", true)
+        .or(`email.eq.${item.to_email},domain.eq.${emailDomain}`)
+        .limit(1)
         .maybeSingle();
 
-      if (unsub) {
+      if (suppression) {
         await supabase
           .from("email_queue")
           .update({ status: "cancelled" as const })
           .eq("id", item.id);
-        await supabase
-          .from("sequence_enrollments")
-          .update({ status: "unsubscribed" })
-          .eq("id", item.enrollment_id);
+
+        if (item.enrollment_id) {
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "unsubscribed", completed_at: new Date().toISOString() })
+            .eq("id", item.enrollment_id);
+        }
+
         continue;
       }
 

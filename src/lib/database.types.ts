@@ -948,6 +948,53 @@ export interface Database {
           },
         ];
       };
+      suppressions: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          email: string | null;
+          domain: string | null;
+          reason: string;
+          source: string | null;
+          active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          email?: string | null;
+          domain?: string | null;
+          reason: string;
+          source?: string | null;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          email?: string | null;
+          domain?: string | null;
+          reason?: string;
+          source?: string | null;
+          active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "suppressions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       unsubscribes: {
         Row: {
           id: string;
