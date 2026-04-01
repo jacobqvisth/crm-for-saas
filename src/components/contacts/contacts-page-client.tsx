@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, X, Plus, Upload, ChevronLeft, ChevronRight, Trash2, Tags, ListPlus } from 'lucide-react';
+import { Search, X, Plus, Upload, ChevronLeft, ChevronRight, Trash2, Tags, ListPlus, ShieldCheck } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
@@ -45,6 +45,8 @@ export function ContactsPageClient() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddToList, setShowAddToList] = useState(false);
+  const [showVerifyConfirm, setShowVerifyConfirm] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [bulkLeadStatus, setBulkLeadStatus] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -200,6 +202,34 @@ export function ContactsPageClient() {
       setTotalCount(prev => prev - selectedIds.size);
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleBulkVerify = async () => {
+    if (!workspaceId || selectedIds.size === 0) return;
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/contacts/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactIds: Array.from(selectedIds), workspaceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Verification failed');
+        return;
+      }
+      const { verified, skipped, errors } = data;
+      toast.success(
+        `Verified ${verified}, skipped ${skipped} (cached)${errors > 0 ? `, ${errors} errors` : ''}`
+      );
+      router.refresh();
+      setSelectedIds(new Set());
+      setShowVerifyConfirm(false);
+    } catch {
+      toast.error('Verification failed');
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -465,6 +495,13 @@ export function ContactsPageClient() {
             Add to List
           </button>
           <button
+            onClick={() => setShowVerifyConfirm(true)}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 bg-slate-800 border border-slate-600 rounded-lg hover:bg-slate-700"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Verify Emails
+          </button>
+          <button
             onClick={() => setShowDeleteConfirm(true)}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-600 rounded-lg hover:bg-red-700"
           >
@@ -505,6 +542,29 @@ export function ContactsPageClient() {
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
           >
             Delete
+          </button>
+        </div>
+      </Modal>
+
+      {/* Verify Emails Modal */}
+      <Modal open={showVerifyConfirm} onClose={() => setShowVerifyConfirm(false)} title="Verify Email Addresses">
+        <p className="text-sm text-slate-600 mb-4">
+          This will verify {selectedIds.size} email address{selectedIds.size !== 1 ? 'es' : ''} using Prospeo (1 credit each). Already-verified contacts will be skipped.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => setShowVerifyConfirm(false)}
+            className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleBulkVerify}
+            disabled={verifying}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {verifying && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+            {verifying ? 'Verifying...' : 'Verify'}
           </button>
         </div>
       </Modal>

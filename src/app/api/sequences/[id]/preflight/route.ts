@@ -92,12 +92,15 @@ export async function GET(
     alreadyEnrolled = count || 0;
   }
 
-  // 5. Count suppressed contacts (email or domain level)
+  // 5. Count suppressed contacts (email or domain level) and email status counts
   let suppressedCount = 0;
+  let invalidEmailCount = 0;
+  let unverifiedEmailCount = 0;
+
   if (validContactIds.length > 0) {
     const { data: contactEmails } = await supabase
       .from("contacts")
-      .select("id, email")
+      .select("id, email, email_status")
       .in("id", validContactIds);
 
     if (contactEmails && contactEmails.length > 0) {
@@ -129,6 +132,10 @@ export async function GET(
       }
 
       suppressedCount = (emailSuppressions || 0) + domainSuppressions;
+      invalidEmailCount = contactEmails.filter((c) => c.email_status === "invalid").length;
+      unverifiedEmailCount = contactEmails.filter(
+        (c) => c.email_status === "unknown" || c.email_status === "unverified"
+      ).length;
     }
   }
 
@@ -149,5 +156,7 @@ export async function GET(
     alreadyEnrolled,
     enrollableCount,
     suppressedCount,
+    invalidEmailCount,
+    unverifiedEmailCount,
   });
 }
