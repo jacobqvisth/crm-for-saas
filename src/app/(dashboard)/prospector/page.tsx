@@ -144,12 +144,89 @@ const SENIORITY_OPTIONS = [
 
 const SUGGESTED_JOB_TITLES = [
   "Workshop owner",
-  "Verkstadschef",
-  "Bilmekaniker",
+  "Workshop manager",
   "Service manager",
-  "Mekaniker",
-  "VD",
+  "Mechanic",
+  "Auto technician",
+  "Service advisor",
+  "Parts manager",
+  "Fleet manager",
 ];
+
+// ─── Language mapping ─────────────────────────────────────────────────────────
+
+type LanguageInfo = { code: string; label: string };
+
+const COUNTRY_LANGUAGE: Record<string, LanguageInfo> = {
+  Sweden:      { code: "sv", label: "Swedish" },
+  Norway:      { code: "no", label: "Norwegian" },
+  Denmark:     { code: "da", label: "Danish" },
+  Finland:     { code: "fi", label: "Finnish" },
+  Iceland:     { code: "is", label: "Icelandic" },
+  Germany:     { code: "de", label: "German" },
+  France:      { code: "fr", label: "French" },
+  Netherlands: { code: "nl", label: "Dutch" },
+  Spain:       { code: "es", label: "Spanish" },
+  Italy:       { code: "it", label: "Italian" },
+  Poland:      { code: "pl", label: "Polish" },
+};
+
+// English title → { languageCode: localTranslation }
+const JOB_TITLE_TRANSLATIONS: Record<string, Record<string, string>> = {
+  "Workshop owner":   { sv: "Verkstadsägare",   no: "Verkstedseier",   da: "Værkstedsejer",  fi: "Korjaamonomistaja", de: "Werkstattinhaber",  nl: "Werkplaatseigenaar" },
+  "Workshop manager": { sv: "Verkstadschef",     no: "Verkstedsjef",    da: "Værkstedsleder", fi: "Korjaamopäällikkö", de: "Werkstattleiter",   nl: "Werkplaatsbeheerder" },
+  "Service manager":  { sv: "Servicechef",       no: "Servicesjef",     da: "Servicechef",    fi: "Huoltopäällikkö",  de: "Serviceleiter",     nl: "Servicemanager" },
+  "Mechanic":         { sv: "Mekaniker",          no: "Mekaniker",       da: "Mekaniker",      fi: "Mekaanikko",       de: "Mechaniker",        nl: "Monteur" },
+  "Auto technician":  { sv: "Biltekniker",        no: "Biltekniker",     da: "Biltekniker",    fi: "Autoteknikko",     de: "Kfz-Techniker",     nl: "Autotechnicus" },
+  "Service advisor":  { sv: "Servicerådgivare",   no: "Servicerådgiver", da: "Serviceadvisør", fi: "Huoltoneuvoaja",   de: "Serviceberater",    nl: "Serviceadviseur" },
+  "Parts manager":    { sv: "Reservdelschef",     no: "Reservdelssjef",  da: "Reservdelschef", fi: "Varaosapäällikkö", de: "Teileleiter",       nl: "Onderdelenmanager" },
+  "Fleet manager":    { sv: "Fordonsflottachef",  no: "Flåtesjef",       da: "Flådesjef",      fi: "Kalustopäällikkö", de: "Fuhrparkleiter",    nl: "Wagenparkbeheerder" },
+};
+
+// Derive all active languages from selected countries (deduped)
+function getActiveLanguages(countries: string[]): LanguageInfo[] {
+  const seen = new Set<string>();
+  const result: LanguageInfo[] = [];
+  for (const country of countries) {
+    const lang = COUNTRY_LANGUAGE[country];
+    if (lang && !seen.has(lang.code)) {
+      seen.add(lang.code);
+      result.push(lang);
+    }
+  }
+  return result;
+}
+
+// Get translations for a given title across the active languages
+function getTranslations(
+  title: string,
+  langs: LanguageInfo[]
+): { lang: LanguageInfo; translation: string }[] {
+  const map = JOB_TITLE_TRANSLATIONS[title];
+  if (!map) return [];
+  return langs.flatMap((lang) =>
+    map[lang.code] ? [{ lang, translation: map[lang.code] }] : []
+  );
+}
+
+// Build the final job titles array to send to Prospeo
+function buildSearchTitles(
+  jobTitles: string[],
+  langs: LanguageInfo[],
+  localOnly: boolean
+): string[] {
+  const result: string[] = [];
+  for (const title of jobTitles) {
+    if (!localOnly) result.push(title); // include English
+    const translations = getTranslations(title, langs);
+    for (const { translation } of translations) {
+      if (!result.includes(translation)) result.push(translation);
+    }
+    // If no translation found and localOnly is on, still include the English term
+    if (localOnly && translations.length === 0) result.push(title);
+  }
+  return result;
+}
 
 // ─── Filters type ─────────────────────────────────────────────────────────────
 
@@ -169,6 +246,9 @@ type Filters = {
   // Quality
   verifiedEmailOnly: boolean;
   maxPerCompany: number;
+
+  // Bilingual
+  localOnly: boolean;
 };
 
 const DEFAULT_FILTERS: Filters = {
@@ -180,6 +260,7 @@ const DEFAULT_FILTERS: Filters = {
   keywords: "",
   verifiedEmailOnly: true,
   maxPerCompany: 1,
+  localOnly: false,
 };
 
 // ─── Filters component ────────────────────────────────────────────────────────
@@ -198,12 +279,14 @@ function ProspectorFilters({
   onSearch,
   onReset,
   loading,
+  activeLanguages,
 }: {
   filters: Filters;
   onChange: (f: Filters) => void;
   onSearch: () => void;
   onReset: () => void;
   loading: boolean;
+  activeLanguages: LanguageInfo[];
 }) {
   const [jobTitleInput, setJobTitleInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -264,21 +347,37 @@ function ProspectorFilters({
         <label className="block text-sm font-medium text-slate-700 mb-2">
           Job Title
         </label>
+
+        {/* Selected chips with inline translation labels */}
         {filters.jobTitles.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {filters.jobTitles.map((t) => (
-              <span
-                key={t}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs"
-              >
-                {t}
-                <button onClick={() => removeJobTitle(t)} className="hover:text-indigo-900">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
+          <div className="flex flex-wrap gap-2 mb-2">
+            {filters.jobTitles.map((title) => {
+              const translations = getTranslations(title, activeLanguages);
+              return (
+                <div key={title} className="flex flex-col gap-0.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
+                    {title}
+                    <button
+                      onClick={() => removeJobTitle(title)}
+                      className="hover:text-indigo-900"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                  {translations.length > 0 && (
+                    <span className="text-[10px] text-slate-400 pl-2">
+                      {translations
+                        .map(({ lang, translation }) => `${translation} (${lang.code.toUpperCase()})`)
+                        .join(" · ")}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
+
+        {/* Free-text input */}
         <input
           ref={inputRef}
           type="text"
@@ -294,6 +393,8 @@ function ProspectorFilters({
           placeholder="Add a title and press Enter"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
+
+        {/* Suggested English quick-add chips */}
         <div className="mt-2 flex flex-wrap gap-1">
           {SUGGESTED_JOB_TITLES.filter((t) => !filters.jobTitles.includes(t)).map((t) => (
             <button
@@ -305,6 +406,23 @@ function ProspectorFilters({
             </button>
           ))}
         </div>
+
+        {/* Language-only toggle — only shown when relevant */}
+        {activeLanguages.length > 0 && filters.jobTitles.length > 0 && (
+          <div className="mt-3 flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="localOnly"
+              checked={filters.localOnly}
+              onChange={(e) => onChange({ ...filters, localOnly: e.target.checked })}
+              className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor="localOnly" className="text-xs text-slate-600 cursor-pointer leading-tight">
+              Search in {activeLanguages.map((l) => l.label).join(" + ")} only
+              <span className="text-slate-400 ml-1">(skip English terms)</span>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Seniority */}
@@ -790,7 +908,11 @@ export default function ProspectorPage() {
 
       return {
         personCountries: filters.personCountries,
-        jobTitles: filters.jobTitles,
+        jobTitles: buildSearchTitles(
+          filters.jobTitles,
+          getActiveLanguages(filters.personCountries),
+          filters.localOnly
+        ),
         seniorities: filters.seniorities,
         industries: filters.industries,
         companySizes,
@@ -855,6 +977,8 @@ export default function ProspectorPage() {
     },
     [workspaceId, buildSearchPayload, filters]
   );
+
+  const activeLanguages = getActiveLanguages(filters.personCountries);
 
   const handleSearch = () => doSearch(1);
 
@@ -939,6 +1063,7 @@ export default function ProspectorPage() {
             onSearch={handleSearch}
             onReset={handleReset}
             loading={searchState === "loading"}
+            activeLanguages={activeLanguages}
           />
         </aside>
 
