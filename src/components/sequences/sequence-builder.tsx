@@ -65,9 +65,10 @@ function AddStepButton({ index, addMenuIndex, setAddMenuIndex, addStep }: AddSte
 
 interface SequenceBuilderProps {
   sequenceId: string;
+  sequenceName?: string;
 }
 
-export function SequenceBuilder({ sequenceId }: SequenceBuilderProps) {
+export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
 
@@ -268,6 +269,8 @@ export function SequenceBuilder({ sequenceId }: SequenceBuilderProps) {
                             <StepCard
                               step={step}
                               totalSteps={steps.length}
+                              stepNumber={index + 1}
+                              sequenceName={sequenceName}
                               onUpdate={updateStep}
                               onDelete={deleteStep}
                               dragHandleProps={dragProvided.dragHandleProps}

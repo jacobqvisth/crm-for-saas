@@ -75,7 +75,7 @@ export default function SequenceEditPage() {
         </button>
       </div>
 
-      <SequenceBuilder sequenceId={sequenceId} />
+      <SequenceBuilder sequenceId={sequenceId} sequenceName={sequence.name} />
 
       <SequenceSettingsPanel
         open={settingsOpen}

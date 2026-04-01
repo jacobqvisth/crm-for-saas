@@ -37,12 +37,14 @@ const STEP_CONFIG = {
 interface StepCardProps {
   step: Step;
   totalSteps: number;
+  stepNumber?: number;
+  sequenceName?: string;
   onUpdate: (stepId: string, updates: Partial<Step>) => void;
   onDelete: (stepId: string) => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
 }
 
-export function StepCard({ step, totalSteps, onUpdate, onDelete, dragHandleProps }: StepCardProps) {
+export function StepCard({ step, totalSteps, stepNumber, sequenceName, onUpdate, onDelete, dragHandleProps }: StepCardProps) {
   const [expanded, setExpanded] = useState(true);
 
   const config = STEP_CONFIG[step.type];
@@ -113,6 +115,8 @@ export function StepCard({ step, totalSteps, onUpdate, onDelete, dragHandleProps
             <EmailStepEditor
               step={step}
               onUpdate={(updates) => onUpdate(step.id, updates)}
+              stepNumber={stepNumber}
+              sequenceName={sequenceName}
             />
           )}
           {step.type === "delay" && (

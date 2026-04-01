@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, ShieldCheck
+  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -72,6 +72,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [showForgetConfirm, setShowForgetConfirm] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [showEnrollInSequence, setShowEnrollInSequence] = useState(false);
+  const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -570,6 +571,13 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setShowPersonalizeModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  Personalize email
+                </button>
+                <button
                   onClick={() => setShowAddNote(!showAddNote)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
                 >
@@ -777,6 +785,16 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         }}
       />
 
+      {/* Personalize Email Modal */}
+      {showPersonalizeModal && workspaceId && (
+        <PersonalizeModal
+          contact={contact}
+          workspaceId={workspaceId}
+          companyName={company?.name}
+          onClose={() => setShowPersonalizeModal(false)}
+        />
+      )}
+
       {/* Delete Modal */}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Contact">
         <p className="text-sm text-slate-600 mb-4">
@@ -843,6 +861,178 @@ function EditableField({
 
 // Need to import X for custom fields delete button
 import { X } from 'lucide-react';
+
+type EmailTemplate = Tables<'email_templates'>;
+
+function PersonalizeModal({
+  contact,
+  workspaceId,
+  companyName,
+  onClose,
+}: {
+  contact: Contact;
+  workspaceId: string;
+  companyName?: string;
+  onClose: () => void;
+}) {
+  const supabase = createClient();
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState<{ subject: string; body: string } | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('email_templates')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('name');
+      setTemplates(data || []);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+
+  const handlePersonalize = async () => {
+    if (!selectedTemplate) return;
+    setGenerating(true);
+    setError('');
+    try {
+      const res = await fetch('/api/ai/generate-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId,
+          personaAngle: 'shop_owner',
+          contactContext: {
+            firstName: contact.first_name || undefined,
+            lastName: contact.last_name || undefined,
+            title: contact.title || undefined,
+            company: companyName,
+            city: contact.city || undefined,
+            country: contact.country || undefined,
+          },
+          stepNumber: 1,
+          existingTemplate: {
+            subject: selectedTemplate.subject,
+            body: selectedTemplate.body_html,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Personalization failed');
+        return;
+      }
+      setResult({ subject: data.subject, body: data.body });
+    } catch {
+      setError('Network error. Try again.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const firstName = contact.first_name || 'this contact';
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-base font-semibold text-slate-900 mb-4">
+          Personalize email for {firstName}
+        </h3>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-slate-500 mb-1">Template</label>
+          <select
+            value={selectedTemplateId}
+            onChange={e => setSelectedTemplateId(e.target.value)}
+            className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm"
+          >
+            <option value="">Select a template…</option>
+            {templates.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
+        {!result ? (
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
+              Cancel
+            </button>
+            <button
+              onClick={handlePersonalize}
+              disabled={!selectedTemplateId || generating}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {generating ? (
+                <><span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" /> Personalizing...</>
+              ) : (
+                <><Wand2 className="w-3.5 h-3.5" /> Personalize</>
+              )}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 mb-4">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-500">Subject</label>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(result.subject).then(() => toast.success('Copied!'))}
+                    className="text-xs text-indigo-600 hover:text-indigo-700"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  value={result.subject}
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-slate-50"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-500">Body</label>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(result.body).then(() => toast.success('Copied!'))}
+                    className="text-xs text-indigo-600 hover:text-indigo-700"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <textarea
+                  readOnly
+                  value={result.body}
+                  rows={8}
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50"
+                />
+              </div>
+            </div>
+            <div className="flex justify-between">
+              <button
+                onClick={() => { setResult(null); handlePersonalize(); }}
+                disabled={generating}
+                className="text-sm text-slate-600 hover:text-slate-900 underline disabled:opacity-50"
+              >
+                {generating ? 'Regenerating...' : 'Regenerate'}
+              </button>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
+                Close
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function VerifyEmailButton({
   contact,
