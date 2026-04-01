@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-03-31 (Phase 12a merged — Prospector live)
+Last updated: 2026-04-01 (Phase 12b merged — Prospector bug fix + UI upgrade live)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -55,6 +55,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 10 | Campaign execution infrastructure | ✅ Merged | #13 |
 | 12a | Prospector (contact discovery via Prospeo.io) | ✅ Merged | #14 |
 | 14 | Inbox + Reply Management | ✅ Merged | #15 |
+| 12b | Prospector: Bug Fix + Search UI Upgrade | ✅ Merged | #16 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -173,6 +174,7 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase QA**: ✅ Complete. 34/34 Playwright E2E tests passing against production.
 - **Phase 10**: Campaign execution infrastructure ✅ COMPLETE — campaign launch modal, preflight API, analytics page, bounce suppression
 - **Phase 12a**: Prospector — contact discovery via Prospeo.io ✅ COMPLETE — PR #14
+- **Phase 12b**: Prospector upgrade — bug fix (headcount_range enum), seniority filter, tag-input, multi-select size, fixed industry values ✅ COMPLETE — PR #16
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
 - **Phases 12-16**: Enrichment, AI writer, meetings, analytics
