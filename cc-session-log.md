@@ -235,3 +235,27 @@ TypeScript ✓, lint ✓ (0 warnings), tsc --noEmit ✓. 7 files changed (3 new)
 - Suppression check in `process-emails` uses `.or()` with both email and domain to cover domain blocks in one query.
 - Preflight suppression count may slightly overcount if both email+domain match same contact — acceptable as it's a warning.
 - `unsubscribes` table kept untouched for backward compatibility.
+---
+
+## Phase 19 — Email Verification
+**Date:** 2026-04-01
+**Branch:** feature/phase19-email-verification
+**PR:** #24
+
+### What was built
+- **`POST /api/contacts/verify-email`**: Calls Prospeo `email-verifier` API, maps status (VALID/RISKY/CATCH_ALL/INVALID → valid/risky/catch_all/invalid), applies cache rules (valid→90d, invalid→30d, risky→7d skip), caps at 50 contacts per call with 200ms delay, returns `{verified, skipped, errors, results}`.
+- **Contact detail page** (`contact-detail-client.tsx`): `VerifyEmailButton` component added next to email_status badge — shows static "Verified/Invalid + date" label when recently cached, otherwise shows active Verify button with spinner; updates contact state and toasts on success.
+- **Contacts list bulk action** (`contacts-page-client.tsx`): "Verify Emails" button added to bulk action bar between Add to List and Delete; confirmation modal with credit cost warning; `handleBulkVerify` calls API, toasts result, refreshes list.
+- **Preflight route** (`sequences/[id]/preflight/route.ts`): Extends contact query to include `email_status`, computes `invalidEmailCount` and `unverifiedEmailCount`, returns both in response.
+- **LaunchCampaignModal** (`launch-campaign-modal.tsx`): `PreflightData` interface extended; two new `PreflightItem` entries — "warn" for invalid emails (will bounce), "info" for unverified emails (consider verifying).
+
+### Build status
+- `npm run build` ✅
+- `npm run lint` ✅ (0 errors)
+- `npx tsc --noEmit` ✅ (pre-existing `.next/dev` error unrelated to this phase)
+
+### No migration needed
+All storage uses `email_status` + `email_verified_at` columns from Phase 18.
+
+### Next step
+Phase 20: Prospector Upgrade
