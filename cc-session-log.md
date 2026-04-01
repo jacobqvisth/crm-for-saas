@@ -153,3 +153,16 @@ TypeScript: 0 errors. Lint: 0 warnings. Build: compiled successfully (pre-existi
     - `displayedResults` derived from `fitFilter` state
 - **Build**: TypeScript ✓, lint ✓, tsc --noEmit ✓ (prerender error in worktree is env-var issue, not code)
 - **Note**: Supabase types don't include new table yet — used `(supabase as any)` cast in API routes; types will resolve after `supabase gen types` is run post-deploy
+
+---
+
+## Phase 15 — Sequence Reliability & Stop Logic
+**Date:** 2026-04-01 | **PR:** #20 | **Branch:** feature/phase15-sequence-reliability
+
+- **OOO detection**: Added `isAutoReply()` to check-replies cron; checks RFC headers (auto-submitted, x-autoreply, x-auto-response-suppress, precedence) and multilingual OOO subject patterns (EN/SV/NO/DA/DE/FI). OOO messages stored with `is_auto_reply=true`, `category='out_of_office'`, still create email_event + activity but do NOT trigger unenrollment. Tracks `realRepliesFound` vs `autoRepliesFound` separately.
+- **Company-level stop**: After real reply triggers stop_on_reply, finds all other active enrollments where contact has same `company_id`, sets them to `company_paused`, cancels scheduled queue items, creates activity records per paused contact. Controlled by new `stop_on_company_reply` setting (default true) in SequenceSettings.
+- **Per-enrollment Pause/Resume + Pause All**: New `PATCH /api/sequences/enrollments/[id]` (pause/resume) and `POST /api/sequences/[id]/pause-all`; analytics page has per-row action buttons; sequence detail page has "Pause All" button with confirmation modal. `company_paused` status badge added.
+- **Email threading**: process-emails looks up most recent sent email in enrollment, passes `gmail_message_id` as `replyToMessageId` (In-Reply-To/References headers) and `gmail_thread_id` as `replyToThreadId` to Gmail API; prepends "Re: " to subject for follow-up steps. Also fixed dead code in `send.ts` (threadId was `? undefined : undefined`).
+- **Health badges**: `GET /api/sequences/health` returns auth_issue/high_bounces/paused_count per sequence; sequence-list loads these once and renders inline color-coded badges.
+- **Migration applied**: `inbox_messages.is_auto_reply boolean DEFAULT false` — applied to Supabase project wdgiwuhehqpkhpvdzzzl.
+- **Build**: TypeScript ✓, lint ✓, tsc --noEmit ✓. 13 files changed, 3 new API routes, 1 migration file.
