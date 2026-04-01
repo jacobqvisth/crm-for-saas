@@ -47,11 +47,14 @@ type ProspeoSearchResponse = {
 };
 
 type SearchRequestBody = {
-  countries: string[];
+  personCountries: string[];
   jobTitles: string[];
   seniorities: string[];
   industries: string[];
-  companySizes: string[];
+  companySizes: string[]; // already-flattened array of valid range strings
+  keywords: string[]; // already split and trimmed
+  verifiedEmailOnly: boolean;
+  maxPerCompany: number;
   page: number;
 };
 
@@ -77,25 +80,48 @@ export async function POST(request: NextRequest) {
   }
 
   const body: SearchRequestBody = await request.json();
-  const { countries, jobTitles, seniorities, industries, companySizes, page = 1 } = body;
+  const {
+    personCountries,
+    jobTitles,
+    seniorities,
+    industries,
+    companySizes,
+    keywords,
+    verifiedEmailOnly,
+    maxPerCompany,
+    page = 1,
+  } = body;
 
   // Build filters
   const filters: Record<string, unknown> = {};
-  if (countries && countries.length > 0) {
-    filters.person_location = { include: countries };
-  }
-  if (jobTitles && jobTitles.length > 0) {
+
+  if (personCountries?.length > 0)
+    filters.person_location_search = { include: personCountries };
+
+  if (jobTitles?.length > 0)
     filters.person_job_title = { include: jobTitles };
-  }
-  if (seniorities && seniorities.length > 0) {
+
+  if (seniorities?.length > 0)
     filters.person_seniority = { include: seniorities };
-  }
-  if (industries && industries.length > 0) {
+
+  if (industries?.length > 0)
     filters.company_industry = { include: industries };
-  }
-  if (companySizes && companySizes.length > 0) {
-    filters.company_headcount_range = companySizes; // plain array, not include/exclude
-  }
+
+  if (companySizes?.length > 0)
+    filters.company_headcount_range = companySizes; // plain array
+
+  if (keywords?.length > 0)
+    filters.company_keywords = {
+      include: keywords,
+      include_all: false,
+      include_company_description: true,
+    };
+
+  if (verifiedEmailOnly)
+    filters.person_contact_details = { email: ["VERIFIED"] };
+
+  if (maxPerCompany && maxPerCompany >= 1 && maxPerCompany <= 100)
+    filters.max_person_per_company = maxPerCompany;
 
   try {
     const response = await fetch("https://api.prospeo.io/search-person", {

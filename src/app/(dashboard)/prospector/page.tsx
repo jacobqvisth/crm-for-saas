@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import {
   Search,
@@ -98,12 +99,14 @@ type IndustryOption = {
 };
 
 const INDUSTRY_OPTIONS: IndustryOption[] = [
-  { label: "Auto Repair & Service",      value: "Repair and Maintenance" },
-  { label: "Automotive Retail",          value: "Retail Motor Vehicles" },
-  { label: "Motor Vehicle Mfg",          value: "Motor Vehicle Manufacturing" },
-  { label: "Transportation & Logistics", value: "Transportation, Logistics, Supply Chain and Storage" },
-  { label: "Industrial Machinery",       value: "Industrial Machinery Manufacturing" },
-  { label: "Construction",               value: "Construction" },
+  { label: "Auto Repair & Service",  value: "Vehicle Repair and Maintenance" },
+  { label: "Automotive",             value: "Automotive" },
+  { label: "Car Dealers",            value: "Retail Motor Vehicles" },
+  { label: "Motor Vehicle Mfg",      value: "Motor Vehicle Manufacturing" },
+  { label: "Parts & Wholesale",      value: "Wholesale Motor Vehicles and Parts" },
+  { label: "Transport & Logistics",  value: "Transportation Logistics Supply Chain and Storage" },
+  { label: "Industrial Machinery",   value: "Industrial Machinery Manufacturing" },
+  { label: "Construction",           value: "Construction" },
 ];
 
 // ─── Company size options ─────────────────────────────────────────────────────
@@ -135,8 +138,6 @@ const SENIORITY_OPTIONS = [
   "Director",
   "Manager",
   "Senior",
-  "Entry",
-  "Intern",
 ];
 
 // ─── Suggested job titles ─────────────────────────────────────────────────────
@@ -144,22 +145,52 @@ const SENIORITY_OPTIONS = [
 const SUGGESTED_JOB_TITLES = [
   "Workshop owner",
   "Verkstadschef",
-  "Bilverkstad",
+  "Bilmekaniker",
   "Service manager",
   "Mekaniker",
+  "VD",
 ];
 
 // ─── Filters type ─────────────────────────────────────────────────────────────
 
 type Filters = {
-  countries: string[];
+  // Who
   jobTitles: string[];
   seniorities: string[];
+
+  // Where
+  personCountries: string[];
+
+  // Company
   industries: string[];
   sizeLabels: string[];
+  keywords: string;
+
+  // Quality
+  verifiedEmailOnly: boolean;
+  maxPerCompany: number;
+};
+
+const DEFAULT_FILTERS: Filters = {
+  jobTitles: [],
+  seniorities: [],
+  personCountries: [],
+  industries: [],
+  sizeLabels: [],
+  keywords: "",
+  verifiedEmailOnly: true,
+  maxPerCompany: 1,
 };
 
 // ─── Filters component ────────────────────────────────────────────────────────
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider pb-1 border-b border-slate-100">
+      {children}
+    </div>
+  );
+}
 
 function ProspectorFilters({
   filters,
@@ -178,10 +209,10 @@ function ProspectorFilters({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const toggleCountry = (c: string) => {
-    const next = filters.countries.includes(c)
-      ? filters.countries.filter((x) => x !== c)
-      : [...filters.countries, c];
-    onChange({ ...filters, countries: next });
+    const next = filters.personCountries.includes(c)
+      ? filters.personCountries.filter((x) => x !== c)
+      : [...filters.personCountries, c];
+    onChange({ ...filters, personCountries: next });
   };
 
   const addJobTitle = (title: string) => {
@@ -225,57 +256,14 @@ function ProspectorFilters({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Countries */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Country
-        </label>
-        <div className="relative">
-          <select
-            multiple
-            size={6}
-            value={filters.countries}
-            onChange={(e) => {
-              const selected = Array.from(e.target.selectedOptions).map(
-                (o) => o.value
-              );
-              onChange({ ...filters, countries: selected });
-            }}
-            className="w-full rounded-lg border border-slate-300 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          >
-            {COUNTRY_OPTIONS.map((c) => (
-              <option key={c} value={c} className={NORDIC_COUNTRIES.includes(c) ? "font-semibold" : ""}>
-                {NORDIC_COUNTRIES.includes(c) ? `★ ${c}` : c}
-              </option>
-            ))}
-          </select>
-        </div>
-        {filters.countries.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {filters.countries.map((c) => (
-              <span
-                key={c}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs"
-              >
-                {c}
-                <button
-                  onClick={() => toggleCountry(c)}
-                  className="hover:text-indigo-900"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* ── WHO ─────────────────────────────────────────────────────────── */}
+      <SectionHeader>Who</SectionHeader>
 
       {/* Job Title */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">
-          Job Title / Role
+          Job Title
         </label>
-        {/* Added tags */}
         {filters.jobTitles.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {filters.jobTitles.map((t) => (
@@ -306,7 +294,6 @@ function ProspectorFilters({
           placeholder="Add a title and press Enter"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
-        {/* Suggested chips */}
         <div className="mt-2 flex flex-wrap gap-1">
           {SUGGESTED_JOB_TITLES.filter((t) => !filters.jobTitles.includes(t)).map((t) => (
             <button
@@ -341,6 +328,50 @@ function ProspectorFilters({
           ))}
         </div>
       </div>
+
+      {/* ── WHERE ───────────────────────────────────────────────────────── */}
+      <SectionHeader>Where</SectionHeader>
+
+      {/* Country */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Country
+        </label>
+        <select
+          multiple
+          size={6}
+          value={filters.personCountries}
+          onChange={(e) => {
+            const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+            onChange({ ...filters, personCountries: selected });
+          }}
+          className="w-full rounded-lg border border-slate-300 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        >
+          {COUNTRY_OPTIONS.map((c) => (
+            <option key={c} value={c} className={NORDIC_COUNTRIES.includes(c) ? "font-semibold" : ""}>
+              {NORDIC_COUNTRIES.includes(c) ? `★ ${c}` : c}
+            </option>
+          ))}
+        </select>
+        {filters.personCountries.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {filters.personCountries.map((c) => (
+              <span
+                key={c}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs"
+              >
+                {c}
+                <button onClick={() => toggleCountry(c)} className="hover:text-indigo-900">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── COMPANY ─────────────────────────────────────────────────────── */}
+      <SectionHeader>Company</SectionHeader>
 
       {/* Industry */}
       <div>
@@ -384,6 +415,61 @@ function ProspectorFilters({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Company Keywords */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Company Keywords
+        </label>
+        <input
+          type="text"
+          value={filters.keywords}
+          onChange={(e) => onChange({ ...filters, keywords: e.target.value })}
+          placeholder="e.g. bilverkstad, verkstad, däck"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
+        <p className="mt-1 text-xs text-slate-400">Searches company names and descriptions</p>
+      </div>
+
+      {/* ── QUALITY ─────────────────────────────────────────────────────── */}
+      <SectionHeader>Quality</SectionHeader>
+
+      {/* Verified emails only */}
+      <div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={filters.verifiedEmailOnly}
+            onChange={(e) => onChange({ ...filters, verifiedEmailOnly: e.target.checked })}
+            className="text-indigo-600 rounded"
+          />
+          <span className="text-sm font-medium text-slate-700">Verified emails only</span>
+        </label>
+        <p className="mt-1 text-xs text-slate-400 ml-6">
+          Only show contacts where Prospeo has a confirmed email address
+        </p>
+      </div>
+
+      {/* Max per company */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Max per company
+        </label>
+        <input
+          type="number"
+          min={1}
+          max={10}
+          value={filters.maxPerCompany}
+          onChange={(e) =>
+            onChange({
+              ...filters,
+              maxPerCompany: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)),
+            })
+          }
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
+        <p className="mt-1 text-xs text-slate-400">Limit results per company</p>
       </div>
 
       {/* Search button */}
@@ -453,7 +539,6 @@ function AddContactsModal({ contacts, workspaceId, onClose, onSuccess }: ModalPr
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Load lists when "existing" is selected
   const handleListModeChange = async (mode: "none" | "existing" | "new") => {
     setListMode(mode);
     if (mode === "existing" && !listsLoaded) {
@@ -626,19 +711,19 @@ function AddContactsModal({ contacts, workspaceId, onClose, onSuccess }: ModalPr
             )}
             <div className="flex gap-3 mt-4">
               {result.listId && (
-                <a
+                <Link
                   href={`/lists/${result.listId}`}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm text-center transition-colors"
                 >
                   View list
-                </a>
+                </Link>
               )}
-              <a
+              <Link
                 href="/contacts"
-                className={`${result.listId ? "flex-1" : "flex-1"} border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium py-2 rounded-lg text-sm text-center transition-colors`}
+                className="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium py-2 rounded-lg text-sm text-center transition-colors"
               >
                 View contacts
-              </a>
+              </Link>
               <button
                 onClick={onClose}
                 className="flex-1 text-slate-500 hover:text-slate-700 text-sm"
@@ -678,14 +763,6 @@ function AddContactsModal({ contacts, workspaceId, onClose, onSuccess }: ModalPr
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-const DEFAULT_FILTERS: Filters = {
-  countries: [],
-  jobTitles: [],
-  seniorities: [],
-  industries: [],
-  sizeLabels: [],
-};
-
 export default function ProspectorPage() {
   const { workspaceId } = useWorkspace();
 
@@ -702,16 +779,24 @@ export default function ProspectorPage() {
 
   const buildSearchPayload = useCallback(
     (page: number) => {
-      const companySizes = filters.sizeLabels.flatMap(
-        (label) => SIZE_OPTIONS.find((s) => s.label === label)?.values ?? []
-      );
+      const companySizes = SIZE_OPTIONS.filter((s) =>
+        filters.sizeLabels.includes(s.label)
+      ).flatMap((s) => s.values);
+
+      const keywords = filters.keywords
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean);
 
       return {
-        countries: filters.countries,
+        personCountries: filters.personCountries,
         jobTitles: filters.jobTitles,
         seniorities: filters.seniorities,
         industries: filters.industries,
         companySizes,
+        keywords,
+        verifiedEmailOnly: filters.verifiedEmailOnly,
+        maxPerCompany: filters.maxPerCompany,
         page,
       };
     },
@@ -727,10 +812,11 @@ export default function ProspectorPage() {
 
       // Require at least one meaningful filter
       if (
-        filters.countries.length === 0 &&
+        filters.personCountries.length === 0 &&
         filters.jobTitles.length === 0 &&
         filters.industries.length === 0 &&
-        filters.seniorities.length === 0
+        filters.seniorities.length === 0 &&
+        filters.keywords.trim().length === 0
       ) {
         toast.error("Add at least one filter before searching");
         return;
