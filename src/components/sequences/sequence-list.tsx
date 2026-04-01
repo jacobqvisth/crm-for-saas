@@ -48,6 +48,9 @@ const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   archived: { label: "Archived", className: "bg-red-100 text-red-600" },
 };
 
+type SortField = "reply_rate" | "bounce_rate";
+type SortDir = "asc" | "desc";
+
 export function SequenceList() {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
@@ -58,6 +61,8 @@ export function SequenceList() {
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [healthData, setHealthData] = useState<Record<string, SequenceHealth>>({});
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const loadSequences = useCallback(async () => {
     if (!workspaceId) return;
@@ -212,6 +217,29 @@ export function SequenceList() {
 
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
+  const handleSortClick = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const sortedSequences = sortField
+    ? [...sequences].sort((a, b) => {
+        const aVal =
+          sortField === "reply_rate"
+            ? pct(a.stats.replied, a.stats.sent)
+            : pct(a.stats.bounced, a.stats.sent);
+        const bVal =
+          sortField === "reply_rate"
+            ? pct(b.stats.replied, b.stats.sent)
+            : pct(b.stats.bounced, b.stats.sent);
+        return sortDir === "desc" ? bVal - aVal : aVal - bVal;
+      })
+    : sequences;
+
   if (!workspaceId) return null;
 
   return (
@@ -275,12 +303,33 @@ export function SequenceList() {
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Enrolled</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Sent</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Open %</th>
-                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Reply %</th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">
+                  <button
+                    onClick={() => handleSortClick("reply_rate")}
+                    className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors"
+                  >
+                    Reply %
+                    <span className="text-slate-300">
+                      {sortField === "reply_rate" ? (sortDir === "desc" ? "↓" : "↑") : "↕"}
+                    </span>
+                  </button>
+                </th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">
+                  <button
+                    onClick={() => handleSortClick("bounce_rate")}
+                    className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors"
+                  >
+                    Bounce %
+                    <span className="text-slate-300">
+                      {sortField === "bounce_rate" ? (sortDir === "desc" ? "↓" : "↑") : "↕"}
+                    </span>
+                  </button>
+                </th>
                 <th className="text-right text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {sequences.map((seq) => {
+              {sortedSequences.map((seq) => {
                 const badge = STATUS_BADGES[seq.status] || STATUS_BADGES.draft;
                 return (
                   <tr
@@ -323,6 +372,9 @@ export function SequenceList() {
                     </td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">
                       {pct(seq.stats.replied, seq.stats.sent)}%
+                    </td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">
+                      {pct(seq.stats.bounced, seq.stats.sent)}%
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>

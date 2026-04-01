@@ -292,3 +292,14 @@ All storage uses `email_status` + `email_verified_at` columns from Phase 18.
 
 ### Next step
 Phase 20: Prospector Upgrade
+
+---
+
+## Phase 23 — Analytics & Dashboards
+**Date:** 2026-04-01 | **Branch:** feature/phase23-analytics-dashboards | **PR:** #28
+
+- **sequence-analytics-tab.tsx** — replaced raw-count bar chart with rate-based grouped bar chart (Open %/Click %/Reply % per step); added horizontal funnel drop-off panel showing sent counts and % drop between adjacent steps (hidden if <2 steps); added `⭐ Most replies` indigo badge on the table row with the highest reply rate (min 5 sends to qualify)
+- **template-list.tsx + GET /api/analytics/template-stats** — added inline Performance column (`X sends · Y% open · Z% reply`) per template; added Sort dropdown (Newest / Name / Reply Rate); new API route aggregates sent/open/reply/click rates by joining sequence_steps → email_queue → email_events, grouped by template_id
+- **sequence-list.tsx** — added Bounce % column (was missing); Reply % and Bounce % column headers are now client-side sortable with toggle asc/desc arrows; sorting works on in-memory array with no extra fetches
+- **deliverability-panel.tsx + GET /api/analytics/send-volume** — new dashboard panel embedded below Contact Growth; contains 30-day Sent/Replied/Bounced area chart, sender account health table (daily sends vs limit, 7d bounce rate, status badge + pause reason), and suppression summary line (`Total suppressed: X (Y bounced · Z unsubscribed · W manual/DNC)`); new API route returns last-30-day time series
+- **Build:** TypeScript clean, ESLint clean, `next build` Turbopack compile passes; prerender error for /login is pre-existing (missing Supabase env vars in build environment — not a code issue)
