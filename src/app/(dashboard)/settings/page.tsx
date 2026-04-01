@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, Users, Shield } from 'lucide-react';
+import { GitBranch, Mail, Sparkles } from 'lucide-react';
 
 const settingsItems = [
   {
@@ -15,6 +15,12 @@ const settingsItems = [
     description: 'Connect your Gmail account for sending sequences',
     href: '/settings/email',
     icon: Mail,
+  },
+  {
+    title: 'AI Lead Filter',
+    description: 'Score Prospector results against your ICP before adding them to your CRM',
+    href: '/settings/ai-filter',
+    icon: Sparkles,
   },
 ];
 

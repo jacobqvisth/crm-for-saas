@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
@@ -12,6 +12,7 @@ import {
   Loader2,
   Users,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 
@@ -879,6 +880,29 @@ function AddContactsModal({ contacts, workspaceId, onClose, onSuccess }: ModalPr
   );
 }
 
+// ─── AI Fit types and badge ───────────────────────────────────────────────────
+
+type FitVerdict = { verdict: "good" | "maybe" | "poor"; reason: string };
+
+function FitBadge({ verdict }: { verdict: FitVerdict }) {
+  const config = {
+    good:  { label: "Good",  color: "bg-green-50 text-green-700 border-green-200",   icon: "✓" },
+    maybe: { label: "Maybe", color: "bg-yellow-50 text-yellow-700 border-yellow-200", icon: "?" },
+    poor:  { label: "Poor",  color: "bg-red-50 text-red-700 border-red-200",         icon: "✗" },
+  }[verdict.verdict];
+
+  return (
+    <div className="relative group inline-flex">
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium border rounded-full ${config.color}`}>
+        {config.icon} {config.label}
+      </span>
+      <div className="absolute bottom-full left-0 mb-1 z-10 hidden group-hover:block w-48 p-2 text-xs text-white bg-slate-800 rounded-lg shadow-lg">
+        {verdict.reason}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProspectorPage() {
@@ -894,6 +918,12 @@ export default function ProspectorPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [modalContacts, setModalContacts] = useState<ProspeoSearchResult[]>([]);
+
+  const [verdicts, setVerdicts] = useState<Record<string, FitVerdict>>({});
+  const [aiCheckLoading, setAiCheckLoading] = useState(false);
+  const [fitFilter, setFitFilter] = useState<"all" | "good" | "maybe" | "poor">("all");
+  const [aiFilterEnabled, setAiFilterEnabled] = useState(false);
+  const [smartReveal, setSmartReveal] = useState(false);
 
   const buildSearchPayload = useCallback(
     (page: number) => {
@@ -980,6 +1010,82 @@ export default function ProspectorPage() {
 
   const activeLanguages = getActiveLanguages(filters.personCountries);
 
+  // Load AI filter settings on mount
+  useEffect(() => {
+    fetch("/api/settings/ai-filter")
+      .then((r) => r.json())
+      .then((data) => {
+        setAiFilterEnabled(data.filter_enabled ?? false);
+      })
+      .catch(() => {});
+
+    const saved = localStorage.getItem("prospector_smart_reveal");
+    if (saved === "true") setSmartReveal(true);
+  }, []);
+
+  const handleAiCheck = async () => {
+    const selectedProfiles = results.filter((r) => selectedIds.has(r.person.person_id));
+    if (selectedProfiles.length === 0) return;
+
+    setAiCheckLoading(true);
+    try {
+      const payload = selectedProfiles.map((r) => ({
+        person_id: r.person.person_id,
+        full_name: r.person.full_name,
+        current_job_title: r.person.current_job_title,
+        headline: r.person.headline,
+        company_name: r.company.name,
+        company_industry: r.company.industry,
+        company_employee_range: r.company.employee_range,
+        location_country: r.person.location?.country,
+        location_city: r.person.location?.city,
+      }));
+
+      const res = await fetch("/api/prospector/ai-filter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profiles: payload }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error === "no_icp_prompt") {
+          toast.error("Set up your ICP in Settings → AI Lead Filter first");
+        } else {
+          toast.error("AI filter unavailable — add contacts manually");
+        }
+        return;
+      }
+
+      const { verdicts: newVerdicts } = await res.json();
+      const verdictMap: Record<string, FitVerdict> = {};
+      for (const v of newVerdicts) {
+        verdictMap[v.person_id] = { verdict: v.verdict, reason: v.reason };
+      }
+      setVerdicts((prev) => ({ ...prev, ...verdictMap }));
+
+      const poorIds: string[] = newVerdicts
+        .filter((v: { verdict: string }) => v.verdict === "poor")
+        .map((v: { person_id: string }) => v.person_id);
+      if (poorIds.length > 0) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          poorIds.forEach((id: string) => next.delete(id));
+          return next;
+        });
+        toast(`${poorIds.length} poor fit${poorIds.length > 1 ? "s" : ""} deselected`, { icon: "⚠️" });
+      }
+
+      const goodCount = newVerdicts.filter((v: { verdict: string }) => v.verdict === "good").length;
+      const maybeCount = newVerdicts.filter((v: { verdict: string }) => v.verdict === "maybe").length;
+      toast.success(`AI check complete: ${goodCount} good, ${maybeCount} maybe, ${poorIds.length} poor`);
+    } catch {
+      toast.error("AI filter unavailable — add contacts manually");
+    } finally {
+      setAiCheckLoading(false);
+    }
+  };
+
   const handleSearch = () => doSearch(1);
 
   const handleReset = () => {
@@ -1021,8 +1127,19 @@ export default function ProspectorPage() {
   };
 
   const handleBulkAdd = () => {
-    const selected = results.filter((r) => selectedIds.has(r.person.person_id));
+    const idsToReveal = smartReveal
+      ? Array.from(selectedIds).filter((id) => verdicts[id]?.verdict !== "poor")
+      : Array.from(selectedIds);
+
+    const skippedCount = selectedIds.size - idsToReveal.length;
+    const selected = results.filter((r) => idsToReveal.includes(r.person.person_id));
     openModal(selected);
+
+    if (skippedCount > 0) {
+      setTimeout(() => {
+        toast(`${skippedCount} poor fit${skippedCount > 1 ? "s" : ""} skipped`, { icon: "🔒" });
+      }, 100);
+    }
   };
 
   const handleModalSuccess = (added: number, skipped: number, _listId: string | null) => {
@@ -1035,6 +1152,11 @@ export default function ProspectorPage() {
     }
     setSelectedIds(new Set());
   };
+
+  const displayedResults =
+    fitFilter === "all"
+      ? results
+      : results.filter((r) => verdicts[r.person.person_id]?.verdict === fitFilter);
 
   if (!workspaceId) {
     return (
@@ -1146,10 +1268,38 @@ export default function ProspectorPage() {
 
               {/* Bulk action bar */}
               {selectedIds.size > 0 && (
-                <div className="flex items-center gap-4 px-6 py-2 bg-indigo-50 border-b border-indigo-100">
+                <div className="flex items-center gap-4 px-6 py-2 bg-indigo-50 border-b border-indigo-100 flex-wrap">
                   <span className="text-sm font-medium text-indigo-700">
                     {selectedIds.size} selected
                   </span>
+                  {aiFilterEnabled && (
+                    <button
+                      onClick={handleAiCheck}
+                      disabled={aiCheckLoading || selectedIds.size === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {aiCheckLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      {aiCheckLoading ? "Checking…" : `AI Check (${selectedIds.size})`}
+                    </button>
+                  )}
+                  {aiFilterEnabled && Object.keys(verdicts).length > 0 && (
+                    <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={smartReveal}
+                        onChange={(e) => {
+                          setSmartReveal(e.target.checked);
+                          localStorage.setItem("prospector_smart_reveal", String(e.target.checked));
+                        }}
+                        className="rounded border-slate-300 text-indigo-600"
+                      />
+                      Smart Reveal
+                    </label>
+                  )}
                   <button
                     onClick={handleBulkAdd}
                     className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
@@ -1163,6 +1313,31 @@ export default function ProspectorPage() {
                   >
                     Clear selection
                   </button>
+                </div>
+              )}
+
+              {/* Fit filter bar */}
+              {Object.keys(verdicts).length > 0 && (
+                <div className="flex gap-1 px-6 py-2 bg-white border-b border-slate-100">
+                  {(["all", "good", "maybe", "poor"] as const).map((f) => {
+                    const count =
+                      f === "all"
+                        ? results.length
+                        : results.filter((r) => verdicts[r.person.person_id]?.verdict === f).length;
+                    return (
+                      <button
+                        key={f}
+                        onClick={() => setFitFilter(f)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                          fitFilter === f
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                        }`}
+                      >
+                        {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)} ({count})
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1187,6 +1362,11 @@ export default function ProspectorPage() {
                       <th className="px-4 py-3 text-left font-medium text-slate-600">Current Title</th>
                       <th className="px-4 py-3 text-left font-medium text-slate-600">Company</th>
                       <th className="px-4 py-3 text-left font-medium text-slate-600">Location</th>
+                      {Object.keys(verdicts).length > 0 && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide w-28">
+                          Fit
+                        </th>
+                      )}
                       <th className="px-4 py-3 text-left font-medium text-slate-600 w-16">Action</th>
                     </tr>
                   </thead>
@@ -1194,7 +1374,7 @@ export default function ProspectorPage() {
                     {searchState === "loading" ? (
                       <SkeletonRows />
                     ) : (
-                      results.map((r) => {
+                      displayedResults.map((r) => {
                         const id = r.person.person_id;
                         const location = [
                           r.person.location?.city,
@@ -1207,7 +1387,7 @@ export default function ProspectorPage() {
                             key={id}
                             className={`hover:bg-white transition-colors ${
                               selectedIds.has(id) ? "bg-indigo-50" : "bg-slate-50"
-                            }`}
+                            } ${verdicts[id]?.verdict === "poor" ? "opacity-50" : ""}`}
                           >
                             <td className="px-4 py-3">
                               <input
@@ -1229,6 +1409,11 @@ export default function ProspectorPage() {
                             <td className="px-4 py-3 text-slate-500">
                               {location || "—"}
                             </td>
+                            {Object.keys(verdicts).length > 0 && (
+                              <td className="px-4 py-3">
+                                {verdicts[id] ? <FitBadge verdict={verdicts[id]} /> : null}
+                              </td>
+                            )}
                             <td className="px-4 py-3">
                               <button
                                 onClick={() => handleAddSingle(r)}
