@@ -12,6 +12,7 @@ interface SendEmailParams {
   textBody?: string;
   trackingId?: string;
   replyToMessageId?: string;
+  replyToThreadId?: string;
 }
 
 interface SendEmailResult {
@@ -176,7 +177,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       userId: "me",
       requestBody: {
         raw: encodedMessage,
-        threadId: params.replyToMessageId ? undefined : undefined,
+        threadId: params.replyToThreadId ?? undefined,
       },
     });
 

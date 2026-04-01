@@ -5,9 +5,10 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pause, Play } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 interface AnalyticsStats {
   enrolled: number;
@@ -42,6 +43,7 @@ const ENROLLMENT_STATUS: Record<string, { label: string; className: string }> = 
   bounced: { label: "Bounced", className: "bg-red-100 text-red-600" },
   unsubscribed: { label: "Unsubscribed", className: "bg-slate-100 text-slate-600" },
   paused: { label: "Paused", className: "bg-yellow-100 text-yellow-700" },
+  company_paused: { label: "Company Paused", className: "bg-orange-100 text-orange-700" },
   replied: { label: "Replied", className: "bg-indigo-100 text-indigo-700" },
 };
 
@@ -60,6 +62,7 @@ export default function SequenceAnalyticsPage() {
   const [tableLoading, setTableLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(0);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     if (!workspaceId) return;
@@ -208,6 +211,30 @@ export default function SequenceAnalyticsPage() {
     loadEnrollments();
   }, [loadEnrollments]);
 
+  const handleEnrollmentAction = async (enrollmentId: string, action: "pause" | "resume") => {
+    if (!workspaceId) return;
+    setActionLoading(enrollmentId);
+    try {
+      const res = await fetch(`/api/sequences/enrollments/${enrollmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || `Failed to ${action} enrollment`);
+      } else {
+        toast.success(action === "pause" ? "Enrollment paused" : "Enrollment resumed");
+        loadEnrollments();
+        loadStats();
+      }
+    } catch {
+      toast.error(`Failed to ${action} enrollment`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const totalPages = Math.ceil(totalEnrollments / PAGE_SIZE);
 
   return (
@@ -314,12 +341,18 @@ export default function SequenceAnalyticsPage() {
                   <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">
                     Enrolled Date
                   </th>
+                  <th className="text-right text-xs font-medium text-slate-500 uppercase px-4 py-3">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {enrollments.map((e) => {
                   const badge =
                     ENROLLMENT_STATUS[e.status ?? "active"] || ENROLLMENT_STATUS.active;
+                  const isActive = e.status === "active";
+                  const isPaused = e.status === "paused" || e.status === "company_paused";
+                  const isLoading = actionLoading === e.id;
                   return (
                     <tr key={e.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-sm font-medium text-slate-900">
@@ -344,6 +377,28 @@ export default function SequenceAnalyticsPage() {
                         {e.enrolled_at
                           ? format(new Date(e.enrolled_at), "MMM d, yyyy")
                           : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isActive && (
+                          <button
+                            onClick={() => handleEnrollmentAction(e.id, "pause")}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-40"
+                          >
+                            <Pause className="w-3 h-3" />
+                            Pause
+                          </button>
+                        )}
+                        {isPaused && (
+                          <button
+                            onClick={() => handleEnrollmentAction(e.id, "resume")}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 disabled:opacity-40"
+                          >
+                            <Play className="w-3 h-3" />
+                            Resume
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

@@ -10,7 +10,7 @@ import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-
 import { SequenceSettingsPanel } from "@/components/sequences/sequence-settings";
 import { EnrollContactsModal } from "@/components/sequences/enroll-contacts-modal";
 import { LaunchCampaignModal } from "@/components/sequences/launch-campaign-modal";
-import { ArrowLeft, Mail, Clock, GitBranch, Rocket, BarChart2 } from "lucide-react";
+import { ArrowLeft, Mail, Clock, GitBranch, Rocket, BarChart2, Pause } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -52,6 +52,8 @@ export default function SequenceDetailPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
+  const [pauseAllOpen, setPauseAllOpen] = useState(false);
+  const [pauseAllLoading, setPauseAllLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!workspaceId) return;
@@ -132,6 +134,13 @@ export default function SequenceDetailPage() {
             <BarChart2 className="w-3.5 h-3.5" />
             View Analytics
           </Link>
+          <button
+            onClick={() => setPauseAllOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <Pause className="w-3.5 h-3.5" />
+            Pause All
+          </button>
           <button
             onClick={() => setLaunchOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -265,6 +274,54 @@ export default function SequenceDetailPage() {
             load();
           }}
         />
+      )}
+
+      {/* Pause All Confirmation Modal */}
+      {pauseAllOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Pause All Enrollments?</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              This will pause all active enrollments in this sequence and cancel their scheduled
+              emails. You can resume individual enrollments from the analytics page.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setPauseAllOpen(false)}
+                disabled={pauseAllLoading}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setPauseAllLoading(true);
+                  try {
+                    const res = await fetch(`/api/sequences/${sequenceId}/pause-all`, {
+                      method: "POST",
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      toast.error(data.error || "Failed to pause enrollments");
+                    } else {
+                      toast.success(`${data.paused} enrollment${data.paused !== 1 ? "s" : ""} paused`);
+                      setPauseAllOpen(false);
+                      load();
+                    }
+                  } catch {
+                    toast.error("Failed to pause enrollments");
+                  } finally {
+                    setPauseAllLoading(false);
+                  }
+                }}
+                disabled={pauseAllLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                {pauseAllLoading ? "Pausing..." : "Pause All"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

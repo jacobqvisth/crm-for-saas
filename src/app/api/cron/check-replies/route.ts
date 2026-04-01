@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
 
   let checked = 0;
   let repliesFound = 0;
+  let autoRepliesFound = 0;
   let bouncesFound = 0;
 
   // --- Reply Detection ---
@@ -66,6 +67,9 @@ export async function POST(request: NextRequest) {
 
         if (!thread?.messages) continue;
 
+        // Track real vs auto replies found in this thread
+        let threadRealReplies = 0;
+
         for (const message of thread.messages) {
           if (!message.id || !message.payload) continue;
 
@@ -91,6 +95,9 @@ export async function POST(request: NextRequest) {
           const receivedAt = dateHeader ? new Date(dateHeader).toISOString() : new Date().toISOString();
           const bodyText = extractTextBody(message.payload);
           const bodyHtml = extractHtmlBody(message.payload);
+
+          // Detect OOO / auto-reply
+          const autoReply = isAutoReply(headers, subject, bodyText);
 
           // Find the email_queue row for this thread
           const threadEmail = sentEmails.find(
@@ -121,9 +128,11 @@ export async function POST(request: NextRequest) {
             body_html: bodyHtml || null,
             body_text: bodyText || null,
             received_at: receivedAt,
+            is_auto_reply: autoReply,
+            category: autoReply ? "out_of_office" : "inbox",
           });
 
-          // Insert email_event for reply
+          // Insert email_event for reply (always, even for OOO — for stats)
           if (threadEmail?.tracking_id) {
             await supabase.from("email_events").insert({
               tracking_id: threadEmail.tracking_id,
@@ -132,8 +141,8 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          // Update contact
-          if (contact?.id) {
+          // Update contact last_contacted_at (only for real replies)
+          if (!autoReply && contact?.id) {
             await supabase
               .from("contacts")
               .update({ last_contacted_at: new Date().toISOString() })
@@ -144,31 +153,44 @@ export async function POST(request: NextRequest) {
           await supabase.from("activities").insert({
             workspace_id: account.workspace_id,
             type: "email_received",
-            subject: "Reply received",
-            description: `Reply from ${fromEmail}`,
+            subject: autoReply ? "Auto-reply received (OOO)" : "Reply received",
+            description: autoReply
+              ? `Out-of-office auto-reply from ${fromEmail}`
+              : `Reply from ${fromEmail}`,
             contact_id: contact?.id ?? null,
             metadata: {
               gmail_message_id: message.id,
               gmail_thread_id: email.gmail_thread_id,
               email_queue_id: threadEmail?.id ?? null,
+              is_auto_reply: autoReply,
             },
           });
 
-          repliesFound++;
+          if (autoReply) {
+            autoRepliesFound++;
+          } else {
+            repliesFound++;
+            threadRealReplies++;
+          }
         }
 
-        // Handle stop_on_reply for enrollment if a reply was found in this thread
-        if (repliesFound > 0 && email.enrollment_id) {
+        // Handle stop_on_reply for enrollment — only for real (non-OOO) replies
+        if (threadRealReplies > 0 && email.enrollment_id) {
           const { data: enrollment } = await supabase
             .from("sequence_enrollments")
-            .select("*, sequences(*)")
+            .select("*, sequences(*), contacts(company_id)")
             .eq("id", email.enrollment_id)
             .eq("status", "active")
             .maybeSingle();
 
           if (enrollment) {
-            const sequence = enrollment.sequences as unknown as { settings: { stop_on_reply?: boolean } };
+            const sequence = enrollment.sequences as unknown as {
+              id: string;
+              settings: { stop_on_reply?: boolean; stop_on_company_reply?: boolean };
+            };
+
             if (sequence?.settings?.stop_on_reply) {
+              // Mark this enrollment as replied
               await supabase
                 .from("sequence_enrollments")
                 .update({ status: "replied", completed_at: new Date().toISOString() })
@@ -179,6 +201,69 @@ export async function POST(request: NextRequest) {
                 .update({ status: "cancelled" as const })
                 .eq("enrollment_id", enrollment.id)
                 .eq("status", "scheduled");
+
+              // Company-level stop: pause other active enrollments at the same company
+              const stopOnCompanyReply = sequence?.settings?.stop_on_company_reply ?? true;
+              const contact = enrollment.contacts as unknown as { company_id: string | null } | null;
+              const companyId = contact?.company_id;
+
+              if (stopOnCompanyReply && companyId) {
+                // Find company name for activity description
+                const { data: company } = await supabase
+                  .from("companies")
+                  .select("name")
+                  .eq("id", companyId)
+                  .maybeSingle();
+
+                // Find all other active enrollments for contacts at this company
+                const { data: companyContacts } = await supabase
+                  .from("contacts")
+                  .select("id")
+                  .eq("workspace_id", account.workspace_id)
+                  .eq("company_id", companyId)
+                  .neq("id", enrollment.contact_id);
+
+                if (companyContacts && companyContacts.length > 0) {
+                  const companyContactIds = companyContacts.map((c) => c.id);
+
+                  const { data: otherEnrollments } = await supabase
+                    .from("sequence_enrollments")
+                    .select("id, contact_id")
+                    .in("contact_id", companyContactIds)
+                    .eq("status", "active");
+
+                  if (otherEnrollments && otherEnrollments.length > 0) {
+                    const otherIds = otherEnrollments.map((e) => e.id);
+
+                    await supabase
+                      .from("sequence_enrollments")
+                      .update({ status: "company_paused" })
+                      .in("id", otherIds);
+
+                    await supabase
+                      .from("email_queue")
+                      .update({ status: "cancelled" as const })
+                      .in("enrollment_id", otherIds)
+                      .eq("status", "scheduled");
+
+                    // Create activity records for each paused contact
+                    const companyName = company?.name ?? "their company";
+                    const activityInserts = otherEnrollments.map((e) => ({
+                      workspace_id: account.workspace_id,
+                      type: "sequence_paused",
+                      subject: "Sequence paused — company reply",
+                      description: `Sequence paused — reply received from another contact at ${companyName}`,
+                      contact_id: e.contact_id,
+                      metadata: {
+                        reason: "company_reply",
+                        company_id: companyId,
+                        replying_enrollment_id: enrollment.id,
+                      },
+                    }));
+                    await supabase.from("activities").insert(activityInserts);
+                  }
+                }
+              }
             }
           }
         }
@@ -296,7 +381,48 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ checked, repliesFound, bouncesFound });
+  return NextResponse.json({ checked, repliesFound, autoRepliesFound, bouncesFound });
+}
+
+function isAutoReply(
+  headers: Array<{ name?: string | null; value?: string | null }>,
+  subject: string,
+  bodyText: string | null
+): boolean {
+  // Header checks (most reliable)
+  const autoSubmitted = getHeader(headers, "auto-submitted");
+  if (autoSubmitted && autoSubmitted.toLowerCase() !== "no") return true;
+
+  const xAutoReply = getHeader(headers, "x-autoreply");
+  if (xAutoReply) return true;
+
+  const xAutoResponseSuppress = getHeader(headers, "x-auto-response-suppress");
+  if (xAutoResponseSuppress) return true;
+
+  const precedence = getHeader(headers, "precedence");
+  if (precedence && ["bulk", "auto_reply", "junk"].includes(precedence.toLowerCase())) return true;
+
+  // Subject checks (multilingual — we email Nordic workshops)
+  const subjectLower = subject.toLowerCase();
+  const oooPatterns = [
+    "out of office",
+    "automatic reply",
+    "auto-reply",
+    "autoreply",
+    "frånvarande", // Swedish
+    "automatiskt svar", // Swedish
+    "fraværende", // Norwegian/Danish
+    "automatisk svar", // Norwegian/Danish
+    "abwesenheit", // German
+    "automatische antwort", // German
+    "poissa", // Finnish
+    "automaattinen vastaus", // Finnish
+  ];
+  if (oooPatterns.some((p) => subjectLower.includes(p))) return true;
+
+  void bodyText; // reserved for future body-based heuristics
+
+  return false;
 }
 
 function getHeader(

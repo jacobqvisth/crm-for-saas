@@ -20,6 +20,7 @@ export type SequenceSettings = {
   timezone: string;
   daily_limit_per_sender: number;
   stop_on_reply: boolean;
+  stop_on_company_reply: boolean;
   sender_rotation: boolean;
 };
 
@@ -861,6 +862,7 @@ export interface Database {
           body_text: string | null;
           received_at: string;
           is_read: boolean;
+          is_auto_reply: boolean;
           category: string;
           created_at: string;
           updated_at: string;
@@ -880,6 +882,7 @@ export interface Database {
           body_text?: string | null;
           received_at: string;
           is_read?: boolean;
+          is_auto_reply?: boolean;
           category?: string;
           created_at?: string;
           updated_at?: string;
@@ -899,6 +902,7 @@ export interface Database {
           body_text?: string | null;
           received_at?: string;
           is_read?: boolean;
+          is_auto_reply?: boolean;
           category?: string;
           updated_at?: string;
         };

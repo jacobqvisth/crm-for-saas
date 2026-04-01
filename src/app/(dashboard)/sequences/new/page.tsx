@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS: SequenceSettings = {
   timezone: "Europe/Stockholm",
   daily_limit_per_sender: 80,
   stop_on_reply: true,
+  stop_on_company_reply: true,
   sender_rotation: true,
 };
 

@@ -53,6 +53,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
   const [timezone, setTimezone] = useState(settings.timezone || "Europe/Stockholm");
   const [dailyLimit, setDailyLimit] = useState(settings.daily_limit_per_sender ?? 80);
   const [stopOnReply, setStopOnReply] = useState(settings.stop_on_reply ?? true);
+  const [stopOnCompanyReply, setStopOnCompanyReply] = useState(settings.stop_on_company_reply ?? true);
   const [senderRotation, setSenderRotation] = useState(settings.sender_rotation ?? true);
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +65,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
     setTimezone(s.timezone || "Europe/Stockholm");
     setDailyLimit(s.daily_limit_per_sender ?? 80);
     setStopOnReply(s.stop_on_reply ?? true);
+    setStopOnCompanyReply(s.stop_on_company_reply ?? true);
     setSenderRotation(s.sender_rotation ?? true);
   }, [sequence]);
 
@@ -84,6 +86,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
       timezone,
       daily_limit_per_sender: dailyLimit,
       stop_on_reply: stopOnReply,
+      stop_on_company_reply: stopOnCompanyReply,
       sender_rotation: senderRotation,
     };
 
@@ -195,6 +198,17 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
               className="rounded border-slate-300 text-indigo-600"
             />
             <span className="text-sm text-slate-700">Stop on reply</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={stopOnCompanyReply}
+              onChange={(e) => setStopOnCompanyReply(e.target.checked)}
+              className="rounded border-slate-300 text-indigo-600"
+            />
+            <span className="text-sm text-slate-700">
+              Pause other contacts at the same company when someone replies
+            </span>
           </label>
           <label className="flex items-center gap-2">
             <input
