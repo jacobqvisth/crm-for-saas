@@ -1068,6 +1068,68 @@ export interface Database {
           },
         ];
       };
+      prospector_saved_searches: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          name: string;
+          filters: Json;
+          last_run_at: string | null;
+          result_count: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          name: string;
+          filters: Json;
+          last_run_at?: string | null;
+          result_count?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          name?: string;
+          filters?: Json;
+          last_run_at?: string | null;
+          result_count?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      prospector_search_cache: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          search_hash: string;
+          filters: Json;
+          results: Json;
+          pagination: Json;
+          searched_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          search_hash: string;
+          filters: Json;
+          results: Json;
+          pagination: Json;
+          searched_at?: string;
+          expires_at: string;
+        };
+        Update: {
+          id?: string;
+          results?: Json;
+          pagination?: Json;
+          searched_at?: string;
+          expires_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

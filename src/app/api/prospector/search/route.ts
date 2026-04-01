@@ -1,5 +1,7 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { Json } from "@/lib/database.types";
 
 // Prospeo API types
 type ProspeoSearchResult = {
@@ -56,7 +58,27 @@ type SearchRequestBody = {
   verifiedEmailOnly: boolean;
   maxPerCompany: number;
   page: number;
+  workspaceId: string;
 };
+
+function buildCacheHash(
+  body: Omit<SearchRequestBody, "page" | "workspaceId">
+): string {
+  const normalized = {
+    personCountries: [...body.personCountries].sort(),
+    jobTitles: [...body.jobTitles].sort(),
+    seniorities: [...body.seniorities].sort(),
+    industries: [...body.industries].sort(),
+    companySizes: [...body.companySizes].sort(),
+    keywords: [...body.keywords].sort(),
+    verifiedEmailOnly: body.verifiedEmailOnly,
+    maxPerCompany: body.maxPerCompany,
+  };
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(normalized))
+    .digest("hex");
+}
 
 export async function POST(request: NextRequest) {
   // Auth check
@@ -90,7 +112,29 @@ export async function POST(request: NextRequest) {
     verifiedEmailOnly,
     maxPerCompany,
     page = 1,
+    workspaceId,
   } = body;
+
+  // Check cache for page 1 only
+  if (page === 1 && workspaceId) {
+    const hash = buildCacheHash(body);
+    const { data: cached } = await supabase
+      .from("prospector_search_cache")
+      .select("results, pagination, searched_at")
+      .eq("workspace_id", workspaceId)
+      .eq("search_hash", hash)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (cached) {
+      return NextResponse.json({
+        results: cached.results,
+        pagination: cached.pagination,
+        cached: true,
+        cachedAt: cached.searched_at,
+      });
+    }
+  }
 
   // Build filters
   const filters: Record<string, unknown> = {};
@@ -169,12 +213,32 @@ export async function POST(request: NextRequest) {
             total_page: 0,
             total_count: 0,
           },
+          cached: false,
         });
       }
       return NextResponse.json(
         { error: data.filter_error || "Search failed" },
         { status: 400 }
       );
+    }
+
+    // Store results in cache for page 1
+    if (page === 1 && workspaceId && data.results) {
+      const hash = buildCacheHash(body);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await supabase
+        .from("prospector_search_cache")
+        .upsert(
+          {
+            workspace_id: workspaceId,
+            search_hash: hash,
+            filters: body as unknown as Json,
+            results: (data.results || []) as unknown as Json,
+            pagination: (data.pagination || {}) as unknown as Json,
+            expires_at: expiresAt,
+          },
+          { onConflict: "workspace_id,search_hash" }
+        );
     }
 
     return NextResponse.json({
@@ -185,6 +249,7 @@ export async function POST(request: NextRequest) {
         total_page: 0,
         total_count: 0,
       },
+      cached: false,
     });
   } catch (err) {
     console.error("Prospeo search error:", err);

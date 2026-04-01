@@ -14,6 +14,17 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-01 — Phase 20: Prospector Upgrade
+
+- **Branch**: `feature/phase20-prospector-upgrade` → **PR #25**
+- **What was built**: Three Prospector improvements — (1) "In CRM" blue badges: after search results load, fires `/api/prospector/check-in-crm` (matches by placeholder email pattern or `linkedin_url`) and overlays a badge on already-imported contacts; (2) search result caching: page-1 results are stored in `prospector_search_cache` keyed by SHA-256 filter hash with 24h TTL, cache hit returns `cached: true` + `cachedAt` and the UI shows "(cached — X ago)"; (3) saved searches: filter sets can be named and saved to `prospector_saved_searches`, shown in a sidebar panel above filters with one-click load and hover-to-delete; "Save search" button appears in the results top bar
+- **Files changed**: 7 — `supabase/migrations/20260401160000_phase20_prospector_upgrade.sql` (new), `src/lib/database.types.ts`, `src/app/api/prospector/check-in-crm/route.ts` (new), `src/app/api/prospector/search/route.ts`, `src/app/api/prospector/saved-searches/route.ts` (new), `src/app/api/prospector/saved-searches/[id]/route.ts` (new), `src/app/(dashboard)/prospector/page.tsx`
+- **Migration**: Applied to `wdgiwuhehqpkhpvdzzzl` via Supabase MCP — 2 new tables (`prospector_saved_searches`, `prospector_search_cache`), RLS policies using `get_user_workspace_ids()`, unique index on `(workspace_id, search_hash)` for upsert
+- **Build status**: Build clean, lint zero warnings (fixed `useCallback` missing dep), `tsc --noEmit` zero errors (pre-existing unrelated `.next/dev` error excluded)
+- **Next step**: Phase 21 — Templates & Snippets
+
+---
+
 ## 2026-04-01 — Phase 18: Contact Data Model Upgrade
 
 - **Branch**: `feature/phase18-data-model-upgrade` → **PR #23**
