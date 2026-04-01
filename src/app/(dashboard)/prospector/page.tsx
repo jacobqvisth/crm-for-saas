@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { formatDistanceToNow } from "date-fns";
 import {
   Search,
   Plus,
@@ -59,6 +60,14 @@ type Pagination = {
 type SearchState = "idle" | "loading" | "results" | "empty" | "error";
 
 type ListOption = { id: string; name: string };
+
+type SavedSearch = {
+  id: string;
+  name: string;
+  filters: Filters;
+  last_run_at: string | null;
+  result_count: number | null;
+};
 
 // ─── Country list ─────────────────────────────────────────────────────────────
 
@@ -926,6 +935,19 @@ export default function ProspectorPage() {
   const [aiFilterEnabled, setAiFilterEnabled] = useState(false);
   const [smartReveal, setSmartReveal] = useState(false);
 
+  // In CRM badges
+  const [inCrmIds, setInCrmIds] = useState<Set<string>>(new Set());
+
+  // Cache indicator
+  const [resultsCached, setResultsCached] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+
+  // Saved searches
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveSearchName, setSaveSearchName] = useState("");
+  const [savingSearch, setSavingSearch] = useState(false);
+
   const buildSearchPayload = useCallback(
     (page: number) => {
       const companySizes = SIZE_OPTIONS.filter((s) =>
@@ -951,9 +973,10 @@ export default function ProspectorPage() {
         verifiedEmailOnly: filters.verifiedEmailOnly,
         maxPerCompany: filters.maxPerCompany,
         page,
+        workspaceId,
       };
     },
-    [filters]
+    [filters, workspaceId]
   );
 
   const doSearch = useCallback(
@@ -978,6 +1001,9 @@ export default function ProspectorPage() {
       setSearchState("loading");
       setSelectedIds(new Set());
       setCurrentPage(page);
+      setInCrmIds(new Set());
+      setResultsCached(false);
+      setCachedAt(null);
 
       try {
         const res = await fetch("/api/prospector/search", {
@@ -999,6 +1025,26 @@ export default function ProspectorPage() {
         setResults(resultsArr);
         setPagination(data.pagination || null);
         setSearchState(resultsArr.length === 0 ? "empty" : "results");
+
+        // Set cache indicator
+        setResultsCached(data.cached === true);
+        setCachedAt(data.cachedAt || null);
+
+        // Fire-and-forget in-CRM check
+        if (resultsArr.length > 0 && workspaceId) {
+          const personIds = resultsArr.map((r) => r.person.person_id);
+          const linkedinUrls = resultsArr.map((r) => r.person.linkedin_url || "");
+          fetch("/api/prospector/check-in-crm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ personIds, linkedinUrls, workspaceId }),
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.inCrmIds) setInCrmIds(new Set(d.inCrmIds));
+            })
+            .catch(() => {}); // non-fatal
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Network error";
         setErrorMsg(msg);
@@ -1011,7 +1057,7 @@ export default function ProspectorPage() {
 
   const activeLanguages = getActiveLanguages(filters.personCountries);
 
-  // Load AI filter settings on mount
+  // Load AI filter settings and saved searches on mount
   useEffect(() => {
     fetch("/api/settings/ai-filter")
       .then((r) => r.json())
@@ -1023,6 +1069,14 @@ export default function ProspectorPage() {
     const saved = localStorage.getItem("prospector_smart_reveal");
     if (saved === "true") setSmartReveal(true);
   }, []);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    fetch(`/api/prospector/saved-searches?workspaceId=${workspaceId}`)
+      .then((r) => r.json())
+      .then((data) => setSavedSearches(data.searches || []))
+      .catch(() => {});
+  }, [workspaceId]);
 
   const handleAiCheck = async () => {
     const selectedProfiles = results.filter((r) => selectedIds.has(r.person.person_id));
@@ -1095,6 +1149,55 @@ export default function ProspectorPage() {
     setResults([]);
     setPagination(null);
     setSelectedIds(new Set());
+    setInCrmIds(new Set());
+    setResultsCached(false);
+    setCachedAt(null);
+  };
+
+  const handleSaveSearch = async () => {
+    if (!saveSearchName.trim() || !workspaceId) return;
+    setSavingSearch(true);
+    try {
+      const res = await fetch("/api/prospector/saved-searches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saveSearchName.trim(),
+          filters,
+          workspaceId,
+          resultCount: pagination?.total_count || results.length,
+        }),
+      });
+      const data = await res.json();
+      setSavedSearches((prev) => [data.search, ...prev]);
+      setShowSaveDialog(false);
+      toast.success("Search saved");
+    } catch {
+      toast.error("Failed to save search");
+    } finally {
+      setSavingSearch(false);
+    }
+  };
+
+  const loadSavedSearch = (s: SavedSearch) => {
+    setFilters(s.filters);
+    toast(`Loaded "${s.name}" — click Search to run`, { icon: "📂" });
+    fetch(`/api/prospector/saved-searches/${s.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ last_run_at: new Date().toISOString(), result_count: s.result_count }),
+    }).catch(() => {});
+  };
+
+  const handleDeleteSavedSearch = async (id: string) => {
+    try {
+      await fetch(`/api/prospector/saved-searches/${id}?workspaceId=${workspaceId}`, {
+        method: "DELETE",
+      });
+      setSavedSearches((prev) => prev.filter((s) => s.id !== id));
+    } catch {
+      toast.error("Failed to delete saved search");
+    }
   };
 
   const handlePageChange = (newPage: number) => {
@@ -1180,6 +1283,39 @@ export default function ProspectorPage() {
       <div className="flex flex-1 min-h-0">
         {/* Filter panel */}
         <aside className="w-72 flex-shrink-0 border-r border-slate-200 bg-white px-5 py-6 overflow-y-auto">
+          {savedSearches.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                Saved Searches
+              </p>
+              <div className="space-y-1">
+                {savedSearches.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 group"
+                  >
+                    <button
+                      onClick={() => loadSavedSearch(s)}
+                      className="flex-1 text-left text-sm text-slate-700 font-medium"
+                    >
+                      {s.name}
+                      {s.result_count != null && (
+                        <span className="ml-1 text-xs text-slate-400">
+                          ({s.result_count} results)
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSavedSearch(s.id)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <ProspectorFilters
             filters={filters}
             onChange={setFilters}
@@ -1241,7 +1377,27 @@ export default function ProspectorPage() {
                         {pagination.total_count.toLocaleString()}
                       </span>{" "}
                       matching profiles
+                      {resultsCached && cachedAt && (
+                        <span className="text-xs text-slate-500 ml-2">
+                          (cached —{" "}
+                          {formatDistanceToNow(new Date(cachedAt), {
+                            addSuffix: true,
+                          })}
+                          )
+                        </span>
+                      )}
                     </span>
+                  )}
+                  {searchState === "results" && (
+                    <button
+                      onClick={() => {
+                        setSaveSearchName("");
+                        setShowSaveDialog(true);
+                      }}
+                      className="text-sm text-slate-500 hover:text-slate-700 underline"
+                    >
+                      Save search
+                    </button>
                   )}
                 </div>
                 {searchState === "results" && pagination && pagination.total_page > 1 && (
@@ -1400,6 +1556,11 @@ export default function ProspectorPage() {
                             </td>
                             <td className="px-4 py-3 font-medium text-slate-900">
                               {r.person.full_name}
+                              {inCrmIds.has(id) && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 ml-2">
+                                  In CRM
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-slate-600">
                               {r.person.current_job_title || "—"}
@@ -1435,6 +1596,41 @@ export default function ProspectorPage() {
           )}
         </main>
       </div>
+
+      {/* Save search dialog */}
+      {showSaveDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 shadow-xl w-80">
+            <h3 className="font-semibold text-slate-900 mb-3">Save this search</h3>
+            <input
+              type="text"
+              placeholder="Search name..."
+              value={saveSearchName}
+              onChange={(e) => setSaveSearchName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveSearch();
+              }}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-4"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowSaveDialog(false)}
+                className="text-sm px-3 py-1.5 border border-slate-300 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSearch}
+                disabled={!saveSearchName.trim() || savingSearch}
+                className="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {savingSearch ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
