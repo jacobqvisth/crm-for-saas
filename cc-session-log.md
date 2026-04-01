@@ -75,3 +75,21 @@ Phases 1–9 complete. App live at https://crm-for-saas.vercel.app. Pre-10 bugs 
   - **E2E tests** (`e2e/inbox.spec.ts`): 3 smoke tests — GET /api/inbox, GET /api/inbox/unread-count, PATCH with nonexistent ID
 - **Build status**: TypeScript compiled clean; zero errors; all 32 routes generated
 - **Notable decisions**: Reply detection uses thread polling (not push webhooks) since no Pub/Sub setup; stop_on_reply logic in check-replies now correctly triggers off real reply events; manual replies from inbox are not tracked (no pixel/link wrapping) since they're human-initiated; lint script is pre-existing broken (no eslint.config.mjs in repo)
+
+---
+
+## 2026-04-01 — Phase 12b: Prospector Bug Fix + Search UI Upgrade
+
+- **Branch**: `claude/elegant-tereshkova`
+- **PR**: #16
+- **Files changed**: `src/app/(dashboard)/prospector/page.tsx`, `src/app/api/prospector/search/route.ts`
+- **What was built**:
+  - **Bug fix**: `company_headcount_range` values corrected to Prospeo's exact API enum — previous values ("11-50", "51-200", "1001-5000") didn't exist in their API, causing 400 on all size-filtered searches
+  - **Size filter**: Now multi-select pill toggles (8 buckets: 1–10 through 5001+); was single-select radio buttons
+  - **Seniority filter**: New multi-select pills using all 10 Prospeo-valid values; added `seniorities` field to `Filters` type and `SearchRequestBody`; sends `person_seniority` to Prospeo API
+  - **Industry values**: Updated to Prospeo's exact enum strings (e.g. "Repair and Maintenance", "Motor Vehicle Manufacturing")
+  - **Job title input**: Replaced textarea with tag-input — Enter or comma adds tag, × removes; suggested chips (Workshop owner, Verkstadschef, etc.) shown as dimmed clickable chips; `jobTitlesRaw: string` → `jobTitles: string[]`
+  - **Minimum filter guard**: Toast error if none of country/title/industry/seniority are set before search
+  - **Result count**: Changed "contacts found" → "matching profiles"
+- **Build status**: TypeScript clean (tsc --noEmit passes); 1 pre-existing lint warning (no-html-link-for-pages in modal, untouched code)
+- **Notable decisions**: Build itself fails on /settings/pipelines prerender (pre-existing Supabase env var issue in static build, not related to these changes)

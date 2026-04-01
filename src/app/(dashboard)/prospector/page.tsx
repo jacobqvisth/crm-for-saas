@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
 import {
   Search,
@@ -98,11 +98,12 @@ type IndustryOption = {
 };
 
 const INDUSTRY_OPTIONS: IndustryOption[] = [
-  { label: "Automotive", value: "Automotive" },
-  { label: "Manufacturing", value: "Manufacturing" },
-  { label: "Transport & Logistics", value: "Transportation/Trucking/Railroad" },
-  { label: "Retail", value: "Retail" },
-  { label: "Construction", value: "Construction" },
+  { label: "Auto Repair & Service",      value: "Repair and Maintenance" },
+  { label: "Automotive Retail",          value: "Retail Motor Vehicles" },
+  { label: "Motor Vehicle Mfg",          value: "Motor Vehicle Manufacturing" },
+  { label: "Transportation & Logistics", value: "Transportation, Logistics, Supply Chain and Storage" },
+  { label: "Industrial Machinery",       value: "Industrial Machinery Manufacturing" },
+  { label: "Construction",               value: "Construction" },
 ];
 
 // ─── Company size options ─────────────────────────────────────────────────────
@@ -113,19 +114,52 @@ type SizeOption = {
 };
 
 const SIZE_OPTIONS: SizeOption[] = [
-  { label: "Small (1–10)", values: ["1-10"] },
-  { label: "Mid (11–200)", values: ["11-50", "51-200"] },
-  { label: "Large (201+)", values: ["201-500", "501-1000", "1001-5000", "5001-10000"] },
+  { label: "1–10",      values: ["1-10"] },
+  { label: "11–50",     values: ["11-20", "21-50"] },
+  { label: "51–200",    values: ["51-100", "101-200"] },
+  { label: "201–500",   values: ["201-500"] },
+  { label: "501–1000",  values: ["501-1000"] },
+  { label: "1001–2000", values: ["1001-2000"] },
+  { label: "2001–5000", values: ["2001-5000"] },
+  { label: "5001+",     values: ["5001-10000", "10000+"] },
 ];
 
-// ─── Filters component ────────────────────────────────────────────────────────
+// ─── Seniority options ────────────────────────────────────────────────────────
+
+const SENIORITY_OPTIONS = [
+  "Founder/Owner",
+  "C-Suite",
+  "Partner",
+  "Vice President",
+  "Head",
+  "Director",
+  "Manager",
+  "Senior",
+  "Entry",
+  "Intern",
+];
+
+// ─── Suggested job titles ─────────────────────────────────────────────────────
+
+const SUGGESTED_JOB_TITLES = [
+  "Workshop owner",
+  "Verkstadschef",
+  "Bilverkstad",
+  "Service manager",
+  "Mekaniker",
+];
+
+// ─── Filters type ─────────────────────────────────────────────────────────────
 
 type Filters = {
   countries: string[];
-  jobTitlesRaw: string;
+  jobTitles: string[];
+  seniorities: string[];
   industries: string[];
-  sizeLabel: string | null;
+  sizeLabels: string[];
 };
+
+// ─── Filters component ────────────────────────────────────────────────────────
 
 function ProspectorFilters({
   filters,
@@ -140,11 +174,39 @@ function ProspectorFilters({
   onReset: () => void;
   loading: boolean;
 }) {
+  const [jobTitleInput, setJobTitleInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const toggleCountry = (c: string) => {
     const next = filters.countries.includes(c)
       ? filters.countries.filter((x) => x !== c)
       : [...filters.countries, c];
     onChange({ ...filters, countries: next });
+  };
+
+  const addJobTitle = (title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed || filters.jobTitles.includes(trimmed)) return;
+    onChange({ ...filters, jobTitles: [...filters.jobTitles, trimmed] });
+  };
+
+  const removeJobTitle = (title: string) => {
+    onChange({ ...filters, jobTitles: filters.jobTitles.filter((t) => t !== title) });
+  };
+
+  const handleJobTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addJobTitle(jobTitleInput);
+      setJobTitleInput("");
+    }
+  };
+
+  const toggleSeniority = (v: string) => {
+    const next = filters.seniorities.includes(v)
+      ? filters.seniorities.filter((x) => x !== v)
+      : [...filters.seniorities, v];
+    onChange({ ...filters, seniorities: next });
   };
 
   const toggleIndustry = (v: string) => {
@@ -155,10 +217,10 @@ function ProspectorFilters({
   };
 
   const toggleSize = (label: string) => {
-    onChange({
-      ...filters,
-      sizeLabel: filters.sizeLabel === label ? null : label,
-    });
+    const next = filters.sizeLabels.includes(label)
+      ? filters.sizeLabels.filter((x) => x !== label)
+      : [...filters.sizeLabels, label];
+    onChange({ ...filters, sizeLabels: next });
   };
 
   return (
@@ -213,14 +275,71 @@ function ProspectorFilters({
         <label className="block text-sm font-medium text-slate-700 mb-2">
           Job Title / Role
         </label>
-        <textarea
-          rows={3}
-          value={filters.jobTitlesRaw}
-          onChange={(e) => onChange({ ...filters, jobTitlesRaw: e.target.value })}
-          placeholder="e.g. Workshop owner, service manager, bilverkstad"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+        {/* Added tags */}
+        {filters.jobTitles.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {filters.jobTitles.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs"
+              >
+                {t}
+                <button onClick={() => removeJobTitle(t)} className="hover:text-indigo-900">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={jobTitleInput}
+          onChange={(e) => setJobTitleInput(e.target.value)}
+          onKeyDown={handleJobTitleKeyDown}
+          onBlur={() => {
+            if (jobTitleInput.trim()) {
+              addJobTitle(jobTitleInput);
+              setJobTitleInput("");
+            }
+          }}
+          placeholder="Add a title and press Enter"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
-        <p className="text-xs text-slate-400 mt-1">Separate multiple titles with commas</p>
+        {/* Suggested chips */}
+        <div className="mt-2 flex flex-wrap gap-1">
+          {SUGGESTED_JOB_TITLES.filter((t) => !filters.jobTitles.includes(t)).map((t) => (
+            <button
+              key={t}
+              onClick={() => addJobTitle(t)}
+              className="px-2 py-0.5 rounded-full border border-slate-200 text-slate-400 text-xs hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Seniority */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Seniority
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {SENIORITY_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => toggleSeniority(s)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                filters.seniorities.includes(s)
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "bg-white text-slate-600 border-slate-300 hover:border-indigo-400 hover:text-indigo-600"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Industry */}
@@ -250,13 +369,13 @@ function ProspectorFilters({
         <label className="block text-sm font-medium text-slate-700 mb-2">
           Company Size
         </label>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {SIZE_OPTIONS.map((s) => (
             <button
               key={s.label}
               onClick={() => toggleSize(s.label)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium border text-left transition-colors ${
-                filters.sizeLabel === s.label
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                filters.sizeLabels.includes(s.label)
                   ? "bg-indigo-600 text-white border-indigo-600"
                   : "bg-white text-slate-600 border-slate-300 hover:border-indigo-400 hover:text-indigo-600"
               }`}
@@ -561,9 +680,10 @@ function AddContactsModal({ contacts, workspaceId, onClose, onSuccess }: ModalPr
 
 const DEFAULT_FILTERS: Filters = {
   countries: [],
-  jobTitlesRaw: "",
+  jobTitles: [],
+  seniorities: [],
   industries: [],
-  sizeLabel: null,
+  sizeLabels: [],
 };
 
 export default function ProspectorPage() {
@@ -582,17 +702,14 @@ export default function ProspectorPage() {
 
   const buildSearchPayload = useCallback(
     (page: number) => {
-      const jobTitles = filters.jobTitlesRaw
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      const companySizes =
-        SIZE_OPTIONS.find((s) => s.label === filters.sizeLabel)?.values || [];
+      const companySizes = filters.sizeLabels.flatMap(
+        (label) => SIZE_OPTIONS.find((s) => s.label === label)?.values ?? []
+      );
 
       return {
         countries: filters.countries,
-        jobTitles,
+        jobTitles: filters.jobTitles,
+        seniorities: filters.seniorities,
         industries: filters.industries,
         companySizes,
         page,
@@ -605,6 +722,17 @@ export default function ProspectorPage() {
     async (page: number) => {
       if (!workspaceId) {
         toast.error("No workspace found");
+        return;
+      }
+
+      // Require at least one meaningful filter
+      if (
+        filters.countries.length === 0 &&
+        filters.jobTitles.length === 0 &&
+        filters.industries.length === 0 &&
+        filters.seniorities.length === 0
+      ) {
+        toast.error("Add at least one filter before searching");
         return;
       }
 
@@ -639,7 +767,7 @@ export default function ProspectorPage() {
         toast.error(msg);
       }
     },
-    [workspaceId, buildSearchPayload]
+    [workspaceId, buildSearchPayload, filters]
   );
 
   const handleSearch = () => doSearch(1);
@@ -778,7 +906,7 @@ export default function ProspectorPage() {
                       <span className="font-semibold text-slate-900">
                         {pagination.total_count.toLocaleString()}
                       </span>{" "}
-                      contacts found
+                      matching profiles
                     </span>
                   )}
                 </div>
