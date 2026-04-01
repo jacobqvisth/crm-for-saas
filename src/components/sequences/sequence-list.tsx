@@ -13,11 +13,19 @@ import {
   Archive,
   MoreHorizontal,
   Zap,
+  AlertTriangle,
+  TrendingUp,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables, Json } from "@/lib/database.types";
 
 type Sequence = Tables<"sequences">;
+
+interface SequenceHealth {
+  auth_issue: boolean;
+  high_bounces: boolean;
+  paused_count: number;
+}
 
 interface SequenceWithStats extends Sequence {
   steps_count: number;
@@ -30,6 +38,7 @@ interface SequenceWithStats extends Sequence {
     bounced: number;
     unsubscribed: number;
   };
+  health?: SequenceHealth;
 }
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
@@ -48,6 +57,7 @@ export function SequenceList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [healthData, setHealthData] = useState<Record<string, SequenceHealth>>({});
 
   const loadSequences = useCallback(async () => {
     if (!workspaceId) return;
@@ -114,9 +124,26 @@ export function SequenceList() {
     setLoading(false);
   }, [workspaceId, supabase, search]);
 
+  const loadHealth = useCallback(async () => {
+    if (!workspaceId) return;
+    try {
+      const res = await fetch("/api/sequences/health");
+      if (res.ok) {
+        const data = await res.json();
+        setHealthData(data as Record<string, SequenceHealth>);
+      }
+    } catch {
+      // Non-fatal — health badges are supplemental
+    }
+  }, [workspaceId]);
+
   useEffect(() => {
     loadSequences();
   }, [loadSequences]);
+
+  useEffect(() => {
+    loadHealth();
+  }, [loadHealth]);
 
   const updateStatus = async (id: string, status: Sequence["status"]) => {
     if (!workspaceId) return;
@@ -262,7 +289,26 @@ export function SequenceList() {
                     onClick={() => router.push(`/sequences/${seq.id}`)}
                   >
                     <td className="px-4 py-3">
-                      <span className="text-sm font-medium text-slate-900">{seq.name}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-slate-900">{seq.name}</span>
+                        {healthData[seq.id]?.auth_issue && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                            <AlertTriangle className="w-3 h-3" />
+                            Auth issue
+                          </span>
+                        )}
+                        {healthData[seq.id]?.high_bounces && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700">
+                            <TrendingUp className="w-3 h-3" />
+                            High bounces
+                          </span>
+                        )}
+                        {(healthData[seq.id]?.paused_count ?? 0) > 0 && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
+                            {healthData[seq.id].paused_count} paused
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>

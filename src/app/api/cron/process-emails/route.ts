@@ -113,6 +113,36 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Look up previous email in this enrollment for threading
+      let replyToMessageId: string | undefined;
+      let replyToThreadId: string | undefined;
+      if (item.enrollment_id) {
+        const { data: previousEmail } = await supabase
+          .from("email_queue")
+          .select("gmail_message_id, gmail_thread_id, subject")
+          .eq("enrollment_id", item.enrollment_id)
+          .eq("status", "sent")
+          .not("gmail_message_id", "is", null)
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (previousEmail?.gmail_message_id) {
+          replyToMessageId = previousEmail.gmail_message_id;
+          replyToThreadId = previousEmail.gmail_thread_id ?? undefined;
+          // Ensure subject starts with "Re: " for threading
+          if (!item.subject.toLowerCase().startsWith("re: ")) {
+            const baseSubject = previousEmail.subject || item.subject;
+            const newSubject = `Re: ${baseSubject}`;
+            await supabase
+              .from("email_queue")
+              .update({ subject: newSubject })
+              .eq("id", item.id);
+            item.subject = newSubject;
+          }
+        }
+      }
+
       // Send the email
       const result = await sendEmail({
         accountId: senderAccountId,
@@ -120,6 +150,8 @@ export async function POST(request: NextRequest) {
         subject: item.subject,
         htmlBody: item.body_html,
         trackingId: item.tracking_id,
+        replyToMessageId,
+        replyToThreadId,
       });
 
       if (result.success) {
