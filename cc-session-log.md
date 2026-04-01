@@ -14,6 +14,17 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-01 — Phase 22: AI Email Writer
+
+- **Branch**: `claude/priceless-stonebraker` → **PR #27**
+- **What was built**: (1) `POST /api/ai/generate-email` — core AI route using `claude-haiku-4-5-20251001` with embedded Wrenchlane ICP/product context; supports generate-from-scratch (3 persona angles: shop_owner, service_advisor, technician) and personalize-existing-template mode; daily rate limiting at 50 generations/workspace tracked in new `daily_email_gen_count` / `daily_email_gen_date` columns; (2) "Generate with AI" in `EmailStepEditor` — Sparkles button opens `GenerateModal` inline in the same file; user picks persona, generates draft, can edit subject/body before inserting; step number + sequence name threaded through `SequenceBuilder → StepCard → EmailStepEditor` for accurate follow-up context; (3) "Personalize email" on contact detail — Wand2 button in activity header opens `PersonalizeModal`; fetches workspace templates, user selects one, AI generates contact-tailored version using contact's name/title/company/location; read-only output with per-field Copy buttons — does not auto-insert
+- **Files changed**: 7 — `supabase/migrations/20260401180000_phase22_ai_email_writer.sql` (new), `src/app/api/ai/generate-email/route.ts` (new), `src/components/sequences/email-step-editor.tsx`, `src/components/sequences/step-card.tsx`, `src/components/sequences/sequence-builder.tsx`, `src/app/(dashboard)/sequences/[id]/edit/page.tsx`, `src/components/contacts/contact-detail-client.tsx`
+- **Migration**: Applied to `wdgiwuhehqpkhpvdzzzl` — 2 new columns on `workspace_ai_settings` (`daily_email_gen_count INTEGER DEFAULT 0`, `daily_email_gen_date DATE`)
+- **Build status**: Build clean, lint zero warnings, `tsc --noEmit` zero errors
+- **Next step**: Phase 23 — Step-Level Analytics & Dashboards
+
+---
+
 ## 2026-04-01 — Phase 21: Templates & Snippets
 
 - **Branch**: `claude/trusting-galileo` → **PR #26**
