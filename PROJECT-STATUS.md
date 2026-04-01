@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-01 (Phase 15 merged — Sequence Reliability & Stop Logic live, 39/39 E2E passing)
+Last updated: 2026-04-01 (Phase 16 merged — Smart Throttling & Circuit Breaker live, 39/39 E2E passing)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -60,6 +60,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 12d | Prospector: Bilingual job title search (EN + local language) | ✅ Merged | #18 |
 | 12e | AI Prospector Filter (ICP scoring via Claude Haiku + Settings page) | ✅ Merged | #19 |
 | 15 | Sequence Reliability: OOO detection, company stop, threading, pause/resume | ✅ Merged | #20 |
+| 16 | Smart Throttling & Circuit Breaker: send jitter, bounce circuit breaker, send limits admin | ✅ Merged | #21 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -185,7 +186,8 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 15**: Sequence Reliability — OOO auto-detection (multilingual), company-level stop (pause other contacts at same company on reply), per-enrollment pause/resume, email threading (In-Reply-To/References), sequence health badges. 39/39 E2E passing. ✅ COMPLETE — PR #20
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
-- **Next**: Phase 16 (Smart Throttling & Circuit Breaker) — see `_prompts/MASTER-PLAN.md` for full roadmap
+- **Phase 16**: Smart Throttling & Circuit Breaker — send jitter (1 email/sender/cron run, reschedule rest with 30-120s random delays), bounce rate circuit breaker (auto-pause at >8% with ≥20 sends), send limits admin panel (per-account status, resume button, workspace defaults). 39/39 E2E passing. ✅ COMPLETE — PR #21
+- **Next**: Phase 17 (Compliance & DNC) — see `_prompts/MASTER-PLAN.md` for full roadmap
 
 ### Phase 14 — Pre-CC Checklist
 1. Make sure PRs #13 and #14 are both merged to main
