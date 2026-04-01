@@ -110,3 +110,19 @@ Phases 1–9 complete. App live at https://crm-for-saas.vercel.app. Pre-10 bugs 
 
 ### Build status
 TypeScript: 0 errors. Lint: 0 warnings. Build: compiled successfully (pre-existing `/contacts/import` prerender error unrelated to this session).
+
+---
+
+## 2026-04-01 — Phase 12d: Prospector Bilingual Job Title Search
+
+- **Branch**: `claude/great-taussig` → **PR #18**
+- **What was built**:
+  - Replaced mixed-language `SUGGESTED_JOB_TITLES` with clean English-only list (8 automotive titles)
+  - Added `COUNTRY_LANGUAGE` map (11 countries) and `JOB_TITLE_TRANSLATIONS` table (8 titles × 6 languages)
+  - Added helper functions: `getActiveLanguages`, `getTranslations`, `buildSearchTitles`
+  - Job title chips now display translation labels beneath them when countries with known languages are selected
+  - New "Search in X only" checkbox — conditionally shown when relevant; unchecked = English + local; checked = local only (with English fallback for untranslatable titles)
+  - `buildSearchPayload` now expands job titles via `buildSearchTitles` before sending to Prospeo
+  - Added `localOnly: boolean` to `Filters` type and `DEFAULT_FILTERS`
+- **Only file changed**: `src/app/(dashboard)/prospector/page.tsx`
+- **Build**: TypeScript clean (`npx tsc --noEmit` passes). Lint clean. Build error is pre-existing worktree env issue (Supabase vars not set), not related to this change.
