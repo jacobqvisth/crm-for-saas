@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     filters.company_industry = { include: industries };
   }
   if (companySizes && companySizes.length > 0) {
-    filters.company_headcount_range = { include: companySizes };
+    filters.company_headcount_range = companySizes; // plain array, not include/exclude
   }
 
   try {
