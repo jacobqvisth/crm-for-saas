@@ -49,6 +49,7 @@ type ProspeoSearchResponse = {
 type SearchRequestBody = {
   countries: string[];
   jobTitles: string[];
+  seniorities: string[];
   industries: string[];
   companySizes: string[];
   page: number;
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body: SearchRequestBody = await request.json();
-  const { countries, jobTitles, industries, companySizes, page = 1 } = body;
+  const { countries, jobTitles, seniorities, industries, companySizes, page = 1 } = body;
 
   // Build filters
   const filters: Record<string, unknown> = {};
@@ -85,6 +86,9 @@ export async function POST(request: NextRequest) {
   }
   if (jobTitles && jobTitles.length > 0) {
     filters.person_job_title = { include: jobTitles };
+  }
+  if (seniorities && seniorities.length > 0) {
+    filters.person_seniority = { include: seniorities };
   }
   if (industries && industries.length > 0) {
     filters.company_industry = { include: industries };
