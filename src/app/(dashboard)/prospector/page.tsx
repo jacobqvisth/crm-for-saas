@@ -685,6 +685,7 @@ function AddContactsModal({ contacts, workspaceId, onClose, onSuccess }: ModalPr
         company_domain: r.company?.domain || null,
         city: r.person.location?.city || null,
         country: r.person.location?.country || null,
+        linkedin_url: r.person.linkedin_url || null,
       }));
 
       const res = await fetch("/api/prospector/add-contacts", {

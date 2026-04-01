@@ -22,7 +22,7 @@ export function FilterBuilder({ filters, onChange }: FilterBuilderProps) {
     if (!workspaceId) return;
     supabase
       .from('companies')
-      .select('id, name, workspace_id, domain, industry, employee_count, annual_revenue, custom_fields, created_at, updated_at')
+      .select('*')
       .eq('workspace_id', workspaceId)
       .order('name')
       .then(({ data }) => { if (data) setCompanies(data); });

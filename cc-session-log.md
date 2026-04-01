@@ -14,6 +14,17 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-01 — Phase 18: Contact Data Model Upgrade
+
+- **Branch**: `feature/phase18-data-model-upgrade` → **PR #23**
+- **What was built**: Migration adds 7 new real columns to `contacts` (`title`, `city`, `country`, `linkedin_url`, `seniority`, `email_status`, `email_verified_at`) and 7 to `companies` (`country`, `city`, `linkedin_url`, `tech_stack`, `revenue_range`, `founded_year`, `description`); partial unique index on `companies(workspace_id, domain)`; backfill from `custom_fields` (additive); `database.types.ts` updated for both tables; `add-contacts` route writes to real columns instead of `custom_fields` and now passes `email_status`; Prospector page passes `linkedin_url`; contacts list has new Title column; contact detail shows email_status badge + read-only Title/Location/LinkedIn fields
+- **Files changed**: 7 — `supabase/migrations/20260401150000_phase18_data_model_upgrade.sql` (new), `src/lib/database.types.ts`, `src/app/api/prospector/add-contacts/route.ts`, `src/app/(dashboard)/prospector/page.tsx`, `src/components/contacts/contacts-page-client.tsx`, `src/components/contacts/contact-detail-client.tsx`, `src/components/lists/filter-builder.tsx`
+- **Migration**: Applied to `wdgiwuhehqpkhpvdzzzl` via Supabase MCP
+- **Build status**: TypeScript clean (`tsc --noEmit` zero errors); lint zero warnings; pre-existing prerender env-var build failure on `/login` (unrelated, same as previous phases)
+- **Next step**: Phase 19 — Email Verification
+
+---
+
 ## 2026-03-31 — Phase 12a: Prospector (Contact Discovery via Prospeo.io)
 
 - **Branch**: `claude/festive-dirac` → **PR #14**
