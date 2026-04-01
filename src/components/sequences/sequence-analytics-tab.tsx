@@ -10,11 +10,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
-import type { Tables } from "@/lib/database.types";
-
-type Step = Tables<"sequence_steps">;
+import { ArrowRight } from "lucide-react";
 
 interface StepAnalytics {
   step_order: number;
@@ -43,7 +42,6 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
     if (!workspaceId) return;
     setLoading(true);
 
-    // Get steps
     const { data: steps } = await supabase
       .from("sequence_steps")
       .select("*")
@@ -60,7 +58,6 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
     for (const step of steps) {
       if (step.type !== "email") continue;
 
-      // Get email queue entries for this step
       const { data: queueItems } = await supabase
         .from("email_queue")
         .select("id, tracking_id, status")
@@ -144,38 +141,93 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
     );
   }
 
+  // Best step: highest reply rate among steps with sent >= 5
+  const eligibleSteps = stepAnalytics.filter((s) => s.sent >= 5);
+  let bestStepOrder: number | null = null;
+  if (eligibleSteps.length > 0) {
+    const best = eligibleSteps.reduce((a, b) =>
+      pct(a.replied, a.sent) >= pct(b.replied, b.sent) ? a : b
+    );
+    bestStepOrder = best.step_order;
+  }
+
+  // Rate-based chart data
   const chartData = stepAnalytics.map((s) => ({
     name: `Step ${s.step_order + 1}`,
-    Sent: s.sent,
-    Opened: s.opened,
-    Clicked: s.clicked,
-    Replied: s.replied,
-    Bounced: s.bounced,
-    Unsubscribed: s.unsubscribed,
+    "Open %": pct(s.opened, s.sent),
+    "Click %": pct(s.clicked, s.sent),
+    "Reply %": pct(s.replied, s.sent),
   }));
+
+  // Funnel: only show if >= 2 email steps
+  const showFunnel = stepAnalytics.length >= 2;
 
   return (
     <div className="space-y-6">
+      {/* Funnel Drop-off Panel */}
+      {showFunnel && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="text-sm font-medium text-slate-900 mb-4">Step Drop-off Funnel</h3>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            {stepAnalytics.map((step, idx) => {
+              const dropPct =
+                idx > 0 && stepAnalytics[idx - 1].sent > 0
+                  ? Math.round(
+                      ((stepAnalytics[idx - 1].sent - step.sent) /
+                        stepAnalytics[idx - 1].sent) *
+                        100
+                    )
+                  : null;
+
+              return (
+                <div key={step.step_order} className="flex items-center gap-2 flex-shrink-0">
+                  {idx > 0 && (
+                    <div className="flex flex-col items-center gap-0.5 text-slate-400">
+                      <span className="text-xs font-medium text-orange-500">
+                        {dropPct !== null ? `-${dropPct}%` : ""}
+                      </span>
+                      <ArrowRight className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 min-w-[130px]">
+                    <div className="text-xs font-semibold text-slate-700 mb-1">
+                      Step {step.step_order + 1}
+                    </div>
+                    <div className="text-xs text-slate-500 truncate max-w-[120px] mb-2" title={step.subject}>
+                      {step.subject.length > 30 ? step.subject.slice(0, 30) + "…" : step.subject}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900">{step.sent} sent</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {pct(step.opened, step.sent)}% open · {pct(step.replied, step.sent)}% reply
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Rate-based Bar Chart */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-sm font-medium text-slate-900 mb-4">Funnel Overview</h3>
+        <h3 className="text-sm font-medium text-slate-900 mb-4">Engagement Rates by Step</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="Sent" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Opened" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Clicked" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Replied" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Bounced" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Unsubscribed" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+              <YAxis tick={{ fontSize: 12 }} unit="%" domain={[0, 100]} />
+              <Tooltip formatter={(value) => `${value}%`} />
+              <Legend />
+              <Bar dataKey="Open %" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Click %" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Reply %" fill="#6366f1" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
+      {/* Per-step Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full">
           <thead>
@@ -194,7 +246,16 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
             {stepAnalytics.map((s) => (
               <tr key={s.step_order} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">Step {s.step_order + 1}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">{s.subject}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  <div className="flex items-center gap-2">
+                    {s.subject}
+                    {bestStepOrder === s.step_order && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700 whitespace-nowrap">
+                        ⭐ Most replies
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-center text-sm text-slate-600">{s.sent}</td>
                 <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.opened, s.sent)}%</td>
                 <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.clicked, s.sent)}%</td>

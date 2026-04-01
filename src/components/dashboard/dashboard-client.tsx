@@ -21,6 +21,7 @@ import { EmailPerformance } from "./email-performance";
 import { SequencePerformance } from "./sequence-performance";
 import { PipelineSection } from "./pipeline-section";
 import { ContactGrowth } from "./contact-growth";
+import { DeliverabilityPanel } from "./deliverability-panel";
 import type { Tables } from "@/lib/database.types";
 
 interface DashboardData {
@@ -264,6 +265,11 @@ export function DashboardClient() {
           growthChart={data.contactGrowthChart}
           leadStatus={data.leadStatusBreakdown}
         />
+      </div>
+
+      {/* Deliverability */}
+      <div className="mb-8">
+        <DeliverabilityPanel />
       </div>
 
       {/* Recent Activity */}
