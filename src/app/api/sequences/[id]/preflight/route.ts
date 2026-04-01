@@ -141,6 +141,61 @@ export async function GET(
 
   const enrollableCount = Math.max(0, validContactIds.length - alreadyEnrolled);
 
+  // 6. Token fallback warnings — scan email step content for {{tokens}}
+  const { data: emailSteps } = await supabase
+    .from("sequence_steps")
+    .select("subject_override, body_override")
+    .eq("sequence_id", sequenceId)
+    .eq("type", "email");
+
+  function extractTokens(
+    steps: { subject_override: string | null; body_override: string | null }[]
+  ): Set<string> {
+    const tokens = new Set<string>();
+    const pattern = /\{\{(\w+)\}\}/g;
+    for (const step of steps) {
+      const text = `${step.subject_override || ""} ${step.body_override || ""}`;
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        tokens.add(match[1]);
+      }
+    }
+    return tokens;
+  }
+
+  const TOKEN_TO_FIELD: Record<string, string> = {
+    first_name: "first_name",
+    last_name: "last_name",
+    company_name: "company_id",
+    phone: "phone",
+    title: "title",
+    city: "city",
+    country: "country",
+  };
+
+  const usedTokens = extractTokens(emailSteps || []);
+  const checkableTokens = [...usedTokens].filter((t) => TOKEN_TO_FIELD[t]);
+
+  let tokenFallbackCount = 0;
+
+  if (checkableTokens.length > 0 && validContactIds.length > 0) {
+    const fields = [...new Set(checkableTokens.map((t) => TOKEN_TO_FIELD[t]))];
+    const { data: contactData } = await supabase
+      .from("contacts")
+      .select(fields.join(", "))
+      .in("id", validContactIds);
+
+    if (contactData) {
+      const missingAny = contactData.filter((c) =>
+        checkableTokens.some((token) => {
+          const field = TOKEN_TO_FIELD[token];
+          return !c[field as keyof typeof c];
+        })
+      );
+      tokenFallbackCount = missingAny.length;
+    }
+  }
+
   return NextResponse.json({
     gmailConnected: !!gmailAccount,
     gmailAccount: gmailAccount
@@ -158,5 +213,6 @@ export async function GET(
     suppressedCount,
     invalidEmailCount,
     unverifiedEmailCount,
+    tokenFallbackCount,
   });
 }

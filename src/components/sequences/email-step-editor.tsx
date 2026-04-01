@@ -4,11 +4,80 @@ import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { VariablePicker } from "./variable-picker";
-import { Eye, EyeOff, FileText } from "lucide-react";
+import { Eye, EyeOff, FileText, Scissors } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 
 type Step = Tables<"sequence_steps">;
 type Template = Tables<"email_templates">;
+type Snippet = Tables<"snippets">;
+
+interface SnippetPickerProps {
+  snippets: Snippet[];
+  onInsert: (body: string) => void;
+}
+
+function SnippetPicker({ snippets, onInsert }: SnippetPickerProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (snippets.length === 0) return null;
+
+  const grouped = snippets.reduce(
+    (acc, s) => {
+      if (!acc[s.category]) acc[s.category] = [];
+      acc[s.category].push(s);
+      return acc;
+    },
+    {} as Record<string, Snippet[]>
+  );
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-600 bg-slate-100 rounded hover:bg-slate-200"
+      >
+        <Scissors className="w-3 h-3" />
+        Snippets
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+          {Object.entries(grouped).map(([category, items]) => (
+            <div key={category}>
+              <p className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-slate-50">
+                {category.replace("_", " ")}
+              </p>
+              {items.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    onInsert(s.body);
+                    setOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface EmailStepEditorProps {
   step: Step;
@@ -25,6 +94,7 @@ export function EmailStepEditor({ step, onUpdate }: EmailStepEditorProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(step.template_id || "");
+  const [snippets, setSnippets] = useState<Snippet[]>([]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -36,7 +106,21 @@ export function EmailStepEditor({ step, onUpdate }: EmailStepEditorProps) {
         .order("name");
       setTemplates(data || []);
     })();
-  }, [workspaceId, supabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("snippets")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("name");
+      setSnippets(data || []);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
 
   useEffect(() => {
     setSubject(step.subject_override || "");
@@ -85,6 +169,21 @@ export function EmailStepEditor({ step, onUpdate }: EmailStepEditorProps) {
     }
   };
 
+  const handleInsertSnippet = (snippetBody: string) => {
+    if (bodyRef.current) {
+      const textarea = bodyRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newValue = bodyHtml.slice(0, start) + snippetBody + bodyHtml.slice(end);
+      setBodyHtml(newValue);
+      onUpdate({ body_override: newValue });
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + snippetBody.length, start + snippetBody.length);
+      }, 0);
+    }
+  };
+
   const previewHtml = bodyHtml
     .replace(/\{\{first_name\}\}/g, "John")
     .replace(/\{\{last_name\}\}/g, "Doe")
@@ -129,6 +228,7 @@ export function EmailStepEditor({ step, onUpdate }: EmailStepEditorProps) {
           <label className="block text-xs font-medium text-slate-500">Body</label>
           <div className="flex items-center gap-1">
             <VariablePicker onInsert={handleInsertVariable} />
+            <SnippetPicker snippets={snippets} onInsert={handleInsertSnippet} />
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}

@@ -14,6 +14,17 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-01 — Phase 21: Templates & Snippets
+
+- **Branch**: `claude/trusting-galileo` → **PR #26**
+- **What was built**: (1) Snippet library — `snippets` table, CRUD API routes (`/api/snippets`, `/api/snippets/[id]`), `SnippetList` component with category badges + editor modal supporting 6 categories (general, intro, objection, pricing, next_steps, closing); (2) Templates page tabs — Templates | Snippets two-tab layout in `TemplateList`, header button adapts label/action per tab; (3) SnippetPicker in `EmailStepEditor` — scissors-icon dropdown grouped by category inserts snippet body at textarea cursor position alongside existing VariablePicker; (4) Template version history — `TemplateEditor` auto-snapshots current state to `template_versions` before each update (capped at 20), shows collapsible history panel with per-version subject preview and one-click restore; (5) Token fallback warnings — preflight route scans email step content for `{{tokens}}`, maps to contact fields, counts contacts missing any used field, surfaced in `LaunchCampaignModal` as an info `PreflightItem`
+- **Files changed**: 10 — `supabase/migrations/20260401170000_phase21_templates_snippets.sql` (new), `src/lib/database.types.ts`, `src/app/api/snippets/route.ts` (new), `src/app/api/snippets/[id]/route.ts` (new), `src/components/templates/snippet-list.tsx` (new), `src/components/templates/template-list.tsx`, `src/components/templates/template-editor.tsx`, `src/components/sequences/email-step-editor.tsx`, `src/app/api/sequences/[id]/preflight/route.ts`, `src/components/sequences/launch-campaign-modal.tsx`
+- **Migration**: Applied to `wdgiwuhehqpkhpvdzzzl` via Supabase MCP — 2 new tables (`snippets`, `template_versions`), RLS policies using `get_user_workspace_ids()`, trigger `update_snippets_updated_at` for auto-timestamp maintenance
+- **Build status**: Build clean, lint zero warnings, `tsc --noEmit` zero errors
+- **Next step**: Phase 22 — AI Email Writer
+
+---
+
 ## 2026-04-01 — Phase 20: Prospector Upgrade
 
 - **Branch**: `feature/phase20-prospector-upgrade` → **PR #25**

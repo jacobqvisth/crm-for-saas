@@ -1130,6 +1130,58 @@ export interface Database {
         };
         Relationships: [];
       };
+      snippets: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          name: string;
+          category: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          name: string;
+          category?: string;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          category?: string;
+          body?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      template_versions: {
+        Row: {
+          id: string;
+          template_id: string;
+          workspace_id: string;
+          version: number;
+          name: string;
+          subject: string;
+          body_html: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          workspace_id: string;
+          version: number;
+          name: string;
+          subject: string;
+          body_html: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
