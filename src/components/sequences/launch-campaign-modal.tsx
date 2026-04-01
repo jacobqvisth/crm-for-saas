@@ -14,6 +14,7 @@ interface PreflightData {
   missingFirstName: number;
   alreadyEnrolled: number;
   enrollableCount: number;
+  suppressedCount: number;
 }
 
 interface ContactList {
@@ -218,6 +219,12 @@ export function LaunchCampaignModal({
                       <PreflightItem
                         status="info"
                         message={`${preflight.alreadyEnrolled} contact${preflight.alreadyEnrolled !== 1 ? "s" : ""} already enrolled — will be skipped`}
+                      />
+                    )}
+                    {preflight.suppressedCount > 0 && (
+                      <PreflightItem
+                        status="warn"
+                        message={`${preflight.suppressedCount} contact${preflight.suppressedCount !== 1 ? "s" : ""} suppressed (unsubscribed, bounced, or DNC) — will be skipped`}
                       />
                     )}
                   </div>

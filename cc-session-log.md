@@ -190,3 +190,37 @@ TypeScript ✓, lint ✓ (0 warnings), tsc --noEmit ✓. 7 files changed (3 new)
 - One-email-per-sender-per-run approach chosen over `sleep()` to stay within Vercel function time limits
 - Circuit breaker requires ≥20 sends before triggering (prevents single-bounce false positives on new accounts)
 - Bounce rate uses a two-step query (get queue IDs for sender, then count bounces) — no RPC needed
+
+---
+
+## Phase 17 — Compliance & DNC
+**Date:** 2026-04-01
+**Branch:** feature/phase17-compliance-dnc
+**PR:** (see below)
+
+### What was built
+- **`suppressions` table** — unified suppression list (email + domain blocking, reason tracking, soft deletes). Applied via Supabase MCP. Migrated existing `unsubscribes` rows into it on creation.
+- **database.types.ts** — added `suppressions` table TypeScript types.
+- **Unsubscribe route** — now inserts into `suppressions` alongside existing `unsubscribes` upsert (backward compat kept).
+- **check-replies route** — bounce detection now also inserts into `suppressions` after updating contact status.
+- **process-emails route** — replaced `unsubscribes` table check with `suppressions` check; now covers both email-level AND domain-level blocks.
+- **preflight route** — added `suppressedCount` to the response (counts email + domain suppressions for the list).
+- **launch-campaign-modal** — shows orange warning "X contacts suppressed (unsubscribed, bounced, or DNC) — will be skipped" in preflight.
+- **prospector add-contacts** — checks `suppressions` before inserting each contact; returns `suppressed` count in response.
+- **`POST /api/contacts/[id]/forget`** — GDPR erasure endpoint: adds email to suppressions, cancels pending emails, deletes all related records, deletes contact, logs anonymized activity.
+- **Contact detail UI** — "Delete & Forget (GDPR)" button with confirmation modal.
+- **Settings → Compliance & DNC page** — stats bar (total/breakdown by reason), paginated suppression table with reason badges, Add Email / Add Domain dialogs, CSV bulk import (papaparse), Remove (soft delete) per row.
+- **Compliance API routes** — `GET/POST /api/settings/compliance`, `PATCH /api/settings/compliance/[id]`, `POST /api/settings/compliance/import`.
+- **Incidental fix** — added `export const dynamic = 'force-dynamic'` to `/contacts/import` page (was failing to prerender due to missing Supabase client init at build time).
+
+### Build status
+- `npm run build` ✅
+- `npm run lint` ✅ (0 errors, 0 warnings)
+- `npx tsc --noEmit` ✅
+
+### Notable decisions
+- `created_by` column on `suppressions` stored as plain UUID (no FK) — `workspace_members.user_id` has no unique constraint.
+- Actual `unsubscribes` schema uses `unsubscribed_at` (not `created_at`) — migration adjusted accordingly.
+- Suppression check in `process-emails` uses `.or()` with both email and domain to cover domain blocks in one query.
+- Preflight suppression count may slightly overcount if both email+domain match same contact — acceptable as it's a warning.
+- `unsubscribes` table kept untouched for backward compatibility.

@@ -38,6 +38,24 @@ async function processUnsubscribe(trackingId: string) {
       { onConflict: "workspace_id,email" }
     );
 
+  // Also insert into suppressions (primary suppression gate)
+  const { data: existingSuppression } = await supabase
+    .from("suppressions")
+    .select("id")
+    .eq("workspace_id", queueItem.workspace_id)
+    .eq("email", queueItem.to_email)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (!existingSuppression) {
+    await supabase.from("suppressions").insert({
+      workspace_id: queueItem.workspace_id,
+      email: queueItem.to_email,
+      reason: "unsubscribed",
+      source: "recipient clicked unsubscribe",
+    });
+  }
+
   // Insert email_event
   await supabase.from("email_events").insert({
     tracking_id: trackingId,

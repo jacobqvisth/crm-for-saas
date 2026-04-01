@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
 
   let added = 0;
   let skipped = 0;
+  let suppressed = 0;
   const errors: string[] = [];
 
   // Process contacts sequentially to be safe with rate limits
@@ -138,6 +139,25 @@ export async function POST(request: NextRequest) {
         enrichData.person?.email
           ? enrichData.person.email
           : null;
+
+      // Check suppressions before inserting
+      if (email) {
+        const emailDomain = email.split("@")[1]?.toLowerCase();
+        const { data: suppression } = await supabase
+          .from("suppressions")
+          .select("id")
+          .eq("workspace_id", workspaceId)
+          .eq("active", true)
+          .or(`email.eq.${email},domain.eq.${emailDomain}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (suppression) {
+          suppressed++;
+          await sleep(100);
+          continue;
+        }
+      }
 
       // Skip duplicate check (by email) if enabled and email is available
       if (skipDuplicates && email) {
@@ -249,6 +269,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     added,
     skipped,
+    suppressed,
     errors,
     listId: targetListId,
   });

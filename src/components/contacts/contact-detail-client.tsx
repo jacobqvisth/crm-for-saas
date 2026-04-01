@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2
+  Trash2, Plus, ChevronDown, Loader2, ShieldOff
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -69,6 +69,8 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [editField, setEditField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showForgetConfirm, setShowForgetConfirm] = useState(false);
+  const [forgetting, setForgetting] = useState(false);
   const [showEnrollInSequence, setShowEnrollInSequence] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
@@ -255,6 +257,26 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     else {
       toast.success('Contact deleted');
       router.push('/contacts');
+    }
+  };
+
+  const handleForget = async () => {
+    if (!contact) return;
+    setForgetting(true);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}/forget`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to process erasure request');
+      } else {
+        toast.success('Contact deleted and email suppressed');
+        router.push('/contacts');
+      }
+    } catch {
+      toast.error('Failed to process erasure request');
+    } finally {
+      setForgetting(false);
+      setShowForgetConfirm(false);
     }
   };
 
@@ -474,6 +496,15 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             >
               <Trash2 className="w-4 h-4" />
               Delete contact
+            </button>
+
+            {/* GDPR Delete & Forget */}
+            <button
+              onClick={() => setShowForgetConfirm(true)}
+              className="mt-2 w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50"
+            >
+              <ShieldOff className="w-4 h-4" />
+              Delete & Forget (GDPR)
             </button>
           </div>
         </div>
@@ -700,6 +731,23 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         <div className="flex justify-end gap-3">
           <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
           <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Delete</button>
+        </div>
+      </Modal>
+
+      {/* GDPR Delete & Forget Modal */}
+      <Modal open={showForgetConfirm} onClose={() => setShowForgetConfirm(false)} title="Delete & Forget (GDPR Erasure)">
+        <p className="text-sm text-slate-600 mb-4">
+          This will permanently delete all data for <strong>{fullName}</strong> and add their email address to the suppression list to prevent future contact. This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button onClick={() => setShowForgetConfirm(false)} className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+          <button
+            onClick={handleForget}
+            disabled={forgetting}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+          >
+            {forgetting ? 'Processing...' : 'Delete & Forget'}
+          </button>
         </div>
       </Modal>
     </div>
