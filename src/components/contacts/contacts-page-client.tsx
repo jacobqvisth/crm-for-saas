@@ -130,7 +130,7 @@ export function ContactsPageClient() {
     if (!workspaceId) return;
     supabase
       .from('companies')
-      .select('id, name, workspace_id, domain, industry, employee_count, annual_revenue, custom_fields, created_at, updated_at')
+      .select('*')
       .eq('workspace_id', workspaceId)
       .order('name')
       .then(({ data }) => { if (data) setCompanies(data); });
@@ -327,6 +327,7 @@ export function ContactsPageClient() {
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Name</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">Title</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Lead Status</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Last Contacted</th>
@@ -340,6 +341,7 @@ export function ContactsPageClient() {
                     <td className="px-4 py-3"><div className="h-4 w-4 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-32 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-40 bg-slate-200 rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-28 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-5 w-16 bg-slate-200 rounded-full" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-200 rounded" /></td>
@@ -348,7 +350,7 @@ export function ContactsPageClient() {
                 ))
               ) : contacts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-16 text-center">
+                  <td colSpan={8} className="px-4 py-16 text-center">
                     <p className="text-slate-500 font-medium">No contacts yet</p>
                     <p className="text-slate-400 text-sm mt-1">Add your first contact or import from CSV</p>
                     <button
@@ -380,6 +382,9 @@ export function ContactsPageClient() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{contact.email}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600 max-w-[160px] truncate">
+                      {contact.title || <span className="text-slate-400">—</span>}
+                    </td>
                     <td className="px-4 py-3">
                       {contact.company_id && contact.company_name ? (
                         <Link href={`/companies/${contact.company_id}`} className="text-indigo-600 hover:text-indigo-700">

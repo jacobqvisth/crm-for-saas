@@ -109,6 +109,13 @@ export interface Database {
           custom_fields: Json | null;
           last_contacted_at: string | null;
           source: string | null;
+          title: string | null;
+          city: string | null;
+          country: string | null;
+          linkedin_url: string | null;
+          seniority: string | null;
+          email_status: string;
+          email_verified_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -125,6 +132,13 @@ export interface Database {
           custom_fields?: Json | null;
           last_contacted_at?: string | null;
           source?: string | null;
+          title?: string | null;
+          city?: string | null;
+          country?: string | null;
+          linkedin_url?: string | null;
+          seniority?: string | null;
+          email_status?: string;
+          email_verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -141,6 +155,13 @@ export interface Database {
           custom_fields?: Json | null;
           last_contacted_at?: string | null;
           source?: string | null;
+          title?: string | null;
+          city?: string | null;
+          country?: string | null;
+          linkedin_url?: string | null;
+          seniority?: string | null;
+          email_status?: string;
+          email_verified_at?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -170,6 +191,13 @@ export interface Database {
           employee_count: number | null;
           annual_revenue: number | null;
           custom_fields: Json | null;
+          country: string | null;
+          city: string | null;
+          linkedin_url: string | null;
+          tech_stack: string[] | null;
+          revenue_range: string | null;
+          founded_year: number | null;
+          description: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -182,6 +210,13 @@ export interface Database {
           employee_count?: number | null;
           annual_revenue?: number | null;
           custom_fields?: Json | null;
+          country?: string | null;
+          city?: string | null;
+          linkedin_url?: string | null;
+          tech_stack?: string[] | null;
+          revenue_range?: string | null;
+          founded_year?: number | null;
+          description?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -194,6 +229,13 @@ export interface Database {
           employee_count?: number | null;
           annual_revenue?: number | null;
           custom_fields?: Json | null;
+          country?: string | null;
+          city?: string | null;
+          linkedin_url?: string | null;
+          tech_stack?: string[] | null;
+          revenue_range?: string | null;
+          founded_year?: number | null;
+          description?: string | null;
           updated_at?: string;
         };
         Relationships: [

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2, ShieldOff
+  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -341,6 +341,18 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               </div>
               <h2 className="text-lg font-bold text-slate-900 text-center">{fullName}</h2>
               <p className="text-sm text-slate-500">{contact.email}</p>
+              {contact.email_status && contact.email_status !== 'unknown' && (
+                <span className={`mt-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  contact.email_status === 'valid'      ? 'bg-green-100 text-green-700' :
+                  contact.email_status === 'invalid'    ? 'bg-red-100 text-red-700' :
+                  contact.email_status === 'risky'      ? 'bg-yellow-100 text-yellow-700' :
+                  contact.email_status === 'catch_all'  ? 'bg-orange-100 text-orange-700' :
+                  contact.email_status === 'unverified' ? 'bg-slate-100 text-slate-600' :
+                  'bg-slate-100 text-slate-600'
+                }`}>
+                  {contact.email_status.replace('_', ' ')}
+                </span>
+              )}
             </div>
 
             {/* Editable Fields */}
@@ -385,6 +397,37 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onSave={() => updateField('phone', editValue || null)}
                 onCancel={() => setEditField(null)}
               />
+
+              {contact.title && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
+                  <p className="text-sm text-slate-800">{contact.title}</p>
+                </div>
+              )}
+
+              {(contact.city || contact.country) && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Location</label>
+                  <p className="text-sm text-slate-800">
+                    {[contact.city, contact.country].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {contact.linkedin_url && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">LinkedIn</label>
+                  <a
+                    href={contact.linkedin_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate max-w-full"
+                  >
+                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">View profile</span>
+                  </a>
+                </div>
+              )}
 
               {/* Company dropdown */}
               <div>

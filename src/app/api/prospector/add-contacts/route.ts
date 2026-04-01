@@ -9,6 +9,7 @@ type ContactInput = {
   company_domain: string | null;
   city: string | null;
   country: string | null;
+  linkedin_url: string | null;
 };
 
 type AddContactsRequestBody = {
@@ -217,10 +218,6 @@ export async function POST(request: NextRequest) {
 
       // Insert contact
       const { firstName, lastName } = parseName(contact.full_name);
-      const customFields: Record<string, string> = {};
-      if (contact.current_job_title) customFields.title = contact.current_job_title;
-      if (contact.city) customFields.city = contact.city;
-      if (contact.country) customFields.country = contact.country;
 
       // email is required by schema — if no verified email, use a placeholder
       const contactEmail = email
@@ -236,7 +233,11 @@ export async function POST(request: NextRequest) {
           last_name: lastName || null,
           company_id: companyId,
           source: "prospector",
-          custom_fields: customFields,
+          title: contact.current_job_title || null,
+          city: contact.city || null,
+          country: contact.country || null,
+          linkedin_url: contact.linkedin_url || null,
+          email_status: email ? "valid" : "unverified",
         })
         .select("id")
         .single();
