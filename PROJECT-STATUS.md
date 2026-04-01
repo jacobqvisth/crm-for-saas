@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-01 (Phase 12e merged — AI Prospector Filter live)
+Last updated: 2026-04-01 (Phase 15 merged — Sequence Reliability & Stop Logic live, 39/39 E2E passing)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -59,6 +59,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 12c | Prospector: Complete API rebuild (verified field names + enum values) | ✅ Merged | #17 |
 | 12d | Prospector: Bilingual job title search (EN + local language) | ✅ Merged | #18 |
 | 12e | AI Prospector Filter (ICP scoring via Claude Haiku + Settings page) | ✅ Merged | #19 |
+| 15 | Sequence Reliability: OOO detection, company stop, threading, pause/resume | ✅ Merged | #20 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -181,9 +182,10 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 12c**: Prospector complete rebuild — verified all Prospeo API field names and enum values from docs. Fixed person_location_search, industry values, headcount format. Added company_keywords, verified-email-only toggle, max-per-company. ✅ COMPLETE — PR #17
 - **Phase 12d**: Prospector bilingual job titles — English-only suggested chips with auto translation labels (e.g. "Verkstadsägare (SV)"), "local language only" checkbox. 11 countries × 8 titles. ✅ COMPLETE — PR #18
 - **Phase 12e**: AI Prospector Filter — Claude Haiku scores selected profiles as good/maybe/poor against workspace ICP. Settings page at /settings/ai-filter with ICP prompt editor. Smart Reveal toggle skips poor fits on reveal. 39/39 E2E tests passing. ✅ COMPLETE — PR #19
+- **Phase 15**: Sequence Reliability — OOO auto-detection (multilingual), company-level stop (pause other contacts at same company on reply), per-enrollment pause/resume, email threading (In-Reply-To/References), sequence health badges. 39/39 E2E passing. ✅ COMPLETE — PR #20
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
-- **Phases 12-16**: Enrichment, AI writer, meetings, analytics
+- **Next**: Phase 16 (Smart Throttling & Circuit Breaker) — see `_prompts/MASTER-PLAN.md` for full roadmap
 
 ### Phase 14 — Pre-CC Checklist
 1. Make sure PRs #13 and #14 are both merged to main
