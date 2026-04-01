@@ -5,10 +5,20 @@ import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { VariablePicker } from "@/components/sequences/variable-picker";
 import { Save, Trash2, Eye, EyeOff } from "lucide-react";
+import { format } from "date-fns";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
 type Template = Tables<"email_templates">;
+
+type TemplateVersion = {
+  id: string;
+  version: number;
+  name: string;
+  subject: string;
+  body_html: string;
+  created_at: string;
+};
 
 interface TemplateEditorProps {
   template?: Template | null;
@@ -27,6 +37,10 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
   const [bodyHtml, setBodyHtml] = useState(template?.body_html || "");
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  const [versions, setVersions] = useState<TemplateVersion[]>([]);
+  const [showVersions, setShowVersions] = useState(false);
+  const [loadingVersions, setLoadingVersions] = useState(false);
 
   useEffect(() => {
     if (template) {
@@ -81,6 +95,42 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
     };
 
     if (template) {
+      // Snapshot current saved state before overwriting
+      try {
+        const { count } = await supabase
+          .from("template_versions")
+          .select("id", { count: "exact", head: true })
+          .eq("template_id", template.id);
+
+        const nextVersion = (count || 0) + 1;
+
+        await supabase.from("template_versions").insert({
+          template_id: template.id,
+          workspace_id: workspaceId,
+          version: nextVersion,
+          name: template.name,
+          subject: template.subject,
+          body_html: template.body_html,
+        });
+
+        // Cap at 20 versions — delete oldest beyond 20
+        const { data: oldVersions } = await supabase
+          .from("template_versions")
+          .select("id")
+          .eq("template_id", template.id)
+          .order("version", { ascending: false })
+          .range(20, 1000);
+
+        if (oldVersions && oldVersions.length > 0) {
+          await supabase
+            .from("template_versions")
+            .delete()
+            .in("id", oldVersions.map((v) => v.id));
+        }
+      } catch (err) {
+        console.error("Failed to snapshot template version:", err);
+      }
+
       const { error } = await supabase
         .from("email_templates")
         .update(payload)
@@ -123,6 +173,29 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
       toast.success("Template deleted");
       onDelete?.();
     }
+  };
+
+  const handleToggleVersions = async () => {
+    setShowVersions(!showVersions);
+    if (!showVersions && versions.length === 0 && template) {
+      setLoadingVersions(true);
+      const { data } = await supabase
+        .from("template_versions")
+        .select("id, version, name, subject, body_html, created_at")
+        .eq("template_id", template.id)
+        .order("version", { ascending: false })
+        .limit(20);
+      setVersions((data as TemplateVersion[]) || []);
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleRestoreVersion = (v: TemplateVersion) => {
+    setName(v.name);
+    setSubject(v.subject);
+    setBodyHtml(v.body_html);
+    setShowVersions(false);
+    toast(`Restored version ${v.version} — click Save to apply`, { icon: "⏪" });
   };
 
   const previewHtml = bodyHtml
@@ -221,6 +294,51 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
           </button>
         </div>
       </div>
+
+      {template && (
+        <div className="pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={handleToggleVersions}
+            className="text-sm text-slate-500 hover:text-slate-700 underline"
+          >
+            {showVersions ? "Hide version history" : "Version history"}
+            {versions.length > 0 && ` (${versions.length})`}
+          </button>
+
+          {showVersions && (
+            <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+              {loadingVersions ? (
+                <p className="text-sm text-slate-400">Loading...</p>
+              ) : versions.length === 0 ? (
+                <p className="text-sm text-slate-400">No previous versions yet.</p>
+              ) : (
+                versions.map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-sm"
+                  >
+                    <div>
+                      <span className="font-medium text-slate-700">v{v.version}</span>
+                      <span className="text-slate-400 ml-2">
+                        {format(new Date(v.created_at), "MMM d, HH:mm")}
+                      </span>
+                      <p className="text-slate-500 truncate max-w-xs">{v.subject}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRestoreVersion(v)}
+                      className="text-xs px-2 py-1 text-indigo-600 hover:bg-indigo-50 rounded"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

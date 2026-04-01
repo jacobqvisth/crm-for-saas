@@ -17,6 +17,7 @@ interface PreflightData {
   suppressedCount: number;
   invalidEmailCount: number;
   unverifiedEmailCount: number;
+  tokenFallbackCount: number;
 }
 
 interface ContactList {
@@ -239,6 +240,12 @@ export function LaunchCampaignModal({
                       <PreflightItem
                         status="info"
                         message={`${preflight.unverifiedEmailCount} contact${preflight.unverifiedEmailCount !== 1 ? "s" : ""} have unverified emails — consider verifying before sending`}
+                      />
+                    )}
+                    {preflight.tokenFallbackCount > 0 && (
+                      <PreflightItem
+                        status="info"
+                        message={`${preflight.tokenFallbackCount} contact${preflight.tokenFallbackCount !== 1 ? "s" : ""} are missing one or more template variables — they'll receive fallback text (e.g. "Hi there")`}
                       />
                     )}
                   </div>
