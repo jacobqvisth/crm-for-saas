@@ -13,6 +13,11 @@ export type PipelineStage = {
   color: string;
 };
 
+export type WorkspaceSendingSettings = {
+  default_max_daily_sends?: number; // default: 50
+  bounce_threshold?: number; // default: 8 (percent)
+};
+
 export type SequenceSettings = {
   send_days: number[];
   send_start_hour: number;
@@ -34,6 +39,7 @@ export interface Database {
           domain: string | null;
           google_workspace_domain: string | null;
           settings: Json | null;
+          sending_settings: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -43,6 +49,7 @@ export interface Database {
           domain?: string | null;
           google_workspace_domain?: string | null;
           settings?: Json | null;
+          sending_settings?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -52,6 +59,7 @@ export interface Database {
           domain?: string | null;
           google_workspace_domain?: string | null;
           settings?: Json | null;
+          sending_settings?: Json | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -804,6 +812,7 @@ export interface Database {
           daily_sends_count: number;
           max_daily_sends: number;
           status: string;
+          pause_reason: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -819,6 +828,7 @@ export interface Database {
           daily_sends_count?: number;
           max_daily_sends?: number;
           status?: string;
+          pause_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -834,6 +844,7 @@ export interface Database {
           daily_sends_count?: number;
           max_daily_sends?: number;
           status?: string;
+          pause_reason?: string | null;
           updated_at?: string;
         };
         Relationships: [

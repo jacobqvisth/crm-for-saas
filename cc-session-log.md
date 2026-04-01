@@ -166,3 +166,27 @@ TypeScript: 0 errors. Lint: 0 warnings. Build: compiled successfully (pre-existi
 - **Health badges**: `GET /api/sequences/health` returns auth_issue/high_bounces/paused_count per sequence; sequence-list loads these once and renders inline color-coded badges.
 - **Migration applied**: `inbox_messages.is_auto_reply boolean DEFAULT false` — applied to Supabase project wdgiwuhehqpkhpvdzzzl.
 - **Build**: TypeScript ✓, lint ✓, tsc --noEmit ✓. 13 files changed, 3 new API routes, 1 migration file.
+
+---
+
+## Phase 16 — Smart Throttling & Circuit Breaker
+**Date:** 2026-04-01 | **Branch:** feature/phase16-smart-throttling | **PR:** #21
+
+### What was built
+
+- **Send jitter** (`process-emails/route.ts`): Cron now sends at most 1 email per sender per run. After the first send, remaining items in the sender's batch are rescheduled with random 30–120s delays (×position index). This avoids robotic back-to-back sending without risking Vercel function timeouts from `sleep()`.
+- **Circuit breaker** (`process-emails/route.ts`): Before each sender loop, checks 24h bounce rate. If `recentSends >= 20` AND `bounceRate > threshold`: auto-pause the gmail_account (status='paused', pause_reason=message), cancel all scheduled queue items for sender, insert system activity record. Threshold read from `workspaces.sending_settings.bounce_threshold` (default 8%).
+- **New API: PATCH /api/settings/email/[accountId]**: Updates account `max_daily_sends`, `status`, `pause_reason`. Resuming (status→active) auto-clears `pause_reason`. Auth-checks workspace membership.
+- **New API: GET/PATCH /api/settings/sending**: Reads/writes `workspaces.sending_settings` JSONB. Returns defaults (`default_max_daily_sends: 50`, `bounce_threshold: 8`) merged with stored values.
+- **GmailAccountCard** updated: Shows `paused` (red) badge, displays `pause_reason` text in alert box, Resume button (green, Play icon) calls PATCH → status active. Disconnect now calls PATCH API instead of direct Supabase client write.
+- **EmailSettingsClient** updated: Loads workspace sending settings via new API. Adds "Workspace Defaults" card with today's total sends (read-only), editable `default_max_daily_sends` and `bounce_threshold %` inputs, Save button.
+- **Migration** (`20260401130000_phase16_smart_throttling.sql`): `gmail_accounts.pause_reason TEXT`, `workspaces.sending_settings JSONB DEFAULT '{}'` — applied to wdgiwuhehqpkhpvdzzzl.
+- **database.types.ts**: `pause_reason` on gmail_accounts Row/Insert/Update; `sending_settings` on workspaces Row/Insert/Update; new `WorkspaceSendingSettings` type exported.
+
+### Build status
+TypeScript ✓, lint ✓ (0 warnings), tsc --noEmit ✓. 7 files changed (3 new), 1 migration applied.
+
+### Notable decisions
+- One-email-per-sender-per-run approach chosen over `sleep()` to stay within Vercel function time limits
+- Circuit breaker requires ≥20 sends before triggering (prevents single-bounce false positives on new accounts)
+- Bounce rate uses a two-step query (get queue IDs for sender, then count bounces) — no RPC needed

@@ -5,7 +5,9 @@ import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { resolveVariables, ensureUnsubscribeLink } from "@/lib/sequences/variables";
 import { getNextSendTime, calculateStepScheduleTime } from "@/lib/sequences/scheduler";
-import type { SequenceSettings } from "@/lib/database.types";
+import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
+
+const DEFAULT_BOUNCE_THRESHOLD = 8; // percent
 
 export async function POST(request: NextRequest) {
   // Verify cron secret
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Check sender daily limit
     const { data: account } = await supabase
       .from("gmail_accounts")
-      .select("daily_sends_count, max_daily_sends, status")
+      .select("daily_sends_count, max_daily_sends, status, workspace_id, email_address")
       .eq("id", senderAccountId)
       .single();
 
@@ -54,9 +56,102 @@ export async function POST(request: NextRequest) {
     const remaining = account.max_daily_sends - account.daily_sends_count;
     if (remaining <= 0) continue;
 
+    // --- Circuit Breaker: check bounce rate for this sender in last 24 hours ---
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { count: recentSends } = await supabase
+      .from("email_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("sender_account_id", senderAccountId)
+      .eq("status", "sent")
+      .gte("sent_at", twentyFourHoursAgo);
+
+    if ((recentSends ?? 0) >= 20) {
+      // Get recent queue IDs for this sender to count bounces
+      const { data: recentQueueIds } = await supabase
+        .from("email_queue")
+        .select("id")
+        .eq("sender_account_id", senderAccountId)
+        .eq("status", "sent")
+        .gte("sent_at", twentyFourHoursAgo);
+
+      const queueIdList = (recentQueueIds || []).map((r) => r.id);
+
+      const { count: recentBounces } = await supabase
+        .from("email_events")
+        .select("*", { count: "exact", head: true })
+        .eq("event_type", "bounce")
+        .gte("created_at", twentyFourHoursAgo)
+        .in("email_queue_id", queueIdList);
+
+      const bounceCount = recentBounces ?? 0;
+      const sendCount = recentSends ?? 0;
+      const bounceRate = sendCount > 0 ? (bounceCount / sendCount) * 100 : 0;
+
+      // Read bounce threshold from workspace sending_settings
+      const { data: workspace } = await supabase
+        .from("workspaces")
+        .select("sending_settings")
+        .eq("id", account.workspace_id)
+        .single();
+
+      const sendingSettings = (workspace?.sending_settings as WorkspaceSendingSettings) || {};
+      const bounceThreshold = sendingSettings.bounce_threshold ?? DEFAULT_BOUNCE_THRESHOLD;
+
+      if (bounceRate > bounceThreshold) {
+        const pauseReason = `Circuit breaker: bounce rate ${bounceRate.toFixed(1)}% exceeded ${bounceThreshold}% threshold (${bounceCount}/${sendCount} in last 24h)`;
+
+        // Pause the account
+        await supabase
+          .from("gmail_accounts")
+          .update({ status: "paused", pause_reason: pauseReason })
+          .eq("id", senderAccountId);
+
+        // Cancel all scheduled queue items for this sender
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("sender_account_id", senderAccountId)
+          .eq("status", "scheduled");
+
+        // Log an activity
+        await supabase.from("activities").insert({
+          workspace_id: account.workspace_id,
+          type: "system",
+          subject: `Sending paused for ${account.email_address} — bounce rate ${bounceRate.toFixed(1)}%`,
+          metadata: {
+            sender_account_id: senderAccountId,
+            bounce_rate: bounceRate,
+            bounce_count: bounceCount,
+            send_count: sendCount,
+            threshold: bounceThreshold,
+          },
+        });
+
+        continue; // Skip this sender
+      }
+    }
+    // --- End Circuit Breaker ---
+
     const toProcess = items.slice(0, remaining);
 
-    for (const item of toProcess) {
+    // --- Jitter: send at most one email per sender per cron run ---
+    // Reschedule remaining items with staggered delays (30-120s apart)
+    if (toProcess.length > 1) {
+      for (let i = 1; i < toProcess.length; i++) {
+        const jitterSeconds = Math.floor(Math.random() * (120 - 30 + 1)) + 30; // 30-120s
+        const newScheduledFor = new Date(Date.now() + jitterSeconds * 1000 * i);
+        await supabase
+          .from("email_queue")
+          .update({ scheduled_for: newScheduledFor.toISOString() })
+          .eq("id", toProcess[i].id);
+      }
+    }
+    // Only process the first item in this sender's batch
+    const itemsToSendNow = toProcess.slice(0, 1);
+    // --- End Jitter ---
+
+    for (const item of itemsToSendNow) {
       // Mark as sending
       await supabase
         .from("email_queue")

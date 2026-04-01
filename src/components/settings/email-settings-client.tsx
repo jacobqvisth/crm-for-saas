@@ -7,7 +7,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
-import type { Tables } from "@/lib/database.types";
+import type { Tables, WorkspaceSendingSettings } from "@/lib/database.types";
 import { ConnectGmailButton } from "./connect-gmail-button";
 import { GmailAccountCard } from "./gmail-account-card";
 
@@ -18,6 +18,11 @@ export function EmailSettingsClient() {
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<GmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sendingSettings, setSendingSettings] = useState<WorkspaceSendingSettings>({
+    default_max_daily_sends: 50,
+    bounce_threshold: 8,
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
   const supabase = createClient();
 
   // Show success/error messages from OAuth callback
@@ -46,11 +51,40 @@ export function EmailSettingsClient() {
     setLoading(false);
   }, [workspaceId, supabase]);
 
+  const loadSendingSettings = useCallback(async () => {
+    const res = await fetch("/api/settings/sending");
+    if (res.ok) {
+      const data = await res.json();
+      setSendingSettings(data);
+    }
+  }, []);
+
   useEffect(() => {
     loadAccounts();
   }, [loadAccounts]);
 
+  useEffect(() => {
+    loadSendingSettings();
+  }, [loadSendingSettings]);
+
+  async function handleSaveWorkspaceDefaults() {
+    setSavingSettings(true);
+    const res = await fetch("/api/settings/sending", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sendingSettings),
+    });
+
+    if (!res.ok) {
+      toast.error("Failed to save workspace defaults");
+    } else {
+      toast.success("Workspace defaults saved");
+    }
+    setSavingSettings(false);
+  }
+
   const activeAccounts = accounts.filter((a) => a.status === "active");
+  const totalSendsToday = accounts.reduce((sum, a) => sum + a.daily_sends_count, 0);
   const totalCapacity = activeAccounts.reduce(
     (sum, a) => sum + Math.max(0, a.max_daily_sends - a.daily_sends_count),
     0
@@ -144,6 +178,83 @@ export function EmailSettingsClient() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Workspace Sending Defaults */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+          Workspace Defaults
+        </h2>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Today&apos;s total sends</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Across all accounts
+              </p>
+            </div>
+            <span className="text-lg font-semibold text-slate-900">{totalSendsToday}</span>
+          </div>
+
+          <div className="border-t border-slate-100 pt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Default max daily sends
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Applied to newly connected accounts
+              </p>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={sendingSettings.default_max_daily_sends ?? 50}
+                onChange={(e) =>
+                  setSendingSettings((s) => ({
+                    ...s,
+                    default_max_daily_sends: Number(e.target.value),
+                  }))
+                }
+                className="w-24 rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Bounce threshold
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Auto-pause sender if bounce rate exceeds this
+              </p>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={sendingSettings.bounce_threshold ?? 8}
+                  onChange={(e) =>
+                    setSendingSettings((s) => ({
+                      ...s,
+                      bounce_threshold: Number(e.target.value),
+                    }))
+                  }
+                  className="w-20 rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                />
+                <span className="text-sm text-slate-500">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4 flex justify-end">
+            <button
+              onClick={handleSaveWorkspaceDefaults}
+              disabled={savingSettings}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {savingSettings ? "Saving..." : "Save defaults"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
