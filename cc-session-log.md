@@ -93,3 +93,20 @@ Phases 1–9 complete. App live at https://crm-for-saas.vercel.app. Pre-10 bugs 
   - **Result count**: Changed "contacts found" → "matching profiles"
 - **Build status**: TypeScript clean (tsc --noEmit passes); 1 pre-existing lint warning (no-html-link-for-pages in modal, untouched code)
 - **Notable decisions**: Build itself fails on /settings/pipelines prerender (pre-existing Supabase env var issue in static build, not related to these changes)
+
+---
+
+## Phase 12c — Prospector Complete API Fix + UI Rebuild
+**Date:** 2026-04-01
+**PR:** #17
+**Branch:** claude/epic-hodgkin
+
+### What was built
+- Rewrote `src/app/api/prospector/search/route.ts`: updated `SearchRequestBody` type to include `personCountries`, `keywords`, `verifiedEmailOnly`, `maxPerCompany`; fixed `person_location` → `person_location_search`; added `company_keywords`, `person_contact_details`, `max_person_per_company` filter blocks
+- Rewrote `src/app/(dashboard)/prospector/page.tsx`: new `Filters` type with `personCountries` (was `countries`), `keywords`, `verifiedEmailOnly` (default true), `maxPerCompany` (default 1); filter panel reorganized with section headers (Who / Where / Company / Quality); added Company Keywords text input; added Verified emails only toggle; added Max per company number input
+- Fixed industry values: `"Vehicle Repair and Maintenance"` (was `"Repair and Maintenance"`), added `"Automotive"`, `"Car Dealers"`, `"Parts & Wholesale"`, fixed `"Transportation Logistics Supply Chain and Storage"` (no commas)
+- Updated search guard to also check `keywords.trim().length > 0`
+- Replaced `<a>` nav with `<Link>` for `/contacts` and `/lists/:id` (lint fix)
+
+### Build status
+TypeScript: 0 errors. Lint: 0 warnings. Build: compiled successfully (pre-existing `/contacts/import` prerender error unrelated to this session).
