@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-01 (Phase 12b merged — Prospector bug fix + UI upgrade live)
+Last updated: 2026-04-01 (Phase 12c merged — Prospector fully rebuilt with verified Prospeo API fields)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -56,6 +56,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 12a | Prospector (contact discovery via Prospeo.io) | ✅ Merged | #14 |
 | 14 | Inbox + Reply Management | ✅ Merged | #15 |
 | 12b | Prospector: Bug Fix + Search UI Upgrade | ✅ Merged | #16 |
+| 12c | Prospector: Complete API rebuild (verified field names + enum values) | ✅ Merged | #17 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -175,6 +176,7 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 10**: Campaign execution infrastructure ✅ COMPLETE — campaign launch modal, preflight API, analytics page, bounce suppression
 - **Phase 12a**: Prospector — contact discovery via Prospeo.io ✅ COMPLETE — PR #14
 - **Phase 12b**: Prospector upgrade — bug fix (headcount_range enum), seniority filter, tag-input, multi-select size, fixed industry values ✅ COMPLETE — PR #16
+- **Phase 12c**: Prospector complete rebuild — verified all Prospeo API field names and enum values from docs. Fixed person_location_search, industry values, headcount format. Added company_keywords, verified-email-only toggle, max-per-company. ✅ COMPLETE — PR #17
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
 - **Phases 12-16**: Enrichment, AI writer, meetings, analytics
