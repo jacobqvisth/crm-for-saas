@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Trash2, RefreshCw } from "lucide-react";
+import { Mail, Trash2, RefreshCw, Play } from "lucide-react";
 import toast from "react-hot-toast";
-import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
 
 type GmailAccount = Tables<"gmail_accounts">;
@@ -15,15 +14,16 @@ interface GmailAccountCardProps {
 
 const statusColors: Record<string, { bg: string; text: string; label: string }> = {
   active: { bg: "bg-green-100", text: "text-green-700", label: "Active" },
-  disconnected: { bg: "bg-red-100", text: "text-red-700", label: "Disconnected" },
+  paused: { bg: "bg-red-100", text: "text-red-700", label: "Paused" },
+  disconnected: { bg: "bg-slate-100", text: "text-slate-600", label: "Disconnected" },
   rate_limited: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Rate Limited" },
 };
 
 export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
   const [disconnecting, setDisconnecting] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [maxSends, setMaxSends] = useState(account.max_daily_sends);
   const [savingLimit, setSavingLimit] = useState(false);
-  const supabase = createClient();
 
   const status = statusColors[account.status] || statusColors.disconnected;
   const sendPercentage = Math.min(
@@ -35,22 +35,36 @@ export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
     if (!confirm("Are you sure you want to disconnect this Gmail account?")) return;
 
     setDisconnecting(true);
-    const { error } = await supabase
-      .from("gmail_accounts")
-      .update({
-        status: "disconnected",
-        access_token: "",
-        refresh_token: "",
-      })
-      .eq("id", account.id);
+    const res = await fetch(`/api/settings/email/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "disconnected" }),
+    });
 
-    if (error) {
+    if (!res.ok) {
       toast.error("Failed to disconnect account");
     } else {
       toast.success("Account disconnected");
       onUpdate();
     }
     setDisconnecting(false);
+  }
+
+  async function handleResume() {
+    setResuming(true);
+    const res = await fetch(`/api/settings/email/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "active" }),
+    });
+
+    if (!res.ok) {
+      toast.error("Failed to resume account");
+    } else {
+      toast.success("Account resumed");
+      onUpdate();
+    }
+    setResuming(false);
   }
 
   async function handleUpdateMaxSends() {
@@ -61,12 +75,13 @@ export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
     }
 
     setSavingLimit(true);
-    const { error } = await supabase
-      .from("gmail_accounts")
-      .update({ max_daily_sends: maxSends })
-      .eq("id", account.id);
+    const res = await fetch(`/api/settings/email/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ max_daily_sends: maxSends }),
+    });
 
-    if (error) {
+    if (!res.ok) {
       toast.error("Failed to update limit");
     } else {
       toast.success("Daily limit updated");
@@ -102,6 +117,13 @@ export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
           {status.label}
         </span>
       </div>
+
+      {/* Pause reason */}
+      {account.status === "paused" && account.pause_reason && (
+        <div className="mt-3 rounded-md bg-red-50 border border-red-100 px-3 py-2">
+          <p className="text-xs text-red-700">{account.pause_reason}</p>
+        </div>
+      )}
 
       {/* Daily sends progress */}
       <div className="mt-4">
@@ -151,7 +173,16 @@ export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
 
       {/* Actions */}
       <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4">
-        {account.status === "disconnected" ? (
+        {account.status === "paused" ? (
+          <button
+            onClick={handleResume}
+            disabled={resuming}
+            className="inline-flex items-center gap-1.5 rounded-md bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50 transition-colors"
+          >
+            <Play className="h-3.5 w-3.5" />
+            {resuming ? "Resuming..." : "Resume"}
+          </button>
+        ) : account.status === "disconnected" ? (
           <button
             onClick={handleReconnect}
             className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-100 transition-colors"
