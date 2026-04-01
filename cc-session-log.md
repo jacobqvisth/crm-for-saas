@@ -126,3 +126,30 @@ TypeScript: 0 errors. Lint: 0 warnings. Build: compiled successfully (pre-existi
   - Added `localOnly: boolean` to `Filters` type and `DEFAULT_FILTERS`
 - **Only file changed**: `src/app/(dashboard)/prospector/page.tsx`
 - **Build**: TypeScript clean (`npx tsc --noEmit` passes). Lint clean. Build error is pre-existing worktree env issue (Supabase vars not set), not related to this change.
+
+---
+
+## Phase 12e — AI Prospector Filter
+
+- **Date**: 2026-04-01
+- **Branch**: `claude/relaxed-chatelet` → PR TBD
+- **What was built**:
+  - Installed `@anthropic-ai/sdk`
+  - Created `supabase/migrations/20260401120000_workspace_ai_settings.sql` — new `workspace_ai_settings` table with RLS policies using `get_user_workspace_ids()` pattern; applied via Supabase MCP
+  - `src/app/api/settings/ai-filter/route.ts` — GET/POST to fetch and upsert ICP prompt + filter_enabled flag per workspace
+  - `src/app/api/prospector/ai-filter/route.ts` — POST endpoint that calls `claude-haiku-4-5-20251001` to evaluate prospect profiles against the workspace ICP; returns good/maybe/poor verdicts with reasons; graceful fallback on AI failure
+  - `src/app/(dashboard)/settings/ai-filter/page.tsx` — ICP editor with toggle, 12-row textarea pre-filled with Wrenchlane ICP, Save button, and inline test tool
+  - Updated `src/app/(dashboard)/settings/page.tsx` — added AI Lead Filter card with Sparkles icon
+  - Updated `src/app/(dashboard)/prospector/page.tsx`:
+    - Added `FitVerdict` type and `FitBadge` component (good/maybe/poor with tooltip)
+    - New state: `verdicts`, `aiCheckLoading`, `fitFilter`, `aiFilterEnabled`, `smartReveal`
+    - `useEffect` on mount fetches AI filter enabled status from settings API and loads `smartReveal` from localStorage
+    - `handleAiCheck` — sends selected profiles to AI filter API, stores verdicts, auto-deselects poor fits
+    - AI Check button in action bar (only when filter enabled)
+    - Smart Reveal toggle in action bar (only after first check)
+    - `handleBulkAdd` skips poor fits when Smart Reveal is on
+    - Fit filter bar (All / Good / Maybe / Poor tabs) above table when verdicts exist
+    - Fit column in results table; poor-fit rows dimmed at 50% opacity
+    - `displayedResults` derived from `fitFilter` state
+- **Build**: TypeScript ✓, lint ✓, tsc --noEmit ✓ (prerender error in worktree is env-var issue, not code)
+- **Note**: Supabase types don't include new table yet — used `(supabase as any)` cast in API routes; types will resolve after `supabase gen types` is run post-deploy
