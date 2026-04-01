@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-01 (Phase 16 merged — Smart Throttling & Circuit Breaker live, 39/39 E2E passing)
+Last updated: 2026-04-01 (Phase 17 merged — Compliance & DNC live, 39/39 E2E passing)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -61,6 +61,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 12e | AI Prospector Filter (ICP scoring via Claude Haiku + Settings page) | ✅ Merged | #19 |
 | 15 | Sequence Reliability: OOO detection, company stop, threading, pause/resume | ✅ Merged | #20 |
 | 16 | Smart Throttling & Circuit Breaker: send jitter, bounce circuit breaker, send limits admin | ✅ Merged | #21 |
+| 17 | Compliance & DNC: suppressions table, GDPR erasure, DNC management page, CSV import | ✅ Merged | #22 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -187,7 +188,8 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 11**: Sender warmup + deliverability ⏸ Skipped for now (ops-heavy, revisit when scaling)
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
 - **Phase 16**: Smart Throttling & Circuit Breaker — send jitter (1 email/sender/cron run, reschedule rest with 30-120s random delays), bounce rate circuit breaker (auto-pause at >8% with ≥20 sends), send limits admin panel (per-account status, resume button, workspace defaults). 39/39 E2E passing. ✅ COMPLETE — PR #21
-- **Next**: Phase 17 (Compliance & DNC) — see `_prompts/MASTER-PLAN.md` for full roadmap
+- **Phase 17**: Compliance & DNC — unified `suppressions` table (email + domain blocking, reason tracking, soft deletes), auto-add on unsubscribe + bounce, pre-send suppression gate, preflight warning, Prospector suppression check, GDPR "Delete & Forget" on contacts, Settings → Compliance page with DNC management + CSV bulk import. Also fixed `/contacts/import` prerender. 39/39 E2E passing. ✅ COMPLETE — PR #22
+- **Next**: Phase 18 (Contact Data Model Upgrade) — see `_prompts/MASTER-PLAN.md` for full roadmap
 
 ### Phase 14 — Pre-CC Checklist
 1. Make sure PRs #13 and #14 are both merged to main
