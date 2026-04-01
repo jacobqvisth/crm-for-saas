@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink
+  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, ShieldCheck
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -341,18 +341,29 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               </div>
               <h2 className="text-lg font-bold text-slate-900 text-center">{fullName}</h2>
               <p className="text-sm text-slate-500">{contact.email}</p>
-              {contact.email_status && contact.email_status !== 'unknown' && (
-                <span className={`mt-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                  contact.email_status === 'valid'      ? 'bg-green-100 text-green-700' :
-                  contact.email_status === 'invalid'    ? 'bg-red-100 text-red-700' :
-                  contact.email_status === 'risky'      ? 'bg-yellow-100 text-yellow-700' :
-                  contact.email_status === 'catch_all'  ? 'bg-orange-100 text-orange-700' :
-                  contact.email_status === 'unverified' ? 'bg-slate-100 text-slate-600' :
-                  'bg-slate-100 text-slate-600'
-                }`}>
-                  {contact.email_status.replace('_', ' ')}
-                </span>
-              )}
+              <div className="mt-1 flex items-center gap-2 flex-wrap justify-center">
+                {contact.email_status && contact.email_status !== 'unknown' && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    contact.email_status === 'valid'      ? 'bg-green-100 text-green-700' :
+                    contact.email_status === 'invalid'    ? 'bg-red-100 text-red-700' :
+                    contact.email_status === 'risky'      ? 'bg-yellow-100 text-yellow-700' :
+                    contact.email_status === 'catch_all'  ? 'bg-orange-100 text-orange-700' :
+                    contact.email_status === 'unverified' ? 'bg-slate-100 text-slate-600' :
+                    'bg-slate-100 text-slate-600'
+                  }`}>
+                    {contact.email_status.replace('_', ' ')}
+                  </span>
+                )}
+                {!contact.email.includes('@placeholder.invalid') && (
+                  <VerifyEmailButton
+                    contact={contact}
+                    workspaceId={workspaceId || ''}
+                    onVerified={(status, verifiedAt) => {
+                      setContact(prev => prev ? { ...prev, email_status: status, email_verified_at: verifiedAt } : null);
+                    }}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Editable Fields */}
@@ -832,3 +843,89 @@ function EditableField({
 
 // Need to import X for custom fields delete button
 import { X } from 'lucide-react';
+
+function VerifyEmailButton({
+  contact,
+  workspaceId,
+  onVerified,
+}: {
+  contact: Contact;
+  workspaceId: string;
+  onVerified: (status: string, verifiedAt: string) => void;
+}) {
+  const [verifying, setVerifying] = useState(false);
+
+  const emailStatus = contact.email_status || 'unknown';
+  const verifiedAt = contact.email_verified_at;
+
+  // Check if recently verified and show static label instead of button
+  if (verifiedAt) {
+    const diffDays =
+      (Date.now() - new Date(verifiedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (emailStatus === 'valid' && diffDays < 90) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Verified {format(new Date(verifiedAt), 'MMM d')}
+        </span>
+      );
+    }
+    if (emailStatus === 'invalid' && diffDays < 30) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Invalid {format(new Date(verifiedAt), 'MMM d')}
+        </span>
+      );
+    }
+  }
+
+  const handleVerify = async () => {
+    if (!workspaceId) {
+      toast.error('No workspace found');
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/contacts/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactIds: [contact.id], workspaceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Verification failed');
+        return;
+      }
+      const result = data.results?.[0];
+      if (result) {
+        const now = new Date().toISOString();
+        onVerified(result.status, now);
+        toast.success(`Email verified: ${result.status}`);
+      } else if (data.skipped > 0) {
+        toast.success('Already verified (cached)');
+      } else {
+        toast.error('Verification failed');
+      }
+    } catch {
+      toast.error('Verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleVerify}
+      disabled={verifying}
+      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-50"
+    >
+      {verifying ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <ShieldCheck className="w-3.5 h-3.5" />
+      )}
+      {verifying ? 'Verifying…' : 'Verify'}
+    </button>
+  );
+}

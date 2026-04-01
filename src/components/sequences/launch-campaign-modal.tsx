@@ -15,6 +15,8 @@ interface PreflightData {
   alreadyEnrolled: number;
   enrollableCount: number;
   suppressedCount: number;
+  invalidEmailCount: number;
+  unverifiedEmailCount: number;
 }
 
 interface ContactList {
@@ -225,6 +227,18 @@ export function LaunchCampaignModal({
                       <PreflightItem
                         status="warn"
                         message={`${preflight.suppressedCount} contact${preflight.suppressedCount !== 1 ? "s" : ""} suppressed (unsubscribed, bounced, or DNC) — will be skipped`}
+                      />
+                    )}
+                    {preflight.invalidEmailCount > 0 && (
+                      <PreflightItem
+                        status="warn"
+                        message={`${preflight.invalidEmailCount} contact${preflight.invalidEmailCount !== 1 ? "s" : ""} have invalid email addresses — will likely bounce`}
+                      />
+                    )}
+                    {preflight.unverifiedEmailCount > 0 && (
+                      <PreflightItem
+                        status="info"
+                        message={`${preflight.unverifiedEmailCount} contact${preflight.unverifiedEmailCount !== 1 ? "s" : ""} have unverified emails — consider verifying before sending`}
                       />
                     )}
                   </div>
