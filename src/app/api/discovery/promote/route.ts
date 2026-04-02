@@ -37,9 +37,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { shop_ids } = body as { shop_ids: string[] };
+  const { shop_ids, select_all, filters } = body as {
+    shop_ids?: string[];
+    select_all?: boolean;
+    filters?: {
+      country_code?: string;
+      status?: string;
+      has_email?: boolean;
+      has_phone?: boolean;
+      verified_email?: boolean;
+      search?: string;
+    };
+  };
 
-  if (!Array.isArray(shop_ids) || shop_ids.length === 0) {
+  if (!select_all && (!Array.isArray(shop_ids) || shop_ids.length === 0)) {
     return NextResponse.json({ error: "shop_ids required" }, { status: 400 });
   }
 
@@ -61,13 +72,33 @@ export async function POST(request: NextRequest) {
   }
   const workspaceId = workspace.id;
 
-  // Fetch shops
-  const { data: shops, error: fetchError } = await supabase
+  // Fetch shops — either by explicit IDs or by filter query (select_all mode)
+  let shopQuery = supabase
     .from("discovered_shops")
     .select(
       "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category, email_valid"
-    )
-    .in("id", shop_ids);
+    );
+
+  if (select_all && filters) {
+    const status = filters.status;
+    if (status && status !== "all") {
+      shopQuery = shopQuery.in("status", status.split(",").map((s) => s.trim()));
+    } else if (!status) {
+      shopQuery = shopQuery.in("status", ["new", "enriched"]);
+    }
+    if (filters.country_code) shopQuery = shopQuery.eq("country_code", filters.country_code.toUpperCase());
+    if (filters.has_email) shopQuery = shopQuery.not("primary_email", "is", null).neq("primary_email", "");
+    if (filters.has_phone) shopQuery = shopQuery.not("phone", "is", null).neq("phone", "");
+    if (filters.verified_email) shopQuery = shopQuery.eq("email_valid", true);
+    if (filters.search?.trim()) {
+      const s = filters.search.trim();
+      shopQuery = shopQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
+    }
+  } else {
+    shopQuery = shopQuery.in("id", shop_ids!);
+  }
+
+  const { data: shops, error: fetchError } = await shopQuery;
 
   if (fetchError || !shops) {
     return NextResponse.json({ error: "Failed to fetch shops" }, { status: 500 });

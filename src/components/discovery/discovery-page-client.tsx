@@ -287,6 +287,7 @@ export function DiscoveryPageClient() {
   });
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllPages, setSelectAllPages] = useState(false);
   const [expandedShop, setExpandedShop] = useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
 
@@ -323,6 +324,7 @@ export function DiscoveryPageClient() {
   const fetchShops = useCallback(async () => {
     setLoadingShops(true);
     setSelectedIds(new Set());
+    setSelectAllPages(false);
     try {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -360,13 +362,26 @@ export function DiscoveryPageClient() {
   }, [filters]);
 
   // ── Actions
-  const handlePromote = useCallback(async (ids: string[]) => {
+  const handlePromote = useCallback(async (ids: string[], allPages = false) => {
     setBulkLoading(true);
     try {
+      const body = allPages
+        ? {
+            select_all: true,
+            filters: {
+              country_code: filters.country_code,
+              status: filters.status,
+              has_email: filters.has_email,
+              has_phone: filters.has_phone,
+              verified_email: filters.verified_email,
+              search: debouncedSearch,
+            },
+          }
+        : { shop_ids: ids };
       const res = await fetch("/api/discovery/promote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop_ids: ids }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
@@ -376,33 +391,48 @@ export function DiscoveryPageClient() {
         (data.skipped_invalid_email > 0 ? ` · ${data.skipped_invalid_email} invalid email${data.skipped_invalid_email !== 1 ? "s" : ""} skipped` : "")
       );
       setSelectedIds(new Set());
+      setSelectAllPages(false);
       fetchShops();
     } catch {
       toast.error("Promote failed");
     } finally {
       setBulkLoading(false);
     }
-  }, [fetchShops]);
+  }, [fetchShops, filters, debouncedSearch]);
 
-  const handleSkip = useCallback(async (ids: string[]) => {
+  const handleSkip = useCallback(async (ids: string[], allPages = false) => {
     setBulkLoading(true);
     try {
+      const body = allPages
+        ? {
+            select_all: true,
+            filters: {
+              country_code: filters.country_code,
+              status: filters.status,
+              has_email: filters.has_email,
+              has_phone: filters.has_phone,
+              verified_email: filters.verified_email,
+              search: debouncedSearch,
+            },
+          }
+        : { shop_ids: ids };
       const res = await fetch("/api/discovery/skip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop_ids: ids }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       toast.success(`Skipped ${data.skipped} shop${data.skipped !== 1 ? "s" : ""}`);
       setSelectedIds(new Set());
+      setSelectAllPages(false);
       fetchShops();
     } catch {
       toast.error("Skip failed");
     } finally {
       setBulkLoading(false);
     }
-  }, [fetchShops]);
+  }, [fetchShops, filters, debouncedSearch]);
 
   // ── Selection
   const toggleRow = (id: string) => {
@@ -638,6 +668,33 @@ export function DiscoveryPageClient() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
+                  {/* ── Select-all-pages banner (Gmail-style) */}
+                  {allSelected && !selectAllPages && total > shops.length && (
+                    <tr>
+                      <td colSpan={11} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
+                        All {shops.length} shops on this page are selected.{" "}
+                        <button
+                          onClick={() => setSelectAllPages(true)}
+                          className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+                        >
+                          Select all {total.toLocaleString()} shops matching current filters
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                  {selectAllPages && (
+                    <tr>
+                      <td colSpan={11} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
+                        All {total.toLocaleString()} shops matching current filters are selected.{" "}
+                        <button
+                          onClick={() => { setSelectAllPages(false); setSelectedIds(new Set()); }}
+                          className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+                        >
+                          Clear selection
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                   {shops.map((shop) => (
                     <tr
                       key={shop.id}
@@ -857,11 +914,11 @@ export function DiscoveryPageClient() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
           <div className="flex items-center gap-3 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl">
             <span className="font-medium">
-              {selectedIds.size} shop{selectedIds.size !== 1 ? "s" : ""} selected
+              {selectAllPages ? total.toLocaleString() : selectedIds.size} shop{(selectAllPages ? total : selectedIds.size) !== 1 ? "s" : ""} selected
             </span>
             <div className="w-px h-5 bg-slate-600" />
             <button
-              onClick={() => handlePromote(Array.from(selectedIds))}
+              onClick={() => handlePromote(Array.from(selectedIds), selectAllPages)}
               disabled={bulkLoading}
               className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
@@ -869,14 +926,14 @@ export function DiscoveryPageClient() {
               Promote to CRM
             </button>
             <button
-              onClick={() => handleSkip(Array.from(selectedIds))}
+              onClick={() => handleSkip(Array.from(selectedIds), selectAllPages)}
               disabled={bulkLoading}
               className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               Skip
             </button>
             <button
-              onClick={() => setSelectedIds(new Set())}
+              onClick={() => { setSelectedIds(new Set()); setSelectAllPages(false); }}
               className="text-slate-400 hover:text-white transition-colors ml-1"
             >
               <X className="w-4 h-4" />
