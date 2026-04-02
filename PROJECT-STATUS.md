@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-02 (Lithuania scrape complete — 1999 shops in Supabase, 2813 total across EE+LT)
+Last updated: 2026-04-02 (Phase 25 UI merged — contact + company detail pages now show all Phase 25 fields)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -65,6 +65,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Schema 25 | Extended contacts + companies — address, country_code, all_emails[], all_phones[], instagram_url, facebook_url, language, tags, notes, is_primary, parent_company_id, phone, website, google_place_id, rating, review_count, category | ✅ Applied | — |
 | Discovery page | Shop Discovery UI (`/discovery`) — browse/filter discovered_shops, promote to CRM, skip | ✅ Merged | #30 |
 | Discovery promote fix | Full Phase 25 field mapping in promote route (address, country_code, all_emails, language, tags, etc.) | ✅ Merged | #31 |
+| Phase 25 UI | Contact + Company detail pages: all Phase 25 fields editable (location, social links, tags, notes, array chips, is_primary, parent company, Google Maps data) | ✅ Merged | #32 |
 | **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
 
 ## Bugs Fixed (not by CC)
