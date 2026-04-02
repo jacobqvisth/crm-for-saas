@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-02 (Email verification UI merged — Discovery page now shows verified/invalid badges, filter, and import guard)
+Last updated: 2026-04-02 (Phase 18: Multi-Sender Selection & Sender Pinning — PR #34 merged + deployed, 39/39 E2E passing)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -68,6 +68,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Phase 25 UI | Contact + Company detail pages: all Phase 25 fields editable (location, social links, tags, notes, array chips, is_primary, parent company, Google Maps data) | ✅ Merged | #32 |
 | Email verification (data) | MX-based email verification run on all 1,035 EE emails: 1,022 valid, 13 invalid. `email_valid` + `email_check_detail` columns added to `discovered_shops`. Scrape skill updated with Step 8 (auto-verify after every future import). | ✅ Done | — |
 | Email verification UI | Discovery page: ✅/❌ badges on email column, "Verified email" filter checkbox, import guard that auto-skips `email_valid=false` shops and reports count in toast | ✅ Merged | #33 |
+| 18 | Multi-Sender Selection & Sender Pinning — sender picker in all enrollment flows, sender pinning per enrollment, preflight capacity info, sender breakdown analytics | ✅ Merged | #34 |
 | **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
 
 ## Bugs Fixed (not by CC)
@@ -256,7 +257,7 @@ See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:
 - **Phase 14**: Inbox + Reply Management ✅ COMPLETE — PR #15
 - **Phase 16**: Smart Throttling & Circuit Breaker — send jitter (1 email/sender/cron run, reschedule rest with 30-120s random delays), bounce rate circuit breaker (auto-pause at >8% with ≥20 sends), send limits admin panel (per-account status, resume button, workspace defaults). 39/39 E2E passing. ✅ COMPLETE — PR #21
 - **Phase 17**: Compliance & DNC — unified `suppressions` table (email + domain blocking, reason tracking, soft deletes), auto-add on unsubscribe + bounce, pre-send suppression gate, preflight warning, Prospector suppression check, GDPR "Delete & Forget" on contacts, Settings → Compliance page with DNC management + CSV bulk import. Also fixed `/contacts/import` prerender. 39/39 E2E passing. ✅ COMPLETE — PR #22
-- **Next**: Phase 18 (Contact Data Model Upgrade) — see `_prompts/MASTER-PLAN.md` for full roadmap
+- **Phase 18**: Multi-Sender Selection & Sender Pinning — sender account picker in all enrollment modals, sender pinning per enrollment (all emails in a sequence use the same sender), preflight capacity info (total daily capacity + estimated days to send), sender breakdown in sequence analytics. 39/39 E2E passing. ✅ COMPLETE — PR #34
 
 ### Phase 14 — Pre-CC Checklist
 1. Make sure PRs #13 and #14 are both merged to main
