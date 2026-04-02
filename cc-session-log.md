@@ -345,3 +345,23 @@ Phase 20: Prospector Upgrade
 - `discovered_shops` has no TypeScript types in `database.types.ts`, so explicit `as { ... }` cast used in stats route to satisfy type checker.
 - Promote flow creates a placeholder contact email `discovery_noemail_{id}@placeholder.invalid` when no `primary_email` present (mirrors the prospector pattern).
 - Stats route fetches all rows and aggregates in JS — acceptable at 814 rows; can be replaced with SQL aggregation if volume grows.
+
+---
+
+## Fix: Discovery Promote Route — Full Field Mapping
+**Date:** 2026-04-02 | **PR:** #31 | **Branch:** claude/condescending-bhaskara
+
+### What was built
+- Updated `DiscoveredShop` type in `src/app/api/discovery/promote/route.ts` to include all Phase 25 fields
+- `.select()` now fetches: `address`, `street`, `postal_code`, `all_emails`, `all_phones`, `instagram_url`, `facebook_url`, `rating`, `review_count`, `category`
+- Company insert maps all new fields plus `tags: ['independent']`
+- Contact insert maps all new fields plus `is_primary: true`, `lead_status: 'new'`, `status: 'active'`, `email_status: 'unknown'`, `language` (via `deriveLanguage()`)
+- Added `deriveLanguage(countryCode)` helper: EE→et, SE→sv, FI→fi, LV→lv, LT→lt, NO→no, DK→da
+
+### Build status
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm run lint` ✅ 0 warnings
+- `npm run build` ✅ TypeScript + compile pass; prerender error for /settings/pipelines is pre-existing (Supabase env vars absent at build time)
+
+### Decisions
+- Contact email falls back to `''` (empty string) instead of the old `discovery_noemail_...@placeholder.invalid` pattern, per spec.

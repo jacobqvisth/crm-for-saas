@@ -8,11 +8,21 @@ type DiscoveredShop = {
   website: string | null;
   domain: string | null;
   phone: string | null;
+  address: string | null;
+  street: string | null;
   city: string | null;
+  postal_code: string | null;
   country: string | null;
   country_code: string | null;
   primary_email: string | null;
+  all_emails: string[] | null;
+  all_phones: string[] | null;
+  instagram_url: string | null;
+  facebook_url: string | null;
   google_place_id: string | null;
+  rating: number | null;
+  review_count: number | null;
+  category: string | null;
 };
 
 export async function POST(request: NextRequest) {
@@ -54,7 +64,7 @@ export async function POST(request: NextRequest) {
   const { data: shops, error: fetchError } = await supabase
     .from("discovered_shops")
     .select(
-      "id, name, website, domain, phone, city, country, country_code, primary_email, google_place_id"
+      "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category"
     )
     .in("id", shop_ids);
 
@@ -121,8 +131,18 @@ export async function POST(request: NextRequest) {
         website: shop.website ?? null,
         domain: websiteDomain,
         phone: shop.phone ?? null,
+        address: shop.address ?? shop.street ?? null,
         city: shop.city ?? null,
+        postal_code: shop.postal_code ?? null,
         country: shop.country ?? null,
+        country_code: shop.country_code ?? null,
+        instagram_url: shop.instagram_url ?? null,
+        facebook_url: shop.facebook_url ?? null,
+        google_place_id: shop.google_place_id ?? null,
+        rating: shop.rating ?? null,
+        review_count: shop.review_count ?? null,
+        category: shop.category ?? null,
+        tags: ['independent'],
       })
       .select("id")
       .single();
@@ -134,23 +154,30 @@ export async function POST(request: NextRequest) {
     companyId = newCompany.id;
 
     // Insert placeholder contact
-    const contactEmail = shop.primary_email
-      ? shop.primary_email
-      : `discovery_noemail_${shop.id}@placeholder.invalid`;
-
     const { data: newContact, error: contactError } = await supabase
       .from("contacts")
       .insert({
         workspace_id: workspaceId,
-        first_name: "Owner",
+        first_name: 'Owner',
         last_name: shop.name,
-        email: contactEmail,
+        email: shop.primary_email ?? '',
         phone: shop.phone ?? null,
-        company_id: companyId,
-        source: "discovery",
+        address: shop.address ?? shop.street ?? null,
         city: shop.city ?? null,
+        postal_code: shop.postal_code ?? null,
         country: shop.country ?? null,
-        email_status: shop.primary_email ? "valid" : "unverified",
+        country_code: shop.country_code ?? null,
+        all_emails: shop.all_emails ?? null,
+        all_phones: shop.all_phones ?? null,
+        instagram_url: shop.instagram_url ?? null,
+        facebook_url: shop.facebook_url ?? null,
+        company_id: companyId,
+        is_primary: true,
+        source: 'discovery',
+        language: deriveLanguage(shop.country_code),
+        email_status: 'unknown',
+        lead_status: 'new',
+        status: 'active',
       })
       .select("id")
       .single();
@@ -187,4 +214,17 @@ function extractDomain(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+function deriveLanguage(countryCode: string | null): string | null {
+  const map: Record<string, string> = {
+    EE: 'et',
+    SE: 'sv',
+    FI: 'fi',
+    LV: 'lv',
+    LT: 'lt',
+    NO: 'no',
+    DK: 'da',
+  };
+  return countryCode ? (map[countryCode] ?? null) : null;
 }
