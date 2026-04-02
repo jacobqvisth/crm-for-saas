@@ -16,6 +16,8 @@ import {
   X,
   CheckSquare,
   Square,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +51,8 @@ type Shop = {
   crm_company_id: string | null;
   crm_contact_id: string | null;
   scraped_at: string | null;
+  email_valid: boolean | null;
+  email_check_detail: string | null;
 };
 
 type Stats = {
@@ -64,6 +68,7 @@ type Filters = {
   status: string; // "new,enriched" | "new" | "enriched" | "imported" | "skipped" | "all"
   has_email: boolean;
   has_phone: boolean;
+  verified_email: boolean;
   search: string;
 };
 
@@ -277,6 +282,7 @@ export function DiscoveryPageClient() {
     status: "", // empty = default (new + enriched)
     has_email: false,
     has_phone: false,
+    verified_email: false,
     search: "",
   });
 
@@ -325,6 +331,7 @@ export function DiscoveryPageClient() {
       if (filters.status) params.set("status", filters.status);
       if (filters.has_email) params.set("has_email", "true");
       if (filters.has_phone) params.set("has_phone", "true");
+      if (filters.verified_email) params.set("verified_email", "true");
       if (debouncedSearch) params.set("search", debouncedSearch);
 
       const res = await fetch(`/api/discovery/shops?${params.toString()}`);
@@ -337,7 +344,7 @@ export function DiscoveryPageClient() {
     } finally {
       setLoadingShops(false);
     }
-  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, debouncedSearch]);
+  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.verified_email, debouncedSearch]);
 
   useEffect(() => {
     fetchShops();
@@ -364,11 +371,9 @@ export function DiscoveryPageClient() {
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       toast.success(
-        `Promoted ${data.promoted} shop${data.promoted !== 1 ? "s" : ""}${
-          data.skipped_duplicates > 0
-            ? ` · ${data.skipped_duplicates} duplicate${data.skipped_duplicates !== 1 ? "s" : ""} skipped`
-            : ""
-        }`
+        `Promoted ${data.promoted} shop${data.promoted !== 1 ? "s" : ""}` +
+        (data.skipped_duplicates > 0 ? ` · ${data.skipped_duplicates} duplicate${data.skipped_duplicates !== 1 ? "s" : ""} skipped` : "") +
+        (data.skipped_invalid_email > 0 ? ` · ${data.skipped_invalid_email} invalid email${data.skipped_invalid_email !== 1 ? "s" : ""} skipped` : "")
       );
       setSelectedIds(new Set());
       fetchShops();
@@ -539,6 +544,17 @@ export function DiscoveryPageClient() {
               Has phone
             </label>
 
+            {/* Verified email */}
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={filters.verified_email}
+                onChange={(e) => setFilters((f) => ({ ...f, verified_email: e.target.checked }))}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Verified email
+            </label>
+
             {/* Search */}
             <div className="flex-1 min-w-48">
               <input
@@ -699,13 +715,36 @@ export function DiscoveryPageClient() {
                       {/* Email */}
                       <td className="px-3 py-3 max-w-[180px]">
                         {shop.primary_email ? (
-                          <a
-                            href={`mailto:${shop.primary_email}`}
-                            className="flex items-center gap-1 text-indigo-600 hover:underline"
-                          >
-                            <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="truncate">{shop.primary_email}</span>
-                          </a>
+                          shop.email_valid === false ? (
+                            <span className="flex items-center gap-1 text-slate-500">
+                              <span
+                                title={
+                                  shop.email_check_detail === "domain_not_found"
+                                    ? "Domain does not exist"
+                                    : shop.email_check_detail === "no_mx_records"
+                                    ? "No mail server found"
+                                    : shop.email_check_detail === "invalid_format"
+                                    ? "Invalid email format"
+                                    : shop.email_check_detail ?? "Invalid"
+                                }
+                              >
+                                <XCircle className="w-3 h-3 flex-shrink-0 text-red-400" />
+                              </span>
+                              <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="truncate">{shop.primary_email}</span>
+                            </span>
+                          ) : (
+                            <a
+                              href={`mailto:${shop.primary_email}`}
+                              className="flex items-center gap-1 text-indigo-600 hover:underline"
+                            >
+                              {shop.email_valid === true && (
+                                <CheckCircle className="w-3 h-3 flex-shrink-0 text-emerald-500" />
+                              )}
+                              <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="truncate">{shop.primary_email}</span>
+                            </a>
+                          )
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}

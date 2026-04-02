@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status"); // comma-separated or single
   const has_email = searchParams.get("has_email");
   const has_phone = searchParams.get("has_phone");
+  const verified_email = searchParams.get("verified_email");
   const search = searchParams.get("search")?.trim();
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const per_page = Math.min(
@@ -43,6 +44,10 @@ export async function GET(request: NextRequest) {
 
   if (has_phone === "true") {
     query = query.not("phone", "is", null).neq("phone", "");
+  }
+
+  if (verified_email === "true") {
+    query = query.eq("email_valid", true);
   }
 
   if (search) {
