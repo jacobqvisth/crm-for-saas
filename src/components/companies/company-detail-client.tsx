@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Trash2, Plus, Loader2, X } from 'lucide-react';
+import { Trash2, Plus, Loader2, X, ExternalLink, Star, Copy } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { LeadStatusBadge, DealStageBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
+import { ArrayChipsField } from '@/components/ui/array-chips-field';
+import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
 import type { Tables, Json } from '@/lib/database.types';
 
@@ -21,6 +23,10 @@ const INDUSTRIES = [
   'Retail', 'Real Estate', 'Media', 'Consulting', 'Legal', 'Other',
 ];
 
+const CATEGORIES = [
+  'auto repair', 'tire shop', 'bodywork', 'car wash', 'inspection', 'glass repair', 'other',
+];
+
 export function CompanyDetailClient({ companyId }: { companyId: string }) {
   const router = useRouter();
   const { workspaceId } = useWorkspace();
@@ -30,6 +36,8 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [deals, setDeals] = useState<{ id: string; name: string; amount: number | null; stage: string; owner_id: string | null; expected_close_date: string | null }[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [allCompanies, setAllCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [childCompanies, setChildCompanies] = useState<{ id: string; name: string }[]>([]);
   const [activeTab, setActiveTab] = useState<'contacts' | 'deals' | 'activity'>('contacts');
   const [loading, setLoading] = useState(true);
   const [editField, setEditField] = useState<string | null>(null);
@@ -59,6 +67,24 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       }
       setCompany(companyData);
       setCustomFields((companyData.custom_fields as Record<string, string>) || {});
+
+      // Fetch all companies for parent dropdown (exclude self)
+      const { data: companiesData } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('workspace_id', workspaceId!)
+        .neq('id', companyId)
+        .order('name');
+      if (companiesData) setAllCompanies(companiesData);
+
+      // Fetch child companies
+      const { data: childData } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('workspace_id', workspaceId!)
+        .eq('parent_company_id', companyId)
+        .order('name');
+      if (childData) setChildCompanies(childData);
 
       // Fetch contacts
       const { data: contactsData } = await supabase
@@ -119,6 +145,21 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     setEditField(null);
   };
 
+  const updateArrayField = async (field: string, newArray: string[]) => {
+    if (!company || !workspaceId) return;
+    const { error } = await supabase
+      .from('companies')
+      .update({ [field]: newArray } as Record<string, unknown>)
+      .eq('id', company.id)
+      .eq('workspace_id', workspaceId);
+
+    if (error) toast.error('Failed to update');
+    else {
+      setCompany(prev => prev ? { ...prev, [field]: newArray } : null);
+      toast.success('Updated');
+    }
+  };
+
   const updateCustomFields = async (fields: Record<string, string>) => {
     if (!company || !workspaceId) return;
     const { error } = await supabase
@@ -159,6 +200,9 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
 
   if (!company) return null;
 
+  const tags = (company.tags as string[] | null) || [];
+  const parentCompany = allCompanies.find(c => c.id === company.parent_company_id);
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <div className="mb-4">
@@ -176,6 +220,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
               <p className="text-sm text-indigo-600 mb-4">{company.domain}</p>
             )}
 
+            {/* Company Info */}
             <div className="space-y-3">
               <EditableField
                 label="Name"
@@ -197,6 +242,57 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
                 onSave={() => updateField('domain', editValue || null)}
                 onCancel={() => setEditField(null)}
               />
+              <EditableField
+                label="Phone"
+                value={company.phone || ''}
+                isEditing={editField === 'phone'}
+                onEdit={() => { setEditField('phone'); setEditValue(company.phone || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('phone', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              {/* Website */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Website</label>
+                {editField === 'website' ? (
+                  <input
+                    type="url"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => updateField('website', editValue || null)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') updateField('website', editValue || null); if (e.key === 'Escape') setEditField(null); }}
+                    autoFocus
+                    placeholder="https://..."
+                    className="w-full text-sm px-2 py-1.5 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                ) : company.website ? (
+                  <div className="flex items-center gap-1 px-2 py-1.5">
+                    <a
+                      href={company.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate flex-1"
+                    >
+                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
+                    </a>
+                    <button
+                      onClick={() => { setEditField('website'); setEditValue(company.website || ''); }}
+                      className="ml-1 text-xs text-slate-400 hover:text-slate-600 flex-shrink-0"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <p
+                    onClick={() => { setEditField('website'); setEditValue(''); }}
+                    className="text-sm text-slate-400 cursor-pointer hover:bg-slate-50 px-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200"
+                  >
+                    —
+                  </p>
+                )}
+              </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Industry</label>
                 <select
@@ -208,6 +304,24 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
                   {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Category</label>
+                <select
+                  value={company.category || ''}
+                  onChange={(e) => updateField('category', e.target.value || null)}
+                  className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">No category</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                </select>
+              </div>
+              <EditableTextarea
+                label="Description"
+                value={company.description || ''}
+                onSave={(v) => updateField('description', v || null)}
+                placeholder="Click to add description..."
+                rows={3}
+              />
               <EditableField
                 label="Employee Count"
                 value={company.employee_count?.toString() || ''}
@@ -229,6 +343,227 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
                 onSave={() => updateField('annual_revenue', editValue ? parseFloat(editValue) : null)}
                 onCancel={() => setEditField(null)}
                 type="number"
+              />
+              <EditableField
+                label="Revenue Range"
+                value={company.revenue_range || ''}
+                isEditing={editField === 'revenue_range'}
+                onEdit={() => { setEditField('revenue_range'); setEditValue(company.revenue_range || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('revenue_range', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Founded Year"
+                value={company.founded_year?.toString() || ''}
+                isEditing={editField === 'founded_year'}
+                onEdit={() => { setEditField('founded_year'); setEditValue(company.founded_year?.toString() || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('founded_year', editValue ? parseInt(editValue) : null)}
+                onCancel={() => setEditField(null)}
+                type="number"
+              />
+            </div>
+
+            {/* Location */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Location</h3>
+              <EditableField
+                label="Address"
+                value={company.address || ''}
+                isEditing={editField === 'address'}
+                onEdit={() => { setEditField('address'); setEditValue(company.address || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('address', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Postal Code"
+                value={company.postal_code || ''}
+                isEditing={editField === 'postal_code'}
+                onEdit={() => { setEditField('postal_code'); setEditValue(company.postal_code || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('postal_code', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="City"
+                value={company.city || ''}
+                isEditing={editField === 'city'}
+                onEdit={() => { setEditField('city'); setEditValue(company.city || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('city', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Country"
+                value={company.country || ''}
+                isEditing={editField === 'country'}
+                onEdit={() => { setEditField('country'); setEditValue(company.country || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('country', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Country Code"
+                value={company.country_code || ''}
+                isEditing={editField === 'country_code'}
+                onEdit={() => { setEditField('country_code'); setEditValue(company.country_code || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('country_code', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+            </div>
+
+            {/* Google Maps Data */}
+            {(company.google_place_id || company.rating || company.review_count) && (
+              <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+                <h3 className="text-sm font-medium text-slate-700">Google Maps Data</h3>
+                {company.google_place_id && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Place ID</label>
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs text-slate-600 truncate flex-1 px-2 py-1.5">
+                        {company.google_place_id}
+                      </p>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(company.google_place_id || '');
+                          toast.success('Copied');
+                        }}
+                        className="flex-shrink-0 text-slate-400 hover:text-slate-600 p-1"
+                        title="Copy Place ID"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {(company.rating || company.review_count) && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Rating</label>
+                    <div className="flex items-center gap-1.5 px-2 py-1.5">
+                      {company.rating && (
+                        <>
+                          <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                          <span className="text-sm font-medium text-slate-800">{company.rating}</span>
+                        </>
+                      )}
+                      {company.review_count && (
+                        <span className="text-sm text-slate-500">({company.review_count.toLocaleString()} reviews)</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Parent Company */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Parent Company</h3>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Parent</label>
+                <select
+                  value={company.parent_company_id || ''}
+                  onChange={(e) => updateField('parent_company_id', e.target.value || null)}
+                  className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">No parent company</option>
+                  {allCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {parentCompany && (
+                  <Link
+                    href={`/companies/${parentCompany.id}`}
+                    className="inline-flex items-center gap-1 mt-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-2"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View {parentCompany.name}
+                  </Link>
+                )}
+              </div>
+              {childCompanies.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    Child Companies ({childCompanies.length})
+                  </label>
+                  <div className="space-y-1">
+                    {childCompanies.map(child => (
+                      <Link
+                        key={child.id}
+                        href={`/companies/${child.id}`}
+                        className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 px-2 py-1"
+                      >
+                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{child.name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Social Links */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Social Links</h3>
+              <SocialLinkField
+                label="LinkedIn"
+                value={company.linkedin_url || ''}
+                isEditing={editField === 'linkedin_url'}
+                onEdit={() => { setEditField('linkedin_url'); setEditValue(company.linkedin_url || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('linkedin_url', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <SocialLinkField
+                label="Instagram"
+                value={company.instagram_url || ''}
+                isEditing={editField === 'instagram_url'}
+                onEdit={() => { setEditField('instagram_url'); setEditValue(company.instagram_url || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('instagram_url', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <SocialLinkField
+                label="Facebook"
+                value={company.facebook_url || ''}
+                isEditing={editField === 'facebook_url'}
+                onEdit={() => { setEditField('facebook_url'); setEditValue(company.facebook_url || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('facebook_url', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+            </div>
+
+            {/* Tags & Notes */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Tags &amp; Notes</h3>
+              <ArrayChipsField
+                label="Tags"
+                values={tags}
+                variant="tag"
+                onAdd={(v) => updateArrayField('tags', [...tags, v])}
+                onRemove={(i) => {
+                  const arr = [...tags];
+                  arr.splice(i, 1);
+                  updateArrayField('tags', arr);
+                }}
+                placeholder="Add tag..."
+              />
+              <EditableTextarea
+                label="Notes"
+                value={company.notes || ''}
+                onSave={(v) => updateField('notes', v || null)}
+                placeholder="Click to add notes..."
               />
             </div>
 
@@ -458,6 +793,57 @@ function EditableField({
           className="text-sm text-slate-900 cursor-pointer hover:bg-slate-50 px-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200"
         >
           {value || <span className="text-slate-400">—</span>}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SocialLinkField({
+  label, value, isEditing, onEdit, editValue, onEditValueChange, onSave, onCancel
+}: {
+  label: string; value: string; isEditing: boolean;
+  onEdit: () => void; editValue: string; onEditValueChange: (v: string) => void;
+  onSave: () => void; onCancel: () => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1">{label}</label>
+      {isEditing ? (
+        <input
+          type="url"
+          value={editValue}
+          onChange={(e) => onEditValueChange(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
+          autoFocus
+          placeholder="https://..."
+          className="w-full text-sm px-2 py-1.5 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      ) : value ? (
+        <div className="flex items-center gap-1 px-2 py-1.5">
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate"
+          >
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">View</span>
+          </a>
+          <button
+            onClick={onEdit}
+            className="ml-auto text-xs text-slate-400 hover:text-slate-600"
+          >
+            Edit
+          </button>
+        </div>
+      ) : (
+        <p
+          onClick={onEdit}
+          className="text-sm text-slate-400 cursor-pointer hover:bg-slate-50 px-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200"
+        >
+          —
         </p>
       )}
     </div>
