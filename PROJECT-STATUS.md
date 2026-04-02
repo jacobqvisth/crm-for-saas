@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-02 (Phase 25 UI merged — contact + company detail pages now show all Phase 25 fields)
+Last updated: 2026-04-02 (Email verification UI merged — Discovery page now shows verified/invalid badges, filter, and import guard)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -66,6 +66,8 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Discovery page | Shop Discovery UI (`/discovery`) — browse/filter discovered_shops, promote to CRM, skip | ✅ Merged | #30 |
 | Discovery promote fix | Full Phase 25 field mapping in promote route (address, country_code, all_emails, language, tags, etc.) | ✅ Merged | #31 |
 | Phase 25 UI | Contact + Company detail pages: all Phase 25 fields editable (location, social links, tags, notes, array chips, is_primary, parent company, Google Maps data) | ✅ Merged | #32 |
+| Email verification (data) | MX-based email verification run on all 1,035 EE emails: 1,022 valid, 13 invalid. `email_valid` + `email_check_detail` columns added to `discovered_shops`. Scrape skill updated with Step 8 (auto-verify after every future import). | ✅ Done | — |
+| Email verification UI | Discovery page: ✅/❌ badges on email column, "Verified email" filter checkbox, import guard that auto-skips `email_valid=false` shops and reports count in toast | ✅ Merged | #33 |
 | **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
 
 ## Bugs Fixed (not by CC)
