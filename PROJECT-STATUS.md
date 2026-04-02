@@ -62,6 +62,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 15 | Sequence Reliability: OOO detection, company stop, threading, pause/resume | ✅ Merged | #20 |
 | 16 | Smart Throttling & Circuit Breaker: send jitter, bounce circuit breaker, send limits admin | ✅ Merged | #21 |
 | 17 | Compliance & DNC: suppressions table, GDPR erasure, DNC management page, CSV import | ✅ Merged | #22 |
+| **Next** | **Rebuild Prospector with Apify discovery (replace Prospeo)** | 🔜 Prompt TBD | — |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -83,10 +84,19 @@ All committed directly to main or via PR #11:
 - Auto-insert 3-day delay before every new email step in sequence builder
 
 ## Database
-18 tables with RLS, all created via Supabase migrations:
-workspaces, workspace_members, contacts, companies, pipelines, deals, deal_contacts, activities, contact_lists, contact_list_members, gmail_accounts, email_templates, sequences, sequence_steps, sequence_enrollments, email_queue, email_events, unsubscribes
+18 CRM tables with RLS + 1 Cowork staging table (no RLS):
+workspaces, workspace_members, contacts, companies, pipelines, deals, deal_contacts, activities, contact_lists, contact_list_members, gmail_accounts, email_templates, sequences, sequence_steps, sequence_enrollments, email_queue, email_events, unsubscribes, **discovered_shops**
 
 Key RLS note: workspace_members uses special non-recursive policies. Do NOT add policies that self-reference workspace_members directly.
+
+### discovered_shops (staging table)
+Managed by Cowork — not exposed in the CRM UI yet. Stores shops found via Apify/Vibe Prospecting before they are promoted to `contacts`/`companies`.
+- **Schema**: name, google_place_id, address, city, country_code, lat/lng, phone, website, domain, primary_email, all_emails[], all_phones[], instagram_url, facebook_url, category, rating, review_count, opening_hours, source, status, crm_company_id, crm_contact_id, scraped_at
+- **Status values**: new | enriched | imported | skipped
+- **Source values**: google_maps | vibe_prospecting | manual
+- **Current data**: 814 Estonian auto repair shops (scraped 2026-04-02 via Apify Google Maps Scraper)
+  - 93% have phone, 41% have email, 59% have website, 251 unique cities
+- **Import script**: `scripts/import-estonia-shops.mjs` (run with `node scripts/import-estonia-shops.mjs`)
 
 ## Env Vars (.env.local)
 - NEXT_PUBLIC_SUPABASE_URL ✅
@@ -173,6 +183,54 @@ Only stop if tests fail or deploy errors — investigate, fix, then report.
 - Sequence analytics page: **build from scratch** (current page is a `<PlaceholderPage>`) — use existing `sequence-analytics-tab.tsx` component + add stat cards + enrollment table
 - Bounce suppression in `process-emails` (contact status check — not yet added)
 - New E2E spec: `e2e/campaign-launch.spec.ts`
+
+## Contact Discovery Pipeline (Cowork-managed)
+
+The CRM is being populated via a multi-stage discovery pipeline managed entirely by Cowork. **This is separate from CC builds** — Cowork runs scrapes, enriches data, and populates `discovered_shops`. CC builds the UI to surface it.
+
+### Architecture
+```
+Stage 1: Apify Google Maps Scraper  →  discovered_shops table (status: 'new')
+Stage 2: Vibe Prospecting enrichment →  discovered_shops table (status: 'enriched')
+Stage 3: Promote to CRM             →  contacts + companies tables (crm_company_id set)
+Stage 4: Enroll in sequences        →  via CRM UI
+```
+
+### How Cowork runs a country scrape
+1. Use `mcp__Apify__call-actor` with actor `compass/crawler-google-places`
+2. Input: `searchStringsArray` (local language terms + English), `locationQuery` = country name, `countryCode` = ISO code, `maxCrawledPlacesPerSearch` = 200, `scrapeContacts` = true, `skipClosedPlaces` = true, `async` = true
+3. Wait for completion via `mcp__Apify__get-actor-run` (runId from step 2)
+4. Fetch results via `mcp__Apify__get-actor-output` (datasetId from run result) in batches of 500
+5. Save raw JSON to `scripts/[country]-shops-data.json` (on Jacob's machine via Python)
+6. Run `node scripts/import-[country]-shops.mjs` via Desktop Commander to push to Supabase
+7. Update discovered_shops count in this file
+
+### Search terms by country
+- **Estonia (EE)**: `auto repair`, `car workshop`, `autoteenindus`, `autoremonttöökoda`, `autoremonditeenindus`
+- **Sweden (SE)**: `bilverkstad`, `autoverkstad`, `bilservice`, `auto repair`
+- **Finland (FI)**: `autokorjaamo`, `autohuolto`, `korjaamo`, `auto repair`
+- **Latvia (LV)**: `autoserviss`, `auto remonts`, `auto repair`
+- **Lithuania (LT)**: `autoservisas`, `automobilių remontas`, `auto repair`
+- **Norway (NO)**: `bilverksted`, `bilservice`, `auto repair`
+- **Denmark (DK)**: `autoværksted`, `bilværksted`, `auto repair`
+
+### discovered_shops data by country
+| Country | Scraped | Total | With Email | With Phone | Status |
+|---------|---------|-------|------------|------------|--------|
+| Estonia (EE) | 2026-04-02 | 814 | 335 (41%) | 758 (93%) | ✅ In Supabase |
+| Sweden (SE) | — | — | — | — | 🔜 Next |
+
+### Import scripts (in `/scripts/`)
+- `scripts/import-estonia-shops.mjs` — Estonia (814 shops, run once)
+- Data files: `scripts/[country]-shops-data.json` (generated by Cowork, gitignored)
+
+### Vibe Prospecting enrichment workflow (when ready)
+Use `mcp__Vibe_Prospecting__fetch-entities` with `naics_category: {"values": ["8111"]}` and `company_country_code: {"values": ["[ISO]"]}` to find owner/manager contacts for shops already in discovered_shops. Export to CSV, map to discovered_shops, update status to 'enriched'.
+
+### Promoting to CRM
+When ready to start campaigns: run a Cowork SQL script to batch-insert `discovered_shops` (status = 'enriched' or 'new') into `companies` + `contacts` tables with `source = 'prospector'`, then set `crm_company_id` / `crm_contact_id` on the discovered_shops row and update status to 'imported'.
+
+---
 
 ## Roadmap
 See `docs/roadmap.md` for the full post-Phase-8 plan. Summary:

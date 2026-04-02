@@ -44,3 +44,6 @@ next-env.d.ts
 
 # CC prompts — local only, not versioned
 docs/prompts/
+
+# Cowork discovery pipeline data files
+scripts/*-shops-data.json

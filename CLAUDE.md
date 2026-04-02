@@ -105,6 +105,7 @@ This app uses a `(dashboard)` route group for layout only. Routes are:
 ### Database Schema
 All tables already exist in Supabase. Do NOT create new tables or run migrations unless explicitly asked. The tables are:
 - **Core CRM:** workspaces, workspace_members, contacts, companies, pipelines, deals, deal_contacts, activities
+- **Discovery staging:** discovered_shops (Cowork-managed — no RLS, not workspace-scoped; stores shops scraped via Apify before promotion to contacts/companies. Fields: id, name, google_place_id, address, street, city, postal_code, state, country, country_code, latitude, longitude, phone, website, domain, primary_email, all_emails[], all_phones[], instagram_url, facebook_url, category, rating, review_count, opening_hours, source, status, crm_company_id, crm_contact_id, scraped_at. Status: new|enriched|imported|skipped. Source: google_maps|vibe_prospecting|manual)
 - **Lists:** contact_lists, contact_list_members
 - **Email:** gmail_accounts, email_templates, sequences, sequence_steps, sequence_enrollments, email_queue, email_events, unsubscribes
 
