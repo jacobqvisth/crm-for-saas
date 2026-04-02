@@ -235,3 +235,28 @@ TypeScript ✓, lint ✓ (0 warnings), tsc --noEmit ✓. 7 files changed (3 new)
 - Suppression check in `process-emails` uses `.or()` with both email and domain to cover domain blocks in one query.
 - Preflight suppression count may slightly overcount if both email+domain match same contact — acceptable as it's a warning.
 - `unsubscribes` table kept untouched for backward compatibility.
+
+---
+
+## Phase 24 — Tasks & Daily Queue
+**Date:** 2026-04-02 | **PR:** #29 | **Branch:** `feature/phase24-tasks-daily-queue`
+
+### What was built
+- **Migration** (`20260401190000_phase24_tasks.sql`) — `tasks` table with RLS, indexes on `(workspace_id, due_date)` and `(workspace_id, contact_id)`, `update_updated_at` trigger. Applied via Supabase MCP.
+- **`database.types.ts`** — added full `tasks` table Row/Insert/Update/Relationships types.
+- **API routes** — `GET/POST /api/tasks` (list with filter params + create), `PATCH/DELETE /api/tasks/[id]` (update/delete with workspace validation), `GET /api/tasks/count` (due+overdue badge count).
+- **`/tasks` page** — filter tabs (All / Due Today / Overdue / Upcoming / Completed), overdue section with red left border, quick-add inline form (collapse to placeholder by default), inline edit, snooze 1 day, delete with confirm.
+- **Sidebar** — Tasks nav item between Inbox and Templates; `CheckSquare` icon; badge polls `/api/tasks/count` every 60s.
+- **`check-replies` cron** — expanded contact query to include `first_name`/`last_name`; auto-creates high-priority email task when enrollment stops on reply; medium-priority task for non-enrollment real replies (guarded with `createdFollowUpTask` flag).
+- **Open tracking** — hot-lead detection: creates call-type high-priority task at 3+ opens without reply, deduped by `ilike('title', 'Hot lead:%')` on active tasks.
+- **Contact detail** — "Add Task" button in activity header opens `Modal` pre-filled with `Follow up with {first_name}` and tomorrow 9am due date.
+
+### Build status
+- `npm run build` — fails with Supabase URL error (pre-existing in worktree — no `.env.local`; not caused by this session's changes)
+- `npx eslint src/` ✅ (0 errors)
+- `npx tsc --noEmit` ✅ (0 errors)
+
+### Notable decisions
+- Non-enrollment reply tasks use `!email.enrollment_id` guard to avoid double-creating when both enrollment-stop and generic reply paths would fire.
+- Hot-lead task deduped by `ilike('title', 'Hot lead:%')` + `is('completed_at', null)` — simple and cheap.
+- Contact detail task modal creates task only (no task list shown on that page, as specified).
