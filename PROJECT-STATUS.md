@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-02 (Discovery page + schema Phase 25 merged — 39/39 E2E passing)
+Last updated: 2026-04-02 (Discovery promote full field mapping merged — 39/39 E2E passing)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -64,6 +64,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 17 | Compliance & DNC: suppressions table, GDPR erasure, DNC management page, CSV import | ✅ Merged | #22 |
 | Schema 25 | Extended contacts + companies — address, country_code, all_emails[], all_phones[], instagram_url, facebook_url, language, tags, notes, is_primary, parent_company_id, phone, website, google_place_id, rating, review_count, category | ✅ Applied | — |
 | Discovery page | Shop Discovery UI (`/discovery`) — browse/filter discovered_shops, promote to CRM, skip | ✅ Merged | #30 |
+| Discovery promote fix | Full Phase 25 field mapping in promote route (address, country_code, all_emails, language, tags, etc.) | ✅ Merged | #31 |
 | **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
 
 ## Bugs Fixed (not by CC)
