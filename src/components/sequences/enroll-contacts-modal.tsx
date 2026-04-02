@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { Modal } from "@/components/ui/modal";
 import { Search, Users, UserPlus, Loader2, AlertTriangle } from "lucide-react";
+import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
@@ -35,6 +36,7 @@ export function EnrollContactsModal({
   const [lists, setLists] = useState<ContactList[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [selectedList, setSelectedList] = useState<string | null>(null);
+  const [senderAccountId, setSenderAccountId] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
 
@@ -120,6 +122,7 @@ export function EnrollContactsModal({
         sequenceId,
         contactIds,
         workspaceId,
+        senderAccountId,
       }),
     });
 
@@ -148,6 +151,7 @@ export function EnrollContactsModal({
     setContacts([]);
     setSelectedContacts(new Set());
     setSelectedList(null);
+    setSenderAccountId(null);
     setTab("search");
   };
 
@@ -268,6 +272,20 @@ export function EnrollContactsModal({
                 ))
               )}
             </div>
+          </div>
+        )}
+
+        {workspaceId && (
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Sender account
+            </label>
+            <SenderAccountSelector
+              workspaceId={workspaceId}
+              value={senderAccountId}
+              onChange={setSenderAccountId}
+              showCapacity={true}
+            />
           </div>
         )}
 

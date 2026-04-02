@@ -4,10 +4,22 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { X, CheckCircle, AlertTriangle, XCircle, Info } from "lucide-react";
 import toast from "react-hot-toast";
+import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
 
 interface PreflightData {
   gmailConnected: boolean;
   gmailAccount: { email: string; maxDailySends: number } | null;
+  senderAccounts: {
+    id: string;
+    email_address: string;
+    display_name: string | null;
+    daily_sends_count: number;
+    max_daily_sends: number;
+    remaining_capacity: number;
+    status: string;
+  }[];
+  totalDailyCapacity: number;
+  estimatedDaysToSend: number | null;
   hasEmailStep: boolean;
   listMemberCount: number;
   missingEmail: number;
@@ -49,6 +61,7 @@ export function LaunchCampaignModal({
   const [launching, setLaunching] = useState(false);
   const [launched, setLaunched] = useState(false);
   const [enrolledCount, setEnrolledCount] = useState(0);
+  const [senderAccountId, setSenderAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchLists() {
@@ -104,7 +117,7 @@ export function LaunchCampaignModal({
     const res = await fetch("/api/sequences/enroll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sequenceId, contactIds, workspaceId }),
+      body: JSON.stringify({ sequenceId, contactIds, workspaceId, senderAccountId }),
     });
     const result = await res.json();
     setLaunching(false);
@@ -121,11 +134,6 @@ export function LaunchCampaignModal({
   };
 
   const hasBlocker = preflight && (!preflight.gmailConnected || !preflight.hasEmailStep);
-
-  const daysEstimate =
-    preflight?.gmailAccount?.maxDailySends && preflight.enrollableCount > 0
-      ? Math.ceil(preflight.enrollableCount / preflight.gmailAccount.maxDailySends)
-      : null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -251,20 +259,37 @@ export function LaunchCampaignModal({
                   </div>
 
                   {!hasBlocker && (
-                    <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 space-y-1">
-                      <p>
-                        Will enroll{" "}
-                        <strong>{preflight.enrollableCount}</strong>{" "}
-                        contact{preflight.enrollableCount !== 1 ? "s" : ""}.
-                      </p>
-                      {daysEstimate !== null && preflight.gmailAccount && (
+                    <>
+                      <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 space-y-1">
                         <p>
-                          At {preflight.gmailAccount.maxDailySends} emails/day → ~{daysEstimate}{" "}
-                          day{daysEstimate !== 1 ? "s" : ""} to complete.
+                          Will enroll{" "}
+                          <strong>{preflight.enrollableCount}</strong>{" "}
+                          contact{preflight.enrollableCount !== 1 ? "s" : ""}.
                         </p>
-                      )}
-                      <p>First email sends within 5 minutes.</p>
-                    </div>
+                        {preflight.senderAccounts.length > 0 && (
+                          <p>
+                            {preflight.senderAccounts.length} sender account{preflight.senderAccounts.length !== 1 ? "s" : ""} available
+                            {" — "}{preflight.totalDailyCapacity} email{preflight.totalDailyCapacity !== 1 ? "s" : ""} remaining today
+                            {preflight.estimatedDaysToSend !== null && (
+                              <> — estimated {preflight.estimatedDaysToSend} day{preflight.estimatedDaysToSend !== 1 ? "s" : ""} to reach all contacts</>
+                            )}.
+                          </p>
+                        )}
+                        <p>First email sends within 5 minutes.</p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-sm font-medium text-slate-700">
+                          Sender account
+                        </label>
+                        <SenderAccountSelector
+                          workspaceId={workspaceId}
+                          value={senderAccountId}
+                          onChange={setSenderAccountId}
+                          showCapacity={true}
+                        />
+                      </div>
+                    </>
                   )}
                 </>
               ) : null}
