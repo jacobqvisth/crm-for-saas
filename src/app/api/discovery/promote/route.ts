@@ -23,6 +23,7 @@ type DiscoveredShop = {
   rating: number | null;
   review_count: number | null;
   category: string | null;
+  email_valid: boolean | null;
 };
 
 export async function POST(request: NextRequest) {
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
   const { data: shops, error: fetchError } = await supabase
     .from("discovered_shops")
     .select(
-      "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category"
+      "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category, email_valid"
     )
     .in("id", shop_ids);
 
@@ -72,10 +73,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to fetch shops" }, { status: 500 });
   }
 
+  const invalidEmail = (shops as DiscoveredShop[]).filter(s => s.email_valid === false);
+  const validShops = (shops as DiscoveredShop[]).filter(s => s.email_valid !== false);
+  const skipped_invalid_email = invalidEmail.length;
+
+  // Mark invalid-email shops as skipped
+  if (invalidEmail.length > 0) {
+    await supabase
+      .from("discovered_shops")
+      .update({ status: "skipped" })
+      .in("id", invalidEmail.map(s => s.id));
+  }
+
   let promoted = 0;
   let skipped_duplicates = 0;
 
-  for (const shop of shops as DiscoveredShop[]) {
+  for (const shop of validShops) {
     // Check for duplicate company by domain or name
     let companyId: string | null = null;
     let isDuplicate = false;
@@ -206,7 +219,7 @@ export async function POST(request: NextRequest) {
     promoted++;
   }
 
-  return NextResponse.json({ promoted, skipped_duplicates });
+  return NextResponse.json({ promoted, skipped_duplicates, skipped_invalid_email });
 }
 
 function extractDomain(url: string): string | null {

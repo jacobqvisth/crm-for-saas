@@ -387,3 +387,26 @@ Phase 20: Prospector Upgrade
 - Google Maps Data section only renders when at least one of google_place_id/rating/review_count is set (avoids empty section for non-scraped companies)
 - `SocialLinkField` defined locally in each file to avoid prop complexity (same pattern in both files)
 - Types updated manually in database.types.ts (no Supabase CLI available in worktree env)
+
+---
+
+## Phase: Email Verification UI — Discovery Page
+**Date:** 2026-04-02
+**Branch:** claude/nostalgic-tu
+**PR:** #33
+
+### What was built
+- Added `email_valid: boolean | null` and `email_check_detail: string | null` to the `Shop` type in `discovery-page-client.tsx`
+- Email column now renders: green `CheckCircle` badge for `email_valid = true`, red `XCircle` badge with tooltip for `email_valid = false` (tooltip maps detail codes to human-readable text), unchanged mailto link for `null`
+- Added `verified_email: boolean` to `Filters` type with default `false`; new "Verified email" checkbox in filter bar passes `verified_email=true` to the API
+- `shops/route.ts`: added `verified_email` query param → `query.eq("email_valid", true)`
+- `promote/route.ts`: added `email_valid` to select and `DiscoveredShop` type; invalid-email shops are split out before the loop, marked `skipped` in DB, and `skipped_invalid_email` count returned in response
+- Toast updated to show invalid email skip count
+
+### Build status
+- `npm run build`: TypeScript clean; static prerender fails in worktree (no `.env.local` — pre-existing, not caused by this PR)
+- `eslint`: exit 0, no warnings
+- `npx tsc --noEmit`: exit 0, no errors
+
+### Notable decisions
+- Used `<span title={...}>` wrapper around `XCircle` instead of `title` prop directly — Lucide's `LucideProps` doesn't expose `title` on SVG components
