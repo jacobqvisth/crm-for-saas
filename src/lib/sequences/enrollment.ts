@@ -106,12 +106,13 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       assignedSenderId = sender.id;
     }
 
-    // Create enrollment
+    // Create enrollment — pin the sender so all steps use the same account
     const { data: enrollment, error: enrollError } = await supabase
       .from("sequence_enrollments")
       .insert({
         sequence_id: sequenceId,
         contact_id: contact.id,
+        sender_account_id: assignedSenderId,
         status: "active",
         current_step: 0,
       })

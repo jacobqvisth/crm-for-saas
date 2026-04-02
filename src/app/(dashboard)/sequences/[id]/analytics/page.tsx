@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
-import { ArrowLeft, Pause, Play } from "lucide-react";
+import { ArrowLeft, Pause, Play, Mail } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -19,6 +19,14 @@ interface AnalyticsStats {
   bounceRate: number;
   unsubscribeRate: number;
   completed: number;
+}
+
+interface SenderBreakdown {
+  sender_account_id: string;
+  email_address: string;
+  emails_sent: number;
+  opens: number;
+  replies: number;
 }
 
 interface Enrollment {
@@ -57,6 +65,7 @@ export default function SequenceAnalyticsPage() {
 
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [senderBreakdown, setSenderBreakdown] = useState<SenderBreakdown[]>([]);
   const [totalEnrollments, setTotalEnrollments] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(true);
@@ -163,6 +172,60 @@ export default function SequenceAnalyticsPage() {
       unsubscribeRate: pct(unsubCount || 0, enrolledTotal),
       completed: completedCount || 0,
     });
+
+    // Sender breakdown — group sent emails by sender, join gmail_accounts for email address
+    if (ids.length > 0) {
+      const { data: sentByAccount } = await supabase
+        .from("email_queue")
+        .select("sender_account_id, tracking_id, gmail_accounts(email_address)")
+        .in("enrollment_id", ids)
+        .eq("status", "sent");
+
+      if (sentByAccount && sentByAccount.length > 0) {
+        const allTrackingIds = sentByAccount.map((r) => r.tracking_id).filter(Boolean);
+
+        const { data: breakdownEvents } = allTrackingIds.length > 0
+          ? await supabase
+              .from("email_events")
+              .select("event_type, tracking_id")
+              .in("tracking_id", allTrackingIds)
+          : { data: [] };
+
+        // Map tracking_id → events
+        const opensByTracking = new Set(
+          (breakdownEvents || []).filter((e) => e.event_type === "open").map((e) => e.tracking_id)
+        );
+        const repliesByTracking = new Set(
+          (breakdownEvents || []).filter((e) => e.event_type === "reply").map((e) => e.tracking_id)
+        );
+
+        // Group by sender
+        const bySender = new Map<string, { email_address: string; sent: number; opens: number; replies: number }>();
+        for (const row of sentByAccount) {
+          const accountId = row.sender_account_id;
+          const emailAddress = (row.gmail_accounts as { email_address: string } | null)?.email_address ?? accountId;
+          if (!bySender.has(accountId)) {
+            bySender.set(accountId, { email_address: emailAddress, sent: 0, opens: 0, replies: 0 });
+          }
+          const entry = bySender.get(accountId)!;
+          entry.sent++;
+          if (row.tracking_id && opensByTracking.has(row.tracking_id)) entry.opens++;
+          if (row.tracking_id && repliesByTracking.has(row.tracking_id)) entry.replies++;
+        }
+
+        setSenderBreakdown(
+          Array.from(bySender.entries()).map(([id, data]) => ({
+            sender_account_id: id,
+            email_address: data.email_address,
+            emails_sent: data.sent,
+            opens: data.opens,
+            replies: data.replies,
+          })).sort((a, b) => b.emails_sent - a.emails_sent)
+        );
+      } else {
+        setSenderBreakdown([]);
+      }
+    }
 
     setStatsLoading(false);
   }, [workspaceId, sequenceId, supabase]);
@@ -291,6 +354,48 @@ export default function SequenceAnalyticsPage() {
 
       {/* Per-step chart */}
       <SequenceAnalyticsTab sequenceId={sequenceId} />
+
+      {/* Sender breakdown */}
+      {!statsLoading && senderBreakdown.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+            <Mail className="w-4 h-4 text-slate-400" />
+            <h3 className="text-sm font-medium text-slate-900">Sender Breakdown</h3>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">
+                  Sender
+                </th>
+                <th className="text-right text-xs font-medium text-slate-500 uppercase px-4 py-3">
+                  Emails Sent
+                </th>
+                <th className="text-right text-xs font-medium text-slate-500 uppercase px-4 py-3">
+                  Open Rate
+                </th>
+                <th className="text-right text-xs font-medium text-slate-500 uppercase px-4 py-3">
+                  Reply Rate
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {senderBreakdown.map((row) => {
+                const openRate = row.emails_sent > 0 ? Math.round((row.opens / row.emails_sent) * 100) : 0;
+                const replyRate = row.emails_sent > 0 ? Math.round((row.replies / row.emails_sent) * 100) : 0;
+                return (
+                  <tr key={row.sender_account_id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm text-slate-900">{row.email_address}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600 text-right">{row.emails_sent.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600 text-right">{openRate}%</td>
+                    <td className="px-4 py-3 text-sm text-slate-600 text-right">{replyRate}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Enrollment table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail } from "@/lib/gmail/send";
 import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
+import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "@/lib/sequences/variables";
 import { getNextSendTime, calculateStepScheduleTime } from "@/lib/sequences/scheduler";
 import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
@@ -321,6 +322,34 @@ export async function POST(request: NextRequest) {
           const sequence = enrollment.sequences as unknown as { settings: SequenceSettings };
           const settings = sequence?.settings;
 
+          // Resolve the sender to use for subsequent emails.
+          // Prefer the enrollment's pinned sender; fall back to getNextSender() if it's gone inactive.
+          const enrollmentSenderId = (enrollment as unknown as { sender_account_id: string | null }).sender_account_id;
+          let nextEmailSenderId = enrollmentSenderId || senderAccountId;
+
+          if (nextEmailSenderId !== senderAccountId) {
+            // Pinned sender differs from current — verify it's still active
+            const { data: pinnedAccount } = await supabase
+              .from("gmail_accounts")
+              .select("status")
+              .eq("id", nextEmailSenderId)
+              .single();
+
+            if (!pinnedAccount || pinnedAccount.status !== "active") {
+              // Pinned sender went inactive — re-pin to a new available sender
+              const fallback = await getNextSender(account.workspace_id);
+              if (fallback) {
+                nextEmailSenderId = fallback.id;
+                await supabase
+                  .from("sequence_enrollments")
+                  .update({ sender_account_id: fallback.id })
+                  .eq("id", enrollment.id);
+              } else {
+                nextEmailSenderId = senderAccountId;
+              }
+            }
+          }
+
           if (nextStep.type === "email" && settings) {
             // Get contact and company for variable resolution
             const { data: contact } = await supabase
@@ -359,7 +388,7 @@ export async function POST(request: NextRequest) {
                 enrollment_id: enrollment.id,
                 step_id: nextStep.id,
                 contact_id: item.contact_id,
-                sender_account_id: senderAccountId,
+                sender_account_id: nextEmailSenderId,
                 to_email: item.to_email,
                 subject,
                 body_html: bodyHtml,
@@ -425,7 +454,7 @@ export async function POST(request: NextRequest) {
                   enrollment_id: enrollment.id,
                   step_id: stepAfterDelay.id,
                   contact_id: item.contact_id,
-                  sender_account_id: senderAccountId,
+                  sender_account_id: nextEmailSenderId,
                   to_email: item.to_email,
                   subject,
                   body_html: bodyHtml,

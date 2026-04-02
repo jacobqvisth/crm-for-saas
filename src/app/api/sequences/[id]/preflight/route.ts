@@ -36,14 +36,20 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // 1. Check for active Gmail account
-  const { data: gmailAccount } = await supabase
+  // 1. Check for active Gmail accounts (all of them for capacity info)
+  const { data: gmailAccounts } = await supabase
     .from("gmail_accounts")
-    .select("email_address, max_daily_sends")
+    .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status")
     .eq("workspace_id", workspaceId)
     .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
+    .order("daily_sends_count", { ascending: true });
+
+  const gmailAccount = gmailAccounts?.[0]
+    ? {
+        email: gmailAccounts[0].email_address,
+        maxDailySends: gmailAccounts[0].max_daily_sends,
+      }
+    : null;
 
   // 2. Check sequence has email steps
   const { count: emailStepCount } = await supabase
@@ -196,14 +202,23 @@ export async function GET(
     }
   }
 
+  const senderAccounts = (gmailAccounts || []).map((a) => ({
+    id: a.id,
+    email_address: a.email_address,
+    display_name: a.display_name,
+    daily_sends_count: a.daily_sends_count,
+    max_daily_sends: a.max_daily_sends,
+    remaining_capacity: Math.max(0, a.max_daily_sends - a.daily_sends_count),
+    status: a.status,
+  }));
+
+  const totalDailyCapacity = senderAccounts.reduce((sum, a) => sum + a.remaining_capacity, 0);
+  const estimatedDaysToSend =
+    totalDailyCapacity > 0 ? Math.ceil(enrollableCount / totalDailyCapacity) : null;
+
   return NextResponse.json({
     gmailConnected: !!gmailAccount,
-    gmailAccount: gmailAccount
-      ? {
-          email: gmailAccount.email_address,
-          maxDailySends: gmailAccount.max_daily_sends,
-        }
-      : null,
+    gmailAccount,
     hasEmailStep: (emailStepCount || 0) > 0,
     listMemberCount,
     missingEmail,
@@ -214,5 +229,8 @@ export async function GET(
     invalidEmailCount,
     unverifiedEmailCount,
     tokenFallbackCount,
+    senderAccounts,
+    totalDailyCapacity,
+    estimatedDaysToSend,
   });
 }

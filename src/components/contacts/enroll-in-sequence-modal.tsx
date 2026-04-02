@@ -6,6 +6,7 @@ import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { Modal } from "@/components/ui/modal";
 import { Loader2, ListOrdered } from "lucide-react";
 import toast from "react-hot-toast";
+import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
 
 interface Sequence {
   id: string;
@@ -33,6 +34,7 @@ export function EnrollInSequenceModal({
 
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [senderAccountId, setSenderAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
 
@@ -67,6 +69,7 @@ export function EnrollInSequenceModal({
         sequenceId: selectedId,
         contactIds: [contactId],
         workspaceId,
+        senderAccountId,
       }),
     });
 
@@ -132,6 +135,20 @@ export function EnrollInSequenceModal({
             ))
           )}
         </div>
+
+        {workspaceId && (
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Sender account
+            </label>
+            <SenderAccountSelector
+              workspaceId={workspaceId}
+              value={senderAccountId}
+              onChange={setSenderAccountId}
+              showCapacity={true}
+            />
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-1">
           <button
