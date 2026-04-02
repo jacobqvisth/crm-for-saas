@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2, CheckSquare
+  Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2, X,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -13,6 +13,8 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { LeadStatusBadge, ContactStatusBadge, DealStageBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
+import { ArrayChipsField } from '@/components/ui/array-chips-field';
+import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
 import type { Tables, Json } from '@/lib/database.types';
 
@@ -22,6 +24,15 @@ type Company = Tables<'companies'>;
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 const CONTACT_STATUSES = ['active', 'bounced', 'unsubscribed', 'archived'] as const;
+const LANGUAGES = [
+  { code: 'et', label: 'Estonian' },
+  { code: 'sv', label: 'Swedish' },
+  { code: 'fi', label: 'Finnish' },
+  { code: 'lv', label: 'Latvian' },
+  { code: 'lt', label: 'Lithuanian' },
+  { code: 'no', label: 'Norwegian' },
+  { code: 'da', label: 'Danish' },
+] as const;
 
 const activityIcons: Record<string, React.ReactNode> = {
   email_sent: <Mail className="w-4 h-4 text-blue-500" />,
@@ -215,7 +226,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, contactId]);
 
-  const updateField = async (field: string, value: string | null) => {
+  const updateField = async (field: string, value: string | boolean | null) => {
     if (!contact || !workspaceId) return;
     const { error } = await supabase
       .from('contacts')
@@ -229,6 +240,21 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
       toast.success('Updated');
     }
     setEditField(null);
+  };
+
+  const updateArrayField = async (field: string, newArray: string[]) => {
+    if (!contact || !workspaceId) return;
+    const { error } = await supabase
+      .from('contacts')
+      .update({ [field]: newArray } as Record<string, unknown>)
+      .eq('id', contact.id)
+      .eq('workspace_id', workspaceId);
+
+    if (error) toast.error('Failed to update');
+    else {
+      setContact(prev => prev ? { ...prev, [field]: newArray } : null);
+      toast.success('Updated');
+    }
   };
 
   const updateCustomFields = async (fields: Record<string, string>) => {
@@ -321,6 +347,9 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
   const initials = [contact.first_name?.[0], contact.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
   const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unnamed Contact';
+  const allEmails = (contact.all_emails as string[] | null) || [];
+  const allPhones = (contact.all_phones as string[] | null) || [];
+  const tags = (contact.tags as string[] | null) || [];
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -367,7 +396,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               </div>
             </div>
 
-            {/* Editable Fields */}
+            {/* Contact Info */}
             <div className="space-y-3">
               <EditableField
                 label="First Name"
@@ -409,35 +438,40 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onSave={() => updateField('phone', editValue || null)}
                 onCancel={() => setEditField(null)}
               />
+              <EditableField
+                label="Title"
+                value={contact.title || ''}
+                isEditing={editField === 'title'}
+                onEdit={() => { setEditField('title'); setEditValue(contact.title || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('title', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Seniority"
+                value={contact.seniority || ''}
+                isEditing={editField === 'seniority'}
+                onEdit={() => { setEditField('seniority'); setEditValue(contact.seniority || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('seniority', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
 
-              {contact.title && (
+              {/* Primary contact toggle (only when company is set) */}
+              {contact.company_id && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
-                  <p className="text-sm text-slate-800">{contact.title}</p>
-                </div>
-              )}
-
-              {(contact.city || contact.country) && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Location</label>
-                  <p className="text-sm text-slate-800">
-                    {[contact.city, contact.country].filter(Boolean).join(', ')}
-                  </p>
-                </div>
-              )}
-
-              {contact.linkedin_url && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">LinkedIn</label>
-                  <a
-                    href={contact.linkedin_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate max-w-full"
-                  >
-                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">View profile</span>
-                  </a>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Primary Contact</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={contact.is_primary || false}
+                      onChange={(e) => updateField('is_primary', e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-slate-700">Primary contact at this company</span>
+                  </label>
                 </div>
               )}
 
@@ -484,6 +518,163 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   {CONTACT_STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                 </select>
               </div>
+            </div>
+
+            {/* Location */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Location</h3>
+              <EditableField
+                label="Address"
+                value={contact.address || ''}
+                isEditing={editField === 'address'}
+                onEdit={() => { setEditField('address'); setEditValue(contact.address || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('address', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Postal Code"
+                value={contact.postal_code || ''}
+                isEditing={editField === 'postal_code'}
+                onEdit={() => { setEditField('postal_code'); setEditValue(contact.postal_code || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('postal_code', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="City"
+                value={contact.city || ''}
+                isEditing={editField === 'city'}
+                onEdit={() => { setEditField('city'); setEditValue(contact.city || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('city', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Country"
+                value={contact.country || ''}
+                isEditing={editField === 'country'}
+                onEdit={() => { setEditField('country'); setEditValue(contact.country || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('country', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <EditableField
+                label="Country Code"
+                value={contact.country_code || ''}
+                isEditing={editField === 'country_code'}
+                onEdit={() => { setEditField('country_code'); setEditValue(contact.country_code || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('country_code', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Language</label>
+                <select
+                  value={contact.language || ''}
+                  onChange={(e) => updateField('language', e.target.value || null)}
+                  className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Auto-detect</option>
+                  {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Additional Emails & Phones */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Additional Emails &amp; Phones</h3>
+              <ArrayChipsField
+                label="Additional Emails"
+                values={allEmails}
+                onAdd={(v) => updateArrayField('all_emails', [...allEmails, v])}
+                onRemove={(i) => {
+                  const arr = [...allEmails];
+                  arr.splice(i, 1);
+                  updateArrayField('all_emails', arr);
+                }}
+                placeholder="Add email..."
+              />
+              <ArrayChipsField
+                label="Additional Phones"
+                values={allPhones}
+                onAdd={(v) => updateArrayField('all_phones', [...allPhones, v])}
+                onRemove={(i) => {
+                  const arr = [...allPhones];
+                  arr.splice(i, 1);
+                  updateArrayField('all_phones', arr);
+                }}
+                placeholder="Add phone..."
+              />
+            </div>
+
+            {/* Social Links */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Social Links</h3>
+              <SocialLinkField
+                label="LinkedIn"
+                value={contact.linkedin_url || ''}
+                isEditing={editField === 'linkedin_url'}
+                onEdit={() => { setEditField('linkedin_url'); setEditValue(contact.linkedin_url || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('linkedin_url', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <SocialLinkField
+                label="Instagram"
+                value={contact.instagram_url || ''}
+                isEditing={editField === 'instagram_url'}
+                onEdit={() => { setEditField('instagram_url'); setEditValue(contact.instagram_url || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('instagram_url', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+              <SocialLinkField
+                label="Facebook"
+                value={contact.facebook_url || ''}
+                isEditing={editField === 'facebook_url'}
+                onEdit={() => { setEditField('facebook_url'); setEditValue(contact.facebook_url || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('facebook_url', editValue || null)}
+                onCancel={() => setEditField(null)}
+              />
+            </div>
+
+            {/* Tags & Notes */}
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+              <h3 className="text-sm font-medium text-slate-700">Tags &amp; Notes</h3>
+              <ArrayChipsField
+                label="Tags"
+                values={tags}
+                variant="tag"
+                onAdd={(v) => updateArrayField('tags', [...tags, v])}
+                onRemove={(i) => {
+                  const arr = [...tags];
+                  arr.splice(i, 1);
+                  updateArrayField('tags', arr);
+                }}
+                placeholder="Add tag..."
+              />
+              <EditableTextarea
+                label="Notes"
+                value={contact.notes || ''}
+                onSave={(v) => updateField('notes', v || null)}
+                placeholder="Click to add notes..."
+              />
+              {contact.source && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Source</label>
+                  <p className="text-sm text-slate-700 px-2 py-1.5">{contact.source}</p>
+                </div>
+              )}
             </div>
 
             {/* Custom Fields */}
@@ -559,7 +750,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               className="mt-2 w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50"
             >
               <ShieldOff className="w-4 h-4" />
-              Delete & Forget (GDPR)
+              Delete &amp; Forget (GDPR)
             </button>
           </div>
         </div>
@@ -859,8 +1050,57 @@ function EditableField({
   );
 }
 
-// Need to import X for custom fields delete button
-import { X } from 'lucide-react';
+// Editable URL field — shows as clickable link when populated
+function SocialLinkField({
+  label, value, isEditing, onEdit, editValue, onEditValueChange, onSave, onCancel
+}: {
+  label: string; value: string; isEditing: boolean;
+  onEdit: () => void; editValue: string; onEditValueChange: (v: string) => void;
+  onSave: () => void; onCancel: () => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1">{label}</label>
+      {isEditing ? (
+        <input
+          type="url"
+          value={editValue}
+          onChange={(e) => onEditValueChange(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
+          autoFocus
+          placeholder="https://..."
+          className="w-full text-sm px-2 py-1.5 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      ) : value ? (
+        <div className="flex items-center gap-1 px-2 py-1.5">
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate"
+          >
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">View</span>
+          </a>
+          <button
+            onClick={onEdit}
+            className="ml-auto text-xs text-slate-400 hover:text-slate-600"
+          >
+            Edit
+          </button>
+        </div>
+      ) : (
+        <p
+          onClick={onEdit}
+          className="text-sm text-slate-400 cursor-pointer hover:bg-slate-50 px-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200"
+        >
+          —
+        </p>
+      )}
+    </div>
+  );
+}
 
 type EmailTemplate = Tables<'email_templates'>;
 
@@ -948,87 +1188,45 @@ function PersonalizeModal({
           <label className="block text-xs font-medium text-slate-500 mb-1">Template</label>
           <select
             value={selectedTemplateId}
-            onChange={e => setSelectedTemplateId(e.target.value)}
-            className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm"
+            onChange={(e) => setSelectedTemplateId(e.target.value)}
+            className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">Select a template…</option>
-            {templates.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
+            <option value="">Select a template...</option>
+            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
 
+        {selectedTemplate && (
+          <div className="mb-4 p-3 bg-slate-50 rounded-lg">
+            <p className="text-xs font-medium text-slate-600 mb-1">Subject: {selectedTemplate.subject}</p>
+            <div
+              className="text-xs text-slate-500 line-clamp-3"
+              dangerouslySetInnerHTML={{ __html: selectedTemplate.body_html || '' }}
+            />
+          </div>
+        )}
+
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 
-        {!result ? (
-          <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
-              Cancel
-            </button>
-            <button
-              onClick={handlePersonalize}
-              disabled={!selectedTemplateId || generating}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {generating ? (
-                <><span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" /> Personalizing...</>
-              ) : (
-                <><Wand2 className="w-3.5 h-3.5" /> Personalize</>
-              )}
-            </button>
+        {result && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-xs font-medium text-green-800 mb-1">Subject: {result.subject}</p>
+            <p className="text-xs text-green-700 whitespace-pre-wrap">{result.body}</p>
           </div>
-        ) : (
-          <>
-            <div className="space-y-3 mb-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-500">Subject</label>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(result.subject).then(() => toast.success('Copied!'))}
-                    className="text-xs text-indigo-600 hover:text-indigo-700"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  readOnly
-                  value={result.subject}
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-slate-50"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-500">Body</label>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(result.body).then(() => toast.success('Copied!'))}
-                    className="text-xs text-indigo-600 hover:text-indigo-700"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <textarea
-                  readOnly
-                  value={result.body}
-                  rows={8}
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50"
-                />
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <button
-                onClick={() => { setResult(null); handlePersonalize(); }}
-                disabled={generating}
-                className="text-sm text-slate-600 hover:text-slate-900 underline disabled:opacity-50"
-              >
-                {generating ? 'Regenerating...' : 'Regenerate'}
-              </button>
-              <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
-                Close
-              </button>
-            </div>
-          </>
         )}
+
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50">
+            Close
+          </button>
+          <button
+            onClick={handlePersonalize}
+            disabled={!selectedTemplateId || generating}
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {generating ? 'Generating...' : result ? 'Regenerate' : 'Personalize'}
+          </button>
+        </div>
       </div>
     </div>
   );

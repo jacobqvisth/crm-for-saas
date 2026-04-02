@@ -365,3 +365,25 @@ Phase 20: Prospector Upgrade
 
 ### Decisions
 - Contact email falls back to `''` (empty string) instead of the old `discovery_noemail_...@placeholder.invalid` pattern, per spec.
+
+---
+
+## Phase 25: Contact & Company Detail Pages — Full Field Visibility
+**Date:** 2026-04-02 | **PR:** #32 | **Branch:** feature/detail-pages-phase25-fields
+
+### What was built
+- `contact-detail-client.tsx`: added title/seniority as editable fields; `is_primary` checkbox (shown when company is set); Location section (address, postal_code, city, country, country_code, language dropdown with et/sv/fi/lv/lt/no/da options); Additional Emails & Phones chip arrays; Social Links section (linkedin/instagram/facebook editable with ExternalLink); Tags & Notes section (tag chips, notes textarea, source read-only); `updateArrayField` helper; `updateField` now accepts `boolean` for is_primary; `SocialLinkField` local component
+- `company-detail-client.tsx`: added phone, website (clickable link with edit), category dropdown, description textarea, revenue_range, founded_year; Location section; Google Maps Data section (google_place_id with copy button, rating + review count shown when present); Parent Company dropdown with link to parent + child companies list (fetched in load()); Social Links; Tags & Notes; `updateArrayField` helper; `SocialLinkField` local component
+- `src/components/ui/array-chips-field.tsx`: new shared component — horizontal chip list with add/remove, default and tag (indigo) variants
+- `src/components/ui/editable-textarea.tsx`: new shared component — click-to-edit textarea with save/cancel, syncs on external value changes
+- `src/lib/database.types.ts`: added Phase 25 fields to contacts Row/Insert/Update (is_primary, tags, notes, all_emails, all_phones, address, postal_code, country_code, language, instagram_url, facebook_url) and companies Row/Insert/Update (tags, notes, phone, website, category, address, postal_code, country_code, google_place_id, rating, review_count, parent_company_id, instagram_url, facebook_url)
+
+### Build status
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm run lint` ✅ 0 warnings
+- `npm run build`: TypeScript phase passes ✅; prerender failure for /settings/pipelines is pre-existing (Supabase env vars absent at build time)
+
+### Decisions
+- Google Maps Data section only renders when at least one of google_place_id/rating/review_count is set (avoids empty section for non-scraped companies)
+- `SocialLinkField` defined locally in each file to avoid prop complexity (same pattern in both files)
+- Types updated manually in database.types.ts (no Supabase CLI available in worktree env)
