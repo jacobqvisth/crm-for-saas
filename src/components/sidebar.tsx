@@ -19,6 +19,7 @@ import {
   Search,
   Inbox,
   CheckSquare,
+  MapPin,
 } from "lucide-react";
 
 type NavItem = {
@@ -36,6 +37,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/prospector", label: "Prospector", icon: Search },
+  { href: "/discovery", label: "Discovery", icon: MapPin },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/templates", label: "Templates", icon: FileText },

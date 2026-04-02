@@ -314,3 +314,34 @@ Phase 20: Prospector Upgrade
 - **sequence-list.tsx** — added Bounce % column (was missing); Reply % and Bounce % column headers are now client-side sortable with toggle asc/desc arrows; sorting works on in-memory array with no extra fetches
 - **deliverability-panel.tsx + GET /api/analytics/send-volume** — new dashboard panel embedded below Contact Growth; contains 30-day Sent/Replied/Bounced area chart, sender account health table (daily sends vs limit, 7d bounce rate, status badge + pause reason), and suppression summary line (`Total suppressed: X (Y bounced · Z unsubscribed · W manual/DNC)`); new API route returns last-30-day time series
 - **Build:** TypeScript clean, ESLint clean, `next build` Turbopack compile passes; prerender error for /login is pre-existing (missing Supabase env vars in build environment — not a code issue)
+
+---
+
+## Phase 25 — Shop Discovery Page (`/discovery`)
+**Date:** 2026-04-02 | **Branch:** claude/sharp-hodgkin | **PR:** TBD
+
+### What was built
+- **`GET /api/discovery/shops`** — paginated list with filters: `country_code`, `status` (default: new+enriched), `has_email`, `has_phone`, `search` (name/city/domain ilike). Default hides imported/skipped.
+- **`GET /api/discovery/stats`** — aggregate totals: `total`, `by_status`, `by_country`, `with_email`, `with_phone`. Used for header stats bar and status tab counts.
+- **`POST /api/discovery/promote`** — bulk promote shops to CRM; checks duplicate by domain then by name; inserts company (name, website, domain, phone, city, country) + placeholder contact (first_name="Owner", last_name=shop.name, source="discovery"); marks `status='imported'`; returns `{promoted, skipped_duplicates}`. Uses service role client.
+- **`POST /api/discovery/skip`** — sets `status='skipped'` for given shop_ids. Uses service role client.
+- **`src/app/(dashboard)/discovery/page.tsx`** — thin server wrapper with `<Suspense>`.
+- **`src/components/discovery/discovery-page-client.tsx`** — full client component:
+  - Header with title + stats bar (total/email/phone counts)
+  - Status pill tabs (New+Enriched default, New, Enriched, Imported, Skipped, All)
+  - Filters: country dropdown (populated from stats), has_email/has_phone checkboxes, debounced search
+  - 4 stats cards (Showing, With email on page, With phone on page, Already imported on page)
+  - Paginated table with 11 columns + checkbox column; name cell opens inline detail popover (address, all_emails, all_phones, Instagram/Facebook/Maps links)
+  - Per-row three-dot menu: Promote, Skip, View on Google Maps
+  - Sticky bulk action bar (bottom-center) when rows are selected; Promote + Skip buttons
+- **Sidebar** — added `Discovery` nav item with `MapPin` icon, placed after Prospector.
+
+### Build status
+- `npx tsc --noEmit` ✅ 0 errors
+- `npm run lint` ✅ 0 warnings
+- `npm run build` ✅ TypeScript + compile pass; prerender error for /contacts is pre-existing (Supabase env vars absent in build env — not a code issue)
+
+### Decisions
+- `discovered_shops` has no TypeScript types in `database.types.ts`, so explicit `as { ... }` cast used in stats route to satisfy type checker.
+- Promote flow creates a placeholder contact email `discovery_noemail_{id}@placeholder.invalid` when no `primary_email` present (mirrors the prospector pattern).
+- Stats route fetches all rows and aggregates in JS — acceptable at 814 rows; can be replaced with SQL aggregation if volume grows.
