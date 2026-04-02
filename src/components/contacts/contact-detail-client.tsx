@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink
+  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, CheckSquare
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -74,6 +74,12 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [showEnrollInSequence, setShowEnrollInSequence] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskType, setTaskType] = useState<'email' | 'call' | 'linkedin' | 'generic'>('generic');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [addingTask, setAddingTask] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [callSubject, setCallSubject] = useState('');
   const [callNotes, setCallNotes] = useState('');
@@ -572,6 +578,22 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   <Phone className="w-3.5 h-3.5" />
                   Log Call
                 </button>
+                <button
+                  onClick={() => {
+                    if (contact) {
+                      setTaskTitle(`Follow up with ${contact.first_name || ''}`);
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      tomorrow.setHours(9, 0, 0, 0);
+                      setTaskDueDate(tomorrow.toISOString().slice(0, 16));
+                    }
+                    setShowAddTask(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  Add Task
+                </button>
               </div>
             </div>
 
@@ -791,6 +813,98 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           >
             {forgetting ? 'Processing...' : 'Delete & Forget'}
           </button>
+        </div>
+      </Modal>
+
+      {/* Add Task Modal */}
+      <Modal open={showAddTask} onClose={() => setShowAddTask(false)} title="Add Task">
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Title *</label>
+            <input
+              autoFocus
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              placeholder="Task title"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
+            <select
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              value={taskType}
+              onChange={(e) => setTaskType(e.target.value as 'email' | 'call' | 'linkedin' | 'generic')}
+            >
+              <option value="generic">Generic</option>
+              <option value="email">Email</option>
+              <option value="call">Call</option>
+              <option value="linkedin">LinkedIn</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Due date</label>
+            <input
+              type="datetime-local"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              value={taskDueDate}
+              onChange={(e) => setTaskDueDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
+            <select
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              value={taskPriority}
+              onChange={(e) => setTaskPriority(e.target.value as 'low' | 'medium' | 'high')}
+            >
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowAddTask(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!taskTitle.trim()) { toast.error('Title is required'); return; }
+                setAddingTask(true);
+                try {
+                  const res = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      title: taskTitle.trim(),
+                      type: taskType,
+                      due_date: taskDueDate || null,
+                      priority: taskPriority,
+                      contact_id: contactId,
+                    }),
+                  });
+                  if (!res.ok) throw new Error('Failed to create task');
+                  toast.success('Task added');
+                  setShowAddTask(false);
+                  setTaskTitle('');
+                  setTaskType('generic');
+                  setTaskDueDate('');
+                  setTaskPriority('medium');
+                } catch {
+                  toast.error('Failed to create task');
+                } finally {
+                  setAddingTask(false);
+                }
+              }}
+              disabled={addingTask}
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {addingTask ? 'Adding...' : 'Add Task'}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

@@ -1068,6 +1068,98 @@ export interface Database {
           },
         ];
       };
+      tasks: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          contact_id: string | null;
+          company_id: string | null;
+          deal_id: string | null;
+          enrollment_id: string | null;
+          type: 'email' | 'call' | 'linkedin' | 'generic';
+          title: string;
+          description: string | null;
+          due_date: string | null;
+          completed_at: string | null;
+          snoozed_until: string | null;
+          priority: 'low' | 'medium' | 'high';
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          contact_id?: string | null;
+          company_id?: string | null;
+          deal_id?: string | null;
+          enrollment_id?: string | null;
+          type?: 'email' | 'call' | 'linkedin' | 'generic';
+          title: string;
+          description?: string | null;
+          due_date?: string | null;
+          completed_at?: string | null;
+          snoozed_until?: string | null;
+          priority?: 'low' | 'medium' | 'high';
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          contact_id?: string | null;
+          company_id?: string | null;
+          deal_id?: string | null;
+          enrollment_id?: string | null;
+          type?: 'email' | 'call' | 'linkedin' | 'generic';
+          title?: string;
+          description?: string | null;
+          due_date?: string | null;
+          completed_at?: string | null;
+          snoozed_until?: string | null;
+          priority?: 'low' | 'medium' | 'high';
+          created_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tasks_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_deal_id_fkey";
+            columns: ["deal_id"];
+            isOneToOne: false;
+            referencedRelation: "deals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_enrollment_id_fkey";
+            columns: ["enrollment_id"];
+            isOneToOne: false;
+            referencedRelation: "sequence_enrollments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {

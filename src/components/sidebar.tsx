@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Search,
   Inbox,
+  CheckSquare,
 } from "lucide-react";
 
 type NavItem = {
@@ -36,6 +37,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/prospector", label: "Prospector", icon: Search },
   { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -43,6 +45,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [tasksDueCount, setTasksDueCount] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -69,6 +72,28 @@ export function Sidebar() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTasksCount() {
+      try {
+        const res = await fetch("/api/tasks/count");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setTasksDueCount(data.count ?? 0);
+      } catch {
+        // Ignore errors for badge fetch
+      }
+    }
+
+    fetchTasksCount();
+    const interval = setInterval(fetchTasksCount, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/login");
@@ -76,7 +101,12 @@ export function Sidebar() {
 
   const navItems: NavItem[] = staticNavItems.map((item) => ({
     ...item,
-    badge: item.href === "/inbox" ? unreadCount : undefined,
+    badge:
+      item.href === "/inbox"
+        ? unreadCount
+        : item.href === "/tasks"
+        ? tasksDueCount
+        : undefined,
   }));
 
   return (
