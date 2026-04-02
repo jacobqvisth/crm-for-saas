@@ -10,6 +10,7 @@ type GmailAccount = Tables<"gmail_accounts">;
 interface GmailAccountCardProps {
   account: GmailAccount;
   onUpdate: () => void;
+  connectedByName?: string | null;
 }
 
 const statusColors: Record<string, { bg: string; text: string; label: string }> = {
@@ -19,7 +20,7 @@ const statusColors: Record<string, { bg: string; text: string; label: string }> 
   rate_limited: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Rate Limited" },
 };
 
-export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
+export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAccountCardProps) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [maxSends, setMaxSends] = useState(account.max_daily_sends);
@@ -107,6 +108,9 @@ export function GmailAccountCard({ account, onUpdate }: GmailAccountCardProps) {
             </p>
             {account.display_name && (
               <p className="text-xs text-slate-500">{account.display_name}</p>
+            )}
+            {connectedByName && (
+              <p className="text-xs text-slate-400 mt-0.5">Connected by {connectedByName}</p>
             )}
           </div>
         </div>

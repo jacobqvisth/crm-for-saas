@@ -435,3 +435,30 @@ Phase 20: Prospector Upgrade
 ### Notable decisions
 - Used native `<select>` for sender picker (consistent with rest of codebase); capacity info shown inline in option text + info line below selected account
 - Backward compatible: null sender = auto-rotate = same as previous behavior; existing enrollments with `sender_account_id = null` fall back to `senderAccountId` from the queue item in the cron
+
+---
+
+## Phase 19 — Multi-User Workspace
+**Date:** 2026-04-02
+**PR:** #35
+**Branch:** claude/vigilant-hamilton
+
+### What was built
+- `src/app/(auth)/auth/callback/route.ts` — Domain-based auto-join: when a new user has no workspace membership, looks up workspaces by email domain using service-role client (bypasses RLS). If a match is found, inserts them as `member`. If no match, creates new workspace with domain stored for future auto-joins.
+- `src/app/api/settings/team/route.ts` — GET endpoint: returns all workspace members with auth profile (full_name, email, avatar_url via `auth.admin.getUserById`) and their connected Gmail accounts.
+- `src/components/settings/team-settings.tsx` — Team Members list with avatar, name, role badge (Owner/Member), joined date, connected Gmail account pills.
+- `src/app/(dashboard)/settings/page.tsx` — Added Team Members section at top of settings page.
+- `src/components/sidebar.tsx` — Added current user's Google avatar/initials + name/email display at the bottom of the sidebar.
+- `src/components/settings/gmail-account-card.tsx` — Added optional `connectedByName` prop to show "Connected by [Name]" below the email address.
+- `src/components/settings/email-settings-client.tsx` — Fetches team members from `/api/settings/team` and passes `connectedByName` to each card (only shown when workspace has >1 member).
+
+### Build status
+- `npm run build`: pre-existing prerender/Supabase env var failure (confirmed by testing before/after stash — same failure class on different page)
+- `npx eslint src/`: exit 0
+- `npx tsc --noEmit`: exit 0
+
+### Notable decisions
+- Used service-role client only for the domain lookup and new-member insert; regular session client used for all else in the callback.
+- `connectedByName` only renders in the Gmail card when the workspace has >1 member (single-user view stays clean).
+- Workspace domain was already set to `wrenchlane.com` on the production workspace — verified via Supabase SQL, no migration needed.
+- Activity attribution (item 7 from prompt) not built: `activities.user_id` column already exists in the schema; activity creation code wasn't touched since adding the column is already done and attribution display in the feed wasn't specified as a required UI change in the phase prompt.

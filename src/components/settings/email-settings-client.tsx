@@ -13,11 +13,18 @@ import { GmailAccountCard } from "./gmail-account-card";
 
 type GmailAccount = Tables<"gmail_accounts">;
 
+interface TeamMember {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+}
+
 export function EmailSettingsClient() {
   const { workspaceId } = useWorkspace();
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<GmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [sendingSettings, setSendingSettings] = useState<WorkspaceSendingSettings>({
     default_max_daily_sends: 50,
     bounce_threshold: 8,
@@ -66,6 +73,13 @@ export function EmailSettingsClient() {
   useEffect(() => {
     loadSendingSettings();
   }, [loadSendingSettings]);
+
+  useEffect(() => {
+    fetch("/api/settings/team")
+      .then((r) => r.json())
+      .then((data) => setTeamMembers(data.members ?? []))
+      .catch(() => {});
+  }, []);
 
   async function handleSaveWorkspaceDefaults() {
     setSavingSettings(true);
@@ -169,13 +183,18 @@ export function EmailSettingsClient() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {accounts.map((account) => (
-              <GmailAccountCard
-                key={account.id}
-                account={account}
-                onUpdate={loadAccounts}
-              />
-            ))}
+            {accounts.map((account) => {
+              const connectedBy = teamMembers.find((m) => m.user_id === account.user_id);
+              const connectedByName = connectedBy?.full_name ?? connectedBy?.email ?? null;
+              return (
+                <GmailAccountCard
+                  key={account.id}
+                  account={account}
+                  onUpdate={loadAccounts}
+                  connectedByName={teamMembers.length > 1 ? connectedByName : null}
+                />
+              );
+            })}
           </div>
         )}
       </div>
