@@ -109,6 +109,27 @@ All tables already exist in Supabase. Do NOT create new tables or run migrations
 - **Lists:** contact_lists, contact_list_members
 - **Email:** gmail_accounts, email_templates, sequences, sequence_steps, sequence_enrollments, email_queue, email_events, unsubscribes
 
+### contacts — full field list
+id, workspace_id, email (required), first_name, last_name, phone, title, city, country, country_code, address, postal_code, company_id (FK → companies), is_primary, status, lead_status, source, email_status, email_verified_at, seniority, linkedin_url, instagram_url, facebook_url, all_emails TEXT[], all_phones TEXT[], language, tags TEXT[], notes, last_contacted_at, custom_fields JSONB, created_at, updated_at
+
+Key notes:
+- One contact → one company (company_id nullable). No multi-company associations.
+- `is_primary` marks the primary contact at a company (boolean, default false)
+- `language` = 2-letter locale code: et, sv, fi, lv, lt, no, da — determines which sequence variant to enroll in
+- `all_emails` / `all_phones` = extra emails/phones scraped from website; `email` is the one used by sequences
+- `tags` = free-form array e.g. ['owner', 'decision-maker', 'vip']
+- `source` = 'csv' | 'discovery' | 'manual' | 'prospeo'
+
+### companies — full field list
+id, workspace_id, name (required), domain, website, phone, address, city, postal_code, country, country_code, industry, category, description, employee_count, annual_revenue, revenue_range, founded_year, linkedin_url, instagram_url, facebook_url, google_place_id, rating DECIMAL(3,1), review_count, tech_stack TEXT[], parent_company_id (FK → companies self-ref), tags TEXT[], notes, custom_fields JSONB, created_at, updated_at
+
+Key notes:
+- `parent_company_id` = self-referencing FK for chain/franchise hierarchy (e.g. Mekonomen AB → local Mekonomen shops). One level deep is enough.
+- `google_place_id` = ties company back to Apify scrape source
+- `rating` / `review_count` = Google Maps rating, useful for ICP scoring
+- `category` = shop type: 'auto repair', 'tire shop', 'bodywork', etc.
+- `tags` = free-form array e.g. ['chain', 'franchise', 'independent', 'vip', 'skip']
+
 ### Supabase Project
 - Project ID: `wdgiwuhehqpkhpvdzzzl`
 - The `update_updated_at` trigger exists on all tables — `updated_at` is auto-maintained
