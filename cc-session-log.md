@@ -410,3 +410,28 @@ Phase 20: Prospector Upgrade
 
 ### Notable decisions
 - Used `<span title={...}>` wrapper around `XCircle` instead of `title` prop directly — Lucide's `LucideProps` doesn't expose `title` on SVG components
+
+---
+
+## Phase 18: Multi-Sender Selection & Sender Pinning
+**Date:** 2026-04-02
+**PR:** #34
+**Branch:** claude/relaxed-engelbart
+
+### What was built
+- `src/components/gmail/sender-account-selector.tsx` — reusable dropdown showing all connected Gmail accounts with daily capacity (sent/max), disabled state for paused/rate-limited accounts; default = "Auto-rotate across all accounts" (null)
+- `src/app/api/gmail/accounts/route.ts` — GET route returning accounts with `remaining_capacity`, no sensitive fields
+- Added `SenderAccountSelector` to all 3 enrollment flows: `launch-campaign-modal.tsx`, `enroll-in-sequence-modal.tsx`, `enroll-contacts-modal.tsx`; `senderAccountId` passed to `/api/sequences/enroll`
+- `src/lib/sequences/enrollment.ts` — enrollment insert now sets `sender_account_id: assignedSenderId` (pinning the sender to the enrollment record)
+- `src/app/api/cron/process-emails/route.ts` — subsequent emails use `enrollment.sender_account_id` (pinned sender); if pinned sender is inactive, falls back to `getNextSender()` and re-pins enrollment; imported `getNextSender`
+- `src/app/api/sequences/[id]/preflight/route.ts` — response extended with `senderAccounts[]`, `totalDailyCapacity`, `estimatedDaysToSend`; launch modal updated to show multi-sender capacity summary
+- `src/app/(dashboard)/sequences/[id]/analytics/page.tsx` — added Sender Breakdown section (per-sender: emails sent, open rate, reply rate) between per-step chart and enrollment table
+
+### Build status
+- `npm run build`: compiled + TypeScript pass; prerender error on /login is pre-existing env var issue (no .env.local in worktree)
+- `npm run lint`: exit 0
+- `npx tsc --noEmit`: exit 0
+
+### Notable decisions
+- Used native `<select>` for sender picker (consistent with rest of codebase); capacity info shown inline in option text + info line below selected account
+- Backward compatible: null sender = auto-rotate = same as previous behavior; existing enrollments with `sender_account_id = null` fall back to `senderAccountId` from the queue item in the cron
