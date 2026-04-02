@@ -10,6 +10,7 @@ import { useWorkspace } from "@/lib/hooks/use-workspace";
 import type { Tables, WorkspaceSendingSettings } from "@/lib/database.types";
 import { ConnectGmailButton } from "./connect-gmail-button";
 import { GmailAccountCard } from "./gmail-account-card";
+import { ConnectChecklist } from "./connect-checklist";
 
 type GmailAccount = Tables<"gmail_accounts">;
 
@@ -186,6 +187,15 @@ export function EmailSettingsClient() {
             {accounts.map((account) => {
               const connectedBy = teamMembers.find((m) => m.user_id === account.user_id);
               const connectedByName = connectedBy?.full_name ?? connectedBy?.email ?? null;
+              if (account.status === "setup_pending") {
+                return (
+                  <ConnectChecklist
+                    key={account.id}
+                    account={account}
+                    onActivated={loadAccounts}
+                  />
+                );
+              }
               return (
                 <GmailAccountCard
                   key={account.id}

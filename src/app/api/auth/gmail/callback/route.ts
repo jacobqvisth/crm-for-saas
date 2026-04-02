@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
         );
       }
     } else {
-      // Insert new account
+      // Insert new account — start in setup_pending with warmup enabled
       const { error: insertError } = await supabase.from("gmail_accounts").insert({
         workspace_id: stateData.workspaceId,
         user_id: user.id,
@@ -109,7 +109,13 @@ export async function GET(request: NextRequest) {
         access_token: encryptedAccessToken,
         refresh_token: encryptedRefreshToken,
         token_expires_at: tokenExpiresAt,
-        status: "active",
+        status: "setup_pending",
+        warmup_enabled: true,
+        warmup_start_date: new Date().toISOString(),
+        warmup_day: 0,
+        warmup_stage: "ramp",
+        max_daily_sends: 5,
+        target_daily_sends: 50,
       });
 
       if (insertError) {

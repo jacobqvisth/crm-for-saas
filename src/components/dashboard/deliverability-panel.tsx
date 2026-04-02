@@ -247,8 +247,9 @@ export function DeliverabilityPanel() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-2">Account</th>
-                  <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-2">Today&apos;s Sends</th>
-                  <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-2">Bounce Rate (7d)</th>
+                  <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-2">Health</th>
+                  <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-2">Warmup</th>
+                  <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-2">Capacity</th>
                   <th className="text-center text-xs font-medium text-slate-500 uppercase px-4 py-2">Status</th>
                 </tr>
               </thead>
@@ -259,6 +260,17 @@ export function DeliverabilityPanel() {
                     stats && stats.sent > 0
                       ? ((stats.bounced / stats.sent) * 100).toFixed(1)
                       : "0.0";
+                  const healthScore = (account as { health_score?: number }).health_score ?? 50;
+                  const warmupStage = (account as { warmup_stage?: string }).warmup_stage ?? "ramp";
+                  const warmupDay = (account as { warmup_day?: number }).warmup_day ?? 0;
+                  const healthColor =
+                    healthScore >= 80
+                      ? "bg-green-100 text-green-700"
+                      : healthScore >= 50
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-red-100 text-red-700";
+                  const remaining = Math.max(0, account.max_daily_sends - account.daily_sends_count);
+
                   return (
                     <tr key={account.id} className="hover:bg-slate-50">
                       <td className="px-4 py-2.5">
@@ -269,11 +281,25 @@ export function DeliverabilityPanel() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-center text-sm text-slate-600">
-                        {account.daily_sends_count} / {account.max_daily_sends}
+                      <td className="px-4 py-2.5 text-center">
+                        <span
+                          title={`Bounce rate (7d): ${bounceRate}%`}
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${healthColor}`}
+                        >
+                          {healthScore}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {warmupStage === "graduated" ? (
+                          <span className="text-xs text-green-700">✅ Done</span>
+                        ) : warmupStage === "ramp" ? (
+                          <span className="text-xs text-indigo-700">Day {warmupDay}/21</span>
+                        ) : (
+                          <span className="text-xs text-slate-500">Manual</span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-center text-sm text-slate-600">
-                        {bounceRate}%
+                        {remaining}/{account.max_daily_sends}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         {getStatusBadge(account)}

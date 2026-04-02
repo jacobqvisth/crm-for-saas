@@ -5,7 +5,7 @@ type GmailAccount = Tables<"gmail_accounts">;
 
 /**
  * Gets the next sender for a workspace using round-robin based on lowest daily send count.
- * Only picks accounts that are active and have remaining capacity.
+ * Only picks accounts with status='active'. Excludes setup_pending, paused, disconnected, rate_limited.
  */
 export async function getNextSender(workspaceId: string): Promise<GmailAccount | null> {
   const supabase = createServiceClient();

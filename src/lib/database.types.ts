@@ -930,6 +930,14 @@ export interface Database {
           max_daily_sends: number;
           status: string;
           pause_reason: string | null;
+          warmup_enabled: boolean;
+          warmup_start_date: string | null;
+          warmup_stage: string;
+          warmup_day: number;
+          target_daily_sends: number;
+          domain_health: Record<string, unknown>;
+          health_score: number;
+          signature: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -946,6 +954,14 @@ export interface Database {
           max_daily_sends?: number;
           status?: string;
           pause_reason?: string | null;
+          warmup_enabled?: boolean;
+          warmup_start_date?: string | null;
+          warmup_stage?: string;
+          warmup_day?: number;
+          target_daily_sends?: number;
+          domain_health?: Record<string, unknown>;
+          health_score?: number;
+          signature?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -962,6 +978,14 @@ export interface Database {
           max_daily_sends?: number;
           status?: string;
           pause_reason?: string | null;
+          warmup_enabled?: boolean;
+          warmup_start_date?: string | null;
+          warmup_stage?: string;
+          warmup_day?: number;
+          target_daily_sends?: number;
+          domain_health?: Record<string, unknown>;
+          health_score?: number;
+          signature?: string | null;
           updated_at?: string;
         };
         Relationships: [

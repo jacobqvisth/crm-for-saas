@@ -39,7 +39,7 @@ export async function GET(
   // 1. Check for active Gmail accounts (all of them for capacity info)
   const { data: gmailAccounts } = await supabase
     .from("gmail_accounts")
-    .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status")
+    .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status, health_score, warmup_stage, warmup_day")
     .eq("workspace_id", workspaceId)
     .eq("status", "active")
     .order("daily_sends_count", { ascending: true });
@@ -216,6 +216,37 @@ export async function GET(
   const estimatedDaysToSend =
     totalDailyCapacity > 0 ? Math.ceil(enrollableCount / totalDailyCapacity) : null;
 
+  // Sender health warnings
+  const senderHealthWarnings: string[] = [];
+  for (const a of gmailAccounts ?? []) {
+    const healthScore = (a as { health_score?: number }).health_score ?? 50;
+    const warmupStage = (a as { warmup_stage?: string }).warmup_stage ?? "ramp";
+    const warmupDay = (a as { warmup_day?: number }).warmup_day ?? 0;
+    if (healthScore < 50) {
+      senderHealthWarnings.push(
+        `Sender ${a.email_address} has poor health (score: ${healthScore}). Consider pausing campaigns from this account.`
+      );
+    }
+    if (warmupStage === "ramp") {
+      const limit = a.max_daily_sends;
+      senderHealthWarnings.push(
+        `Sender ${a.email_address} is still warming up (Day ${warmupDay}/21, limit: ${limit}/day). Campaign will be throttled.`
+      );
+    }
+  }
+
+  // Also check setup_pending accounts
+  const { data: pendingAccounts } = await supabase
+    .from("gmail_accounts")
+    .select("email_address")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "setup_pending");
+  for (const a of pendingAccounts ?? []) {
+    senderHealthWarnings.push(
+      `Sender ${a.email_address} has not completed setup. It won't be used for sending.`
+    );
+  }
+
   return NextResponse.json({
     gmailConnected: !!gmailAccount,
     gmailAccount,
@@ -232,5 +263,6 @@ export async function GET(
     senderAccounts,
     totalDailyCapacity,
     estimatedDaysToSend,
+    senderHealthWarnings,
   });
 }
