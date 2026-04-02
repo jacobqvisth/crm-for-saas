@@ -141,6 +141,7 @@ export async function POST(request: NextRequest) {
         google_place_id: shop.google_place_id ?? null,
         rating: shop.rating ?? null,
         review_count: shop.review_count ?? null,
+        industry: 'Automotive',
         category: shop.category ?? null,
         tags: ['independent'],
       })
