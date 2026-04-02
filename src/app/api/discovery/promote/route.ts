@@ -158,8 +158,8 @@ export async function POST(request: NextRequest) {
       .from("contacts")
       .insert({
         workspace_id: workspaceId,
-        first_name: 'Owner',
-        last_name: shop.name,
+        first_name: null,
+        last_name: null,
         email: shop.primary_email ?? '',
         phone: shop.phone ?? null,
         address: shop.address ?? shop.street ?? null,
@@ -178,6 +178,7 @@ export async function POST(request: NextRequest) {
         email_status: 'unknown',
         lead_status: 'new',
         status: 'active',
+        tags: ['owner'],
       })
       .select("id")
       .single();
