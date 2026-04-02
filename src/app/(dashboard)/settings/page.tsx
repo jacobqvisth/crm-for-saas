@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, Sparkles, ShieldCheck } from 'lucide-react';
+import { GitBranch, Mail, Sparkles, ShieldCheck, Users } from 'lucide-react';
+import { TeamSettings } from '@/components/settings/team-settings';
 
 const settingsItems = [
   {
@@ -32,32 +33,47 @@ const settingsItems = [
 
 export default function SettingsPage() {
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">Settings</h1>
-      <p className="text-sm text-slate-500 mb-6">Manage workspace settings, team members, and integrations.</p>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {settingsItems.map(item => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block p-5 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-sm transition-all group"
-            >
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-indigo-50">
-                  <Icon className="w-5 h-5 text-slate-500 group-hover:text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600">{item.title}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+    <div className="p-6 max-w-4xl mx-auto space-y-10">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 mb-1">Settings</h1>
+        <p className="text-sm text-slate-500">Manage workspace settings, team members, and integrations.</p>
       </div>
+
+      {/* Team Members */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <Users className="w-5 h-5 text-slate-500" />
+          <h2 className="text-base font-semibold text-slate-900">Team Members</h2>
+        </div>
+        <TeamSettings />
+      </section>
+
+      {/* Settings cards */}
+      <section>
+        <h2 className="text-base font-semibold text-slate-900 mb-4">Configuration</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {settingsItems.map(item => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="block p-5 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-sm transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-indigo-50">
+                    <Icon className="w-5 h-5 text-slate-500 group-hover:text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600">{item.title}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard,
   Users,
@@ -48,9 +49,16 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [tasksDueCount, setTasksDueCount] = useState(0);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUser(data.user);
+    });
+  }, [supabase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +168,44 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="border-t border-slate-200 p-2 space-y-1">
+        {/* Current user */}
+        {currentUser && (
+          <div
+            className="flex items-center gap-3 px-3 py-2 rounded-lg"
+            title={currentUser.email ?? undefined}
+          >
+            {currentUser.user_metadata?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={currentUser.user_metadata.avatar_url}
+                alt={currentUser.user_metadata?.full_name ?? "You"}
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-semibold text-indigo-700">
+                  {(currentUser.user_metadata?.full_name as string | undefined)
+                    ?.split(" ")
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase() ?? "?"}
+                </span>
+              </div>
+            )}
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {currentUser.user_metadata?.full_name ?? currentUser.email}
+                </p>
+                {currentUser.user_metadata?.full_name && (
+                  <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 w-full transition-colors"
