@@ -14,6 +14,17 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-02 — Phase 24: Tasks & Daily Queue
+
+- **Branch**: `feature/phase24-tasks-daily-queue` → **PR #29**
+- **What was built**: (1) `tasks` table — migration applied via Supabase MCP; RLS + indexes on `(workspace_id, due_date)` and `(workspace_id, contact_id)`, `update_updated_at` trigger; (2) API routes — `GET/POST /api/tasks` (list with filter params + create), `PATCH/DELETE /api/tasks/[id]`, `GET /api/tasks/count` (due+overdue count for sidebar badge); (3) `/tasks` page — filter tabs (All / Due Today / Overdue / Upcoming / Completed), overdue section with red left border, quick-add inline form (collapses to placeholder), inline edit/snooze/delete per card; (4) Sidebar — Tasks nav item between Inbox and Templates with `CheckSquare` icon + red badge polling `/api/tasks/count` every 60s; (5) `check-replies` cron — expanded contact query to include `first_name`/`last_name`; creates high-priority email task when enrollment stops on real reply, medium-priority for non-enrollment real replies (guarded with `createdFollowUpTask` flag); (6) Open tracking — hot-lead detection: call-type high-priority task at 3+ opens without reply, deduped via `ilike('title', 'Hot lead:%')` + `is('completed_at', null)`; (7) Contact detail — "Add Task" button opens modal pre-filled with `Follow up with {first_name}` and tomorrow 9am due date
+- **Files changed**: 9 — `supabase/migrations/20260401190000_phase24_tasks.sql` (new), `src/lib/database.types.ts`, `src/app/api/tasks/route.ts` (new), `src/app/api/tasks/[id]/route.ts` (new), `src/app/api/tasks/count/route.ts` (new), `src/app/(dashboard)/tasks/page.tsx` (new), `src/components/sidebar.tsx`, `src/app/api/cron/check-replies/route.ts`, `src/app/api/tracking/open/[trackingId]/route.ts`, `src/components/contacts/contact-detail-client.tsx`
+- **Migration**: Applied to `wdgiwuhehqpkhpvdzzzl` via Supabase MCP — `tasks` table with RLS, indexes, and `update_updated_at` trigger
+- **Build status**: ESLint clean, `tsc --noEmit` clean; `npm run build` pre-existing env-var failure in worktree (not caused by this session)
+- **Next step**: Phase 25 — A/B Testing
+
+---
+
 ## 2026-04-01 — Phase 22: AI Email Writer
 
 - **Branch**: `claude/priceless-stonebraker` → **PR #27**

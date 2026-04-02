@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2
+  Trash2, Plus, ChevronDown, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2, CheckSquare
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';

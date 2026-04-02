@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
 
         // Track real vs auto replies found in this thread
         let threadRealReplies = 0;
+        let createdFollowUpTask = false;
 
         for (const message of thread.messages) {
           if (!message.id || !message.payload) continue;
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
           // Look up contact by from email
           const { data: contact } = await supabase
             .from("contacts")
-            .select("id")
+            .select("id, first_name, last_name")
             .eq("workspace_id", account.workspace_id)
             .eq("email", fromEmail.toLowerCase())
             .maybeSingle();
@@ -171,6 +172,20 @@ export async function POST(request: NextRequest) {
           } else {
             repliesFound++;
             threadRealReplies++;
+
+            // Auto-create a task for any non-enrollment real reply (lower priority)
+            if (!autoReply && contact?.id && !createdFollowUpTask && !email.enrollment_id) {
+              await supabase.from("tasks").insert({
+                workspace_id: account.workspace_id,
+                contact_id: contact.id,
+                type: "email",
+                title: `Reply from ${contact.first_name || fromEmail}`,
+                description: "Review and respond to their reply in Inbox.",
+                due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                priority: "medium",
+              });
+              createdFollowUpTask = true;
+            }
           }
         }
 
@@ -178,7 +193,7 @@ export async function POST(request: NextRequest) {
         if (threadRealReplies > 0 && email.enrollment_id) {
           const { data: enrollment } = await supabase
             .from("sequence_enrollments")
-            .select("*, sequences(*), contacts(company_id)")
+            .select("*, sequences(*), contacts(id, company_id, first_name, last_name)")
             .eq("id", email.enrollment_id)
             .eq("status", "active")
             .maybeSingle();
@@ -201,6 +216,33 @@ export async function POST(request: NextRequest) {
                 .update({ status: "cancelled" as const })
                 .eq("enrollment_id", enrollment.id)
                 .eq("status", "scheduled");
+
+              // Auto-create follow-up task for the replied enrollment
+              {
+                const enrollmentContact = enrollment.contacts as unknown as {
+                  id: string;
+                  first_name: string | null;
+                  last_name: string | null;
+                  company_id: string | null;
+                } | null;
+                const seqName = (enrollment.sequences as unknown as { name: string })?.name ?? "sequence";
+                const contactName = enrollmentContact
+                  ? [enrollmentContact.first_name, enrollmentContact.last_name].filter(Boolean).join(" ") || "contact"
+                  : "contact";
+                if (enrollmentContact?.id) {
+                  await supabase.from("tasks").insert({
+                    workspace_id: account.workspace_id,
+                    contact_id: enrollmentContact.id,
+                    enrollment_id: enrollment.id,
+                    type: "email",
+                    title: `Follow up with ${contactName || "contact"} — replied to "${seqName}"`,
+                    description: "They replied to your sequence. Review their reply in Inbox and respond.",
+                    due_date: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                    priority: "high",
+                  });
+                  createdFollowUpTask = true;
+                }
+              }
 
               // Company-level stop: pause other active enrollments at the same company
               const stopOnCompanyReply = sequence?.settings?.stop_on_company_reply ?? true;

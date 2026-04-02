@@ -141,6 +141,53 @@ export async function GET(
         },
       });
     }
+
+    // Hot-lead detection: if contact has opened 3+ times without a reply, create a task
+    if (queueItem.contact_id) {
+      const { count: openCount } = await supabase
+        .from("email_events")
+        .select("id", { count: "exact", head: true })
+        .eq("tracking_id", trackingId)
+        .eq("event_type", "open");
+
+      if ((openCount ?? 0) >= 3) {
+        const { count: replyCount } = await supabase
+          .from("email_events")
+          .select("id", { count: "exact", head: true })
+          .eq("tracking_id", trackingId)
+          .eq("event_type", "reply");
+
+        if ((replyCount ?? 0) === 0) {
+          const { count: taskExists } = await supabase
+            .from("tasks")
+            .select("id", { count: "exact", head: true })
+            .eq("contact_id", queueItem.contact_id)
+            .ilike("title", "Hot lead:%")
+            .is("completed_at", null);
+
+          if ((taskExists ?? 0) === 0) {
+            const { data: contact } = await supabase
+              .from("contacts")
+              .select("first_name, last_name, workspace_id")
+              .eq("id", queueItem.contact_id)
+              .maybeSingle();
+
+            if (contact) {
+              const name =
+                [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "Contact";
+              await supabase.from("tasks").insert({
+                workspace_id: contact.workspace_id,
+                contact_id: queueItem.contact_id,
+                type: "call",
+                title: `Hot lead: ${name} opened ${openCount} times — consider calling`,
+                due_date: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+                priority: "high",
+              });
+            }
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error("Open tracking error:", err);
   }
