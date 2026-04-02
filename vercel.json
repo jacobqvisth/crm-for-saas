@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/reset-daily-sends",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/advance-warmup",
+      "schedule": "5 0 * * *"
     }
   ]
 }

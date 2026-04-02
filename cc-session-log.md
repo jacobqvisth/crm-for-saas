@@ -462,3 +462,39 @@ Phase 20: Prospector Upgrade
 - `connectedByName` only renders in the Gmail card when the workspace has >1 member (single-user view stays clean).
 - Workspace domain was already set to `wrenchlane.com` on the production workspace — verified via Supabase SQL, no migration needed.
 - Activity attribution (item 7 from prompt) not built: `activities.user_id` column already exists in the schema; activity creation code wasn't touched since adding the column is already done and attribution display in the feed wasn't specified as a required UI change in the phase prompt.
+
+---
+
+## Phase 11 — Email Warmup & Sender Health
+**Date:** 2026-04-02
+**Branch:** claude/loving-perlman
+**PR:** TBD
+
+### What was built
+- `supabase/migrations/*_phase11_warmup.sql` — added 8 columns to `gmail_accounts`: `warmup_enabled`, `warmup_start_date`, `warmup_stage`, `warmup_day`, `target_daily_sends`, `domain_health`, `health_score`, `signature`. Applied via Supabase MCP.
+- `src/lib/warmup/schedule.ts` — 21-day warmup ramp schedule (5→50 emails/day), `getWarmupDailyLimit()` helper.
+- `src/lib/warmup/domain-check.ts` — DNS-based SPF/DKIM/DMARC/MX checker using `dns/promises`. Returns structured `DomainCheckResult`.
+- `src/lib/warmup/health-score.ts` — 0–100 health score calculator (bounce rate 35%, domain auth 25%, warmup progress 20%, account age 20%).
+- `src/app/api/cron/advance-warmup/route.ts` — Daily cron at 00:05 UTC: advances warmup day, checks graduation (day≥21, bounce<3%, total sent≥100), resets accounts paused mid-warmup, refreshes domain health (if empty or >24h old), recalculates health scores for all active accounts.
+- `src/app/api/settings/email/[accountId]/domain-check/route.ts` — On-demand GET endpoint to run domain check + store result in `domain_health`.
+- `src/components/settings/connect-checklist.tsx` — Setup checklist for `setup_pending` accounts: auto-runs domain check, display name input, warmup acknowledgment checkbox, Activate button.
+- `src/components/settings/gmail-account-card.tsx` — Added: health score badge (colored by score), warmup progress bar (Day X/21), domain health pills (SPF/DKIM/DMARC/MX), Skip/Reset warmup buttons, collapsible signature field, `setup_pending` status color.
+- `src/components/settings/email-settings-client.tsx` — Renders `ConnectChecklist` for `setup_pending` accounts instead of `GmailAccountCard`.
+- `src/components/dashboard/deliverability-panel.tsx` — Sender health table now shows health score badge, warmup status (Day X/21 / Done / Manual), remaining daily capacity column.
+- `src/app/api/sequences/[id]/preflight/route.ts` — Added `senderHealthWarnings[]` to response: warns on poor health score, warmup throttling, or setup_pending senders.
+- `src/app/api/settings/email/[accountId]/route.ts` — PATCH now accepts `warmup_stage`, `warmup_day`, `target_daily_sends`, `signature`, `display_name`, `warmup_enabled`, `warmup_start_date`.
+- `src/app/api/auth/gmail/callback/route.ts` — New accounts start as `setup_pending` with warmup defaults (5/day, ramp stage, day 0).
+- `src/lib/gmail/sender-rotation.ts` — Added comment confirming `setup_pending` already excluded (filter is `status = 'active'`).
+- `vercel.json` — Added advance-warmup cron (daily at 00:05 UTC).
+- `e2e/warmup.spec.ts` — 4 E2E tests: settings page shows warmup info, advance-warmup requires CRON_SECRET, domain-check requires auth, preflight doesn't crash.
+
+### Build status
+- `npx tsc --noEmit`: 0 errors
+- `npm run lint`: 0 warnings
+- `npm run build`: Supabase env var prerender error on `/login` — pre-existing worktree issue, unrelated to this phase
+
+### Notable decisions
+- Types updated manually (supabase CLI not authenticated in worktree); added new fields to `database.types.ts` Row/Insert/Update.
+- Domain health stored as `Record<string, unknown>` in DB type to match Supabase JSONB; cast to `DomainCheckResult` at runtime.
+- Graduate check in advance-warmup only triggers when `warmup_day >= 21` AND bounce rate < 3% AND total sent >= 100 — conservative to avoid premature graduation.
+- `setup_pending` accounts never enter sender rotation (already enforced by `status = 'active'` filter).
