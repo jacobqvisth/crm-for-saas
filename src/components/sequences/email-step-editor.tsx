@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
-import { VariablePicker } from "./variable-picker";
 import { Eye, EyeOff, FileText, Scissors, Sparkles } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
+import { RichEmailEditor } from "./rich-email-editor";
+import { EmailPreviewFrame, previewInterpolate } from "./email-preview-frame";
 
 type Step = Tables<"sequence_steps">;
 type Template = Tables<"email_templates">;
@@ -13,6 +14,9 @@ type Snippet = Tables<"snippets">;
 
 type PersonaAngle = "shop_owner" | "service_advisor" | "technician";
 
+// ---------------------------------------------------------------------------
+// Snippet picker (unchanged)
+// ---------------------------------------------------------------------------
 interface SnippetPickerProps {
   snippets: Snippet[];
   onInsert: (body: string) => void;
@@ -81,6 +85,9 @@ function SnippetPicker({ snippets, onInsert }: SnippetPickerProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Generate-with-AI modal (unchanged)
+// ---------------------------------------------------------------------------
 interface GenerateModalProps {
   workspaceId: string;
   stepNumber: number;
@@ -215,15 +222,11 @@ function GenerateModal({
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Body (HTML)
+                  Body preview
                 </label>
-                <textarea
-                  value={draft.body}
-                  onChange={(e) =>
-                    setDraft((d) => (d ? { ...d, body: e.target.value } : d))
-                  }
-                  rows={8}
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-mono"
+                <div
+                  className="w-full min-h-[120px] px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: draft.body }}
                 />
               </div>
             </div>
@@ -261,6 +264,9 @@ function GenerateModal({
   );
 }
 
+// ---------------------------------------------------------------------------
+// EmailStepEditor
+// ---------------------------------------------------------------------------
 interface EmailStepEditorProps {
   step: Step;
   onUpdate: (updates: Partial<Step>) => void;
@@ -268,6 +274,17 @@ interface EmailStepEditorProps {
   sequenceName?: string;
   isFirstEmailStep?: boolean;
 }
+
+const SEQUENCE_VARIABLES = [
+  "first_name",
+  "last_name",
+  "email",
+  "company_name",
+  "phone",
+  "sender_first_name",
+  "sender_company",
+  "unsubscribe_link",
+];
 
 export function EmailStepEditor({
   step,
@@ -278,7 +295,6 @@ export function EmailStepEditor({
 }: EmailStepEditorProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const [subject, setSubject] = useState(step.subject_override || "");
   const [bodyHtml, setBodyHtml] = useState(step.body_override || "");
@@ -344,45 +360,17 @@ export function EmailStepEditor({
     onUpdate({ subject_override: subject });
   };
 
-  const handleBodyBlur = () => {
-    onUpdate({ body_override: bodyHtml });
-  };
-
-  const handleInsertVariable = (variable: string) => {
-    if (bodyRef.current) {
-      const textarea = bodyRef.current;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newValue = bodyHtml.slice(0, start) + variable + bodyHtml.slice(end);
-      setBodyHtml(newValue);
-      onUpdate({ body_override: newValue });
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(
-          start + variable.length,
-          start + variable.length
-        );
-      }, 0);
-    }
+  const handleBodyChange = (html: string) => {
+    setBodyHtml(html);
+    onUpdate({ body_override: html });
   };
 
   const handleInsertSnippet = (snippetBody: string) => {
-    if (bodyRef.current) {
-      const textarea = bodyRef.current;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newValue =
-        bodyHtml.slice(0, start) + snippetBody + bodyHtml.slice(end);
-      setBodyHtml(newValue);
-      onUpdate({ body_override: newValue });
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(
-          start + snippetBody.length,
-          start + snippetBody.length
-        );
-      }, 0);
-    }
+    // Append snippet to current body
+    const separator = bodyHtml.trim() ? "\n" : "";
+    const newBody = bodyHtml + separator + snippetBody;
+    setBodyHtml(newBody);
+    onUpdate({ body_override: newBody });
   };
 
   const handleGenerateInsert = (newSubject: string, newBody: string) => {
@@ -391,14 +379,6 @@ export function EmailStepEditor({
     onUpdate({ subject_override: newSubject, body_override: newBody });
     setShowGenerateModal(false);
   };
-
-  const previewHtml = bodyHtml
-    .replace(/\{\{first_name\}\}/g, "John")
-    .replace(/\{\{last_name\}\}/g, "Doe")
-    .replace(/\{\{email\}\}/g, "john@example.com")
-    .replace(/\{\{company_name\}\}/g, "Acme Inc")
-    .replace(/\{\{phone\}\}/g, "+1 555-0123")
-    .replace(/\{\{unsubscribe_link\}\}/g, "#");
 
   return (
     <div className="space-y-3">
@@ -437,9 +417,11 @@ export function EmailStepEditor({
         />
         {isFirstEmailStep === false && (
           <p className="mt-1 text-xs text-slate-500">
-            Leave blank to reply in the same Gmail thread as your first email (subject will auto-become{" "}
-            <span className="font-mono">Re: &lt;first email subject&gt;</span>). Only set a subject here if you
-            want to break out of the thread and start a new conversation.
+            Leave blank to reply in the same Gmail thread as your first email
+            (subject will auto-become{" "}
+            <span className="font-mono">Re: &lt;first email subject&gt;</span>).
+            Only set a subject here if you want to break out of the thread and
+            start a new conversation.
           </p>
         )}
       </div>
@@ -458,7 +440,6 @@ export function EmailStepEditor({
               <Sparkles className="w-3 h-3" />
               Generate
             </button>
-            <VariablePicker onInsert={handleInsertVariable} />
             <SnippetPicker snippets={snippets} onInsert={handleInsertSnippet} />
             <button
               type="button"
@@ -474,20 +455,21 @@ export function EmailStepEditor({
             </button>
           </div>
         </div>
+
         {showPreview ? (
-          <div
-            className="w-full min-h-[120px] px-3 py-2 border border-slate-300 rounded-md text-sm bg-white prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+          <div className="border border-slate-300 rounded-lg overflow-hidden bg-white">
+            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 flex items-center gap-1.5">
+              <Eye className="w-3 h-3" />
+              Gmail preview — sample values shown
+            </div>
+            <EmailPreviewFrame html={previewInterpolate(bodyHtml)} />
+          </div>
         ) : (
-          <textarea
-            ref={bodyRef}
+          <RichEmailEditor
             value={bodyHtml}
-            onChange={(e) => setBodyHtml(e.target.value)}
-            onBlur={handleBodyBlur}
-            rows={6}
-            placeholder="<p>Hi {{first_name}},</p>"
-            className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm font-mono"
+            onChange={handleBodyChange}
+            placeholder="Hi {{first_name}}, …"
+            variables={SEQUENCE_VARIABLES}
           />
         )}
       </div>

@@ -524,3 +524,31 @@ Phase 20: Prospector Upgrade
 - Duplicate dialog: sequence table has no language/country column, so info lives in the name suffix only (no schema change).
 - Delete: soft-preserves inbox reply history by nullifying FK rather than cascading; active+enrolled sequences are blocked from deletion (must be archived first).
 - Cowork violation logged: the duplicate dialog was edited directly instead of via CC prompt flow. Feedback memory saved (`feedback_always_use_cc_prompt_flow.md`) — future code changes must go through git pull → CC prompt → PR → Cowork merge.
+
+---
+
+## Phase: Rich Email Editor (TipTap)
+**Date:** 2026-04-14
+**PR:** #39
+**Branch:** feature/rich-email-editor
+
+### What was built
+- **`src/components/sequences/tiptap-variable-extension.ts`** — Custom TipTap inline atom Node for variables. Vanilla DOM NodeView renders blue pill chip with human-readable label (e.g. "First name"). Serializes to `<span data-variable="first_name">{{first_name}}</span>` via `renderHTML` for the send pipeline. Exposes `insertVariable` command.
+- **`src/components/sequences/rich-email-editor.tsx`** — Full TipTap v2 editor wrapping StarterKit + Underline + Link + Placeholder + CharacterCount + VariableExtension. Toolbar: B/I/U, link dialog, bullet/numbered list, clear formatting, + Variable dropdown. Min-height 240px, max-height 500px with scroll. Legacy plain-text content (no HTML tags) auto-migrates to `<p>` on load. External value changes (template/AI inject) sync via `setContent({ emitUpdate: false })`.
+- **`src/components/sequences/email-preview-frame.tsx`** — Sandboxed `<iframe>` with Gmail-ish CSS (`-apple-system` fonts, `max-width: 600px`, proper paragraph margins). `previewInterpolate()` replaces span-wrapped and bare `{{var}}` with sample values for in-editor preview.
+- **MOD `src/components/sequences/email-step-editor.tsx`** — Replaces `<textarea>` + `VariablePicker` + cursor-insertion logic with `RichEmailEditor`. Preview mode uses `EmailPreviewFrame`. Snippet picker still present (appends to body).
+- **MOD `src/components/templates/template-editor.tsx`** — Same swap; removes `VariablePicker` + `bodyRef`. Preview mode uses `EmailPreviewFrame`.
+- **MOD `src/lib/sequences/variables.ts`** — `resolveVariables()` now handles both `<span data-variable="x">{{x}}</span>` (TipTap serialized) and bare `{{x}}` (backward compat). `ensureUnsubscribeLink()` detects span variant to avoid duplicate footer.
+- **NEW `src/lib/sequences/__tests__/variable-interpolation.test.ts`** — 19 unit tests (tsx runner): bare vars, span-wrapped vars, legacy label spans, mixed, ensureUnsubscribeLink edge cases. All 19 passing.
+- **NEW `e2e/email-editor.spec.ts`** — 5 Playwright tests: page loads without errors, can type in editor, variable chip inserts, preview iframe renders, existing sequences load without crash.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- Unit tests: 19/19 ✅
+- Pre-existing build failure on `/tasks` page (Supabase env vars missing during static gen) — not introduced by this PR; confirmed present on HEAD before branch.
+
+### Notable decisions
+- Chose vanilla DOM NodeView over ReactNodeViewRenderer — keeps extension a plain `.ts` file, simpler for a static non-interactive chip.
+- Variables in the editor serialize with `{{x}}` text inside the span so the send-pipeline regex finds them even without parsing DOM. Backward compat with old plain-text sequences preserved via second regex pass.
+- `sender_first_name` and `sender_company` variables added to both the extension and the variable dropdown (were missing from old VariablePicker); `variables.ts` returns empty string for these (populated by send pipeline from Gmail account).

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
-import { VariablePicker } from "@/components/sequences/variable-picker";
 import { Save, Trash2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
+import { RichEmailEditor } from "@/components/sequences/rich-email-editor";
+import { EmailPreviewFrame, previewInterpolate } from "@/components/sequences/email-preview-frame";
 
 type Template = Tables<"email_templates">;
 
@@ -27,10 +28,20 @@ interface TemplateEditorProps {
   onDelete?: () => void;
 }
 
+const TEMPLATE_VARIABLES = [
+  "first_name",
+  "last_name",
+  "email",
+  "company_name",
+  "phone",
+  "sender_first_name",
+  "sender_company",
+  "unsubscribe_link",
+];
+
 export function TemplateEditor({ template, onSave, onCancel, onDelete }: TemplateEditorProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const [name, setName] = useState(template?.name || "");
   const [subject, setSubject] = useState(template?.subject || "");
@@ -49,20 +60,6 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
       setBodyHtml(template.body_html);
     }
   }, [template]);
-
-  const handleInsertVariable = (variable: string) => {
-    if (bodyRef.current) {
-      const textarea = bodyRef.current;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newValue = bodyHtml.slice(0, start) + variable + bodyHtml.slice(end);
-      setBodyHtml(newValue);
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(start + variable.length, start + variable.length);
-      }, 0);
-    }
-  };
 
   const generatePlainText = (html: string) => html.replace(/<[^>]*>/g, "").trim();
 
@@ -198,14 +195,6 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
     toast(`Restored version ${v.version} — click Save to apply`, { icon: "⏪" });
   };
 
-  const previewHtml = bodyHtml
-    .replace(/\{\{first_name\}\}/g, "John")
-    .replace(/\{\{last_name\}\}/g, "Doe")
-    .replace(/\{\{email\}\}/g, "john@example.com")
-    .replace(/\{\{company_name\}\}/g, "Acme Inc")
-    .replace(/\{\{phone\}\}/g, "+1 555-0123")
-    .replace(/\{\{unsubscribe_link\}\}/g, "#");
-
   return (
     <div className="space-y-4">
       <div>
@@ -232,32 +221,31 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="block text-sm font-medium text-slate-700">Body (HTML)</label>
-          <div className="flex items-center gap-2">
-            <VariablePicker onInsert={handleInsertVariable} />
-            <button
-              type="button"
-              onClick={() => setShowPreview(!showPreview)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
-            >
-              {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              {showPreview ? "Edit" : "Preview"}
-            </button>
-          </div>
+          <label className="block text-sm font-medium text-slate-700">Body</label>
+          <button
+            type="button"
+            onClick={() => setShowPreview(!showPreview)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+          >
+            {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {showPreview ? "Edit" : "Preview"}
+          </button>
         </div>
+
         {showPreview ? (
-          <div
-            className="w-full min-h-[200px] px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+          <div className="border border-slate-300 rounded-lg overflow-hidden bg-white">
+            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 flex items-center gap-1.5">
+              <Eye className="w-3 h-3" />
+              Gmail preview — sample values shown
+            </div>
+            <EmailPreviewFrame html={previewInterpolate(bodyHtml)} minHeight={240} />
+          </div>
         ) : (
-          <textarea
-            ref={bodyRef}
+          <RichEmailEditor
             value={bodyHtml}
-            onChange={(e) => setBodyHtml(e.target.value)}
-            rows={10}
-            placeholder="<p>Hi {{first_name}},</p><p>...</p>"
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            onChange={setBodyHtml}
+            placeholder="Hi {{first_name}}, …"
+            variables={TEMPLATE_VARIABLES}
           />
         )}
       </div>
