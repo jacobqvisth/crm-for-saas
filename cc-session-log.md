@@ -475,3 +475,31 @@ Phase 20: Prospector Upgrade
 - `connectedByName` only renders in the Gmail card when the workspace has >1 member (single-user view stays clean).
 - Workspace domain was already set to `wrenchlane.com` on the production workspace — verified via Supabase SQL, no migration needed.
 - Activity attribution (item 7 from prompt) not built: `activities.user_id` column already exists in the schema; activity creation code wasn't touched since adding the column is already done and attribution display in the feed wasn't specified as a required UI change in the phase prompt.
+
+---
+
+## Session: Sequence Detail UX Clarity + Contacts Table Columns
+- **Date:** 2026-04-14
+- **PR:** #38
+- **Branch:** feature/sequence-detail-ux-clarity
+
+### What was built
+
+**Part A — Action button clarity**
+- `src/components/sequences/launch-campaign-modal.tsx` — Renamed title "Launch Campaign" → "Enroll List", success message "Campaign Launched!" → "Contacts Enrolled!", CTA "Launch Campaign →" → "Enroll contacts →"
+- `src/app/(dashboard)/sequences/[id]/page.tsx` — New top-right action bar (View Analytics | ⋯ menu | Start/Pause Sending | Enroll List). Amber banner when paused/draft. `toggleStatus` lifted from SequenceHeader to the page. Extended `load()` to fetch sending status (gmail accounts + next scheduled send + last sent_at from email_queue).
+- `src/components/sequences/sequence-header.tsx` — Removed Activate/Pause button. Added `SendingStatus` prop (exported interface). Added sending-status strip (3 items: sender account, next send, last sent). Removed `Play`/`Pause` imports.
+- `e2e/campaign-launch.spec.ts` — Updated test to check for "Enroll List" button instead of "Launch Campaign".
+
+**Part B — Contacts tab (5 → 9 columns)**
+- `src/components/sequences/sequence-contacts-tab.tsx` — Added Company, Last activity, Next send, Sent columns. Step column now shows "2 / 5 · Email" format. Single email_queue query with nested email_events (no N+1). Table wrapped in overflow-x-auto. Accepts new `steps` prop from page.
+
+### Build status
+- `npx eslint src/`: exit 0
+- `npx tsc --noEmit`: exit 0
+- `npm run build`: pre-existing failure on `/tasks` page (Phase 24, already on main before this branch)
+
+### Notable decisions
+- `sent` event type doesn't exist in `email_events` (only open/click/reply/bounce/unsubscribe). "Last sent" activity is sourced from `email_queue.sent_at` where `status='sent'` instead.
+- Sending status strip queries run in parallel via `Promise.all` to avoid adding latency.
+- `formatDistanceToNow` from date-fns for relative times; `format(date, "MMM d, HH:mm")` for absolute next-send time.
