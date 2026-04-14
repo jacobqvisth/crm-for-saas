@@ -1,16 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { SequenceHeader } from "@/components/sequences/sequence-header";
+import type { SendingStatus } from "@/components/sequences/sequence-header";
 import { SequenceContactsTab } from "@/components/sequences/sequence-contacts-tab";
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
 import { SequenceSettingsPanel } from "@/components/sequences/sequence-settings";
 import { EnrollContactsModal } from "@/components/sequences/enroll-contacts-modal";
 import { LaunchCampaignModal } from "@/components/sequences/launch-campaign-modal";
-import { ArrowLeft, Mail, Clock, GitBranch, Rocket, BarChart2, Pause, CornerDownRight } from "lucide-react";
+import {
+  ArrowLeft,
+  Mail,
+  Clock,
+  GitBranch,
+  UserPlus,
+  BarChart2,
+  Play,
+  Pause,
+  AlertTriangle,
+  MoreHorizontal,
+  CornerDownRight,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -47,6 +60,7 @@ export default function SequenceDetailPage() {
   const [stats, setStats] = useState<SequenceStats>({
     enrolled: 0, sent: 0, opened: 0, clicked: 0, replied: 0, bounced: 0, unsubscribed: 0,
   });
+  const [sendingStatus, setSendingStatus] = useState<SendingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "contacts" | "analytics">("overview");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -54,6 +68,9 @@ export default function SequenceDetailPage() {
   const [launchOpen, setLaunchOpen] = useState(false);
   const [pauseAllOpen, setPauseAllOpen] = useState(false);
   const [pauseAllLoading, setPauseAllLoading] = useState(false);
+  const [toggleLoading, setToggleLoading] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     if (!workspaceId) return;
@@ -101,12 +118,113 @@ export default function SequenceDetailPage() {
       });
     }
 
+    // Load sending status (parallel: gmail accounts + enrollment-based queue queries)
+    const [
+      { data: gmailAccounts },
+      { data: enrollmentIds },
+    ] = await Promise.all([
+      supabase
+        .from("gmail_accounts")
+        .select("id, email_address, status")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active")
+        .limit(1),
+      supabase
+        .from("sequence_enrollments")
+        .select("id")
+        .eq("sequence_id", sequenceId),
+    ]);
+
+    const enrollIds = (enrollmentIds || []).map((e) => e.id);
+
+    let nextSend: string | null = null;
+    let lastSent: string | null = null;
+
+    if (enrollIds.length > 0) {
+      const [{ data: nextEmail }, { data: lastSentEmail }] = await Promise.all([
+        supabase
+          .from("email_queue")
+          .select("scheduled_for")
+          .eq("status", "scheduled")
+          .in("enrollment_id", enrollIds)
+          .order("scheduled_for", { ascending: true })
+          .limit(1),
+        supabase
+          .from("email_queue")
+          .select("sent_at")
+          .eq("status", "sent")
+          .in("enrollment_id", enrollIds)
+          .not("sent_at", "is", null)
+          .order("sent_at", { ascending: false })
+          .limit(1),
+      ]);
+
+      nextSend = nextEmail?.[0]?.scheduled_for ?? null;
+      lastSent = lastSentEmail?.[0]?.sent_at ?? null;
+    }
+
+    setSendingStatus({
+      gmailConnected: (gmailAccounts?.length ?? 0) > 0,
+      gmailEmail: gmailAccounts?.[0]?.email_address ?? null,
+      nextSend,
+      lastSent,
+    });
+
     setLoading(false);
   }, [workspaceId, sequenceId, supabase, router]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Close more-menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggleStatus = async () => {
+    if (!workspaceId || !sequence) return;
+    setToggleLoading(true);
+    const newStatus = sequence.status === "active" ? "paused" : "active";
+
+    const { error } = await supabase
+      .from("sequences")
+      .update({ status: newStatus })
+      .eq("id", sequence.id)
+      .eq("workspace_id", workspaceId);
+
+    if (error) {
+      toast.error("Failed to update status");
+      setToggleLoading(false);
+      return;
+    }
+
+    // When activating: promote all pending emails to scheduled so the cron picks them up
+    if (newStatus === "active") {
+      const { data: enrollments } = await supabase
+        .from("sequence_enrollments")
+        .select("id")
+        .eq("sequence_id", sequence.id);
+
+      if (enrollments && enrollments.length > 0) {
+        await supabase
+          .from("email_queue")
+          .update({ status: "scheduled" })
+          .in("enrollment_id", enrollments.map((e) => e.id))
+          .eq("status", "pending");
+      }
+    }
+
+    toast.success(`Sequence ${newStatus === "active" ? "sending started" : "sending paused"}`);
+    setToggleLoading(false);
+    load();
+  };
 
   if (loading || !sequence) {
     return (
@@ -115,6 +233,9 @@ export default function SequenceDetailPage() {
       </div>
     );
   }
+
+  const isActive = sequence.status === "active";
+  const isPausedOrDraft = sequence.status === "paused" || sequence.status === "draft";
 
   return (
     <div className="p-6">
@@ -126,6 +247,8 @@ export default function SequenceDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           Back to Sequences
         </button>
+
+        {/* Top-right action bar: View Analytics | ⋯ | Start/Pause Sending | Enroll List */}
         <div className="flex items-center gap-2">
           <Link
             href={`/sequences/${sequenceId}/analytics`}
@@ -134,26 +257,77 @@ export default function SequenceDetailPage() {
             <BarChart2 className="w-3.5 h-3.5" />
             View Analytics
           </Link>
-          <button
-            onClick={() => setPauseAllOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <Pause className="w-3.5 h-3.5" />
-            Pause All
-          </button>
+
+          {/* ⋯ more menu */}
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setMoreMenuOpen((o) => !o)}
+              className="inline-flex items-center justify-center w-9 h-9 text-slate-500 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              aria-label="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {moreMenuOpen && (
+              <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
+                <button
+                  onClick={() => { setMoreMenuOpen(false); setPauseAllOpen(true); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Pause className="w-3.5 h-3.5 text-slate-400" />
+                  Pause All
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Start Sending / Pause Sending */}
+          {sequence.status !== "archived" && (
+            <button
+              onClick={toggleStatus}
+              disabled={toggleLoading}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-60 ${
+                isActive
+                  ? "text-yellow-700 bg-yellow-50 border border-yellow-200 hover:bg-yellow-100"
+                  : "text-white bg-indigo-600 hover:bg-indigo-700"
+              }`}
+            >
+              {isActive ? (
+                <><Pause className="w-3.5 h-3.5" /> Pause Sending</>
+              ) : (
+                <><Play className="w-3.5 h-3.5" /> Start Sending</>
+              )}
+            </button>
+          )}
+
+          {/* Enroll List */}
           <button
             onClick={() => setLaunchOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              isActive
+                ? "text-white bg-indigo-600 hover:bg-indigo-700"
+                : "text-slate-700 bg-white border border-slate-300 hover:bg-slate-50"
+            }`}
           >
-            <Rocket className="w-3.5 h-3.5" />
-            Launch Campaign
+            <UserPlus className="w-3.5 h-3.5" />
+            Enroll List
           </button>
         </div>
       </div>
 
+      {/* Amber banner when paused/draft */}
+      {isPausedOrDraft && (
+        <div className="flex items-center gap-2 px-4 py-3 mb-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-800">
+            This sequence is paused. New enrollments will be queued but no emails will send until you press Start Sending.
+          </p>
+        </div>
+      )}
+
       <SequenceHeader
         sequence={sequence}
         stats={stats}
+        sendingStatus={sendingStatus}
         onRefresh={load}
         onEnrollClick={() => setEnrollOpen(true)}
         onSettingsClick={() => setSettingsOpen(true)}
@@ -273,7 +447,9 @@ export default function SequenceDetailPage() {
         </div>
       )}
 
-      {activeTab === "contacts" && <SequenceContactsTab sequenceId={sequenceId} />}
+      {activeTab === "contacts" && (
+        <SequenceContactsTab sequenceId={sequenceId} steps={steps} />
+      )}
       {activeTab === "analytics" && <SequenceAnalyticsTab sequenceId={sequenceId} />}
 
       <SequenceSettingsPanel

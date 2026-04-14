@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Campaign launch', () => {
-  test('launch campaign button is visible on sequence detail page', async ({ page }) => {
+  test('enroll list button is visible on sequence detail page', async ({ page }) => {
     await page.goto('/sequences');
     // Click first sequence if any exist
     const firstSequence = page.locator('table tbody tr').first();
     if (await firstSequence.count() > 0) {
       await firstSequence.click();
-      await expect(page.getByRole('button', { name: /launch campaign/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /enroll list/i })).toBeVisible();
     }
   });
 
