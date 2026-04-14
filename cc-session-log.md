@@ -503,3 +503,24 @@ Phase 20: Prospector Upgrade
 - `sent` event type doesn't exist in `email_events` (only open/click/reply/bounce/unsubscribe). "Last sent" activity is sourced from `email_queue.sent_at` where `status='sent'` instead.
 - Sending status strip queries run in parallel via `Promise.all` to avoid adding latency.
 - `formatDistanceToNow` from date-fns for relative times; `format(date, "MMM d, HH:mm")` for absolute next-send time.
+
+---
+
+## Sequence UX — Duplicate (country+language) + Threading hint + Delete
+**Date:** 2026-04-14
+**PRs:** direct commit `2cd3979` (duplicate dialog — Cowork bypassed CC flow), #37 (threading hint + delete)
+**Branch:** main (duplicate), feature/sequence-threading-ux-and-delete (#37)
+
+### What was built
+- **Duplicate dialog** (`src/components/sequences/sequence-list.tsx`) — clicking Duplicate opens modal with Country (EE/SE/FI/LV/LT/NO/DK) + Language (auto-fills default for country) selectors; duplicate name becomes e.g. `Cold Outreach (Estonia — Estonian)`. Language dropdown disabled until country chosen; confirm disabled until both set; live preview of new name shown.
+- **Threading hint** (`src/app/(dashboard)/sequences/[id]/page.tsx`, `src/components/sequences/email-step-editor.tsx`, `step-card.tsx`, `sequence-builder.tsx`) — non-first email steps with blank subject_override show `Re: <prior subject>` in italic + "Threaded reply" badge (CornerDownRight icon); editor Subject input shows helper text explaining blank = same Gmail thread.
+- **Delete sequence** (`src/app/api/sequences/[id]/route.ts` new DELETE route; list component modal) — FK-ordered cascade (email_events → email_queue → sequence_enrollments → sequence_steps → sequences); nullifies `inbox_messages.email_queue_id` to preserve reply history; logs activity entry; returns 400 if active with live enrollments; UI requires typing exact sequence name to enable "Delete forever".
+
+### Build status
+- Deploy: Ready on Vercel (59s build)
+- E2E: 39/39 passing against https://crm-for-saas.vercel.app
+
+### Notable decisions
+- Duplicate dialog: sequence table has no language/country column, so info lives in the name suffix only (no schema change).
+- Delete: soft-preserves inbox reply history by nullifying FK rather than cascading; active+enrolled sequences are blocked from deletion (must be archived first).
+- Cowork violation logged: the duplicate dialog was edited directly instead of via CC prompt flow. Feedback memory saved (`feedback_always_use_cc_prompt_flow.md`) — future code changes must go through git pull → CC prompt → PR → Cowork merge.
