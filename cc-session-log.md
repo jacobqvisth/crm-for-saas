@@ -552,3 +552,25 @@ Phase 20: Prospector Upgrade
 - Chose vanilla DOM NodeView over ReactNodeViewRenderer — keeps extension a plain `.ts` file, simpler for a static non-interactive chip.
 - Variables in the editor serialize with `{{x}}` text inside the span so the send-pipeline regex finds them even without parsing DOM. Backward compat with old plain-text sequences preserved via second regex pass.
 - `sender_first_name` and `sender_company` variables added to both the extension and the variable dropdown (were missing from old VariablePicker); `variables.ts` returns empty string for these (populated by send pipeline from Gmail account).
+
+---
+
+## Discovery — Category Exclude Filter
+**Date:** 2026-04-14
+**PR:** #40
+**Branch:** feature/discovery-category-filter
+
+### What was built
+- **`stats/route.ts`**: added `category` to select; added `by_category: Record<string, number>` aggregation (null → "Uncategorized") to the stats response.
+- **`shops/route.ts`**: reads `exclude_categories` query param (comma-separated); applies PostgREST `or(category.not.in.(...), category.is.null)` so null-category rows are preserved while named categories are excluded.
+- **`promote/route.ts`** + **`skip/route.ts`**: added `exclude_categories?: string[]` to the `filters` type; same exclusion filter applied in `select_all` mode so bulk actions honour the visible filter.
+- **`discovery-page-client.tsx`**: added `by_category` to `Stats` type; added `excluded_categories: string[]` to `Filters` type; built `CategoryExcludeDropdown` component (checkbox dropdown, sorted alphabetically, shows counts, has Clear button, active state highlights button); wired into filter bar Row 2 between "Verified email" and search; `fetchShops`, `handlePromote`, and `handleSkip` all pass excluded_categories.
+
+### Build status
+- TypeScript: clean (no errors)
+- Lint: clean
+- Build: compiled successfully (pre-existing /tasks prerender env issue unrelated to this session)
+
+### Notable decisions
+- Used PostgREST `or(category.not.in.(...), category.is.null)` pattern to preserve null-category rows when exclusion filter is active (plain `not.in.()` would drop nulls in SQL semantics).
+- Stats `by_category` is computed client-side in the same pass as `by_status`/`by_country` — no extra DB query needed.
