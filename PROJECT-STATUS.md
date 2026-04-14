@@ -72,6 +72,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | 19 | Multi-User Workspace — domain-based auto-join (@wrenchlane.com auto-joins existing workspace), Team Settings page, user avatar in sidebar, "Connected by" on Gmail cards | ✅ Merged | #35 |
 | Sequence UX 1 | Duplicate sequence with country + language selection (dialog w/ country→default-language auto-select; suffix appended to name e.g. "Cold Outreach (Estonia — Estonian)") | ✅ Pushed direct to main (no PR) | 2cd3979 |
 | Sequence UX 2 | Threading hint + Delete sequence — non-first email steps show "Re: <prior subject>" preview + Threaded reply badge; editor helper explains blank subject = same Gmail thread; DELETE /api/sequences/[id] with FK-ordered cascade + type-name-to-confirm modal | ✅ Merged | #37 |
+| Sequence UX 3 | Sequence detail UX clarity — Launch Campaign → Enroll List, Activate/Pause → Start/Pause Sending (promoted to top bar), Pause All behind ⋯ menu, amber paused banner, sending-status strip (sender/next send/last sent), Contacts tab 5→9 cols (Company, Last activity, Next send, Sent + Step as "2/5 · Email") | ✅ Merged | #38 |
 | **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
 
 ## Bugs Fixed (not by CC)
