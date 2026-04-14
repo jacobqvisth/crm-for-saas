@@ -139,7 +139,7 @@ export function LaunchCampaignModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Launch Campaign</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Enroll List</h2>
           <button
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -152,7 +152,7 @@ export function LaunchCampaignModal({
           {launched ? (
             <div className="text-center py-6">
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-              <p className="text-lg font-semibold text-slate-900">Campaign Launched!</p>
+              <p className="text-lg font-semibold text-slate-900">Contacts Enrolled!</p>
               <p className="text-sm text-slate-500 mt-1">
                 {enrolledCount} contact{enrolledCount !== 1 ? "s" : ""} enrolled. Emails begin
                 sending within 5 minutes.
@@ -323,7 +323,7 @@ export function LaunchCampaignModal({
                 {launching && (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                 )}
-                Launch Campaign →
+                Enroll contacts →
               </button>
             )}
           </div>
