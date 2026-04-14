@@ -72,7 +72,7 @@ type Filters = {
   has_phone: boolean;
   verified_email: boolean;
   search: string;
-  excluded_categories: string[];
+  included_categories: string[] | null; // null = no filter (all categories shown)
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -268,19 +268,26 @@ function RowActions({
   );
 }
 
-// ─── Category Exclude Dropdown ────────────────────────────────────────────────
+// ─── Category Filter Dropdown ─────────────────────────────────────────────────
+// included = null means "all categories" (no filter). When the user unchecks
+// a category the remaining checked ones are stored as the included set.
 
-function CategoryExcludeDropdown({
+function CategoryFilterDropdown({
   categories,
-  excluded,
+  included,
   onChange,
 }: {
   categories: { name: string; count: number }[];
-  excluded: string[];
-  onChange: (excluded: string[]) => void;
+  included: string[] | null; // null = all
+  onChange: (included: string[] | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const allNames = categories.map((c) => c.name);
+  const checkedSet = included === null ? new Set(allNames) : new Set(included);
+  const isFiltered = included !== null;
+  const checkedCount = checkedSet.size;
+  const totalCount = allNames.length;
 
   useEffect(() => {
     if (!open) return;
@@ -294,41 +301,57 @@ function CategoryExcludeDropdown({
   }, [open]);
 
   const toggle = (name: string) => {
-    if (excluded.includes(name)) {
-      onChange(excluded.filter((c) => c !== name));
+    const next = new Set(checkedSet);
+    if (next.has(name)) {
+      next.delete(name);
     } else {
-      onChange([...excluded, name]);
+      next.add(name);
+    }
+    // If all are checked, revert to null (no filter)
+    if (next.size === totalCount) {
+      onChange(null);
+    } else {
+      onChange(Array.from(next));
     }
   };
+
+  const selectAll = () => onChange(null);
+  const clearAll = () => onChange([]);
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-sm transition-colors ${
-          excluded.length > 0
+          isFiltered
             ? "border-indigo-300 bg-indigo-50 text-indigo-700"
             : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
         }`}
       >
         <ChevronDown className="w-3.5 h-3.5" />
-        {excluded.length > 0 ? `Exclude: ${excluded.length}` : "Exclude categories"}
+        {isFiltered ? `Categories: ${checkedCount} of ${totalCount}` : "All categories"}
       </button>
 
       {open && (
         <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-64 py-2">
           <div className="flex items-center justify-between px-3 pb-2 border-b border-slate-100">
             <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-              Exclude categories
+              Filter categories
             </span>
-            {excluded.length > 0 && (
+            <div className="flex gap-2">
               <button
-                onClick={() => onChange([])}
+                onClick={selectAll}
                 className="text-xs text-indigo-600 hover:text-indigo-800"
+              >
+                Select all
+              </button>
+              <button
+                onClick={clearAll}
+                className="text-xs text-slate-500 hover:text-slate-700"
               >
                 Clear
               </button>
-            )}
+            </div>
           </div>
           <div className="max-h-64 overflow-y-auto py-1">
             {categories.map(({ name, count }) => (
@@ -338,7 +361,7 @@ function CategoryExcludeDropdown({
               >
                 <input
                   type="checkbox"
-                  checked={excluded.includes(name)}
+                  checked={checkedSet.has(name)}
                   onChange={() => toggle(name)}
                   className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
@@ -372,7 +395,7 @@ export function DiscoveryPageClient() {
     has_phone: false,
     verified_email: false,
     search: "",
-    excluded_categories: [],
+    included_categories: null, // null = all categories shown
   });
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -424,8 +447,8 @@ export function DiscoveryPageClient() {
       if (filters.has_phone) params.set("has_phone", "true");
       if (filters.verified_email) params.set("verified_email", "true");
       if (debouncedSearch) params.set("search", debouncedSearch);
-      if (filters.excluded_categories.length > 0) {
-        params.set("exclude_categories", filters.excluded_categories.join(","));
+      if (filters.included_categories !== null && filters.included_categories.length > 0) {
+        params.set("categories", filters.included_categories.join(","));
       }
 
       const res = await fetch(`/api/discovery/shops?${params.toString()}`);
@@ -438,7 +461,7 @@ export function DiscoveryPageClient() {
     } finally {
       setLoadingShops(false);
     }
-  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.verified_email, debouncedSearch, filters.excluded_categories]);
+  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.verified_email, debouncedSearch, filters.included_categories]);
 
   useEffect(() => {
     fetchShops();
@@ -467,7 +490,7 @@ export function DiscoveryPageClient() {
               has_phone: filters.has_phone,
               verified_email: filters.verified_email,
               search: debouncedSearch,
-              exclude_categories: filters.excluded_categories,
+              categories: filters.included_categories ?? undefined,
             },
           }
         : { shop_ids: ids };
@@ -506,7 +529,7 @@ export function DiscoveryPageClient() {
               has_phone: filters.has_phone,
               verified_email: filters.verified_email,
               search: debouncedSearch,
-              exclude_categories: filters.excluded_categories,
+              categories: filters.included_categories ?? undefined,
             },
           }
         : { shop_ids: ids };
@@ -686,11 +709,11 @@ export function DiscoveryPageClient() {
               Verified email
             </label>
 
-            {/* Exclude categories */}
-            <CategoryExcludeDropdown
+            {/* Category filter */}
+            <CategoryFilterDropdown
               categories={categoryOptions}
-              excluded={filters.excluded_categories}
-              onChange={(excluded) => setFilters((f) => ({ ...f, excluded_categories: excluded }))}
+              included={filters.included_categories}
+              onChange={(included) => setFilters((f) => ({ ...f, included_categories: included }))}
             />
 
             {/* Search */}

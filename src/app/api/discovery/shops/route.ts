@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
   const has_phone = searchParams.get("has_phone");
   const verified_email = searchParams.get("verified_email");
   const search = searchParams.get("search")?.trim();
-  const exclude_categories_raw = searchParams.get("exclude_categories");
-  const exclude_categories = exclude_categories_raw
-    ? exclude_categories_raw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
+  const categories_raw = searchParams.get("categories");
+  const categories = categories_raw
+    ? categories_raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : null; // null = no filter (show all)
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const per_page = Math.min(
     200,
@@ -60,12 +60,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (exclude_categories.length > 0) {
-    // Exclude specified categories; keep rows where category IS NULL
-    const quotedCats = exclude_categories
-      .map((c) => `"${c.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
-      .join(",");
-    query = query.or(`category.not.in.(${quotedCats}),category.is.null`);
+  // Category filter: array-overlap — shop is kept if ANY of its categories is
+  // in the included set. A shop tagged ["ATV repair","Auto repair"] survives
+  // as long as "Auto repair" is checked, even if "ATV repair" is not.
+  if (categories !== null && categories.length > 0) {
+    query = query.overlaps("all_categories", categories);
   }
 
   const from = (page - 1) * per_page;
