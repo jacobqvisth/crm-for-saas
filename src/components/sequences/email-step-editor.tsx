@@ -266,6 +266,7 @@ interface EmailStepEditorProps {
   onUpdate: (updates: Partial<Step>) => void;
   stepNumber?: number;
   sequenceName?: string;
+  isFirstEmailStep?: boolean;
 }
 
 export function EmailStepEditor({
@@ -273,6 +274,7 @@ export function EmailStepEditor({
   onUpdate,
   stepNumber,
   sequenceName,
+  isFirstEmailStep,
 }: EmailStepEditorProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
@@ -433,6 +435,13 @@ export function EmailStepEditor({
           placeholder="e.g. Hey {{first_name}}, quick question"
           className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm"
         />
+        {isFirstEmailStep === false && (
+          <p className="mt-1 text-xs text-slate-500">
+            Leave blank to reply in the same Gmail thread as your first email (subject will auto-become{" "}
+            <span className="font-mono">Re: &lt;first email subject&gt;</span>). Only set a subject here if you
+            want to break out of the thread and start a new conversation.
+          </p>
+        )}
       </div>
 
       <div>

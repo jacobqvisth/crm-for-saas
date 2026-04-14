@@ -256,7 +256,11 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
 
           <DragDropContext onDragEnd={onDragEnd}>
             <Droppable droppableId="steps">
-              {(provided) => (
+              {(provided) => {
+                // Compute first email step ID for threading hint
+                const emailSteps = steps.filter((s) => s.type === "email");
+                const firstEmailStepId = emailSteps.length > 0 ? emailSteps[0].id : null;
+                return (
                 <div ref={provided.innerRef} {...provided.droppableProps}>
                   {steps.map((step, index) => (
                     <div key={step.id}>
@@ -271,6 +275,7 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
                               totalSteps={steps.length}
                               stepNumber={index + 1}
                               sequenceName={sequenceName}
+                              isFirstEmailStep={step.type === "email" ? step.id === firstEmailStepId : undefined}
                               onUpdate={updateStep}
                               onDelete={deleteStep}
                               dragHandleProps={dragProvided.dragHandleProps}
@@ -283,7 +288,8 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
                   ))}
                   {provided.placeholder}
                 </div>
-              )}
+                );
+              }}
             </Droppable>
           </DragDropContext>
         </>
