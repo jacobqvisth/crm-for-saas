@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-14 (Sequence UX: duplicate-with-country/language dialog + threading hint + delete sequence — PRs #36/#37 merged + deployed, 39/39 E2E passing)
+Last updated: 2026-04-14 (Phase: Rich Email Editor — TipTap WYSIWYG replaces textarea in sequence + template editors, variable chips, sandboxed Gmail-like preview iframe. PR #39 merged + deployed, 42/42 E2E passing + 19/19 unit tests)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
