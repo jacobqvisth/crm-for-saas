@@ -15,6 +15,7 @@ import {
   Zap,
   AlertTriangle,
   TrendingUp,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables, Json } from "@/lib/database.types";
@@ -41,6 +42,27 @@ interface SequenceWithStats extends Sequence {
   health?: SequenceHealth;
 }
 
+const COUNTRIES = [
+  { code: "EE", name: "Estonia", defaultLang: "et" },
+  { code: "SE", name: "Sweden", defaultLang: "sv" },
+  { code: "FI", name: "Finland", defaultLang: "fi" },
+  { code: "LV", name: "Latvia", defaultLang: "lv" },
+  { code: "LT", name: "Lithuania", defaultLang: "lt" },
+  { code: "NO", name: "Norway", defaultLang: "no" },
+  { code: "DK", name: "Denmark", defaultLang: "da" },
+] as const;
+
+const LANGUAGES = [
+  { code: "et", label: "Estonian" },
+  { code: "sv", label: "Swedish" },
+  { code: "fi", label: "Finnish" },
+  { code: "lv", label: "Latvian" },
+  { code: "lt", label: "Lithuanian" },
+  { code: "no", label: "Norwegian" },
+  { code: "da", label: "Danish" },
+  { code: "en", label: "English" },
+] as const;
+
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   draft: { label: "Draft", className: "bg-slate-100 text-slate-600" },
   active: { label: "Active", className: "bg-green-100 text-green-700" },
@@ -63,6 +85,9 @@ export function SequenceList() {
   const [healthData, setHealthData] = useState<Record<string, SequenceHealth>>({});
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [dupDialog, setDupDialog] = useState<{ seq: Sequence } | null>(null);
+  const [dupCountry, setDupCountry] = useState("");
+  const [dupLang, setDupLang] = useState("");
 
   const loadSequences = useCallback(async () => {
     if (!workspaceId) return;
@@ -167,14 +192,40 @@ export function SequenceList() {
     setMenuOpen(null);
   };
 
-  const duplicateSequence = async (seq: Sequence) => {
-    if (!workspaceId) return;
+  const openDuplicateDialog = (seq: Sequence) => {
+    setDupCountry("");
+    setDupLang("");
+    setDupDialog({ seq });
+    setMenuOpen(null);
+  };
+
+  const handleCountryChange = (countryCode: string) => {
+    setDupCountry(countryCode);
+    const country = COUNTRIES.find((c) => c.code === countryCode);
+    if (country) {
+      setDupLang(country.defaultLang);
+    } else {
+      setDupLang("");
+    }
+  };
+
+  const duplicateSequence = async () => {
+    if (!workspaceId || !dupDialog) return;
+    const { seq } = dupDialog;
+
+    const countryObj = COUNTRIES.find((c) => c.code === dupCountry);
+    const langObj = LANGUAGES.find((l) => l.code === dupLang);
+    const suffix = countryObj && langObj
+      ? `(${countryObj.name} — ${langObj.label})`
+      : countryObj
+        ? `(${countryObj.name})`
+        : "(Copy)";
 
     const { data: newSeq, error } = await supabase
       .from("sequences")
       .insert({
         workspace_id: workspaceId,
-        name: `${seq.name} (Copy)`,
+        name: `${seq.name} ${suffix}`,
         status: "draft" as const,
         settings: seq.settings,
       })
@@ -211,8 +262,8 @@ export function SequenceList() {
     }
 
     toast.success("Sequence duplicated");
+    setDupDialog(null);
     loadSequences();
-    setMenuOpen(null);
   };
 
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
@@ -403,7 +454,7 @@ export function SequenceList() {
                               </button>
                             )}
                             <button
-                              onClick={() => duplicateSequence(seq)}
+                              onClick={() => openDuplicateDialog(seq)}
                               className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                             >
                               <Copy className="w-3.5 h-3.5" /> Duplicate
@@ -425,6 +476,82 @@ export function SequenceList() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Duplicate dialog */}
+      {dupDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDupDialog(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 p-6">
+            <button
+              onClick={() => setDupDialog(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Duplicate Sequence</h2>
+            <p className="text-sm text-slate-500 mb-5">
+              Choose a target country and language for the copy of <span className="font-medium text-slate-700">{dupDialog.seq.name}</span>.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
+                <select
+                  value={dupCountry}
+                  onChange={(e) => handleCountryChange(e.target.value)}
+                  className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="">Select country...</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Language</label>
+                <select
+                  value={dupLang}
+                  onChange={(e) => setDupLang(e.target.value)}
+                  disabled={!dupCountry}
+                  className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  <option value="">Select language...</option>
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {dupCountry && dupLang && (
+                <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+                  New name: <span className="font-medium text-slate-700">{dupDialog.seq.name} ({COUNTRIES.find((c) => c.code === dupCountry)?.name} — {LANGUAGES.find((l) => l.code === dupLang)?.label})</span>
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setDupDialog(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={duplicateSequence}
+                disabled={!dupCountry || !dupLang}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Duplicate
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
