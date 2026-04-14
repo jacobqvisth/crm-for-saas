@@ -80,6 +80,7 @@ function processItem(item) {
     instagram_url: instagrams[0] || null,
     facebook_url: facebooks[0] || null,
     category: categories[0] || null,
+    all_categories: categories,
     rating: item.totalScore ?? null,
     review_count: item.reviewsCount ?? null,
     opening_hours: item.openingHours || null,

@@ -10,12 +10,20 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch all rows just for status + country_code + presence fields
-  // Using aggregation via RPC would be ideal but we can do it client-side
+  // Fetch all rows for status + country_code + presence fields + all_categories
+  // all_categories is used for per-category counts (multi-cat aware: a shop with
+  // 3 categories contributes +1 to each of its 3 buckets).
   const { data, error } = await supabase
     .from("discovered_shops")
-    .select("status, country_code, primary_email, phone, category") as {
-      data: { status: string; country_code: string | null; primary_email: string | null; phone: string | null; category: string | null }[] | null;
+    .select("status, country_code, primary_email, phone, category, all_categories") as {
+      data: {
+        status: string;
+        country_code: string | null;
+        primary_email: string | null;
+        phone: string | null;
+        category: string | null;
+        all_categories: string[] | null;
+      }[] | null;
       error: { message: string } | null;
     };
 
@@ -40,9 +48,22 @@ export async function GET() {
     const c = row.country_code ?? "??";
     by_country[c] = (by_country[c] ?? 0) + 1;
 
-    // category
-    const cat = row.category ?? "Uncategorized";
-    by_category[cat] = (by_category[cat] ?? 0) + 1;
+    // category — use all_categories for multi-cat-aware counts:
+    // a shop tagged ["Auto repair", "Tire shop"] contributes +1 to each bucket.
+    // Fall back to the legacy `category` field if all_categories is not set.
+    const cats = row.all_categories && row.all_categories.length > 0
+      ? row.all_categories
+      : row.category
+        ? [row.category]
+        : null;
+
+    if (cats) {
+      for (const cat of cats) {
+        by_category[cat] = (by_category[cat] ?? 0) + 1;
+      }
+    } else {
+      by_category["Uncategorized"] = (by_category["Uncategorized"] ?? 0) + 1;
+    }
 
     // email / phone
     if (row.primary_email) with_email++;

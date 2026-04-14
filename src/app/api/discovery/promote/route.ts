@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       has_phone?: boolean;
       verified_email?: boolean;
       search?: string;
-      exclude_categories?: string[];
+      categories?: string[]; // included categories (null/absent = all)
     };
   };
 
@@ -95,11 +95,8 @@ export async function POST(request: NextRequest) {
       const s = filters.search.trim();
       shopQuery = shopQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
     }
-    if (filters.exclude_categories && filters.exclude_categories.length > 0) {
-      const quotedCats = filters.exclude_categories
-        .map((c) => `"${c.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
-        .join(",");
-      shopQuery = shopQuery.or(`category.not.in.(${quotedCats}),category.is.null`);
+    if (filters.categories && filters.categories.length > 0) {
+      shopQuery = shopQuery.overlaps("all_categories", filters.categories);
     }
   } else {
     shopQuery = shopQuery.in("id", shop_ids!);
