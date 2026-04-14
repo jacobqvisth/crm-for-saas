@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
   const has_phone = searchParams.get("has_phone");
   const verified_email = searchParams.get("verified_email");
   const search = searchParams.get("search")?.trim();
+  const exclude_categories_raw = searchParams.get("exclude_categories");
+  const exclude_categories = exclude_categories_raw
+    ? exclude_categories_raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const per_page = Math.min(
     200,
@@ -54,6 +58,14 @@ export async function GET(request: NextRequest) {
     query = query.or(
       `name.ilike.%${search}%,city.ilike.%${search}%,domain.ilike.%${search}%`
     );
+  }
+
+  if (exclude_categories.length > 0) {
+    // Exclude specified categories; keep rows where category IS NULL
+    const quotedCats = exclude_categories
+      .map((c) => `"${c.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+      .join(",");
+    query = query.or(`category.not.in.(${quotedCats}),category.is.null`);
   }
 
   const from = (page - 1) * per_page;
