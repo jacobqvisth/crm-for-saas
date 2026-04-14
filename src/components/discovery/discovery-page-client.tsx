@@ -10,6 +10,7 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ExternalLink,
   MoreHorizontal,
   Loader2,
@@ -59,6 +60,7 @@ type Stats = {
   total: number;
   by_status: Record<string, number>;
   by_country: Record<string, number>;
+  by_category: Record<string, number>;
   with_email: number;
   with_phone: number;
 };
@@ -70,6 +72,7 @@ type Filters = {
   has_phone: boolean;
   verified_email: boolean;
   search: string;
+  excluded_categories: string[];
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -265,6 +268,91 @@ function RowActions({
   );
 }
 
+// ─── Category Exclude Dropdown ────────────────────────────────────────────────
+
+function CategoryExcludeDropdown({
+  categories,
+  excluded,
+  onChange,
+}: {
+  categories: { name: string; count: number }[];
+  excluded: string[];
+  onChange: (excluded: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const toggle = (name: string) => {
+    if (excluded.includes(name)) {
+      onChange(excluded.filter((c) => c !== name));
+    } else {
+      onChange([...excluded, name]);
+    }
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-sm transition-colors ${
+          excluded.length > 0
+            ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+            : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
+        }`}
+      >
+        <ChevronDown className="w-3.5 h-3.5" />
+        {excluded.length > 0 ? `Exclude: ${excluded.length}` : "Exclude categories"}
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-64 py-2">
+          <div className="flex items-center justify-between px-3 pb-2 border-b border-slate-100">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+              Exclude categories
+            </span>
+            {excluded.length > 0 && (
+              <button
+                onClick={() => onChange([])}
+                className="text-xs text-indigo-600 hover:text-indigo-800"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {categories.map(({ name, count }) => (
+              <label
+                key={name}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={excluded.includes(name)}
+                  onChange={() => toggle(name)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-slate-700 flex-1">{name}</span>
+                <span className="text-xs text-slate-400">({count.toLocaleString()})</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function DiscoveryPageClient() {
@@ -284,6 +372,7 @@ export function DiscoveryPageClient() {
     has_phone: false,
     verified_email: false,
     search: "",
+    excluded_categories: [],
   });
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -335,6 +424,9 @@ export function DiscoveryPageClient() {
       if (filters.has_phone) params.set("has_phone", "true");
       if (filters.verified_email) params.set("verified_email", "true");
       if (debouncedSearch) params.set("search", debouncedSearch);
+      if (filters.excluded_categories.length > 0) {
+        params.set("exclude_categories", filters.excluded_categories.join(","));
+      }
 
       const res = await fetch(`/api/discovery/shops?${params.toString()}`);
       if (!res.ok) throw new Error("Failed");
@@ -346,7 +438,7 @@ export function DiscoveryPageClient() {
     } finally {
       setLoadingShops(false);
     }
-  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.verified_email, debouncedSearch]);
+  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.verified_email, debouncedSearch, filters.excluded_categories]);
 
   useEffect(() => {
     fetchShops();
@@ -375,6 +467,7 @@ export function DiscoveryPageClient() {
               has_phone: filters.has_phone,
               verified_email: filters.verified_email,
               search: debouncedSearch,
+              exclude_categories: filters.excluded_categories,
             },
           }
         : { shop_ids: ids };
@@ -413,6 +506,7 @@ export function DiscoveryPageClient() {
               has_phone: filters.has_phone,
               verified_email: filters.verified_email,
               search: debouncedSearch,
+              exclude_categories: filters.excluded_categories,
             },
           }
         : { shop_ids: ids };
@@ -458,6 +552,13 @@ export function DiscoveryPageClient() {
   // ── Country options from stats
   const countryOptions = stats
     ? Object.keys(stats.by_country).sort()
+    : [];
+
+  // ── Category options from stats (sorted alphabetically)
+  const categoryOptions = stats
+    ? Object.entries(stats.by_category)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, count]) => ({ name, count }))
     : [];
 
   // ── Status tab config
@@ -584,6 +685,13 @@ export function DiscoveryPageClient() {
               />
               Verified email
             </label>
+
+            {/* Exclude categories */}
+            <CategoryExcludeDropdown
+              categories={categoryOptions}
+              excluded={filters.excluded_categories}
+              onChange={(excluded) => setFilters((f) => ({ ...f, excluded_categories: excluded }))}
+            />
 
             {/* Search */}
             <div className="flex-1 min-w-48">

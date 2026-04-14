@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       has_phone?: boolean;
       verified_email?: boolean;
       search?: string;
+      exclude_categories?: string[];
     };
   };
 
@@ -93,6 +94,12 @@ export async function POST(request: NextRequest) {
     if (filters.search?.trim()) {
       const s = filters.search.trim();
       shopQuery = shopQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
+    }
+    if (filters.exclude_categories && filters.exclude_categories.length > 0) {
+      const quotedCats = filters.exclude_categories
+        .map((c) => `"${c.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+        .join(",");
+      shopQuery = shopQuery.or(`category.not.in.(${quotedCats}),category.is.null`);
     }
   } else {
     shopQuery = shopQuery.in("id", shop_ids!);
