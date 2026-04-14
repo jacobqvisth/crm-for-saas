@@ -574,3 +574,28 @@ Phase 20: Prospector Upgrade
 ### Notable decisions
 - Used PostgREST `or(category.not.in.(...), category.is.null)` pattern to preserve null-category rows when exclusion filter is active (plain `not.in.()` would drop nulls in SQL semantics).
 - Stats `by_category` is computed client-side in the same pass as `by_status`/`by_country` — no extra DB query needed.
+
+## Discovery — Multi-Category Support
+**Date:** 2026-04-14
+**PR:** #41
+**Branch:** feature/discovery-multi-category
+
+### What was built
+- **Migration** (`supabase/migrations/20260414000000_discovered_shops_all_categories.sql`): adds `all_categories TEXT[]` column + GIN index to `discovered_shops`. Applied to production.
+- **SQL fallback backfill**: run directly via Supabase MCP — set `all_categories = ARRAY[category]` for all existing rows. EE: 807/814 updated, LT: 1971/1999 updated (rows with NULL category left as-is). All are single-cat arrays; LT full multi-cat requires the Apify backfill (see below).
+- **`scripts/backfill-all-categories.mjs`**: one-shot script; Step 1 fetches LT dataset `96U2txGRRVKHyBPsF` from Apify and updates `all_categories` per row; Step 2 is the SQL fallback for any remaining null rows. Requires `APIFY_TOKEN` env var — not present in .env.local, so Step 1 was not run by CC.
+- **`scripts/import-lithuania-shops.mjs`**: `processItem()` now includes `all_categories: categories` alongside `category: categories[0]`.
+- **`shops/route.ts`**: replaced `exclude_categories` (exclude-list) with `categories` (include-list); applies Supabase `.overlaps("all_categories", categories)` — shop kept if any of its categories matches the included set.
+- **`stats/route.ts`**: `by_category` now multi-cat-aware; iterates `all_categories` array, contributing +1 to each bucket per category; falls back to `category` field if `all_categories` is unset.
+- **`promote/route.ts`** + **`skip/route.ts`**: updated `filters` type (`exclude_categories → categories`); overlap filter in `select_all` path.
+- **`discovery-page-client.tsx`**: `CategoryExcludeDropdown` → `CategoryFilterDropdown`; `excluded_categories: string[]` → `included_categories: string[] | null`; default = null (all shown); unchecking a category removes it from the included set; button shows "All categories" or "Categories: N of M"; added "Select all" + "Clear" buttons.
+
+### Build status
+- TypeScript: clean
+- Lint: clean
+- Build: compiled successfully
+
+### Notable decisions
+- APIFY_TOKEN not in .env.local; ran SQL fallback directly via Supabase MCP instead of Step 1 of backfill script. LT multi-cat remains single-cat until Jacob runs `APIFY_TOKEN=your_token node scripts/backfill-all-categories.mjs`.
+- Kept `category` column untouched; `all_categories` is additive, all old code still works.
+- When `included_categories` is an empty array (`[]`), the API will apply `.overlaps("all_categories", [])` which returns no rows — this is the correct UX (user clicked "Clear", showing nothing until they re-select).
