@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   TrendingUp,
   X,
+  Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables, Json } from "@/lib/database.types";
@@ -88,6 +89,9 @@ export function SequenceList() {
   const [dupDialog, setDupDialog] = useState<{ seq: Sequence } | null>(null);
   const [dupCountry, setDupCountry] = useState("");
   const [dupLang, setDupLang] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState<{ seq: Sequence } | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const loadSequences = useCallback(async () => {
     if (!workspaceId) return;
@@ -264,6 +268,29 @@ export function SequenceList() {
     toast.success("Sequence duplicated");
     setDupDialog(null);
     loadSequences();
+  };
+
+  const deleteSequence = async () => {
+    if (!deleteDialog) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/sequences/${deleteDialog.seq.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to delete sequence");
+      } else {
+        toast.success("Sequence deleted");
+        setDeleteDialog(null);
+        setDeleteConfirmName("");
+        loadSequences();
+      }
+    } catch {
+      toast.error("Failed to delete sequence");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
@@ -467,6 +494,17 @@ export function SequenceList() {
                                 <Archive className="w-3.5 h-3.5" /> Archive
                               </button>
                             )}
+                            <div className="my-1 border-t border-slate-100" />
+                            <button
+                              onClick={() => {
+                                setDeleteConfirmName("");
+                                setDeleteDialog({ seq });
+                                setMenuOpen(null);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Delete
+                            </button>
                           </div>
                         )}
                       </div>
@@ -549,6 +587,63 @@ export function SequenceList() {
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Duplicate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete confirmation dialog */}
+      {deleteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !deleteLoading && setDeleteDialog(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 p-6">
+            <button
+              onClick={() => setDeleteDialog(null)}
+              disabled={deleteLoading}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 disabled:opacity-50"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <h2 className="text-lg font-semibold text-slate-900 mb-2">Delete sequence?</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              This will permanently delete{" "}
+              <span className="font-semibold text-slate-900">&quot;{deleteDialog.seq.name}&quot;</span>{" "}
+              along with all of its steps, enrollments, and queued/sent email history records tied to it.
+              This cannot be undone.
+            </p>
+
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Type the sequence name to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                placeholder={deleteDialog.seq.name}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setDeleteDialog(null);
+                  setDeleteConfirmName("");
+                }}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteSequence}
+                disabled={deleteConfirmName !== deleteDialog.seq.name || deleteLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteLoading ? "Deleting..." : "Delete forever"}
               </button>
             </div>
           </div>

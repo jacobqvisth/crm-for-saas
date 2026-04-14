@@ -10,7 +10,7 @@ import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-
 import { SequenceSettingsPanel } from "@/components/sequences/sequence-settings";
 import { EnrollContactsModal } from "@/components/sequences/enroll-contacts-modal";
 import { LaunchCampaignModal } from "@/components/sequences/launch-campaign-modal";
-import { ArrowLeft, Mail, Clock, GitBranch, Rocket, BarChart2, Pause } from "lucide-react";
+import { ArrowLeft, Mail, Clock, GitBranch, Rocket, BarChart2, Pause, CornerDownRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -193,8 +193,16 @@ export default function SequenceDetailPage() {
             </div>
           ) : (
             <div className="space-y-0">
-              {steps.map((step, i) => {
+              {(() => {
+                // Pre-compute email steps sorted by step_order for threading logic
+                const emailSteps = steps.filter((s) => s.type === "email");
+                return steps.map((step, i) => {
                 const Icon = STEP_ICONS[step.type] || Mail;
+                // Compute threading context for email steps
+                const thisEmailIdx = step.type === "email"
+                  ? emailSteps.findIndex((s) => s.id === step.id)
+                  : -1;
+                const priorEmailStep = thisEmailIdx > 0 ? emailSteps[thisEmailIdx - 1] : null;
                 return (
                   <div key={step.id}>
                     <div className="flex items-start gap-4">
@@ -219,9 +227,28 @@ export default function SequenceDetailPage() {
                               Step {step.step_order + 1} &middot; {step.type}
                             </span>
                             {step.type === "email" && (
-                              <p className="text-sm font-medium text-slate-900 mt-0.5">
-                                {step.subject_override || "No subject"}
-                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {step.subject_override ? (
+                                  <p className="text-sm font-medium text-slate-900">
+                                    {step.subject_override}
+                                  </p>
+                                ) : priorEmailStep ? (
+                                  <>
+                                    <p className="text-sm italic text-slate-600">
+                                      Re: {priorEmailStep.subject_override || "No subject"}
+                                    </p>
+                                    <span
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700 cursor-default"
+                                      title={`Sent in the same Gmail thread as Step ${priorEmailStep.step_order + 1}. Leave the subject blank to keep it threaded.`}
+                                    >
+                                      <CornerDownRight className="w-3 h-3" />
+                                      Threaded reply
+                                    </span>
+                                  </>
+                                ) : (
+                                  <p className="text-sm font-medium text-slate-900">No subject</p>
+                                )}
+                              </div>
                             )}
                             {step.type === "delay" && (
                               <p className="text-sm text-slate-700 mt-0.5">
@@ -239,7 +266,8 @@ export default function SequenceDetailPage() {
                     </div>
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           )}
         </div>

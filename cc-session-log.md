@@ -14,6 +14,19 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-14 — Sequence UX: threading hint + delete action
+
+- **Branch**: `feature/sequence-threading-ux-and-delete` → PR pending
+- **What was built**:
+  - **Threading hint (overview page)**: Non-first email steps with no `subject_override` now show `Re: <prior email step's subject>` in italic slate-600 with an indigo `Threaded reply` badge (`CornerDownRight` icon). Tooltip explains the Gmail threading behaviour. First email step with no subject still shows `No subject` (real problem state).
+  - **Threading hint (editor)**: `EmailStepEditor` gained `isFirstEmailStep?: boolean` prop. When `false`, a `text-xs text-slate-500` helper line renders under the Subject input explaining to leave it blank for threading. Propagated through `StepCard` → `SequenceBuilder` (computes first email step ID from sorted email steps).
+  - **Delete sequence**: New `DELETE /api/sequences/[id]` handler — deletes in FK order (`email_events` → `email_queue` → `sequence_enrollments` → `sequence_steps` → `sequences`), nullifies `inbox_messages.email_queue_id` to preserve reply history, logs an activity trail before deletion, blocks with `400` if sequence is active with live enrollments.
+  - **Delete UI**: Delete menu item (below Archive with separator) in `SequenceList` action menu, visible for all statuses. Opens a modal requiring exact sequence name match before the red "Delete forever" button enables.
+- **Build status**: TypeScript clean (`tsc --noEmit` — no output), ESLint clean. Build prerender failure is pre-existing env-var issue (no `.env.local` in worktree), unrelated to this session.
+- **Notable decisions**: `inbox_messages.email_queue_id` is nullified (not deleted) on sequence delete — preserves contact reply history. Activity log entry written before deletion for audit trail.
+
+---
+
 ## 2026-04-02 — Phase 24: Tasks & Daily Queue
 
 - **Branch**: `feature/phase24-tasks-daily-queue` → **PR #29**

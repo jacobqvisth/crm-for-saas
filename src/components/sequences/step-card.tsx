@@ -39,12 +39,13 @@ interface StepCardProps {
   totalSteps: number;
   stepNumber?: number;
   sequenceName?: string;
+  isFirstEmailStep?: boolean;
   onUpdate: (stepId: string, updates: Partial<Step>) => void;
   onDelete: (stepId: string) => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
 }
 
-export function StepCard({ step, totalSteps, stepNumber, sequenceName, onUpdate, onDelete, dragHandleProps }: StepCardProps) {
+export function StepCard({ step, totalSteps, stepNumber, sequenceName, isFirstEmailStep, onUpdate, onDelete, dragHandleProps }: StepCardProps) {
   const [expanded, setExpanded] = useState(true);
 
   const config = STEP_CONFIG[step.type];
@@ -117,6 +118,7 @@ export function StepCard({ step, totalSteps, stepNumber, sequenceName, onUpdate,
               onUpdate={(updates) => onUpdate(step.id, updates)}
               stepNumber={stepNumber}
               sequenceName={sequenceName}
+              isFirstEmailStep={isFirstEmailStep}
             />
           )}
           {step.type === "delay" && (
