@@ -599,3 +599,24 @@ Phase 20: Prospector Upgrade
 - APIFY_TOKEN not in .env.local; ran SQL fallback directly via Supabase MCP instead of Step 1 of backfill script. LT multi-cat remains single-cat until Jacob runs `APIFY_TOKEN=your_token node scripts/backfill-all-categories.mjs`.
 - Kept `category` column untouched; `all_categories` is additive, all old code still works.
 - When `included_categories` is an empty array (`[]`), the API will apply `.overlaps("all_categories", [])` which returns no rows — this is the correct UX (user clicked "Clear", showing nothing until they re-select).
+
+## Workflow Migration — CC Owns Merge+Deploy Loop
+**Date:** 2026-04-14
+**PR:** #42
+**Branch:** chore/cc-owns-merge-deploy-loop
+
+### What was built
+- **`.github/workflows/e2e.yml`**: GitHub Actions CI with two jobs — `build-and-lint` (Node 20, `npm ci`, `npm run build`, `npm run lint`, `npx tsc --noEmit`) runs on all pushes and PRs to main; `e2e-prod` (Playwright, runs full E2E suite against production) runs only on push to main. Report uploaded as artifact on failure. CI is a safety net — CC does not wait for it.
+- **`CLAUDE.md`**: Rewrote workflow sections. Removed "Sync Sequence" and "Cowork's Autonomous Merge + Deploy Loop" sections. Added `## Workflow` section at the top describing the new CC-owned loop (fetch/rebase → build → checks → push → PR → merge → verify deploy → log). Preserved all architecture, code conventions, and database schema sections.
+- **`PROJECT-STATUS.md`**: Added workflow migration row to phase table. Updated Sync Sequence and merge/deploy loop sections. Updated Deployment note to reflect auto-deploy reconnected.
+- **Vercel auto-deploy reconnected**: Ran `vercel git connect --yes` from `/Users/jacobqvisth/crm-for-saas` — GitHub repo reconnected to Vercel project `crm-for-saas`. Every push to main now triggers a production deploy automatically.
+
+### Build status
+- Lint: clean
+- TypeScript: clean (no errors)
+- Build: pre-existing `/tasks` prerender error due to missing env vars in worktree (noted in multiple prior sessions — not introduced by this session, no source code changed)
+
+### Notable decisions
+- `e2e-prod` job uses `secrets.TEST_BASE_URL` (already set in GitHub repo) — no new secrets needed.
+- Used `--squash` merge flag throughout to keep main history clean.
+- This PR is the first exercise of the new loop: CC merges it, Vercel auto-deploys, no Cowork hand-off needed.

@@ -8,6 +8,24 @@ Self-hosted CRM with email sequencing (like HubSpot Sales + Lemlist) for a SaaS 
 
 **Tech stack:** Next.js 16 (App Router) + Supabase (PostgreSQL) + Tailwind CSS 4 + Vercel + Inngest + Gmail API
 
+## Workflow
+
+**CC owns the full build-test-merge-deploy cycle. Do not wait for Cowork to merge.**
+
+Each CC session follows this loop:
+
+1. `git fetch origin && git rebase origin/main` on a new branch
+2. Build the feature
+3. Local checks: `npm run build`, `npm run lint`, `npx tsc --noEmit`, `npm run test:e2e:smoke`
+4. Push branch, open PR (`gh pr create`), merge immediately (`gh pr merge --squash --repo jacobqvisth/crm-for-saas`)
+5. Vercel auto-deploys on every push to `main` — wait up to 90 s and verify the deploy URL is live (`curl -I https://crm-for-saas.vercel.app`)
+6. Append to `cc-session-log.md`: phase/task, date, PR #, branch, bullet list of what was built, build status, deploy URL, anything skipped or notable
+7. Done. No hand-off to Cowork needed.
+
+**Cowork's role** is now only: write prompts (in the vault, not this repo), update `PROJECT-STATUS.md` based on `cc-session-log.md`, fix-forward if CI fails (check with `gh run list --branch main --limit 5`).
+
+**GitHub Actions CI** runs on every push to `main` and every PR — it's a safety net, not a gate. CC does not wait for it. If it fails, fix forward in the next session.
+
 ## Autonomy
 
 Work as autonomously as possible. Do not ask for clarification on small decisions — make a reasonable choice and move on. Only stop and ask when:
@@ -24,51 +42,15 @@ You have full permission to run any of the following without asking:
 - Any npm/npx commands (`npm install`, `npm run build`, `npm run lint`, `npm run test:e2e`, `npx playwright`, etc.)
 - Any git commands (`git status`, `git add`, `git commit`, `git push`, `git pull`, `git branch`, `git log`, etc.)
 - Any file read/write/edit operations anywhere in this project
-- Any TypeScript/Node commands needed for development
 
 You do NOT need to ask permission before running these. Just run them.
 
-## Development Workflow
-
-This project uses two AI agents coordinated by Jacob:
-
-- **Cowork** (Claude in Cowork mode): Architecture, planning, prompts, debugging, database management, docs. Reads/writes directly to the local repo folder.
-- **Claude Code** (CC, Claude desktop app in Code mode): Builds features from prompts. Creates branches, commits, pushes, opens PRs. Each phase = one new CC session.
-
-### The Sync Sequence (IMPORTANT)
-
-The local folder, GitHub, and both agents must stay in sync. This is the strict order:
-
-1. **Before Cowork writes anything:** `git pull origin main` to get latest from GitHub
-2. **Cowork writes** (prompts, CLAUDE.md updates, docs, etc.)
-3. **Commit and push** Cowork's changes so they're on GitHub
-4. **CC starts a new session** — it reads from GitHub, so it gets everything
-5. **CC builds** on a new branch, opens a PR
-6. **Cowork handles the full merge/deploy loop** (see below) — Jacob does not need to do anything
-7. **`git pull origin main`** to sync local folder before Cowork touches anything again
-
-Breaking this sequence causes conflicts. The rule: **always pull before writing, always push before CC starts.**
-
-### Cowork's Autonomous Merge + Deploy Loop
-
-When Jacob pastes a CC session result (containing a PR number), Cowork handles the full loop **without asking Jacob**:
-
-1. `gh pr merge [N] --merge --repo jacobqvisth/crm-for-saas` — merge the PR
-2. `git pull origin main` — sync local repo via Desktop Commander
-3. `vercel --prod --yes` from `/Users/jacobqvisth/crm-for-saas/` — deploy to production (auto-deploy is intentionally disconnected)
-4. `TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e` — run full E2E suite
-5. Update `PROJECT-STATUS.md` to mark phase ✅ Merged + push to GitHub
-6. Report back: pass/fail count, deploy URL, what's next
-
-Only stop if tests fail or deploy errors — investigate and fix, then report.
-
-### Git Rules for CC
+## Git Rules
 
 - **Always create a new branch** for each task. Never commit directly to `main`.
 - Branch naming: `feature/short-description`, `fix/short-description`, or `chore/short-description`
 - Commit frequently with clear messages describing what changed and why
-- After completing a task, push the branch and open a PR to `main`
-- In the PR description, briefly summarize what was done and if there is anything Jacob should review or decide
+- Push the branch, open a PR (`gh pr create`), then merge it yourself (`gh pr merge --squash --repo jacobqvisth/crm-for-saas`)
 - **Always fetch and rebase on latest `origin/main`** before starting work
 
 ## Architecture — IMPORTANT
@@ -194,7 +176,7 @@ Do NOT commit `e2e/.auth/user.json` — it contains session tokens and is gitign
 - Phase 9: Production Deployment + Vercel ✅
 - Phase QA: Playwright E2E test suite ✅ 33/33 tests passing (PR #10)
 
-**Core build + deployment complete.** Phase 10 (campaign execution infrastructure) prompt is ready. See `docs/roadmap.md` for Phases 10-16.
+**Core build + deployment complete.** See `docs/roadmap.md` for active and upcoming phases.
 
 ## Maintenance Cadence
 
@@ -203,11 +185,6 @@ Before signing off on any session, run these checks:
 1. `npm run build` — must pass with 0 errors
 2. `npm run lint` — fix any new warnings introduced by this session
 3. `npx tsc --noEmit` — no type errors
-
-After every deploy, the full E2E suite must pass:
-```bash
-TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e
-```
 
 Every 3–4 phases, a dedicated health check session runs: lint to zero, dead code removal, `npm audit`, `npx depcheck`, git branch cleanup, env var audit, TODO sweep, and CLAUDE.md freshness check.
 

@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-14 (Phase: Rich Email Editor — TipTap WYSIWYG replaces textarea in sequence + template editors, variable chips, sandboxed Gmail-like preview iframe. PR #39 merged + deployed, 42/42 E2E passing + 19/19 unit tests)
+Last updated: 2026-04-14 (Workflow migration: CC now owns merge+deploy+test loop. GitHub Actions CI added. Vercel auto-deploy reconnected. PR #42)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -73,6 +73,7 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Sequence UX 1 | Duplicate sequence with country + language selection (dialog w/ country→default-language auto-select; suffix appended to name e.g. "Cold Outreach (Estonia — Estonian)") | ✅ Pushed direct to main (no PR) | 2cd3979 |
 | Sequence UX 2 | Threading hint + Delete sequence — non-first email steps show "Re: <prior subject>" preview + Threaded reply badge; editor helper explains blank subject = same Gmail thread; DELETE /api/sequences/[id] with FK-ordered cascade + type-name-to-confirm modal | ✅ Merged | #37 |
 | Sequence UX 3 | Sequence detail UX clarity — Launch Campaign → Enroll List, Activate/Pause → Start/Pause Sending (promoted to top bar), Pause All behind ⋯ menu, amber paused banner, sending-status strip (sender/next send/last sent), Contacts tab 5→9 cols (Company, Last activity, Next send, Sent + Step as "2/5 · Email") | ✅ Merged | #38 |
+| Workflow migration | CC now owns merge+deploy+test loop. GitHub Actions CI added as safety net. Vercel auto-deploy reconnected. | ✅ Merged | #42 |
 | **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
 
 ## Bugs Fixed (not by CC)
@@ -126,37 +127,24 @@ Managed by Cowork — not exposed in the CRM UI yet. Stores shops found via Apif
 - **Cowork**: Architecture, planning, prompts, debugging, docs. Reads/writes local folder.
 - **Claude Code (CC)**: Builds features from prompts in the Claude desktop app (Code mode). One new session per phase. Creates branches, commits, pushes, opens PRs.
 
-### Sync Sequence (strict order)
+### Sync Sequence
 1. `git pull origin main` — sync local with GitHub
-2. Cowork writes changes (prompts, docs, CLAUDE.md updates)
-3. Commit and push — so GitHub has Cowork's changes
-4. CC starts new session — reads from GitHub, gets everything
-5. CC builds on new branch → PR
-6. **Cowork handles the full merge/deploy loop** — Jacob does not touch git or Vercel
-7. `git pull origin main` — sync local again before next round
+2. Cowork writes changes (prompts, docs, CLAUDE.md updates) and pushes to main
+3. CC starts new session — reads from GitHub, gets everything
+4. CC builds on a new branch → opens PR → merges it → Vercel auto-deploys
+5. `git pull origin main` — sync local again before Cowork writes next time
 
 **Rule: always pull before writing, always push before CC starts.**
 
-### Cowork's Autonomous Merge + Deploy Loop
+### CC-Owned Merge + Deploy Loop (as of 2026-04-14)
 
-When Jacob pastes a CC session result (containing a PR number), Cowork runs this full sequence **without asking Jacob for approval**:
+CC now owns the full build-test-merge-deploy cycle. After every session:
+1. CC merges its own PR with `gh pr merge --squash`
+2. Vercel auto-deploys on push to main (reconnected 2026-04-14)
+3. GitHub Actions CI runs E2E tests as an async safety net
+4. CC appends to `cc-session-log.md`
 
-```bash
-# 1. Merge the PR
-gh pr merge [N] --merge --repo jacobqvisth/crm-for-saas
-
-# 2. Pull latest
-cd /Users/jacobqvisth/crm-for-saas && git pull origin main
-
-# 3. Deploy (auto-deploy is intentionally disconnected on Vercel)
-vercel --prod --yes
-
-# 4. Run E2E tests against production
-TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e
-```
-
-Then update PROJECT-STATUS.md, push, and report back to Jacob: pass/fail counts, deploy URL, next phase.
-Only stop if tests fail or deploy errors — investigate, fix, then report.
+Cowork reads `cc-session-log.md` to stay in sync. Cowork no longer merges PRs or runs Vercel deploys.
 
 ### CC Session Practice
 - Always start a new CC session for each phase/prompt
@@ -166,7 +154,7 @@ Only stop if tests fail or deploy errors — investigate, fix, then report.
 ## Deployment
 - **Vercel project**: crm-for-saas (team: jacobqvisths-projects)
 - **Production URL**: https://crm-for-saas.vercel.app
-- **GitHub**: https://github.com/jacobqvisth/crm-for-saas (auto-deploys on push to main)
+- **GitHub**: https://github.com/jacobqvisth/crm-for-saas (auto-deploys on push to main — reconnected 2026-04-14)
 - **Cron jobs** (vercel.json): process-emails (*/5 min), check-replies (*/30 min), reset-daily-sends (midnight UTC)
 
 ### Phase 12a — Pre-CC checklist (can run in parallel with Phase 10)
