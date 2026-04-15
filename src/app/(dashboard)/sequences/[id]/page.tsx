@@ -118,24 +118,55 @@ export default function SequenceDetailPage() {
       });
     }
 
-    // Load sending status (parallel: gmail accounts + enrollment-based queue queries)
-    const [
-      { data: gmailAccounts },
-      { data: enrollmentIds },
-    ] = await Promise.all([
-      supabase
+    // Load sending status: get distinct senders from this sequence's enrollments,
+    // fall back to first active workspace account if no enrollments yet.
+    const { data: enrollmentRows } = await supabase
+      .from("sequence_enrollments")
+      .select("id, sender_account_id")
+      .eq("sequence_id", sequenceId);
+
+    const enrollIds = (enrollmentRows || []).map((e) => e.id);
+
+    // Count enrollments per sender_account_id
+    const senderCountMap = new Map<string, number>();
+    for (const row of enrollmentRows || []) {
+      if (!row.sender_account_id) continue;
+      senderCountMap.set(
+        row.sender_account_id,
+        (senderCountMap.get(row.sender_account_id) ?? 0) + 1
+      );
+    }
+
+    const uniqueSenderIds = Array.from(senderCountMap.keys());
+
+    // Fetch gmail_accounts for those sender IDs (separate query avoids FK type issues)
+    let senders: { id: string; email: string; status: string; enrollmentCount: number }[] = [];
+    if (uniqueSenderIds.length > 0) {
+      const { data: gmailRows } = await supabase
+        .from("gmail_accounts")
+        .select("id, email_address, status")
+        .in("id", uniqueSenderIds);
+      senders = (gmailRows || []).map((g) => ({
+        id: g.id,
+        email: g.email_address,
+        status: g.status,
+        enrollmentCount: senderCountMap.get(g.id) ?? 0,
+      }));
+    }
+
+    // Fallback: if no enrollments yet, use first active workspace account
+    let fallbackEmail: string | null = null;
+    let gmailConnected = senders.length > 0;
+    if (senders.length === 0) {
+      const { data: fallbackAccounts } = await supabase
         .from("gmail_accounts")
         .select("id, email_address, status")
         .eq("workspace_id", workspaceId)
         .eq("status", "active")
-        .limit(1),
-      supabase
-        .from("sequence_enrollments")
-        .select("id")
-        .eq("sequence_id", sequenceId),
-    ]);
-
-    const enrollIds = (enrollmentIds || []).map((e) => e.id);
+        .limit(1);
+      fallbackEmail = fallbackAccounts?.[0]?.email_address ?? null;
+      gmailConnected = (fallbackAccounts?.length ?? 0) > 0;
+    }
 
     let nextSend: string | null = null;
     let lastSent: string | null = null;
@@ -164,8 +195,9 @@ export default function SequenceDetailPage() {
     }
 
     setSendingStatus({
-      gmailConnected: (gmailAccounts?.length ?? 0) > 0,
-      gmailEmail: gmailAccounts?.[0]?.email_address ?? null,
+      gmailConnected,
+      senders,
+      gmailEmail: senders.length === 1 ? senders[0].email : fallbackEmail,
       nextSend,
       lastSent,
     });

@@ -10,10 +10,12 @@ import {
   UserPlus,
   Check,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
+import { ChangeSenderModal } from "@/components/sequences/change-sender-modal";
 
 type Sequence = Tables<"sequences">;
 
@@ -27,9 +29,17 @@ interface SequenceStats {
   unsubscribed: number;
 }
 
+export interface SenderInfo {
+  id: string;
+  email: string;
+  status: string;
+  enrollmentCount: number;
+}
+
 export interface SendingStatus {
   gmailConnected: boolean;
-  gmailEmail: string | null;
+  senders: SenderInfo[];
+  gmailEmail: string | null; // kept for backward-compat: single sender email or fallback
   nextSend: string | null;
   lastSent: string | null;
 }
@@ -64,6 +74,7 @@ export function SequenceHeader({
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sequence.name);
+  const [changeSenderOpen, setChangeSenderOpen] = useState(false);
 
   const badge = STATUS_BADGES[sequence.status] || STATUS_BADGES.draft;
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
@@ -168,12 +179,48 @@ export function SequenceHeader({
 
       {sendingStatus && (
         <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 flex-wrap">
-          <span className="flex items-center gap-1 text-xs text-slate-500">
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${sendingStatus.gmailConnected ? "bg-green-500" : "bg-red-400"}`} />
-            {sendingStatus.gmailConnected && sendingStatus.gmailEmail
-              ? <>{sendingStatus.gmailEmail} connected</>
-              : <>No sender connected — go to Settings → Email</>}
-          </span>
+          {/* Sender display */}
+          {(() => {
+            const { senders, gmailConnected, gmailEmail } = sendingStatus;
+            let dotColor = "bg-red-400";
+            let label: React.ReactNode = <>No sender connected — go to Settings → Email</>;
+
+            if (senders.length === 1) {
+              const s = senders[0];
+              const isActive = s.status === "active";
+              dotColor = isActive ? "bg-green-500" : "bg-red-400";
+              label = isActive
+                ? <>{s.email} connected</>
+                : <>{s.email} <span className="text-red-500">(paused)</span></>;
+            } else if (senders.length > 1) {
+              dotColor = "bg-yellow-400";
+              label = (
+                <span title={senders.map((s) => s.email).join(", ")}>
+                  Multiple senders ({senders.length})
+                </span>
+              );
+            } else if (gmailConnected && gmailEmail) {
+              dotColor = "bg-green-500";
+              label = <>{gmailEmail} connected</>;
+            }
+
+            return (
+              <span className="flex items-center gap-1 text-xs text-slate-500">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                {label}
+              </span>
+            );
+          })()}
+
+          {/* Change sender button */}
+          <button
+            onClick={() => setChangeSenderOpen(true)}
+            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Change sender
+          </button>
+
           <span className="text-slate-300 text-xs">·</span>
           <span className="text-xs text-slate-500">
             {sendingStatus.nextSend
@@ -187,6 +234,20 @@ export function SequenceHeader({
               : <>No emails sent yet</>}
           </span>
         </div>
+      )}
+
+      {changeSenderOpen && workspaceId && (
+        <ChangeSenderModal
+          sequenceId={sequence.id}
+          workspaceId={workspaceId}
+          currentSenders={sendingStatus?.senders ?? []}
+          enrolledCount={stats.enrolled}
+          onClose={() => setChangeSenderOpen(false)}
+          onSuccess={() => {
+            setChangeSenderOpen(false);
+            onRefresh();
+          }}
+        />
       )}
     </div>
   );
