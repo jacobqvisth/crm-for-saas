@@ -637,3 +637,24 @@ Phase 20: Prospector Upgrade
 ### Notable decisions
 - Script only committed — data was already in Supabase before this session (Cowork ran the import directly).
 - No `scripts/latvia-shops-data.json` generated or committed — script fetches directly from Apify (same pattern as Lithuania).
+
+---
+
+## Session: Country filtering on Contacts + Lists
+- **Date:** 2026-04-15
+- **PR:** #44
+- **Branch:** feature/country-filter
+
+### What was built
+- **`src/lib/lists/filter-query.ts`**: Added `country_code` to `FilterField` union, `FILTER_FIELDS` array (after Company), and `OPERATORS_BY_FIELD` (`is` / `is not` / `has no country` / `has a country`). Updated `describeFilter` to render country filter descriptions.
+- **`src/components/lists/filter-builder.tsx`**: Fetches distinct `country_code`/`country` pairs from workspace contacts on mount; deduplicates and sorts alphabetically; passes as `countries` prop to `FilterRow`.
+- **`src/components/lists/filter-row.tsx`**: Accepts `countries` prop; renders a `<select>` dropdown for `country_code` field showing friendly name + code (e.g. "Latvia (LV)").
+- **`src/components/contacts/contacts-page-client.tsx`**: Added Country filter dropdown (distinct values, URL-persisted as `country_code` param), Country column (shows `country` name then `country_code` then `—`), sortable Country column header (asc/desc by `country_code`, nulls last, toggled locally).
+
+### Build status
+- `npm run build` ✅ | `npm run lint` ✅ | `npm run test:e2e:smoke` ✅ 8/8
+- Vercel deploy: live (HTTP 307 → auth as expected)
+
+### Notable decisions
+- Sort state is local (not in URL) since no other column has sort — keeps it simple.
+- Countries list deduplicates in JS rather than SQL DISTINCT since Supabase REST doesn't expose SELECT DISTINCT; performant for expected dataset sizes.
