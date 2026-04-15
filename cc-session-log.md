@@ -620,3 +620,20 @@ Phase 20: Prospector Upgrade
 - `e2e-prod` job uses `secrets.TEST_BASE_URL` (already set in GitHub repo) — no new secrets needed.
 - Used `--squash` merge flag throughout to keep main history clean.
 - This PR is the first exercise of the new loop: CC merges it, Vercel auto-deploys, no Cowork hand-off needed.
+
+## Latvia Scrape Artifacts Commit
+**Date:** 2026-04-15
+**PR:** #43
+**Branch:** chore/latvia-scrape-import-script
+
+### What was built
+- **`scripts/import-latvia-shops.mjs`**: New import script for Latvia. Fetches 12 Apify datasets (Rīga ×2 by search term, 6 major cities, 4 regional residuals: Vidzeme/Latgale/Kurzeme/Zemgale). Deduplicates on `placeId`. Filters CSDD-operated state inspection stations. Modeled on `import-lithuania-shops.mjs`.
+- **`PROJECT-STATUS.md`**: Added Latvia row to `discovered_shops data by country` table (973 shops, 35% email, 94% phone, 46 cities, imported 2026-04-15). Added `import-latvia-shops.mjs` to Import scripts list.
+
+### Build status
+- No app code changed — build/lint/tsc not run (docs + script only commit)
+- Vercel deploy: no-op, site live (HTTP 307 → auth as expected)
+
+### Notable decisions
+- Script only committed — data was already in Supabase before this session (Cowork ran the import directly).
+- No `scripts/latvia-shops-data.json` generated or committed — script fetches directly from Apify (same pattern as Lithuania).
