@@ -17,9 +17,10 @@ interface FilterRowProps {
   onChange: (filter: ListFilter) => void;
   onRemove: () => void;
   companies: Tables<'companies'>[];
+  countries: { code: string; name: string }[];
 }
 
-export function FilterRow({ filter, onChange, onRemove, companies }: FilterRowProps) {
+export function FilterRow({ filter, onChange, onRemove, companies, countries }: FilterRowProps) {
   const operators = OPERATORS_BY_FIELD[filter.field] || [];
 
   const handleFieldChange = (field: FilterField) => {
@@ -127,6 +128,21 @@ export function FilterRow({ filter, onChange, onRemove, companies }: FilterRowPr
           <option value="">Select company...</option>
           {companies.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (filter.field === 'country_code') {
+      return (
+        <select
+          value={(filter.value as string) || ''}
+          onChange={(e) => onChange({ ...filter, value: e.target.value })}
+          className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Select country...</option>
+          {countries.map(c => (
+            <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
           ))}
         </select>
       );
