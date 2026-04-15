@@ -9,6 +9,7 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { Modal } from '@/components/ui/modal';
 import { FilterBuilder } from './filter-builder';
 import toast from 'react-hot-toast';
+import { buildFilterQuery } from '@/lib/lists/filter-query';
 import type { Tables } from '@/lib/database.types';
 import type { ListFilter } from '@/lib/lists/filter-query';
 
@@ -50,19 +51,27 @@ export function ListTable() {
       return;
     }
 
-    // Get member counts for static lists
-    const listsWithCounts: ContactList[] = [];
-    for (const list of data || []) {
-      if (list.is_dynamic === true) {
-        listsWithCounts.push({ ...list, contact_count: undefined });
-      } else {
-        const { count } = await supabase
-          .from('contact_list_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('list_id', list.id);
-        listsWithCounts.push({ ...list, contact_count: count || 0 });
-      }
-    }
+    // Get member counts for all lists in parallel
+    const listsWithCounts: ContactList[] = await Promise.all(
+      (data || []).map(async (list) => {
+        if (list.is_dynamic === true) {
+          const { count } = await buildFilterQuery(
+            supabase,
+            workspaceId,
+            (list.filters as unknown as ListFilter[]) || [],
+            'id',
+            { count: 'exact', head: true },
+          );
+          return { ...list, contact_count: count ?? 0 };
+        } else {
+          const { count } = await supabase
+            .from('contact_list_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('list_id', list.id);
+          return { ...list, contact_count: count ?? 0 };
+        }
+      })
+    );
 
     setLists(listsWithCounts);
     setLoading(false);
@@ -273,7 +282,7 @@ export function ListTable() {
                       {list.description || '—'}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {list.is_dynamic === true ? '—' : (list.contact_count ?? 0)}
+                      {list.contact_count ?? 0}
                     </td>
                     <td className="px-4 py-3 text-slate-500">
                       {list.created_at ? format(new Date(list.created_at), 'MMM d, yyyy') : '—'}

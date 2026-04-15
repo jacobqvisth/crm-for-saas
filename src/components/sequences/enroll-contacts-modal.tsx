@@ -6,6 +6,7 @@ import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { Modal } from "@/components/ui/modal";
 import { Search, Users, UserPlus, Loader2, AlertTriangle } from "lucide-react";
 import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
+import { resolveListContactIds } from "@/lib/lists/filter-query";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
@@ -100,12 +101,19 @@ export function EnrollContactsModal({
     if (tab === "search") {
       contactIds = Array.from(selectedContacts);
     } else if (tab === "list" && selectedList) {
-      // Get all contacts from the selected list
-      const { data: members } = await supabase
-        .from("contact_list_members")
-        .select("contact_id")
-        .eq("list_id", selectedList);
-      contactIds = (members || []).map((m) => m.contact_id);
+      const list = lists.find((l) => l.id === selectedList);
+      if (!list) {
+        toast.error("List not found");
+        setEnrolling(false);
+        return;
+      }
+      try {
+        contactIds = await resolveListContactIds(supabase, list);
+      } catch {
+        toast.error("Failed to resolve list contacts");
+        setEnrolling(false);
+        return;
+      }
     }
 
     if (contactIds.length === 0) {

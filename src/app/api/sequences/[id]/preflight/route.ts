@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { buildFilterQuery } from "@/lib/lists/filter-query";
+import type { ListFilter } from "@/lib/lists/filter-query";
 
 export async function GET(
   request: NextRequest,
@@ -58,25 +60,43 @@ export async function GET(
     .eq("sequence_id", sequenceId)
     .eq("type", "email");
 
-  // 3. Get list members with contact data
-  const { data: members } = await supabase
-    .from("contact_list_members")
-    .select("contact_id, contacts(id, email, first_name)")
-    .eq("list_id", listId);
+  // 3. Get list metadata, then resolve contacts (dynamic or static)
+  const { data: listData } = await supabase
+    .from("contact_lists")
+    .select("is_dynamic, filters")
+    .eq("id", listId)
+    .eq("workspace_id", workspaceId)
+    .single();
 
-  const listMemberCount = members?.length || 0;
+  type ContactRow = { id: string; email: string | null; first_name: string | null };
+  let rawContacts: ContactRow[] = [];
+
+  if (listData?.is_dynamic === true) {
+    const filters = (listData.filters as ListFilter[] | null) ?? [];
+    const { data: contactData } = await buildFilterQuery(
+      supabase,
+      workspaceId,
+      filters,
+      "id, email, first_name",
+    );
+    rawContacts = (contactData ?? []) as ContactRow[];
+  } else {
+    const { data: memberData } = await supabase
+      .from("contact_list_members")
+      .select("contact_id, contacts(id, email, first_name)")
+      .eq("list_id", listId);
+    rawContacts = ((memberData ?? []) as { contacts: ContactRow | null }[])
+      .map((m) => m.contacts)
+      .filter((c): c is ContactRow => c !== null);
+  }
+
+  const listMemberCount = rawContacts.length;
   let missingEmail = 0;
   let missingFirstName = 0;
   const validContactIds: string[] = [];
 
-  for (const m of members || []) {
-    const contact = m.contacts as {
-      id: string;
-      email: string | null;
-      first_name: string | null;
-    } | null;
-
-    if (!contact?.email) {
+  for (const contact of rawContacts) {
+    if (!contact.email) {
       missingEmail++;
     } else {
       validContactIds.push(contact.id);
