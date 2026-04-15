@@ -1,5 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getNextSendTime } from "@/lib/sequences/scheduler";
+import type { SequenceSettings } from "@/lib/database.types";
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createClient();
+  const { id: sequenceId } = await params;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { status: newStatus } = body as { status: string };
+
+  const allowedStatuses = ["active", "paused", "draft", "archived"] as const;
+  type AllowedStatus = typeof allowedStatuses[number];
+  if (!allowedStatuses.includes(newStatus as AllowedStatus)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+  const validStatus = newStatus as AllowedStatus;
+
+  const { data: sequence, error: seqError } = await supabase
+    .from("sequences")
+    .select("id, workspace_id, settings")
+    .eq("id", sequenceId)
+    .single();
+
+  if (seqError || !sequence) {
+    return NextResponse.json({ error: "Sequence not found" }, { status: 404 });
+  }
+
+  const { error: updateError } = await supabase
+    .from("sequences")
+    .update({ status: validStatus })
+    .eq("id", sequenceId)
+    .eq("workspace_id", sequence.workspace_id);
+
+  if (updateError) {
+    return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
+  }
+
+  // When activating, promote all pending queue rows → scheduled with fresh scheduled_for.
+  // This handles the case where contacts were enrolled while the sequence was draft/paused.
+  if (validStatus === "active") {
+    const { data: enrollments } = await supabase
+      .from("sequence_enrollments")
+      .select("id")
+      .eq("sequence_id", sequenceId);
+
+    if (enrollments && enrollments.length > 0) {
+      const enrollmentIds = enrollments.map((e) => e.id);
+      const settings = sequence.settings as SequenceSettings;
+      const scheduledFor = getNextSendTime(settings);
+
+      await supabase
+        .from("email_queue")
+        .update({ status: "scheduled", scheduled_for: scheduledFor.toISOString() })
+        .in("enrollment_id", enrollmentIds)
+        .eq("status", "pending");
+    }
+  }
+
+  return NextResponse.json({ ok: true, status: validStatus });
+}
 
 // Note: A future migration could add ON DELETE CASCADE to the FKs below
 // (email_queue → sequence_enrollments, sequence_steps → sequences, etc.)
