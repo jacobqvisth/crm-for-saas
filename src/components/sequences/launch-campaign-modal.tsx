@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { buildFilterQuery, resolveListContactIds } from "@/lib/lists/filter-query";
 import { X, CheckCircle, AlertTriangle, XCircle, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
+import type { ListFilter } from "@/lib/lists/filter-query";
 
 interface PreflightData {
   gmailConnected: boolean;
@@ -36,6 +38,8 @@ interface ContactList {
   id: string;
   name: string;
   memberCount: number;
+  is_dynamic: boolean | null;
+  filters: unknown;
 }
 
 interface LaunchCampaignModalProps {
@@ -68,18 +72,29 @@ export function LaunchCampaignModal({
       setLoadingLists(true);
       const { data } = await supabase
         .from("contact_lists")
-        .select("id, name")
+        .select("id, name, is_dynamic, filters")
         .eq("workspace_id", workspaceId)
         .order("name");
 
       if (data) {
         const listsWithCounts = await Promise.all(
           data.map(async (list) => {
-            const { count } = await supabase
-              .from("contact_list_members")
-              .select("id", { count: "exact", head: true })
-              .eq("list_id", list.id);
-            return { id: list.id, name: list.name, memberCount: count || 0 };
+            if (list.is_dynamic === true) {
+              const { count } = await buildFilterQuery(
+                supabase,
+                workspaceId,
+                (list.filters as unknown as ListFilter[]) || [],
+                "id",
+                { count: "exact", head: true },
+              );
+              return { id: list.id, name: list.name, memberCount: count ?? 0, is_dynamic: list.is_dynamic, filters: list.filters };
+            } else {
+              const { count } = await supabase
+                .from("contact_list_members")
+                .select("id", { count: "exact", head: true })
+                .eq("list_id", list.id);
+              return { id: list.id, name: list.name, memberCount: count ?? 0, is_dynamic: list.is_dynamic, filters: list.filters };
+            }
           })
         );
         setLists(listsWithCounts);
@@ -107,12 +122,26 @@ export function LaunchCampaignModal({
     if (!preflight) return;
     setLaunching(true);
 
-    const { data: members } = await supabase
-      .from("contact_list_members")
-      .select("contact_id")
-      .eq("list_id", selectedListId);
+    const selectedList = lists.find((l) => l.id === selectedListId);
+    if (!selectedList) {
+      toast.error("List not found");
+      setLaunching(false);
+      return;
+    }
 
-    const contactIds = (members || []).map((m) => m.contact_id);
+    let contactIds: string[];
+    try {
+      contactIds = await resolveListContactIds(supabase, {
+        id: selectedList.id,
+        workspace_id: workspaceId,
+        is_dynamic: selectedList.is_dynamic,
+        filters: selectedList.filters,
+      });
+    } catch {
+      toast.error("Failed to resolve list contacts");
+      setLaunching(false);
+      return;
+    }
 
     const res = await fetch("/api/sequences/enroll", {
       method: "POST",

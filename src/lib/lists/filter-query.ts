@@ -114,11 +114,15 @@ export function buildFilterQuery(
   workspaceId: string,
   filters: ListFilter[],
   selectClause: string = '*, companies(name)',
-  opts?: { count?: 'exact'; range?: [number, number] }
+  opts?: { count?: 'exact'; range?: [number, number]; head?: boolean }
 ): any {
+  const selectOpts: { count?: 'exact'; head?: boolean } = {};
+  if (opts?.count) selectOpts.count = opts.count;
+  if (opts?.head) selectOpts.head = opts.head;
+
   let query: any = supabase
     .from('contacts')
-    .select(selectClause, opts?.count ? { count: opts.count } : undefined)
+    .select(selectClause, Object.keys(selectOpts).length > 0 ? selectOpts : undefined)
     .eq('workspace_id', workspaceId);
 
   for (const filter of filters) {
@@ -174,6 +178,42 @@ export function buildFilterQuery(
   }
 
   return query.order('created_at', { ascending: false });
+}
+
+/** Minimal list shape required for membership resolution. */
+export type ResolvableList = {
+  id: string;
+  workspace_id: string;
+  is_dynamic: boolean | null;
+  filters: unknown;
+};
+
+/**
+ * Resolve the full set of contact IDs for a list.
+ * - Dynamic lists: runs the stored filter query and returns matching IDs.
+ * - Static lists: queries contact_list_members.
+ *
+ * This is the single source of truth for list membership resolution.
+ * Do NOT query contact_list_members directly for resolution purposes —
+ * use this helper so dynamic lists work correctly.
+ */
+export async function resolveListContactIds(
+  supabase: SupabaseClient<Database>,
+  list: ResolvableList,
+): Promise<string[]> {
+  if (list.is_dynamic === true) {
+    const filters = (list.filters as ListFilter[] | null) ?? [];
+    const { data, error } = await buildFilterQuery(supabase, list.workspace_id, filters, 'id');
+    if (error) throw error;
+    return (data ?? []).map((c: { id: string }) => c.id);
+  }
+
+  const { data, error } = await supabase
+    .from('contact_list_members')
+    .select('contact_id')
+    .eq('list_id', list.id);
+  if (error) throw error;
+  return (data ?? []).map((m) => m.contact_id);
 }
 
 export function describeFilter(filter: ListFilter, companyName?: string): string {
