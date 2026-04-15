@@ -225,32 +225,16 @@ export default function SequenceDetailPage() {
     setToggleLoading(true);
     const newStatus = sequence.status === "active" ? "paused" : "active";
 
-    const { error } = await supabase
-      .from("sequences")
-      .update({ status: newStatus })
-      .eq("id", sequence.id)
-      .eq("workspace_id", workspaceId);
+    const res = await fetch(`/api/sequences/${sequence.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
 
-    if (error) {
+    if (!res.ok) {
       toast.error("Failed to update status");
       setToggleLoading(false);
       return;
-    }
-
-    // When activating: promote all pending emails to scheduled so the cron picks them up
-    if (newStatus === "active") {
-      const { data: enrollments } = await supabase
-        .from("sequence_enrollments")
-        .select("id")
-        .eq("sequence_id", sequence.id);
-
-      if (enrollments && enrollments.length > 0) {
-        await supabase
-          .from("email_queue")
-          .update({ status: "scheduled" })
-          .in("enrollment_id", enrollments.map((e) => e.id))
-          .eq("status", "pending");
-      }
     }
 
     toast.success(`Sequence ${newStatus === "active" ? "sending started" : "sending paused"}`);

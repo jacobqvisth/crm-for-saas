@@ -157,7 +157,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       bodyHtml = resolveVariables(bodyHtml, contact, company as never, trackingId);
       bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
 
-      await supabase.from("email_queue").insert({
+      const { error: queueError } = await supabase.from("email_queue").insert({
         workspace_id: workspaceId,
         enrollment_id: enrollment.id,
         step_id: firstStep.id,
@@ -170,6 +170,12 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
         scheduled_for: scheduledFor.toISOString(),
         tracking_id: trackingId,
       });
+      if (queueError) {
+        await supabase.from("sequence_enrollments").delete().eq("id", enrollment.id);
+        result.skipped++;
+        result.reasons.push(`${contact.email}: Failed to queue first email — ${queueError.message}`);
+        continue;
+      }
     } else if (firstStep && firstStep.type === "delay" && enrollment) {
       // For delay steps, calculate when the delay ends and schedule the next step
       const delayEnd = calculateStepScheduleTime(
@@ -204,7 +210,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
         bodyHtml = resolveVariables(bodyHtml, contact, company, trackingId);
         bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
 
-        await supabase.from("email_queue").insert({
+        const { error: delayQueueError } = await supabase.from("email_queue").insert({
           workspace_id: workspaceId,
           enrollment_id: enrollment.id,
           step_id: nextStep.id,
@@ -217,6 +223,12 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
           scheduled_for: delayEnd.toISOString(),
           tracking_id: trackingId,
         });
+        if (delayQueueError) {
+          await supabase.from("sequence_enrollments").delete().eq("id", enrollment.id);
+          result.skipped++;
+          result.reasons.push(`${contact.email}: Failed to queue first email — ${delayQueueError.message}`);
+          continue;
+        }
       }
     }
 
