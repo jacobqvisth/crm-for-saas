@@ -680,3 +680,29 @@ Phase 20: Prospector Upgrade
 ### Notable decisions
 - Did not change `contact_list_members` writes — static lists still materialize members there. Only reads-for-resolution are redirected through `resolveListContactIds()`.
 - `enroll-list-modal.tsx` and `export-csv-button.tsx` were already handling dynamic lists correctly; left untouched.
+
+---
+
+## Session: Fix draft-sequence enrollments silently failing to queue emails
+- **Date:** 2026-04-15
+- **PR:** #50
+- **Branch:** fix/draft-sequence-pending-queue
+
+### What was built
+- **`supabase/migrations/20260415000000_email_queue_allow_pending.sql`**: Drops and recreates `email_queue_status_check` constraint to include `'pending'` alongside `scheduled/sending/sent/failed/cancelled`. Applied to prod via Supabase MCP before merging.
+- **`src/lib/sequences/enrollment.ts`**: Added error handling on both `email_queue` INSERT calls. On failure, rolls back the just-created `sequence_enrollments` row and counts the contact as skipped with an error reason. Previously both inserts silently swallowed errors (`await` without capturing return value).
+- **`src/app/api/sequences/[id]/route.ts`**: Added `PATCH` handler for sequence status transitions. When transitioning to `active`, fetches all enrollment IDs for the sequence and promotes `pending` queue rows to `scheduled` with a fresh `scheduled_for` computed via `getNextSendTime(settings)`.
+- **`src/app/(dashboard)/sequences/[id]/page.tsx`**: Updated `toggleStatus` to call `PATCH /api/sequences/:id` instead of two separate direct Supabase calls from the browser client.
+
+### Root cause summary
+`email_queue` had a CHECK constraint that only allowed `scheduled/sending/sent/failed/cancelled`. The enrollment code set `status='pending'` for draft/paused sequences, which violated the constraint. Supabase JS client silently discarded the error (unchecked return value). Result: enrollment rows existed but queue rows never did — nothing sent after activation.
+
+### Build status
+- `npm run build` ✅ | `npm run lint` ✅ | `npx tsc --noEmit` ✅
+- DB constraint verified via SQL: `CHECK (status = ANY (ARRAY['pending','scheduled','sending','sent','failed','cancelled']))`
+- Vercel deploy: live (HTTP 307 → auth as expected)
+
+### Notable decisions
+- Did not backfill the 279 stuck Latvia enrollments — Jacob will re-enroll them manually after this fix ships.
+- Cron (`process-emails`) filter unchanged — still only picks up `status='scheduled'`.
+- `scheduled_for` is reset to `getNextSendTime(settings)` on activation so stale timestamps from draft-enrollment don't all fire at once (cron jitter handles the rest).
