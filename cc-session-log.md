@@ -14,6 +14,20 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-15 — Sequence detail: real sender display + Change Sender modal
+
+- **Branch**: `claude/nice-lewin` → PR #48, squash-merged to main
+- **What was built**:
+  - **Fix wrong sender display**: `sequences/[id]/page.tsx` now queries `sequence_enrollments.sender_account_id` and resolves via `gmail_accounts` to get actual per-sequence sender(s). Falls back to first active workspace account if no enrollments exist.
+  - **Multi-sender rendering in header**: `SendingStatus` extended with `senders: SenderInfo[]`. Header renders green dot (1 active sender), yellow dot (`Multiple senders (N)` with tooltip), or red dot (0 senders / paused sender).
+  - **"Change sender" button** in header status bar (using `RefreshCw` icon) opens `ChangeSenderModal`.
+  - **`ChangeSenderModal`** (`src/components/sequences/change-sender-modal.tsx`): loads active Gmail accounts via `/api/gmail/accounts`, pre-selects current sender if exactly one, warns if multiple senders will be reassigned. Scope picker: "Future sends only" (scheduled queue + enrollments) vs "All enrollments" (adds `sent` rows, with confirmation warning). Handles zero-enrollment gracefully.
+  - **`POST /api/sequences/[id]/sender`** (`src/app/api/sequences/[id]/sender/route.ts`): verifies auth + workspace membership via RLS, verifies target account belongs to workspace and is active, updates `sequence_enrollments.sender_account_id` for all enrollments, updates `email_queue.sender_account_id` for `scheduled` (and `sent` if scope=all). Never touches `sending` rows.
+- **Build status**: TypeScript clean (no new errors). ESLint clean. Pre-existing `@tiptap` module errors unrelated to this session.
+- **Deploy**: https://crm-for-saas.vercel.app live (HTTP 307 auth redirect confirmed).
+
+---
+
 ## 2026-04-14 — Sequence UX: threading hint + delete action
 
 - **Branch**: `feature/sequence-threading-ux-and-delete` → PR pending
