@@ -89,6 +89,7 @@ export function SequenceList() {
   const [dupDialog, setDupDialog] = useState<{ seq: Sequence } | null>(null);
   const [dupCountry, setDupCountry] = useState("");
   const [dupLang, setDupLang] = useState("");
+  const [dupLoading, setDupLoading] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{ seq: Sequence } | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -224,50 +225,44 @@ export function SequenceList() {
       : countryObj
         ? `(${countryObj.name})`
         : "(Copy)";
+    const newName = `${seq.name} ${suffix}`;
 
-    const { data: newSeq, error } = await supabase
-      .from("sequences")
-      .insert({
-        workspace_id: workspaceId,
-        name: `${seq.name} ${suffix}`,
-        status: "draft" as const,
-        settings: seq.settings,
-      })
-      .select()
-      .single();
+    setDupLoading(true);
+    try {
+      const res = await fetch("/api/sequences/duplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceSequenceId: seq.id,
+          workspaceId,
+          targetCountry: dupCountry,
+          targetCountryName: countryObj?.name ?? "",
+          targetLanguage: dupLang,
+          targetLanguageLabel: langObj?.label ?? dupLang,
+          newName,
+        }),
+      });
 
-    if (error || !newSeq) {
+      const data = await res.json() as { sequenceId?: string; warnings?: string[]; error?: string };
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to duplicate sequence");
+        return;
+      }
+
+      toast.success(`Sequence duplicated and translated to ${langObj?.label ?? dupLang}`);
+
+      if (data.warnings && data.warnings.length > 0) {
+        data.warnings.forEach((w) => toast(w, { icon: "⚠️" }));
+      }
+
+      setDupDialog(null);
+      loadSequences();
+    } catch {
       toast.error("Failed to duplicate sequence");
-      return;
+    } finally {
+      setDupLoading(false);
     }
-
-    // Copy steps
-    const { data: steps } = await supabase
-      .from("sequence_steps")
-      .select("*")
-      .eq("sequence_id", seq.id)
-      .order("step_order");
-
-    if (steps && steps.length > 0) {
-      const newSteps = steps.map((s) => ({
-        sequence_id: newSeq.id,
-        step_order: s.step_order,
-        type: s.type,
-        delay_days: s.delay_days,
-        delay_hours: s.delay_hours,
-        template_id: s.template_id,
-        subject_override: s.subject_override,
-        body_override: s.body_override,
-        condition_type: s.condition_type,
-        condition_branch_yes: s.condition_branch_yes,
-        condition_branch_no: s.condition_branch_no,
-      }));
-      await supabase.from("sequence_steps").insert(newSteps);
-    }
-
-    toast.success("Sequence duplicated");
-    setDupDialog(null);
-    loadSequences();
   };
 
   const deleteSequence = async () => {
@@ -519,11 +514,12 @@ export function SequenceList() {
       {/* Duplicate dialog */}
       {dupDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDupDialog(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => !dupLoading && setDupDialog(null)} />
           <div className="relative bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md mx-4 p-6">
             <button
               onClick={() => setDupDialog(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+              disabled={dupLoading}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 disabled:opacity-50"
             >
               <X className="w-4 h-4" />
             </button>
@@ -577,16 +573,17 @@ export function SequenceList() {
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setDupDialog(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                disabled={dupLoading}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={duplicateSequence}
-                disabled={!dupCountry || !dupLang}
+                disabled={!dupCountry || !dupLang || dupLoading}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Duplicate
+                {dupLoading ? "Translating…" : "Duplicate"}
               </button>
             </div>
           </div>
