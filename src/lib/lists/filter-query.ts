@@ -18,6 +18,7 @@ export type FilterField =
   | 'status'
   | 'lead_status'
   | 'company_id'
+  | 'country_code'
   | 'created_at'
   | 'last_contacted_at'
   | 'email'
@@ -36,6 +37,7 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'status', label: 'Status' },
   { value: 'lead_status', label: 'Lead Status' },
   { value: 'company_id', label: 'Company' },
+  { value: 'country_code', label: 'Country' },
   { value: 'created_at', label: 'Created Date' },
   { value: 'last_contacted_at', label: 'Last Contacted' },
   { value: 'email', label: 'Email' },
@@ -59,6 +61,12 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'equals', label: 'is' },
     { value: 'is_null', label: 'has no company' },
     { value: 'is_not_null', label: 'has a company' },
+  ],
+  country_code: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'is_null', label: 'has no country' },
+    { value: 'is_not_null', label: 'has a country' },
   ],
   created_at: [
     { value: 'before', label: 'before' },
@@ -179,6 +187,10 @@ export function describeFilter(filter: ListFilter, companyName?: string): string
 
   if (filter.field === 'company_id' && companyName) {
     return `${fieldLabel} ${opLabel} ${companyName}`;
+  }
+
+  if (filter.field === 'country_code') {
+    return `${fieldLabel} ${opLabel} ${filter.value}`;
   }
 
   if (filter.field === 'custom_fields' && filter.customFieldKey) {

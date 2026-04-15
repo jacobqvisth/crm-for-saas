@@ -17,6 +17,7 @@ export function FilterBuilder({ filters, onChange }: FilterBuilderProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
   const [companies, setCompanies] = useState<Tables<'companies'>[]>([]);
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -26,6 +27,28 @@ export function FilterBuilder({ filters, onChange }: FilterBuilderProps) {
       .eq('workspace_id', workspaceId)
       .order('name')
       .then(({ data }) => { if (data) setCompanies(data); });
+  }, [workspaceId, supabase]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from('contacts')
+      .select('country_code, country')
+      .eq('workspace_id', workspaceId)
+      .not('country_code', 'is', null)
+      .then(({ data }) => {
+        if (!data) return;
+        const seen = new Set<string>();
+        const list: { code: string; name: string }[] = [];
+        for (const row of data) {
+          if (row.country_code && !seen.has(row.country_code)) {
+            seen.add(row.country_code);
+            list.push({ code: row.country_code, name: row.country || row.country_code });
+          }
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setCountries(list);
+      });
   }, [workspaceId, supabase]);
 
   const addFilter = () => {
@@ -61,6 +84,7 @@ export function FilterBuilder({ filters, onChange }: FilterBuilderProps) {
                 onChange={(f) => updateFilter(i, f)}
                 onRemove={() => removeFilter(i)}
                 companies={companies}
+                countries={countries}
               />
             </div>
           ))}

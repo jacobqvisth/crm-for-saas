@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, X, Plus, Upload, ChevronLeft, ChevronRight, Trash2, Tags, ListPlus, ShieldCheck } from 'lucide-react';
+import { Search, X, Plus, Upload, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, Tags, ListPlus, ShieldCheck } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
@@ -31,6 +31,7 @@ export function ContactsPageClient() {
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<Tables<'companies'>[]>([]);
   const [lists, setLists] = useState<Tables<'contact_lists'>[]>([]);
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
 
   // Table state from URL
   const page = Number(searchParams.get('page') || '1');
@@ -38,9 +39,12 @@ export function ContactsPageClient() {
   const leadStatusFilter = searchParams.get('lead_status') || '';
   const statusFilter = searchParams.get('status') || '';
   const companyFilter = searchParams.get('company_id') || '';
+  const countryFilter = searchParams.get('country_code') || '';
 
   // Local state
   const [searchInput, setSearchInput] = useState(search);
+  const [sortField, setSortField] = useState<'country_code' | null>(null);
+  const [sortAsc, setSortAsc] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddContact, setShowAddContact] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -87,7 +91,6 @@ export function ContactsPageClient() {
         .from('contacts')
         .select('*, companies(name)', { count: 'exact' })
         .eq('workspace_id', workspaceId!)
-        .order('created_at', { ascending: false })
         .range(from, to);
 
       if (search) {
@@ -101,6 +104,15 @@ export function ContactsPageClient() {
       }
       if (companyFilter) {
         query = query.eq('company_id', companyFilter);
+      }
+      if (countryFilter) {
+        query = query.eq('country_code', countryFilter);
+      }
+
+      if (sortField === 'country_code') {
+        query = query.order('country_code', { ascending: sortAsc, nullsFirst: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
       }
 
       const { data, count, error } = await query;
@@ -125,7 +137,7 @@ export function ContactsPageClient() {
     fetchContacts();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, page, search, leadStatusFilter, statusFilter, companyFilter]);
+  }, [workspaceId, page, search, leadStatusFilter, statusFilter, companyFilter, countryFilter, sortField, sortAsc]);
 
   // Fetch companies for filter dropdown
   useEffect(() => {
@@ -136,6 +148,30 @@ export function ContactsPageClient() {
       .eq('workspace_id', workspaceId)
       .order('name')
       .then(({ data }) => { if (data) setCompanies(data); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
+  // Fetch distinct countries for filter dropdown
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from('contacts')
+      .select('country_code, country')
+      .eq('workspace_id', workspaceId)
+      .not('country_code', 'is', null)
+      .then(({ data }) => {
+        if (!data) return;
+        const seen = new Set<string>();
+        const list: { code: string; name: string }[] = [];
+        for (const row of data) {
+          if (row.country_code && !seen.has(row.country_code)) {
+            seen.add(row.country_code);
+            list.push({ code: row.country_code, name: row.country || row.country_code });
+          }
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setCountries(list);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
@@ -152,7 +188,7 @@ export function ContactsPageClient() {
   }, [workspaceId]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const hasFilters = !!leadStatusFilter || !!statusFilter || !!companyFilter;
+  const hasFilters = !!leadStatusFilter || !!statusFilter || !!companyFilter || !!countryFilter;
   const allSelected = contacts.length > 0 && selectedIds.size === contacts.length;
 
   const toggleSelect = (id: string) => {
@@ -331,9 +367,20 @@ export function ContactsPageClient() {
           ))}
         </select>
 
+        <select
+          value={countryFilter}
+          onChange={(e) => updateParams({ country_code: e.target.value })}
+          className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Countries</option>
+          {countries.map(c => (
+            <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+          ))}
+        </select>
+
         {hasFilters && (
           <button
-            onClick={() => updateParams({ lead_status: '', status: '', company_id: '' })}
+            onClick={() => updateParams({ lead_status: '', status: '', company_id: '', country_code: '' })}
             className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
           >
             Clear filters
@@ -359,6 +406,20 @@ export function ContactsPageClient() {
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Title</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">
+                  <button
+                    onClick={() => {
+                      if (sortField === 'country_code') setSortAsc(a => !a);
+                      else { setSortField('country_code'); setSortAsc(true); }
+                    }}
+                    className="inline-flex items-center gap-1 hover:text-slate-900"
+                  >
+                    Country
+                    {sortField === 'country_code'
+                      ? (sortAsc ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)
+                      : <span className="text-slate-300 text-xs">↕</span>}
+                  </button>
+                </th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Lead Status</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Last Contacted</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Created</th>
@@ -373,6 +434,7 @@ export function ContactsPageClient() {
                     <td className="px-4 py-3"><div className="h-4 w-40 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-28 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-10 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-5 w-16 bg-slate-200 rounded-full" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-200 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-200 rounded" /></td>
@@ -380,7 +442,7 @@ export function ContactsPageClient() {
                 ))
               ) : contacts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
+                  <td colSpan={9} className="px-4 py-16 text-center">
                     <p className="text-slate-500 font-medium">No contacts yet</p>
                     <p className="text-slate-400 text-sm mt-1">Add your first contact or import from CSV</p>
                     <button
@@ -423,6 +485,9 @@ export function ContactsPageClient() {
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {contact.country || contact.country_code || <span className="text-slate-400">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <LeadStatusBadge status={contact.lead_status} />
