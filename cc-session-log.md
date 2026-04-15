@@ -658,3 +658,25 @@ Phase 20: Prospector Upgrade
 ### Notable decisions
 - Sort state is local (not in URL) since no other column has sort — keeps it simple.
 - Countries list deduplicates in JS rather than SQL DISTINCT since Supabase REST doesn't expose SELECT DISTINCT; performant for expected dataset sizes.
+
+---
+
+## Session: Fix dynamic list counts + sequence enrollment
+- **Date:** 2026-04-15
+- **PR:** #46
+- **Branch:** feature/fix-dynamic-list-membership
+
+### What was built
+- **`src/lib/lists/filter-query.ts`**: Added `head` option to `buildFilterQuery` opts so callers can get counts without fetching rows. Added `ResolvableList` type and `resolveListContactIds()` helper — single source of truth for list membership resolution; branches on `is_dynamic` so it works for both static and dynamic lists.
+- **`src/components/lists/list-table.tsx`**: Fixed Bug 1 — dynamic lists now show real contact counts (was `—`). Replaced sequential `for` loop with `Promise.all` for parallel count fetches; dynamic lists use `buildFilterQuery` with `{ count: 'exact', head: true }`.
+- **`src/components/sequences/enroll-contacts-modal.tsx`**: Fixed Bug 2 — "From List" tab now calls `resolveListContactIds()` instead of reading `contact_list_members` directly, so enrolling a dynamic list works end-to-end.
+- **`src/components/sequences/launch-campaign-modal.tsx`**: Fixed both the list selector (dynamic lists now show correct member count) and `handleLaunch` (uses `resolveListContactIds()` so dynamic list enrollment works).
+- **`src/app/api/sequences/[id]/preflight/route.ts`**: Fetches list `is_dynamic`/`filters` metadata first; uses `buildFilterQuery` for dynamic lists so preflight contact analysis is accurate.
+
+### Build status
+- `npm run lint` ✅ | `npx tsc --noEmit` ✅ | build compiled without errors (worktree missing `.env.local` — prerender of `/tasks` fails as expected, unrelated to this change)
+- Vercel deploy: live (HTTP 307 → auth as expected)
+
+### Notable decisions
+- Did not change `contact_list_members` writes — static lists still materialize members there. Only reads-for-resolution are redirected through `resolveListContactIds()`.
+- `enroll-list-modal.tsx` and `export-csv-button.tsx` were already handling dynamic lists correctly; left untouched.
