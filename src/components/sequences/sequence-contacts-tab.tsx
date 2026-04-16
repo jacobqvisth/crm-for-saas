@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, differenceInHours } from "date-fns";
 import { Pause, Play, Trash2, Send, Eye, MousePointer, Reply, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
-import type { Tables } from "@/lib/database.types";
+import type { Tables, SequenceSettings } from "@/lib/database.types";
+import { estimateSendTimes } from "@/lib/sequences/estimate-send-times";
 
 type Step = Tables<"sequence_steps">;
 
@@ -31,9 +32,16 @@ interface QueueRow {
   contact_id: string;
   status: string;
   scheduled_for: string;
+  created_at: string;
   sent_at: string | null;
   email_events: { event_type: string; created_at: string }[];
 }
+
+type EstSendDisplay =
+  | { kind: "estimated"; time: Date }
+  | { kind: "sending" }
+  | { kind: "waiting" }
+  | { kind: "none" };
 
 interface ActivityInfo {
   type: "sent" | "open" | "click" | "reply" | "bounce";
@@ -63,9 +71,18 @@ const ENROLLMENT_STATUS: Record<string, { label: string; className: string }> = 
 interface SequenceContactsTabProps {
   sequenceId: string;
   steps: Step[];
+  settings: SequenceSettings;
 }
 
-export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabProps) {
+function formatEstimatedTime(date: Date): string {
+  const diffHours = differenceInHours(date, new Date());
+  if (diffHours < 24) {
+    return formatDistanceToNow(date, { addSuffix: true });
+  }
+  return format(date, "MMM d, HH:mm");
+}
+
+export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceContactsTabProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
 
@@ -74,7 +91,7 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Maps keyed by enrollment_id
-  const [nextSendByEnrollment, setNextSendByEnrollment] = useState<Map<string, string>>(new Map());
+  const [estSendByEnrollment, setEstSendByEnrollment] = useState<Map<string, EstSendDisplay>>(new Map());
   const [sentCountByEnrollment, setSentCountByEnrollment] = useState<Map<string, number>>(new Map());
   const [lastActivityByContact, setLastActivityByContact] = useState<Map<string, ActivityInfo>>(new Map());
 
@@ -105,31 +122,35 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
         // 2. Load email_queue rows with nested email_events for all enrollments at once
         const { data: queueData } = await supabase
           .from("email_queue")
-          .select("id, enrollment_id, contact_id, status, scheduled_for, sent_at, email_events(event_type, created_at)")
+          .select("id, enrollment_id, contact_id, status, scheduled_for, created_at, sent_at, email_events(event_type, created_at)")
           .in("enrollment_id", enrollIds);
 
         const rows = (queueData || []) as QueueRow[];
 
-        // Compute nextSend (earliest scheduled_for where status='scheduled') per enrollment
-        const nextSendMap = new Map<string, string>();
+        // Compute per-enrollment display info
         const sentCountMap = new Map<string, number>();
-        // Collect all events (including "sent" from queue) per contact_id
         const activityByContact = new Map<string, ActivityInfo>();
 
+        // Track queue presence per enrollment for EST. SEND determination
+        const hasSending = new Set<string>();
+        const hasScheduled = new Set<string>();
+        const hasPending = new Set<string>();
+
         for (const row of rows) {
-          // Next send
+          if (row.status === "sending") {
+            hasSending.add(row.enrollment_id);
+          }
           if (row.status === "scheduled") {
-            const current = nextSendMap.get(row.enrollment_id);
-            if (!current || row.scheduled_for < current) {
-              nextSendMap.set(row.enrollment_id, row.scheduled_for);
-            }
+            hasScheduled.add(row.enrollment_id);
+          }
+          if (row.status === "pending") {
+            hasPending.add(row.enrollment_id);
           }
 
           // Sent count
           if (row.status === "sent") {
             sentCountMap.set(row.enrollment_id, (sentCountMap.get(row.enrollment_id) || 0) + 1);
 
-            // Track "sent" as an activity
             if (row.sent_at) {
               const existing = activityByContact.get(row.contact_id);
               if (!existing || row.sent_at > existing.timestamp) {
@@ -150,18 +171,40 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
           }
         }
 
-        setNextSendByEnrollment(nextSendMap);
+        // Compute estimated send times for all scheduled rows at once
+        const estimatedTimes = estimateSendTimes({ queueRows: rows, settings });
+
+        // Build the final EST. SEND display map
+        const estSendMap = new Map<string, EstSendDisplay>();
+        for (const enrollId of enrollIds) {
+          if (hasSending.has(enrollId)) {
+            estSendMap.set(enrollId, { kind: "sending" });
+          } else if (hasScheduled.has(enrollId)) {
+            const est = estimatedTimes.get(enrollId);
+            if (est) {
+              estSendMap.set(enrollId, { kind: "estimated", time: est });
+            } else {
+              estSendMap.set(enrollId, { kind: "none" });
+            }
+          } else if (hasPending.has(enrollId)) {
+            estSendMap.set(enrollId, { kind: "waiting" });
+          } else {
+            estSendMap.set(enrollId, { kind: "none" });
+          }
+        }
+
+        setEstSendByEnrollment(estSendMap);
         setSentCountByEnrollment(sentCountMap);
         setLastActivityByContact(activityByContact);
       } else {
-        setNextSendByEnrollment(new Map());
+        setEstSendByEnrollment(new Map());
         setSentCountByEnrollment(new Map());
         setLastActivityByContact(new Map());
       }
     }
 
     setLoading(false);
-  }, [workspaceId, sequenceId, supabase]);
+  }, [workspaceId, sequenceId, supabase, settings]);
 
   useEffect(() => {
     load();
@@ -240,6 +283,27 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
     return `${stepIdx + 1} / ${total} · ${typeName}`;
   };
 
+  const renderEstSend = (display: EstSendDisplay | undefined) => {
+    if (!display || display.kind === "none") {
+      return <span className="text-slate-400">—</span>;
+    }
+    if (display.kind === "sending") {
+      return <span className="text-indigo-600 font-medium">Sending…</span>;
+    }
+    if (display.kind === "waiting") {
+      return <span className="text-slate-400 italic">Waiting</span>;
+    }
+    // estimated
+    return (
+      <span
+        title="Estimated — actual time depends on send rate and daily limits"
+        className="cursor-help border-b border-dashed border-slate-300"
+      >
+        {formatEstimatedTime(display.time)}
+      </span>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -297,7 +361,7 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
                 <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">Status</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">Step</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">Last activity</th>
-                <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">Next send</th>
+                <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">Est. send</th>
                 <th className="text-right text-xs font-medium text-slate-500 uppercase px-4 py-3">Sent</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase px-4 py-3">Enrolled</th>
               </tr>
@@ -307,7 +371,7 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
                 const badge = ENROLLMENT_STATUS[e.status ?? "active"] || ENROLLMENT_STATUS.active;
                 const contactId = e.contact?.id ?? e.contact_id;
                 const activity = lastActivityByContact.get(contactId);
-                const nextSend = nextSendByEnrollment.get(e.id);
+                const estSend = estSendByEnrollment.get(e.id);
                 const sentCount = sentCountByEnrollment.get(e.id) ?? 0;
                 const ActivityIcon = activity ? (EVENT_CONFIG[activity.type]?.icon ?? Send) : null;
                 const activityColor = activity ? (EVENT_CONFIG[activity.type]?.color ?? "text-slate-400") : "";
@@ -363,7 +427,7 @@ export function SequenceContactsTab({ sequenceId, steps }: SequenceContactsTabPr
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                      {nextSend ? format(new Date(nextSend), "MMM d, HH:mm") : "—"}
+                      {renderEstSend(estSend)}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600 text-right">
                       {sentCount > 0 ? sentCount : "—"}

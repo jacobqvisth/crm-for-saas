@@ -464,7 +464,7 @@ export default function SequenceDetailPage() {
       )}
 
       {activeTab === "contacts" && (
-        <SequenceContactsTab sequenceId={sequenceId} steps={steps} />
+        <SequenceContactsTab sequenceId={sequenceId} steps={steps} settings={sequence.settings} />
       )}
       {activeTab === "analytics" && <SequenceAnalyticsTab sequenceId={sequenceId} />}
 
