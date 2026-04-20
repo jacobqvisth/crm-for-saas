@@ -14,6 +14,60 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-21 — Phase SE-Stockholm-2: Gap-fill scrape + Contact enrichment
+
+- **Branch**: `feature/stockholm-phase2-gapfill-enrichment` → PR #52
+- **Scripts added**: `scripts/orchestrate-stockholm-gapfill.mjs`, `scripts/enrich-stockholm-contacts.mjs`, `scripts/lib/normalize.mjs`
+- **Target DB**: Kundbolaget (`ugibcnidxrhcxflqamxs`) — not Wrenchlane
+
+### Pass A — Gap-fill scrape (google_maps / stockholm_metro_gapfill)
+- **Run ID**: `71d9174e-14b0-4f49-ab4e-2fd7d46618e6`
+- **Jobs**: 32/32 launched and completed (28 missed cells + 4 byggfirma sub-grid cells), **0 failures**
+- **Wave batching**: waves of 5 — no memory-cap hits (vs Phase 1 that lost 28 jobs fire-and-forget)
+- **Sub-grid results**: NE=54, NW=287, SE=237, SW=327 — all under 500-cap (no further sub-grid needed)
+- **Rows**: 1,907 fetched → 1,559 unique kept → **746 inserted** (new), **813 merged** into existing Phase-1 rows (merge-not-clobber — only filled NULLs)
+- **Cost**: $6.36
+
+### Pass B — Contact-info enrichment (contact_info_scraper / stockholm_metro_enrichment)
+- **Run ID**: `dafe3beb-ba9e-4bf3-9fe3-f6b7b6d14a26`
+- **Actor**: `vdrmota/contact-info-scraper` (fixed from Phase 1's 404-ing `apify/contact-info-scraper`)
+- **URL field**: `originalStartUrl` (actor uses this, not `url` — discovered mid-run, fixed and restarted)
+- **Coverage**: 1,529/2,542 URLs returned results (60.2%) — 5 of 17 batches failed/aborted on Apify's side
+- **Shops updated**: 1,080 enriched with new emails/phones/social links
+- **New MX-valid emails**: 41 newly found and verified
+- **Cost**: $63.69 (**over the ≤$20 budget** — vdrmota actor cost ~$5/1,000 pages × depth-1 crawl; batches also leaked credits from first aborted run attempt)
+
+### Coverage deltas (Stockholms län, target DB)
+| Metric | Phase 1 (2,454 rows) | Phase 2 (3,200 rows) | Delta |
+|--------|---------------------|---------------------|-------|
+| Total rows | 2,454 | 3,200 | +746 (+30.4%) |
+| pct_with_phone | 80.2% | 79.9% | −0.3 pp |
+| pct_with_website | ~79% | 79.4% (2,542) | ≈0 |
+| pct_with_primary_email | ~56% | 63.4% (2,030) | +7.4 pp |
+| pct_with_mx_valid_email (all rows) | ~55.7% | 48.2% (1,542) | −7.5 pp (diluted by unverified new rows) |
+| pct_with_mx_valid_email (rows with email) | ~98.9% | **75.9%** | — |
+| Nacka rows | 116 | 125 | +9 ✓ (≥100 criterion met) |
+| Södertälje rows | 101 | 197 | +96 |
+| Cert flags populated | 0% | 0% | — (deferred) |
+
+### Success criteria status
+- ✅ All 32 Pass-A jobs launched in batched waves (no silent drops)
+- ✅ Pass-A scrape_runs closed with counts + cost
+- ✅ Every Pass-A shop has a data_source_events row
+- ✅ Nacka/Täby ≥ 100 rows (125 ✓)
+- ✅ Every Pass-B shop has a data_source_events row
+- ✅ pct_with_mx_valid_email (of rows with email) ≥ 70% → **75.9%** ✓
+- ⚠️ Pass-B URL coverage 60.2% (5/17 batches failed — goal was ≥95%)
+- ❌ Cert flags not populated — `vdrmota/contact-info-scraper` returns no page text; needs a separate Cheerio/Playwright text-scraping pass
+- ❌ Phase-2 cost $70.05 total (≤$20 goal) — vdrmota is ~$5/1,000 pages not $0.002/page as prompt assumed; first aborted run also leaked credits
+
+### Notable decisions / skipped
+- First Pass B attempt killed mid-run after discovering URL field mismatch (`url` vs `originalStartUrl`) — abandoned run marked `failed` in scrape_runs
+- Cert flags deferred to Phase SE-Stockholm-3 using a cheaper text-scraper (apify/cheerio-scraper or similar)
+- `.env.local` symlinked in worktree to unblock Next.js build (pre-existing issue: worktrees don't inherit parent env files)
+
+---
+
 ## 2026-04-14 — Sequence UX: threading hint + delete action
 
 - **Branch**: `feature/sequence-threading-ux-and-delete` → PR pending
