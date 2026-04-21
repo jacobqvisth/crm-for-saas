@@ -19,6 +19,7 @@ import {
   Square,
   CheckCircle,
   XCircle,
+  ShieldCheck,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -54,6 +55,8 @@ type Shop = {
   scraped_at: string | null;
   email_valid: boolean | null;
   email_check_detail: string | null;
+  email_status: string | null;
+  email_verified_at: string | null;
 };
 
 type Stats = {
@@ -402,6 +405,8 @@ export function DiscoveryPageClient() {
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [expandedShop, setExpandedShop] = useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [showVerifyConfirm, setShowVerifyConfirm] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   // Debounce search
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -550,6 +555,50 @@ export function DiscoveryPageClient() {
       setBulkLoading(false);
     }
   }, [fetchShops, filters, debouncedSearch]);
+
+  const handleVerify = useCallback(async (allPages = false) => {
+    setVerifying(true);
+    try {
+      const body = allPages
+        ? {
+            filters: {
+              country_code: filters.country_code,
+              status: filters.status,
+              has_email: filters.has_email,
+              has_phone: filters.has_phone,
+              verified_email: filters.verified_email,
+              search: debouncedSearch,
+              categories: filters.included_categories ?? undefined,
+            },
+          }
+        : { shopIds: Array.from(selectedIds) };
+      const res = await fetch("/api/discovery/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      const { verified, skipped, errors, capped, totalRequested } = data;
+      const statusCounts = (data.results as Array<{ status: string }> ?? []).reduce(
+        (acc: Record<string, number>, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; },
+        {}
+      );
+      const detail = Object.entries(statusCounts).map(([s, n]) => `${s.charAt(0).toUpperCase() + s.slice(1)}: ${n}`).join(", ");
+      const cappedNote = capped ? ` · ${totalRequested} total — click again for next batch` : "";
+      toast.success(
+        `Verified ${verified} · Skipped ${skipped}${errors > 0 ? ` · ${errors} errors` : ""}${detail ? ` · ${detail}` : ""}${cappedNote}`
+      );
+      setShowVerifyConfirm(false);
+      setSelectedIds(new Set());
+      setSelectAllPages(false);
+      fetchShops();
+    } catch {
+      toast.error("Verify failed");
+    } finally {
+      setVerifying(false);
+    }
+  }, [fetchShops, filters, debouncedSearch, selectedIds]);
 
   // ── Selection
   const toggleRow = (id: string) => {
@@ -903,21 +952,9 @@ export function DiscoveryPageClient() {
                       {/* Email */}
                       <td className="px-3 py-3 max-w-[180px]">
                         {shop.primary_email ? (
-                          shop.email_valid === false ? (
+                          shop.email_status === "invalid" || shop.email_valid === false ? (
                             <span className="flex items-center gap-1 text-slate-500">
-                              <span
-                                title={
-                                  shop.email_check_detail === "domain_not_found"
-                                    ? "Domain does not exist"
-                                    : shop.email_check_detail === "no_mx_records"
-                                    ? "No mail server found"
-                                    : shop.email_check_detail === "invalid_format"
-                                    ? "Invalid email format"
-                                    : shop.email_check_detail ?? "Invalid"
-                                }
-                              >
-                                <XCircle className="w-3 h-3 flex-shrink-0 text-red-400" />
-                              </span>
+                              <XCircle className="w-3 h-3 flex-shrink-0 text-red-400" />
                               <Mail className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="truncate">{shop.primary_email}</span>
                             </span>
@@ -926,8 +963,14 @@ export function DiscoveryPageClient() {
                               href={`mailto:${shop.primary_email}`}
                               className="flex items-center gap-1 text-indigo-600 hover:underline"
                             >
-                              {shop.email_valid === true && (
+                              {shop.email_status === "valid" && (
                                 <CheckCircle className="w-3 h-3 flex-shrink-0 text-emerald-500" />
+                              )}
+                              {shop.email_status === "risky" && (
+                                <CheckCircle className="w-3 h-3 flex-shrink-0 text-amber-400" />
+                              )}
+                              {shop.email_status === "catch_all" && (
+                                <CheckCircle className="w-3 h-3 flex-shrink-0 text-slate-400" />
                               )}
                               <Mail className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="truncate">{shop.primary_email}</span>
@@ -1040,6 +1083,34 @@ export function DiscoveryPageClient() {
         </div>
       </div>
 
+      {/* ── Verify Emails Modal */}
+      {showVerifyConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-base font-semibold text-slate-900 mb-2">Verify Email Addresses</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              Verify {selectAllPages ? total.toLocaleString() : selectedIds.size} email address{(selectAllPages ? total : selectedIds.size) !== 1 ? "es" : ""} using Prospeo (1 credit each). Already-verified shops and shops without an email will be skipped. Capped at 50 per click.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowVerifyConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleVerify(selectAllPages)}
+                disabled={verifying}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {verifying && <Loader2 className="w-4 h-4 animate-spin" />}
+                {verifying ? "Verifying…" : "Verify"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Bulk action bar */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
@@ -1058,10 +1129,18 @@ export function DiscoveryPageClient() {
             </button>
             <button
               onClick={() => handleSkip(Array.from(selectedIds), selectAllPages)}
-              disabled={bulkLoading}
+              disabled={bulkLoading || verifying}
               className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               Skip
+            </button>
+            <button
+              onClick={() => setShowVerifyConfirm(true)}
+              disabled={bulkLoading || verifying}
+              className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+              Verify Emails
             </button>
             <button
               onClick={() => { setSelectedIds(new Set()); setSelectAllPages(false); }}

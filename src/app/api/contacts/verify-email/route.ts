@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveContactIdsByFilters, type ContactFilters } from "@/lib/contacts-filter";
 
 function mapProspeoStatus(status: string): string {
   switch (status?.toUpperCase()) {
@@ -39,7 +40,6 @@ function sleep(ms: number) {
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
-  // Auth check
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,16 +48,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { contactIds, workspaceId } = body as {
-    contactIds: string[];
+  const { contactIds, filters, workspaceId } = body as {
+    contactIds?: string[];
+    filters?: ContactFilters;
     workspaceId: string;
   };
 
-  if (!contactIds || !workspaceId) {
-    return NextResponse.json(
-      { error: "Missing contactIds or workspaceId" },
-      { status: 400 }
-    );
+  if (!workspaceId) {
+    return NextResponse.json({ error: "Missing workspaceId" }, { status: 400 });
   }
 
   // Workspace membership check
@@ -72,9 +70,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Resolve IDs — either explicit list or filter expansion
+  let allIds: string[];
+  if (filters) {
+    allIds = await resolveContactIdsByFilters(supabase, workspaceId, filters);
+  } else if (Array.isArray(contactIds) && contactIds.length > 0) {
+    allIds = contactIds;
+  } else {
+    return NextResponse.json(
+      { error: "Missing contactIds or filters" },
+      { status: 400 }
+    );
+  }
+
+  const totalRequested = allIds.length;
+
   // Cap at 50
-  const idsToProcess = contactIds.slice(0, 50);
-  const capped = contactIds.length > 50;
+  const idsToProcess = allIds.slice(0, 50);
+  const capped = allIds.length > 50;
 
   // Fetch contacts
   const { data: contacts, error: fetchError } = await supabase
@@ -171,7 +184,7 @@ export async function POST(request: NextRequest) {
     errors,
     capped,
     processedCount: idsToProcess.length,
-    totalRequested: contactIds.length,
+    totalRequested,
     results,
   });
 }

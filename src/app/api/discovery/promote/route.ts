@@ -24,6 +24,8 @@ type DiscoveredShop = {
   review_count: number | null;
   category: string | null;
   email_valid: boolean | null;
+  email_status: string | null;
+  email_verified_at: string | null;
 };
 
 export async function POST(request: NextRequest) {
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
   let shopQuery = supabase
     .from("discovered_shops")
     .select(
-      "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category, email_valid"
+      "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category, email_valid, email_status, email_verified_at"
     );
 
   if (select_all && filters) {
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
     if (filters.country_code) shopQuery = shopQuery.eq("country_code", filters.country_code.toUpperCase());
     if (filters.has_email) shopQuery = shopQuery.not("primary_email", "is", null).neq("primary_email", "");
     if (filters.has_phone) shopQuery = shopQuery.not("phone", "is", null).neq("phone", "");
-    if (filters.verified_email) shopQuery = shopQuery.eq("email_valid", true);
+    if (filters.verified_email) shopQuery = shopQuery.eq("email_status", "valid");
     if (filters.search?.trim()) {
       const s = filters.search.trim();
       shopQuery = shopQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
@@ -224,7 +226,8 @@ export async function POST(request: NextRequest) {
         is_primary: true,
         source: 'discovery',
         language: deriveLanguage(shop.country_code),
-        email_status: 'unknown',
+        email_status: shop.email_status ?? 'unknown',
+        email_verified_at: shop.email_verified_at ?? null,
         lead_status: 'new',
         status: 'active',
         tags: ['owner'],

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (filters.country_code) idQuery = idQuery.eq("country_code", filters.country_code.toUpperCase());
     if (filters.has_email) idQuery = idQuery.not("primary_email", "is", null).neq("primary_email", "");
     if (filters.has_phone) idQuery = idQuery.not("phone", "is", null).neq("phone", "");
-    if (filters.verified_email) idQuery = idQuery.eq("email_valid", true);
+    if (filters.verified_email) idQuery = idQuery.eq("email_status", "valid");
     if (filters.search?.trim()) {
       const s = filters.search.trim();
       idQuery = idQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
