@@ -14,6 +14,69 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-21 — Phase SE-Stockholm-4a: ServiceFinder migration + utilities + Stockholm pilot
+
+- **Branch**: `feature/se-stockholm-4a-servicefinder-migration-utils-pilot` → PR #55
+- **PRs**: 2 commits — migration + utilities, then website-extractor bugfix
+- **Build**: ✅ `npm run build` clean, `npm run lint` clean, `node --test` 5/5 pass
+- **Deploy**: Vercel auto-deploys; no UI changes in this phase
+
+### Phase A — Migration (Kundbolaget `ugibcnidxrhcxflqamxs`)
+- Applied `20260422010000_servicefinder_dorunner_schema.sql`
+- Added 17 new columns: `servicefinder_id/state/area_served/jobs_completed`, `dorunner_rating/review_count/url/slug/jobs_completed`, `partial_org_number`, `logo_url`, `photos`, `f_skatt_registered`, `bankid_verified`, `insurance_carrier`, `insurance_amount_sek`, `warranty_years`
+- Created `discovered_shop_reviews` table with idempotent upsert, FTS index, RLS off
+- Regenerated `coverage_stats` view with new ratios
+- Verification: 17 columns ✅, reviews table 0 rows ✅, coverage_stats returns 3,200 Stockholm rows ✅
+
+### Phase B — Shared utilities
+- `scripts/lib/supabase-kundbolaget.mjs` — dedicated Kundbolaget Supabase client
+- `scripts/lib/normalize.mjs` — extended with `normalizeDomain/Phone/Name` aliases, `makeReviewId`, `isStockholmsLan`, `postalToState` (backward-compat with existing callers)
+- `scripts/lib/shop-merger.mjs` — `upsertShop` (6-key priority match, additive merge, event log) + `upsertReview` (idempotent via SHA1 key)
+- `scripts/lib/__tests__/normalize.test.mjs` — 5/5 tests pass via `node --test`
+
+### Phase C — Stockholm pilot (`scrape-servicefinder.mjs`)
+- Discovery crawl: 9 trades × 24 Stockholm cities = 216 requests → **136 unique profiles discovered**
+- SF listing pages cap at 8-12 results per trade/city combo regardless of pagination — national run (4b) should use full sitemap or ID range scan
+- Profile fetch: 136 fetched, **89 skipped** (non-Stockholm postal code), **47 processed**
+- Merge results: **40 inserts** (new to DB) + **7 updates** (enriched existing shops) + **134 reviews** inserted
+- Run ID: `bf3150ba-b072-4c74-a466-000a2ad91dd7` — status: `complete`
+
+#### Bug found + fixed during pilot
+False-positive domain match: SF profiles link to `mittanbudmarketplaces.com` (shared marketplace), causing all 46 profiles to match the same existing shop via `normalized_domain`. Fixed by adding a `SHARED_PLATFORM_DOMAINS` blocklist in `extractExternalWebsite()`. Rerun after fix yielded correct results.
+
+### Spot-checks (5 profiles, all pass)
+| Profile | Name | phone ✅ | rating ✅ | reviews SF / DB | Trust signals |
+|---|---|---|---|---|---|
+| 9290469 | Mackans Måleri AB | +46729086280 | 5.00 | 26 / 3* | — |
+| 6969645 | Rörservice & Montering Stockholm AB | +46707207543 | 4.80 | 49 / 3* | — |
+| 9070974 | AK GIPSPUTS AB | +46763197851 | 5.00 | 5 / 3* | bankid ✅, folksam ✅ |
+| 6822464 | Din Bygg & Städ i Sverige AB | +46760548789 | 4.92 | 13 / 3* | länsförsäkringar ✅ |
+| 7042391 | A.E Entreprenad AB | +46760808131 | 4.66 | 32 / 3* | bankid ✅ |
+
+*SF ld+json only includes the 3 most recent reviews — full review count stored in `servicefinder_review_count`.
+
+### Coverage stats delta (Stockholms län subset)
+| Metric | Phase 3 end | After 4a pilot |
+|---|---|---|
+| Total shops in state | 3,200 | 3,241 |
+| % on ServiceFinder | 0% | 1.5% (47 shops) |
+| Reviews in `discovered_shop_reviews` | 0 | 134 |
+| % with logo_url | 0% | 1.3% |
+| % f_skatt_registered = TRUE | 0% | 0.0% (1/47)* |
+| % bankid_verified = TRUE | 0% | 30% among SF profiles (14/47) |
+| Avg SF review count (matched) | — | 21.6 |
+| Insert vs update ratio | — | 40:7 (85% new) |
+
+*f_skatt hits rarely: SF profiles don't typically display F-skatt status explicitly. Phase 4b should add `F-skattesedel` variant to regex.
+
+### Notes for Phase 4b
+- Discovery: listing pages cap at 8-12 per trade/city regardless of pagination. For national run, use full profile ID range scan or sitemap from SF partner API
+- Reviews: only 3 per profile (ld+json truncation). Accept as-is or add separate review endpoint scrape
+- f_skatt regex: needs `F-skattesedel` and `F-skattegodkänd` variants
+- `partial_org_number`: extracted from `taxID` field — 40/47 profiles had this populated
+
+---
+
 ## 2026-04-21 — Phase SE-Stockholm-2: Gap-fill scrape + Contact enrichment
 
 - **Branch**: `feature/stockholm-phase2-gapfill-enrichment` → PR #52
