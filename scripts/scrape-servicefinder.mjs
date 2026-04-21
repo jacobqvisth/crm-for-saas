@@ -1,15 +1,12 @@
 /**
- * ServiceFinder Stockholm pilot scraper — Phase SE-Stockholm-4a
+ * ServiceFinder scraper — Phase SE-Stockholm-4a (pilot) + Phase SE-Stockholm-4b (national)
  *
- * Strategy:
- *   1. Discovery crawl: fetch /hantverkare/<trade>/<city> pages → foretag_id → Set<trade_slug>
- *   2. Profile fetch: only IDs seen in discovery (optimization: ~300-500 vs 4,050)
- *   3. Parse ld+json + HTML extractors → candidate row
- *   4. Apply Stockholm filter (postal code 100-199)
- *   5. Upsert via shop-merger (additive merge)
- *   6. Close scrape_runs row
+ * Modes:
+ *   Default (no flags):  Stockholm pilot — discovery crawl via hard-coded cities, Stockholm filter
+ *   --national:          National run — sitemap-based ID universe, concurrent category crawl, no geo filter
  *
- * Run: node scripts/scrape-servicefinder.mjs [--run-id <uuid>] [--dry-run]
+ * Run:
+ *   node scripts/scrape-servicefinder.mjs [--national] [--run-id <uuid>] [--dry-run]
  *
  * Requires env (loaded from .env.local):
  *   KUNDBOLAGET_SUPABASE_URL
@@ -60,18 +57,19 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 const ARGS = process.argv.slice(2);
 const DRY_RUN = ARGS.includes('--dry-run');
+const NATIONAL = ARGS.includes('--national');
 const RUN_ID_ARG = (() => {
   const idx = ARGS.indexOf('--run-id');
   return idx >= 0 ? ARGS[idx + 1] : null;
 })();
 
-// Pre-created run ID from Phase C1
+// Pre-created run ID for Stockholm pilot (4a legacy)
 const PILOT_RUN_ID = RUN_ID_ARG || 'bf3150ba-b072-4c74-a466-000a2ad91dd7';
 
 const BASE_URL = 'https://servicefinder.se';
 const UA = 'Kundbolaget-ContractorIndex/1.0 (+https://kundbolaget.se/contact; jacob@wrenchlane.com)';
 const RATE_MS = Math.ceil(1000 / 1.5); // ~667ms between requests
-const CHECKPOINT_EVERY = 50;
+const CHECKPOINT_EVERY = 100;
 
 const TRADE_SLUGS = [
   'elektriker',
@@ -85,7 +83,8 @@ const TRADE_SLUGS = [
   'totalentreprenad',
 ];
 
-const DISCOVERY_CITIES = [
+// Legacy pilot cities (Stockholm)
+const DISCOVERY_CITIES_STOCKHOLM = [
   'stockholm',
   'solna',
   'sundbyberg',
@@ -175,22 +174,113 @@ async function fetchPage(url, retries = 3, backoffMs = 3000) {
 }
 
 // ---------------------------------------------------------------------------
-// Sitemap parsing (optional — not needed for optimized pilot)
+// Sitemap discovery (national mode)
 // ---------------------------------------------------------------------------
 
-// Discovery crawl is sufficient for the Stockholm pilot.
-// Full sitemap parse is left for Phase 4b national run.
+/**
+ * Fetch SF sitemap chain and extract all foretag IDs with their state.
+ *
+ * SF sitemap hierarchy (3 levels):
+ *   /sitemaps/businesses.xml   → sitemapindex: Active, InactiveWithReview, InactiveWithoutReview
+ *   /sitemaps/businessesActive.xml → sitemapindex: businessesActive-1.xml, …
+ *   /sitemaps/businessesActive-1.xml → urlset: actual /foretag/<id> entries
+ *
+ * Returns Map<foretagId, 'active' | 'inactive_with_reviews'>
+ */
+async function discoverFromSitemap() {
+  const stateMap = new Map(); // foretagId → state
+
+  // Level 1: businesses.xml lists the state-level sitemapindex files
+  console.log('  Fetching businesses.xml...');
+  const businessesXml = await fetchPage(`${BASE_URL}/sitemaps/businesses.xml`);
+  if (!businessesXml) throw new Error('Failed to fetch businesses.xml');
+
+  const stateIndexUrls = [];
+  const locRe = /<loc>([^<]+)<\/loc>/g;
+  let m;
+  while ((m = locRe.exec(businessesXml)) !== null) {
+    const url = m[1];
+    if (url.includes('businessesActive') || url.includes('businessesInactiveWithReview')) {
+      stateIndexUrls.push(url);
+    }
+  }
+  console.log(`  Found ${stateIndexUrls.length} state-level sitemap index files`);
+
+  // Level 2: each state-level file is itself a sitemapindex with numbered sub-sitemaps
+  const leafSitemaps = []; // { url, state }
+  for (const indexUrl of stateIndexUrls) {
+    const isActive = indexUrl.includes('businessesActive') && !indexUrl.includes('Inactive');
+    const state = isActive ? 'active' : 'inactive_with_reviews';
+
+    await delay(RATE_MS);
+    const xml = await fetchPage(indexUrl);
+    if (!xml) { console.warn(`  [skip] ${indexUrl}`); continue; }
+
+    const subRe = /<loc>([^<]+)<\/loc>/g;
+    let sm;
+    while ((sm = subRe.exec(xml)) !== null) {
+      const url = sm[1];
+      // Numbered leaf sitemaps end in -N.xml (e.g. businessesActive-1.xml)
+      if (/-\d+\.xml$/.test(url)) {
+        leafSitemaps.push({ url, state });
+      }
+    }
+  }
+  console.log(`  Found ${leafSitemaps.length} leaf sitemap files`);
+
+  // Level 3: fetch each leaf sitemap and collect foretag IDs
+  for (const { url: sitemapUrl, state } of leafSitemaps) {
+    await delay(RATE_MS);
+    const xml = await fetchPage(sitemapUrl);
+    if (!xml) { console.warn(`  [skip] ${sitemapUrl}`); continue; }
+
+    const profileRe = /<loc>https:\/\/servicefinder\.se\/foretag\/(\d+)<\/loc>/g;
+    let pm;
+    let count = 0;
+    while ((pm = profileRe.exec(xml)) !== null) {
+      stateMap.set(pm[1], state);
+      count++;
+    }
+    console.log(`  ${sitemapUrl.split('/').pop()}: ${count} profiles (${state})`);
+  }
+
+  console.log(`Sitemap discovery complete: ${stateMap.size} total unique foretag IDs`);
+  return stateMap;
+}
+
+// ---------------------------------------------------------------------------
+// City slug discovery (national mode)
+// ---------------------------------------------------------------------------
+
+async function discoverCitySlugs(oneTrade = 'elektriker') {
+  const url = `${BASE_URL}/hantverkare/${oneTrade}`;
+  const html = await fetchPage(url);
+  if (!html) return [];
+
+  const cities = [];
+  const re = /href="\/hantverkare\/[^/]+\/([a-z0-9-]+)"/g;
+  const seen = new Set();
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const city = m[1];
+    if (!seen.has(city)) {
+      seen.add(city);
+      cities.push(city);
+    }
+  }
+  return cities;
+}
 
 // ---------------------------------------------------------------------------
 // Discovery crawl: trade × city → Map<foretagId, Set<tradeSlug>>
 // ---------------------------------------------------------------------------
 
-async function runDiscoveryCrawl() {
+async function runDiscoveryCrawl(cities) {
   const tradeMap = new Map(); // foretagId (string) → Set<tradeSlug>
   let reqCount = 0;
 
   for (const trade of TRADE_SLUGS) {
-    for (const city of DISCOVERY_CITIES) {
+    for (const city of cities) {
       // Paginate each trade/city combo
       for (let page = 1; page <= MAX_PAGES_PER_COMBO; page++) {
         const url = page === 1
@@ -224,8 +314,7 @@ async function runDiscoveryCrawl() {
         // Stop if page returned no new profiles (or no profiles at all)
         if (newOnPage === 0) break;
 
-        // Stop if there's no "next page" signal — avoid over-crawling
-        // SF shows a "Nästa sida" link when there are more results
+        // Stop if there's no "next page" signal
         if (!html.includes('Nästa sida') && !html.includes('page=' + (page + 1))) break;
       }
     }
@@ -261,7 +350,8 @@ function parseLdJson(html) {
 // HTML extractors — 9 "all info" fields
 // ---------------------------------------------------------------------------
 
-const F_SKATT_RE    = /\b(godkänd för f-skatt|innehar f-skatt|f-skatt godkänd|innehavare av f-skatt|med f-skatt|f-skattsedel)\b/i;
+// Updated in Phase 4b: added f-skattesedel variants
+const F_SKATT_RE = /\b(godkänd för f-skatt|innehar f-skatt|f-skatt godkänd|innehavare av f-skatt|med f-skatt|f-skattsedel|f-skattesedel|f\.-skattesedel|innehar f-skattesedel)\b/i;
 const BANKID_RE     = /\bverifierad med bankid\b|\bbankid-verifierad\b|\bbankid\s+verifierad\b/i;
 const INS_CARRIER_RE = /\b(trygg-hansa|if försäkring|if forsakring|folksam|länsförsäkringar|lansforsakringar|moderna försäkringar|moderna forsakringar|gjensidige|protector)\b/i;
 const INS_AMT_RE    = /(\d{1,3})\s*(msek|miljoner kronor|miljoner kr|mkr|mnkr)\b/i;
@@ -283,7 +373,6 @@ function extractInsurance(text) {
   if (!carrierMatch) return { carrier: null, amount: null };
 
   const carrier = carrierMatch[0].toLowerCase();
-  // Only emit amount if within 200 chars of an insurance keyword
   const keywordIdx = text.search(INS_KEYWORD_RE);
   const carrierIdx = text.search(INS_CARRIER_RE);
   if (keywordIdx < 0) return { carrier, amount: null };
@@ -309,7 +398,6 @@ function extractSfJobs(text) {
   return parseInt(m[1].replace(/\s/g, '')) || null;
 }
 
-// Domains that appear on many SF profiles but are NOT the contractor's own site
 const SHARED_PLATFORM_DOMAINS = new Set([
   'mittanbudmarketplaces.com', 'mittanbud.com', 'anbud.se', 'byggahus.se',
   'blocket.se', 'hittahem.se', 'hantverkare.se', 'topphantverkare.se',
@@ -318,7 +406,6 @@ const SHARED_PLATFORM_DOMAINS = new Set([
 ]);
 
 function extractExternalWebsite(html, $) {
-  // Look for links in the profile body that go to the contractor's own website
   let found = null;
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href') || '';
@@ -332,7 +419,6 @@ function extractExternalWebsite(html, $) {
     ];
     if (skipDomains.some(d => href.includes(d))) return;
 
-    // Skip shared marketplace domains
     let hostname = '';
     try { hostname = new URL(href).hostname.replace(/^www\./, ''); } catch { return; }
     if (SHARED_PLATFORM_DOMAINS.has(hostname)) return;
@@ -344,7 +430,6 @@ function extractExternalWebsite(html, $) {
 
 function extractGalleryImages(html, $) {
   const photos = [];
-  // SF profiles show gallery images in a photo section
   $('img[src]').each((_, el) => {
     const src = $(el).attr('src') || '';
     if (
@@ -357,12 +442,11 @@ function extractGalleryImages(html, $) {
       photos.push(src);
     }
   });
-  return photos.slice(0, 20); // cap at 20 per profile
+  return photos.slice(0, 20);
 }
 
 function extractPartialOrgNumber(taxId) {
   if (!taxId) return null;
-  // SF taxID looks like "556XXX-****" or "XXXXXX-****"
   const clean = taxId.replace(/[\s*-]/g, '').replace(/^0+/, '');
   return clean.length >= 6 ? clean.slice(0, 6) : null;
 }
@@ -378,15 +462,17 @@ function deriveCategoryFromTrades(tradeSet) {
 // Profile parser
 // ---------------------------------------------------------------------------
 
-function parseProfile(html, foretagId, tradeSet) {
+function parseProfile(html, foretagId, tradeSet, sfState) {
   const $ = load(html);
   const ld = parseLdJson(html);
 
-  const fullText = $.text(); // all visible text
+  const fullText = $.text();
   const pageParsedOk = !!ld;
 
-  // Core fields from ld+json
-  const name = ld?.name || null;
+  // Inactive profiles often lack ld+json name — fall back to <h1> or <title>
+  const name = ld?.name
+    || $('h1').first().text().replace(/\s+/g, ' ').trim().slice(0, 200) || null
+    || $('title').first().text().split('|')[0].replace(/\s+/g, ' ').trim().slice(0, 200) || null;
   const rawPhone = ld?.telephone || null;
   const postalCode = ld?.address?.postalCode?.replace(/\s/g, '') || null;
   const city = ld?.address?.addressLocality || null;
@@ -394,7 +480,6 @@ function parseProfile(html, foretagId, tradeSet) {
   const description = ld?.description?.trim()?.slice(0, 500) || null;
   const logoUrl = (typeof ld?.image === 'string' ? ld.image : ld?.image?.url) || null;
 
-  // Rating
   const sfRating = ld?.aggregateRating?.ratingValue
     ? parseFloat(ld.aggregateRating.ratingValue)
     : null;
@@ -402,15 +487,11 @@ function parseProfile(html, foretagId, tradeSet) {
     ? parseInt(ld.aggregateRating.reviewCount)
     : null;
 
-  // Area served
   const areaServed = Array.isArray(ld?.areaServed)
     ? ld.areaServed.map(a => (typeof a === 'string' ? a : a.name)).filter(Boolean)
     : [];
 
-  // External website (non-SF)
   const website = extractExternalWebsite(html, $);
-
-  // HTML extractors
   const fSkatt = extractFSkatt(fullText, pageParsedOk);
   const bankId = extractBankId(fullText);
   const { carrier: insCarrier, amount: insAmount } = extractInsurance(fullText);
@@ -419,7 +500,6 @@ function parseProfile(html, foretagId, tradeSet) {
   const photos = extractGalleryImages(html, $);
   const partialOrg = extractPartialOrgNumber(ld?.taxID);
 
-  // Reviews from ld+json
   const rawReviews = Array.isArray(ld?.review) ? ld.review : [];
   const reviews = rawReviews.map(r => ({
     source: 'servicefinder',
@@ -442,7 +522,6 @@ function parseProfile(html, foretagId, tradeSet) {
   const state = postalToState(postalCode);
   const category = deriveCategoryFromTrades(tradeSet);
 
-  // Build sources JSONB
   const sources = {};
   if (name)       sources.name        = 'servicefinder';
   if (phone)      sources.phone       = 'servicefinder';
@@ -469,37 +548,31 @@ function parseProfile(html, foretagId, tradeSet) {
     org_number: null,
     partial_org_number: partialOrg,
 
-    // ServiceFinder-specific
     servicefinder_id:            String(foretagId),
     servicefinder_url:           `${BASE_URL}/foretag/${foretagId}`,
     servicefinder_rating:        sfRating,
     servicefinder_review_count:  sfReviewCount,
-    servicefinder_state:         'active',
+    servicefinder_state:         sfState || 'active',
     servicefinder_area_served:   areaServed.length ? areaServed : null,
     servicefinder_jobs_completed: sfJobs,
 
-    // Content
     description,
     logo_url: logoUrl,
     photos: photos.length ? photos : null,
 
-    // Trust signals
     f_skatt_registered: fSkatt,
     bankid_verified:    bankId,
     insurance_carrier:  insCarrier,
     insurance_amount_sek: insAmount,
     warranty_years:     warrantyYears,
 
-    // Category
     category,
     all_categories: Array.from(tradeSet),
 
-    // Match keys
     normalized_domain: domain,
     normalized_phone:  phone,
     normalized_name:   normalName,
 
-    // Provenance
     source:     'servicefinder',
     sources,
     scraped_at: new Date().toISOString(),
@@ -512,12 +585,12 @@ function parseProfile(html, foretagId, tradeSet) {
 // Checkpoint helpers
 // ---------------------------------------------------------------------------
 
-function checkpointPath(runId) {
-  return `/tmp/sf-pilot-${runId}.json`;
+function checkpointPath(runId, mode) {
+  return `/tmp/sf-${mode}-${runId}.json`;
 }
 
-function loadCheckpoint(runId) {
-  const p = checkpointPath(runId);
+function loadCheckpoint(runId, mode) {
+  const p = checkpointPath(runId, mode);
   if (!existsSync(p)) return new Set();
   try {
     const data = JSON.parse(readFileSync(p, 'utf8'));
@@ -525,21 +598,168 @@ function loadCheckpoint(runId) {
   } catch { return new Set(); }
 }
 
-function saveCheckpoint(runId, doneSet) {
-  if (DRY_RUN) return; // never persist dry-run state
-  writeFileSync(checkpointPath(runId), JSON.stringify({ done: Array.from(doneSet) }));
+function saveCheckpoint(runId, mode, doneSet) {
+  if (DRY_RUN) return;
+  writeFileSync(checkpointPath(runId, mode), JSON.stringify({ done: Array.from(doneSet) }));
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// National run
 // ---------------------------------------------------------------------------
 
-async function main() {
+async function runNational() {
+  console.log('[SF national] dry_run=' + DRY_RUN);
+
+  // Create run row
+  let runId = RUN_ID_ARG;
+  if (!runId && !DRY_RUN) {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        source: 'servicefinder',
+        scope: 'national',
+        status: 'running',
+        meta: {
+          rate_req_per_s: 1.5,
+          expected_profiles: 4050,
+          user_agent: UA,
+          review_limit_per_profile: 3,
+          review_limit_note: 'SF ld+json only ships 3 most-recent reviews; true total in servicefinder_review_count',
+        },
+      })
+      .select('id')
+      .single();
+    if (error) { console.error('Failed to create run row:', error.message); process.exit(1); }
+    runId = data.id;
+    console.log(`Created scrape_run: ${runId}`);
+  } else if (!runId) {
+    runId = 'dry-run-' + Date.now();
+  }
+
+  // Step 1: Sitemap discovery
+  console.log('\n=== Sitemap discovery ===');
+  const sitemapStateMap = await discoverFromSitemap();
+
+  // Step 2: Category crawl (concurrent with profile fetch, but we do it first for simplicity)
+  console.log('\n=== Category crawl: discovering city slugs ===');
+  await delay(RATE_MS);
+  const cities = await discoverCitySlugs('elektriker');
+  console.log(`Discovered ${cities.length} city slugs from SF`);
+
+  if (cities.length === 0) {
+    console.warn('City slug discovery returned 0 cities — using fallback list');
+  }
+
+  const effectiveCities = cities.length > 0 ? cities : DISCOVERY_CITIES_STOCKHOLM;
+
+  console.log('\n=== Category crawl: trade × city ===');
+  const tradeMap = await runDiscoveryCrawl(effectiveCities);
+
+  // Step 3: Profile fetch
+  const allIds = Array.from(sitemapStateMap.keys());
+  console.log(`\nProfile IDs from sitemap: ${allIds.length}`);
+
+  const done = loadCheckpoint(runId, 'national');
+  const toFetch = allIds.filter(id => !done.has(id));
+  console.log(`Already done: ${done.size}, remaining: ${toFetch.length}`);
+
+  const stats = { fetched: 0, inserted: 0, updated: 0, failed: 0, reviews: 0 };
+  let checkpointCounter = 0;
+
+  console.log('\n=== Profile fetch + merge ===');
+  for (const foretagId of toFetch) {
+    const tradeSet = tradeMap.get(foretagId) || new Set(['construction_other']);
+    const sfState = sitemapStateMap.get(foretagId) || 'active';
+    const url = `${BASE_URL}/foretag/${foretagId}`;
+
+    await delay(RATE_MS);
+    const html = await fetchPage(url);
+    stats.fetched++;
+
+    if (!html) {
+      stats.failed++;
+      done.add(foretagId);
+      continue;
+    }
+
+    let candidate;
+    try {
+      candidate = parseProfile(html, foretagId, tradeSet, sfState);
+    } catch (err) {
+      console.error(`  [parse error] foretag/${foretagId}: ${err.message}`);
+      stats.failed++;
+      done.add(foretagId);
+      continue;
+    }
+
+    if (stats.fetched % 50 === 0) {
+      console.log(`  [${stats.fetched}/${toFetch.length}] inserted=${stats.inserted} updated=${stats.updated} failed=${stats.failed} reviews=${stats.reviews}`);
+    }
+
+    if (DRY_RUN) {
+      console.log(`  [DRY RUN] would upsert foretag/${foretagId}: ${candidate.name} (${candidate.city}, ${candidate.postal_code}) state=${sfState}`);
+      done.add(foretagId);
+      continue;
+    }
+
+    const result = await upsertShop(supabase, runId, candidate);
+
+    if (result.action === 'insert') stats.inserted++;
+    else if (result.action === 'update') stats.updated++;
+    else stats.failed++;
+
+    if (result.shopId && candidate.reviews.length > 0) {
+      for (const review of candidate.reviews) {
+        await upsertReview(supabase, runId, result.shopId, review);
+        stats.reviews++;
+      }
+    }
+
+    done.add(foretagId);
+
+    checkpointCounter++;
+    if (checkpointCounter % CHECKPOINT_EVERY === 0) {
+      saveCheckpoint(runId, 'national', done);
+      console.log(`  [checkpoint] ${done.size} done, stats:`, stats);
+    }
+  }
+
+  saveCheckpoint(runId, 'national', done);
+
+  console.log('\n=== National run complete ===');
+  console.log(stats);
+
+  if (!DRY_RUN) {
+    const { error } = await supabase
+      .from('scrape_runs')
+      .update({
+        status: 'complete',
+        completed_at: new Date().toISOString(),
+        rows_fetched: stats.fetched,
+        rows_updated: stats.updated,
+        rows_inserted: stats.inserted,
+        rows_unmatched: stats.inserted,
+        cost_usd: 0,
+        notes: `National run: ${stats.inserted} new + ${stats.updated} updated + ${stats.failed} failed. ${stats.reviews} reviews. Sitemap: ${allIds.length} profiles. Category crawl: ${tradeMap.size} categorised. Cities: ${effectiveCities.length}.`,
+      })
+      .eq('id', runId);
+
+    if (error) console.error('Failed to close run:', error.message);
+    else console.log(`Run ${runId} marked complete.`);
+  }
+
+  return runId;
+}
+
+// ---------------------------------------------------------------------------
+// Stockholm pilot (legacy — Phase 4a)
+// ---------------------------------------------------------------------------
+
+async function runPilot() {
   console.log(`[SF pilot] run_id=${PILOT_RUN_ID} dry_run=${DRY_RUN}`);
 
-  // --- Phase 1: Discovery crawl ---
   console.log('\n=== Discovery crawl ===');
-  const tradeMap = await runDiscoveryCrawl();
+  const tradeMap = await runDiscoveryCrawl(DISCOVERY_CITIES_STOCKHOLM);
 
   if (tradeMap.size === 0) {
     console.error('Discovery crawl returned 0 profiles — aborting.');
@@ -549,12 +769,10 @@ async function main() {
   const allIds = Array.from(tradeMap.keys());
   console.log(`\nProfile IDs to fetch: ${allIds.length}`);
 
-  // Load checkpoint (resume support)
-  const done = loadCheckpoint(PILOT_RUN_ID);
+  const done = loadCheckpoint(PILOT_RUN_ID, 'pilot');
   const toFetch = allIds.filter(id => !done.has(id));
   console.log(`Already done: ${done.size}, remaining: ${toFetch.length}`);
 
-  // --- Phase 2: Profile fetch + parse + merge ---
   const stats = { fetched: 0, skipped_non_stockholm: 0, inserted: 0, updated: 0, failed: 0, reviews: 0 };
   let checkpointCounter = 0;
 
@@ -575,7 +793,7 @@ async function main() {
 
     let candidate;
     try {
-      candidate = parseProfile(html, foretagId, tradeSet);
+      candidate = parseProfile(html, foretagId, tradeSet, 'active');
     } catch (err) {
       console.error(`  [parse error] foretag/${foretagId}: ${err.message}`);
       stats.failed++;
@@ -583,7 +801,7 @@ async function main() {
       continue;
     }
 
-    // Stockholm filter
+    // Stockholm filter (pilot only)
     if (!isStockholmsLan(candidate.postal_code)) {
       stats.skipped_non_stockholm++;
       done.add(foretagId);
@@ -600,14 +818,12 @@ async function main() {
       continue;
     }
 
-    // Upsert shop
     const result = await upsertShop(supabase, PILOT_RUN_ID, candidate);
 
     if (result.action === 'insert') stats.inserted++;
     else if (result.action === 'update') stats.updated++;
     else stats.failed++;
 
-    // Upsert reviews
     if (result.shopId && candidate.reviews.length > 0) {
       for (const review of candidate.reviews) {
         await upsertReview(supabase, PILOT_RUN_ID, result.shopId, review);
@@ -617,20 +833,18 @@ async function main() {
 
     done.add(foretagId);
 
-    // Checkpoint
     checkpointCounter++;
     if (checkpointCounter % CHECKPOINT_EVERY === 0) {
-      saveCheckpoint(PILOT_RUN_ID, done);
+      saveCheckpoint(PILOT_RUN_ID, 'pilot', done);
       console.log(`  [checkpoint] ${done.size} done, stats:`, stats);
     }
   }
 
-  saveCheckpoint(PILOT_RUN_ID, done);
+  saveCheckpoint(PILOT_RUN_ID, 'pilot', done);
 
   console.log('\n=== Pilot complete ===');
   console.log(stats);
 
-  // --- Close run ---
   if (!DRY_RUN) {
     const { error } = await supabase
       .from('scrape_runs')
@@ -640,9 +854,9 @@ async function main() {
         rows_fetched: stats.fetched,
         rows_updated: stats.updated,
         rows_inserted: stats.inserted,
-        rows_unmatched: stats.inserted, // new rows not matched to existing = inserts
+        rows_unmatched: stats.inserted,
         cost_usd: 0,
-        notes: `Stockholm pilot: ${stats.inserted} new + ${stats.updated} updated + ${stats.skipped_non_stockholm} skipped (non-Stockholm) + ${stats.failed} failed. ${stats.reviews} reviews. Discovery found ${allIds.length} unique profiles across ${TRADE_SLUGS.length} trades × ${DISCOVERY_CITIES.length} cities.`,
+        notes: `Stockholm pilot: ${stats.inserted} new + ${stats.updated} updated + ${stats.skipped_non_stockholm} skipped (non-Stockholm) + ${stats.failed} failed. ${stats.reviews} reviews. Discovery found ${allIds.length} unique profiles across ${TRADE_SLUGS.length} trades × ${DISCOVERY_CITIES_STOCKHOLM.length} cities.`,
       })
       .eq('id', PILOT_RUN_ID);
 
@@ -651,17 +865,33 @@ async function main() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+async function main() {
+  if (NATIONAL) {
+    await runNational();
+  } else {
+    await runPilot();
+  }
+}
+
 main().catch(err => {
   if (err.message.startsWith('STOP:')) {
     console.error('\n⚠️  Rate-limit stop triggered:', err.message);
-    // Mark run as paused
-    supabase.from('scrape_runs')
-      .update({ status: 'paused', notes: err.message })
-      .eq('id', PILOT_RUN_ID)
-      .then(({ error }) => {
-        if (error) console.error('Failed to mark run paused:', error.message);
-        process.exit(1);
-      });
+    const runId = RUN_ID_ARG || (NATIONAL ? null : PILOT_RUN_ID);
+    if (runId) {
+      supabase.from('scrape_runs')
+        .update({ status: 'paused', notes: err.message })
+        .eq('id', runId)
+        .then(({ error }) => {
+          if (error) console.error('Failed to mark run paused:', error.message);
+          process.exit(1);
+        });
+    } else {
+      process.exit(1);
+    }
   } else {
     console.error('Fatal error:', err);
     process.exit(1);

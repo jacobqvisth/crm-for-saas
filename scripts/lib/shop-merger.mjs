@@ -169,6 +169,7 @@ function buildUpdatePayload(existing, candidate) {
  * @returns {{ action: 'insert'|'update'|'match_ambiguous'|'match_failed', shopId: string|null, matchMethod: string|null, fieldsChanged: string[] }}
  */
 export async function upsertShop(supabase, runId, candidate) {
+  const eventSource = candidate.source || 'servicefinder';
   const match = await findExisting(supabase, candidate);
 
   if (!match) {
@@ -184,11 +185,11 @@ export async function upsertShop(supabase, runId, candidate) {
       .single();
 
     if (error) {
-      await writeEvent(supabase, runId, null, 'match_failed', null, []);
+      await writeEvent(supabase, runId, null, 'match_failed', null, [], eventSource);
       return { action: 'match_failed', shopId: null, matchMethod: null, fieldsChanged: [] };
     }
 
-    await writeEvent(supabase, runId, inserted.id, 'insert', null, Object.keys(insertPayload));
+    await writeEvent(supabase, runId, inserted.id, 'insert', null, Object.keys(insertPayload), eventSource);
     return { action: 'insert', shopId: inserted.id, matchMethod: null, fieldsChanged: Object.keys(insertPayload) };
   }
 
@@ -200,7 +201,7 @@ export async function upsertShop(supabase, runId, candidate) {
     .single();
 
   if (fetchErr) {
-    await writeEvent(supabase, runId, match.row.id, 'match_failed', match.method, []);
+    await writeEvent(supabase, runId, match.row.id, 'match_failed', match.method, [], eventSource);
     return { action: 'match_failed', shopId: match.row.id, matchMethod: match.method, fieldsChanged: [] };
   }
 
@@ -213,12 +214,12 @@ export async function upsertShop(supabase, runId, candidate) {
       .eq('id', existing.id);
 
     if (updateErr) {
-      await writeEvent(supabase, runId, existing.id, 'match_failed', match.method, []);
+      await writeEvent(supabase, runId, existing.id, 'match_failed', match.method, [], eventSource);
       return { action: 'match_failed', shopId: existing.id, matchMethod: match.method, fieldsChanged: [] };
     }
   }
 
-  await writeEvent(supabase, runId, existing.id, 'update', match.method, fieldsChanged);
+  await writeEvent(supabase, runId, existing.id, 'update', match.method, fieldsChanged, eventSource);
   return { action: 'update', shopId: existing.id, matchMethod: match.method, fieldsChanged };
 }
 
@@ -261,11 +262,11 @@ export async function upsertReview(supabase, runId, shopId, review) {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-async function writeEvent(supabase, runId, shopId, eventType, matchMethod, fieldsChanged) {
+async function writeEvent(supabase, runId, shopId, eventType, matchMethod, fieldsChanged, source = 'servicefinder') {
   const { error } = await supabase.from('data_source_events').insert({
     run_id: runId,
     shop_id: shopId,
-    source: 'servicefinder',
+    source,
     event_type: eventType,
     match_method: matchMethod,
     fields_changed: fieldsChanged,

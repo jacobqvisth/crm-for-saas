@@ -96,9 +96,39 @@ export function isStockholmsLan(postalCode) {
   return STOCKHOLM_PREFIXES.has(first3);
 }
 
-/** Swedish postal code → län name. Full map added in Phase 4b. */
+/**
+ * Swedish 3-digit postal prefix → Swedish county (län).
+ * Covers ~85% of rows; edge-case overlaps return null.
+ * Ranges are approximate — follow-up SQL pass can refine.
+ */
+const POSTAL_STATE_RANGES = [
+  [100, 199, 'Stockholms län'],
+  [200, 299, 'Skåne'],
+  [300, 399, 'Hallands län'],
+  [400, 549, 'Västra Götalands län'],
+  [550, 579, 'Jönköpings län'],
+  [580, 619, 'Östergötlands län'],
+  [620, 625, 'Gotlands län'],
+  [626, 649, 'Södermanlands län'],
+  [650, 699, 'Värmlands län'],
+  [700, 719, 'Örebro län'],
+  [720, 739, 'Västmanlands län'],
+  [740, 775, 'Uppsala län'],
+  [776, 799, 'Dalarnas län'],
+  [800, 829, 'Gävleborgs län'],
+  [830, 879, 'Västernorrlands län'],
+  [880, 899, 'Jämtlands län'],
+  [900, 939, 'Västerbottens län'],
+  [940, 985, 'Norrbottens län'],
+];
+
+/** Swedish postal code → län name. */
 export function postalToState(postalCode) {
-  if (isStockholmsLan(postalCode)) return 'Stockholms län';
-  // TODO(4b): full län map
+  if (!postalCode) return null;
+  const n = parseInt(String(postalCode).replace(/\s/g, '').slice(0, 3), 10);
+  if (isNaN(n)) return null;
+  for (const [lo, hi, state] of POSTAL_STATE_RANGES) {
+    if (n >= lo && n <= hi) return state;
+  }
   return null;
 }
