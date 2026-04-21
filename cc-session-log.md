@@ -14,6 +14,36 @@ updated: 2026-03-31
 
 ---
 
+## 2026-04-21 — Select-all-matching on Contacts + Verify emails in Discovery
+
+- **Branch**: `feature/select-all-contacts-and-verify-in-discovery` (worktree `claude/adoring-babbage-2dec85`) → [PR #56](https://github.com/jacobqvisth/crm-for-saas/pull/56)
+- **Build**: TypeScript ✅ · Lint ✅ · 8/8 smoke tests ✅
+
+### What was built
+
+**Part 1 — `/contacts`: Select all matching filters**
+- Gmail-style "select all N contacts matching current filters" banner row appears when all 50 page rows are checked and `totalCount > PAGE_SIZE`
+- `selectAllMatching` state resets on any filter/page change
+- All 4 bulk actions (lead status, add to list, verify emails, delete) now accept either `contactIds[]` or `filters{}` and hit the full matching set server-side
+- New shared helper `src/lib/contacts-filter.ts` (`resolveContactIdsByFilters`) used by all routes
+- New routes: `POST /api/contacts/bulk-delete`, `POST /api/contacts/bulk-update-lead-status`, `POST /api/contact-lists/add-contacts`
+- `POST /api/contacts/verify-email` updated to accept `filters` branch (cap still 50; returns `capped: true` + `totalRequested` so Jacob can click-through batches)
+
+**Part 2 — `/discovery`: Verify emails before promote**
+- Migration `20260421000000_discovered_shops_email_status.sql`: added `email_status TEXT` + `email_verified_at TIMESTAMPTZ` to `discovered_shops`; backfilled `email_valid=true → 'valid'` and `email_valid=false → 'invalid'`; applied to production via Supabase MCP
+- New `POST /api/discovery/verify-email`: same Prospeo logic as contacts route, targets `primary_email` on `discovered_shops`, caps at 50
+- Email column in discovery table now shows ✅ green (valid), 🟡 amber (risky), ⬜ grey (catch_all), ❌ red (invalid) inline with the email
+- "Verify Emails" button + confirmation modal added to discovery bulk action bar; works in both selected-IDs and select-all-pages mode
+- All discovery routes (`shops`, `promote`, `skip`) switched `verified_email` filter from `email_valid = true` → `email_status = 'valid'`
+- `promote/route.ts` now inherits `email_status` + `email_verified_at` from the shop row — promoted contacts land already-verified and skip Prospeo re-check on `/contacts`
+
+### Notable decisions
+- `email_valid` column kept (not dropped) for backward compat; can remove in a later migration
+- No auto-verify on promote — intentionally manual so Jacob controls Prospeo credit spend
+- No async queue for >50 verifications — click-through batching is sufficient at current volumes
+
+---
+
 ## 2026-04-21 — Phase SE-Stockholm-2: Gap-fill scrape + Contact enrichment
 
 - **Branch**: `feature/stockholm-phase2-gapfill-enrichment` → PR #52
