@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (verified_email === "true") {
-    query = query.eq("email_valid", true);
+    query = query.eq("email_status", "valid");
   }
 
   if (search) {

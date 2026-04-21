@@ -12,6 +12,7 @@ import { SlideOver } from '@/components/ui/slide-over';
 import { Modal } from '@/components/ui/modal';
 import toast from 'react-hot-toast';
 import type { Tables } from '@/lib/database.types';
+import type { ContactFilters } from '@/lib/contacts-filter';
 
 type Contact = Tables<'contacts'> & { company_name?: string | null };
 
@@ -46,6 +47,7 @@ export function ContactsPageClient() {
   const [sortField, setSortField] = useState<'country_code' | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddToList, setShowAddToList] = useState(false);
@@ -53,6 +55,15 @@ export function ContactsPageClient() {
   const [verifying, setVerifying] = useState(false);
   const [bulkLeadStatus, setBulkLeadStatus] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Build current filter object for API calls
+  const currentFilters: ContactFilters = {
+    search: search || undefined,
+    lead_status: leadStatusFilter || undefined,
+    status: statusFilter || undefined,
+    company_id: companyFilter || undefined,
+    country_code: countryFilter || undefined,
+  };
 
   // Update URL params
   const updateParams = useCallback((updates: Record<string, string>) => {
@@ -77,13 +88,14 @@ export function ContactsPageClient() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput, search, updateParams]);
 
-  // Fetch contacts
+  // Fetch contacts — reset selectAllMatching on every fetch
   useEffect(() => {
     if (!workspaceId) return;
     let cancelled = false;
 
     async function fetchContacts() {
       setLoading(true);
+      setSelectAllMatching(false);
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
@@ -192,6 +204,7 @@ export function ContactsPageClient() {
   const allSelected = contacts.length > 0 && selectedIds.size === contacts.length;
 
   const toggleSelect = (id: string) => {
+    setSelectAllMatching(false);
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -201,66 +214,90 @@ export function ContactsPageClient() {
   };
 
   const toggleSelectAll = () => {
+    setSelectAllMatching(false);
     if (allSelected) setSelectedIds(new Set());
     else setSelectedIds(new Set(contacts.map(c => c.id)));
   };
 
-  // Bulk actions
-  const handleBulkLeadStatusChange = async (newStatus: string) => {
-    if (!workspaceId || selectedIds.size === 0) return;
-    const { error } = await supabase
-      .from('contacts')
-      .update({ lead_status: newStatus as Contact['lead_status'] })
-      .in('id', Array.from(selectedIds))
-      .eq('workspace_id', workspaceId);
+  // The count shown in the action bar
+  const effectiveCount = selectAllMatching ? totalCount : selectedIds.size;
 
-    if (error) toast.error('Failed to update contacts');
-    else {
-      toast.success(`Updated ${selectedIds.size} contacts`);
-      setContacts(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, lead_status: newStatus as Contact['lead_status'] } : c));
-      setSelectedIds(new Set());
-      setBulkLeadStatus('');
+  // Bulk actions — all support both modes
+  const handleBulkLeadStatusChange = async (newStatus: string) => {
+    if (!workspaceId || effectiveCount === 0) return;
+
+    const body = selectAllMatching
+      ? { filters: currentFilters, workspaceId, lead_status: newStatus }
+      : { contactIds: Array.from(selectedIds), workspaceId, lead_status: newStatus };
+
+    const res = await fetch('/api/contacts/bulk-update-lead-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.error || 'Failed to update contacts');
+      return;
     }
+    toast.success(`Updated ${data.updated} contacts`);
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
+    setBulkLeadStatus('');
+    router.refresh();
+    updateParams({});
   };
 
   const handleBulkDelete = async () => {
-    if (!workspaceId || selectedIds.size === 0) return;
-    const { error } = await supabase
-      .from('contacts')
-      .delete()
-      .in('id', Array.from(selectedIds))
-      .eq('workspace_id', workspaceId);
+    if (!workspaceId || effectiveCount === 0) return;
 
-    if (error) toast.error('Failed to delete contacts');
-    else {
-      toast.success(`Deleted ${selectedIds.size} contacts`);
-      setContacts(prev => prev.filter(c => !selectedIds.has(c.id)));
-      setTotalCount(prev => prev - selectedIds.size);
-      setSelectedIds(new Set());
-      setShowDeleteConfirm(false);
+    const body = selectAllMatching
+      ? { filters: currentFilters, workspaceId }
+      : { contactIds: Array.from(selectedIds), workspaceId };
+
+    const res = await fetch('/api/contacts/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.error || 'Failed to delete contacts');
+      return;
     }
+    toast.success(`Deleted ${data.deleted} contacts`);
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
+    setShowDeleteConfirm(false);
+    updateParams({});
   };
 
   const handleBulkVerify = async () => {
-    if (!workspaceId || selectedIds.size === 0) return;
+    if (!workspaceId || effectiveCount === 0) return;
     setVerifying(true);
     try {
+      const body = selectAllMatching
+        ? { filters: currentFilters, workspaceId }
+        : { contactIds: Array.from(selectedIds), workspaceId };
+
       const res = await fetch('/api/contacts/verify-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactIds: Array.from(selectedIds), workspaceId }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error || 'Verification failed');
         return;
       }
-      const { verified, skipped, errors } = data;
+      const { verified, skipped, errors, capped, totalRequested } = data;
+      const cappedNote = capped ? ` (${totalRequested} total — click again for next batch)` : '';
       toast.success(
-        `Verified ${verified}, skipped ${skipped} (cached)${errors > 0 ? `, ${errors} errors` : ''}`
+        `Verified ${verified}, skipped ${skipped} (cached)${errors > 0 ? `, ${errors} errors` : ''}${cappedNote}`
       );
       router.refresh();
       setSelectedIds(new Set());
+      setSelectAllMatching(false);
       setShowVerifyConfirm(false);
     } catch {
       toast.error('Verification failed');
@@ -270,18 +307,26 @@ export function ContactsPageClient() {
   };
 
   const handleBulkAddToList = async (listId: string) => {
-    if (!workspaceId || selectedIds.size === 0) return;
-    const rows = Array.from(selectedIds).map(contactId => ({
-      list_id: listId,
-      contact_id: contactId,
-    }));
-    const { error } = await supabase.from('contact_list_members').upsert(rows, { onConflict: 'list_id,contact_id' });
-    if (error) toast.error('Failed to add to list');
-    else {
-      toast.success(`Added ${selectedIds.size} contacts to list`);
-      setShowAddToList(false);
-      setSelectedIds(new Set());
+    if (!workspaceId || effectiveCount === 0) return;
+
+    const body = selectAllMatching
+      ? { filters: currentFilters, workspaceId, listId }
+      : { contactIds: Array.from(selectedIds), workspaceId, listId };
+
+    const res = await fetch('/api/contact-lists/add-contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.error || 'Failed to add to list');
+      return;
     }
+    toast.success(`Added ${data.added} contacts to list`);
+    setShowAddToList(false);
+    setSelectedIds(new Set());
+    setSelectAllMatching(false);
   };
 
   return (
@@ -426,6 +471,33 @@ export function ContactsPageClient() {
               </tr>
             </thead>
             <tbody>
+              {/* Select-all-matching banner — Gmail-style */}
+              {!loading && allSelected && !selectAllMatching && totalCount > contacts.length && (
+                <tr>
+                  <td colSpan={9} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
+                    All {contacts.length} contacts on this page are selected.{' '}
+                    <button
+                      onClick={() => setSelectAllMatching(true)}
+                      className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+                    >
+                      Select all {totalCount.toLocaleString()} contacts matching current filters
+                    </button>
+                  </td>
+                </tr>
+              )}
+              {!loading && selectAllMatching && (
+                <tr>
+                  <td colSpan={9} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
+                    All {totalCount.toLocaleString()} contacts matching current filters are selected.{' '}
+                    <button
+                      onClick={() => { setSelectAllMatching(false); setSelectedIds(new Set()); }}
+                      className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+                    >
+                      Clear selection
+                    </button>
+                  </td>
+                </tr>
+              )}
               {loading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i} className="border-b border-slate-100 animate-pulse">
@@ -536,9 +608,9 @@ export function ContactsPageClient() {
       </div>
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
+      {(selectedIds.size > 0 || selectAllMatching) && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white rounded-xl shadow-2xl px-6 py-3 flex items-center gap-4">
-          <span className="text-sm font-medium">{selectedIds.size} contacts selected</span>
+          <span className="text-sm font-medium">{effectiveCount.toLocaleString()} contacts selected</span>
           <div className="h-5 w-px bg-slate-600" />
           <select
             value={bulkLeadStatus}
@@ -584,7 +656,6 @@ export function ContactsPageClient() {
           onSuccess={() => {
             setShowAddContact(false);
             router.refresh();
-            // Re-fetch contacts
             updateParams({});
           }}
         />
@@ -593,7 +664,7 @@ export function ContactsPageClient() {
       {/* Delete Confirmation Modal */}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Contacts">
         <p className="text-sm text-slate-600 mb-4">
-          Are you sure you want to delete {selectedIds.size} contact{selectedIds.size > 1 ? 's' : ''}? This action cannot be undone.
+          Are you sure you want to delete {effectiveCount.toLocaleString()} contact{effectiveCount > 1 ? 's' : ''}? This action cannot be undone.
         </p>
         <div className="flex justify-end gap-3">
           <button
@@ -614,7 +685,7 @@ export function ContactsPageClient() {
       {/* Verify Emails Modal */}
       <Modal open={showVerifyConfirm} onClose={() => setShowVerifyConfirm(false)} title="Verify Email Addresses">
         <p className="text-sm text-slate-600 mb-4">
-          This will verify {selectedIds.size} email address{selectedIds.size !== 1 ? 'es' : ''} using Prospeo (1 credit each). Already-verified contacts will be skipped.
+          This will verify {effectiveCount.toLocaleString()} email address{effectiveCount !== 1 ? 'es' : ''} using Prospeo (1 credit each). Already-verified contacts and contacts without an email will be skipped. Capped at 50 per click.
         </p>
         <div className="flex justify-end gap-3">
           <button
