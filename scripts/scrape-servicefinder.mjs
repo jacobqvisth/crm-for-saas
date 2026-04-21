@@ -309,22 +309,35 @@ function extractSfJobs(text) {
   return parseInt(m[1].replace(/\s/g, '')) || null;
 }
 
+// Domains that appear on many SF profiles but are NOT the contractor's own site
+const SHARED_PLATFORM_DOMAINS = new Set([
+  'mittanbudmarketplaces.com', 'mittanbud.com', 'anbud.se', 'byggahus.se',
+  'blocket.se', 'hittahem.se', 'hantverkare.se', 'topphantverkare.se',
+  'reco.se', 'trustpilot.com', 'allabolag.se', 'hitta.se', 'eniro.se',
+  'gulasidorna.se', 'foretaget.se', 'proff.se', 'uc.se',
+]);
+
 function extractExternalWebsite(html, $) {
-  // Look for links in the profile body that go to external sites
+  // Look for links in the profile body that go to the contractor's own website
   let found = null;
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href') || '';
-    if (
-      href.startsWith('http') &&
-      !href.includes('servicefinder.se') &&
-      !href.includes('facebook.com') &&
-      !href.includes('instagram.com') &&
-      !href.includes('linkedin.com') &&
-      !href.includes('google.') &&
-      !found
-    ) {
-      found = href;
-    }
+    if (!href.startsWith('http')) return;
+    if (found) return;
+
+    const skipDomains = [
+      'servicefinder.se', 'facebook.com', 'instagram.com',
+      'linkedin.com', 'google.', 'youtube.com', 'twitter.com',
+      'x.com', 'tiktok.com',
+    ];
+    if (skipDomains.some(d => href.includes(d))) return;
+
+    // Skip shared marketplace domains
+    let hostname = '';
+    try { hostname = new URL(href).hostname.replace(/^www\./, ''); } catch { return; }
+    if (SHARED_PLATFORM_DOMAINS.has(hostname)) return;
+
+    found = href;
   });
   return found;
 }
@@ -513,6 +526,7 @@ function loadCheckpoint(runId) {
 }
 
 function saveCheckpoint(runId, doneSet) {
+  if (DRY_RUN) return; // never persist dry-run state
   writeFileSync(checkpointPath(runId), JSON.stringify({ done: Array.from(doneSet) }));
 }
 
