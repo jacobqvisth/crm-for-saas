@@ -734,3 +734,44 @@ Phase 20: Prospector Upgrade
 ### Notable decisions
 - Did not change `contact_list_members` writes — static lists still materialize members there. Only reads-for-resolution are redirected through `resolveListContactIds()`.
 - `enroll-list-modal.tsx` and `export-csv-button.tsx` were already handling dynamic lists correctly; left untouched.
+
+---
+
+## Session: Phase SE-Stockholm-3 — Cert-flag + description enrichment
+- **Date:** 2026-04-21
+- **PR:** [#53](https://github.com/jacobqvisth/crm-for-saas/pull/53)
+- **Branch:** feature/se-stockholm-3-cert-flags
+- **Target DB:** Kundbolaget `ugibcnidxrhcxflqamxs`
+
+### What was built
+- **`scripts/lib/cert-flag-scraper.mjs`**: Node.js script that fetches each Stockholm shop's website directly (no Apify, $0 cost) using native `fetch` + `cheerio`. Per-shop: homepage + /om-oss variants + /tjanster variants + /kontakt. Extracts `description` (meta tag, 500-char cap), `about_text` (20k cap, homepage fallback if no /om-oss found), `services_text` (20k cap, NULL if no services page found), and runs 6 cert-flag regexes on combined text.
+- **Cert flags populated (3-state):** NULL = fetch failed, TRUE = regex matched, FALSE = text fetched but no match.
+- **`cheerio`** added as devDependency.
+
+### Pass A results (n=3,200 Stockholms län rows)
+| Metric | End of Phase 2 | End of Phase 3 |
+|---|---|---|
+| % with phone | 79.9% | 79.9% (unchanged) |
+| % MX-valid email | 76.0% | 76.0% (unchanged) |
+| % with description | ~0% | 55.4% |
+| % with about_text | ~0% | 65.5% |
+| % with services_text | ~0% | 28.2% |
+| avg about_text length | — | 2,741 chars |
+| % cert flags evaluated | 0% | 73.9% (2,364/3,200) |
+| % with ≥1 cert flag TRUE | 0% | 20.5% |
+
+Cert flag breakdown (2,364 evaluated): rot_advertised=555, esv=92, sv=80, bf=32, if=32, gvk=12.
+Fetch failures: 178 (7% — offline/403/timeout sites; cert flags stay NULL).
+Pages truncated at 20k chars: 14.
+
+### Pass B (vdrmota retry)
+No-op — straggler count was 0. All 2,542 shops already had `contact_info_scraper` events from Phase 2 Phase B.
+
+### Build status
+- Script-only change (no Next.js app changes). Pre-existing CI failures on main unrelated to this session.
+- Vercel deploy: live (HTTP 307 → auth as expected).
+
+### Notable decisions
+- services_text target was ≥30%; achieved 28.2% — SMB sites often embed services on homepage rather than a dedicated page. Acceptable.
+- about_text uses homepage as fallback (not NULL) when no /om-oss found, to maximize content coverage for the contractor detail page.
+- Pass B skipped after confirming 0 stragglers in DB.
