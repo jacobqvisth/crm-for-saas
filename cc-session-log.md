@@ -878,3 +878,41 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 - No auto-verify-on-promote — Jacob wants manual control over Prospeo credit spend.
 - Prospeo cap remains 50/click for discovery (same as contacts). Manual click-through is fine at current volumes.
 - Pass B skipped after confirming 0 stragglers in DB.
+
+---
+
+## Phase SE-Stockholm-5 — Promote discovered_shops → contractor_directory
+**Date:** 2026-04-21
+**PR:** (pending)
+**Branch:** `feature/phase-se-stockholm-5-promote`
+
+### What was built
+- **Migrations (Kundbolaget `ugibcnidxrhcxflqamxs`)**:
+  - `20260423000000_extend_contractor_directory.sql` — adds ~35 columns to `contractor_directory` (description, cert flags, composite_rating, shop_score, reviews_recent JSONB, servicefinder_id, dorunner_slug, sources JSONB, discovered_shop_id back-ref, tags, etc.), 9 indexes, and the `contractor_directory_reviews_v` helper view. Column count 31 → 67.
+  - `20260423000001_extend_public_status_check.sql` — extends the `public_status` CHECK to allow `'published'` / `'pending'` alongside the legacy trio.
+- **`scripts/lib/se-chains.mjs`** — 17 SE chain patterns (Bravida, Assemblin, Elkedjan, Mekonomen, Beijer, etc.) with `detectChains()` helper.
+- **`scripts/lib/slug.mjs`** — diacritic-aware `slugify()` (å→a, ö→o, é→e).
+- **`scripts/promote-discovered-shops.mjs`** — dry-run-default promote pipeline. Match-key cascade (`discovered_shop_id` → `google_place_id` → `org_number` → `domain` → `phone` → `name+postal`), composite rating, shop_score 0–100, chain tags, slug generation with collision resolution + UUID fallback, reviews_recent JSONB snapshot, sources JSON, `scrape_runs` + `data_source_events` logging, paginated candidate fetch.
+- **`package.json` scripts**: `promote:se-stockholm` (dry-run) + `promote:se-stockholm:commit` (live).
+- **`_reference/promote-results-phase-5-2026-04-23.md`** — full results doc.
+
+### Pilot results (Stockholms län)
+- 3,551 candidates → 177 dropped by gating → 3,374 promotable → **3,075 directory rows** (299 merges absorbed via domain/phone cascade).
+- 2,532 `published` / 543 `pending`.
+- 0 duplicate `public_slug` values.
+- `shop_score` peaks at 20–40 band; long tail to 78.
+- Top scorer: *Svenska Eljouren - Stockholm*, shop_score 78, composite 4.24, 318 reviews.
+- Idempotency re-run: 0 inserts, 0 updates. ✅
+
+### Build status
+- `npm run build` — clean (0 errors, all 60 routes built).
+- `npm run lint` — clean.
+- `npx tsc --noEmit` — clean.
+- Deploy not applicable (scripts + migrations only, no runtime code surface).
+
+### Notable decisions
+- Kept the legacy `public_status` values (`listed`/`suppressed`/`pending_review`) alongside the new `published`/`pending` for back-compat; migration 20260423000001 widens the CHECK.
+- Domain-step cascade intentionally collapses multi-location chain offices (Bravida, Assemblin, Ahlsell) into a single directory row — matches plan's match-key ordering. Follow-up phase can re-split by `google_place_id` if chain-location pages are desired.
+- Error threshold set at 10-min-errors + 2% ratio (plan was 2% from first error, which was too tight — transient fetch failures aborted early).
+- Script is resume-safe via `.neq('status','imported')` filter; first commit attempt aborted after 143 inserts and the second run cleanly continued from shop #144.
+- `crm_company_id` column referenced in plan back-stamp step does not exist on `discovered_shops` — script back-stamps `status='imported'` only.

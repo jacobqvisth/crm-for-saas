@@ -10,7 +10,9 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "test:e2e:smoke": "npx playwright test --project=smoke --project=api",
-    "test:e2e:report": "npx playwright show-report"
+    "test:e2e:report": "npx playwright show-report",
+    "promote:se-stockholm": "node scripts/promote-discovered-shops.mjs --country=SE --state=\"Stockholms län\" --dry-run",
+    "promote:se-stockholm:commit": "node scripts/promote-discovered-shops.mjs --country=SE --state=\"Stockholms län\" --yes"
   },
   "repository": {
     "type": "git",
