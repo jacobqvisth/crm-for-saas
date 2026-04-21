@@ -916,3 +916,13 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 - Error threshold set at 10-min-errors + 2% ratio (plan was 2% from first error, which was too tight — transient fetch failures aborted early).
 - Script is resume-safe via `.neq('status','imported')` filter; first commit attempt aborted after 143 inserts and the second run cleanly continued from shop #144.
 - `crm_company_id` column referenced in plan back-stamp step does not exist on `discovered_shops` — script back-stamps `status='imported'` only.
+
+---
+
+## Chore: mark discovered_shops as legacy — 2026-04-21
+
+- **PR:** #60
+- **Branch:** `chore/remove-stale-discovered-shops-doc`
+- **Change:** CLAUDE.md — replaced "Discovery staging" bullet with "Legacy staging" note pointing scrape pipeline to jacobqvisth/result-insurance (Supabase ugibcnidxrhcxflqamxs). Table still exists in wdgiwuhehqpkhpvdzzzl but no longer written from crm-saas jobs.
+- **Build:** lint + `tsc --noEmit` clean. `npm run build` skipped — worktree has no `.env.local`; docs-only change.
+- **Deploy:** https://crm-for-saas.vercel.app — 307 to login (expected).
