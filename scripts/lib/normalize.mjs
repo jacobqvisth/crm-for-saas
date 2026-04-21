@@ -3,6 +3,8 @@
  * All functions are pure and safe to call with null/undefined (return null).
  */
 
+import { createHash } from 'crypto';
+
 export function normalizedDomain(url) {
   if (!url) return null;
   try {
@@ -10,7 +12,7 @@ export function normalizedDomain(url) {
     // Add scheme if missing so URL can parse it
     if (!/^https?:\/\//.test(s)) s = 'https://' + s;
     const u = new URL(s);
-    let host = u.hostname.replace(/^www\./, '');
+    const host = u.hostname.replace(/^www\./, '');
     return host || null;
   } catch {
     return null;
@@ -20,7 +22,7 @@ export function normalizedDomain(url) {
 export function normalizedPhone(phone, countryCode = 'SE') {
   if (!phone) return null;
   // Strip everything except digits and leading +
-  let digits = phone.replace(/[^\d]/g, '');
+  const digits = phone.replace(/[^\d]/g, '');
   if (!digits) return null;
   // Swedish numbers: strip leading 0, prepend +46
   if (countryCode === 'SE') {
@@ -44,4 +46,59 @@ export function normalizedName(name) {
     .replace(/\s+(ab|hb|kb|as|aps|oy|gmbh|ltd|llc|inc)\s*$/i, '')
     .replace(/\s+/g, ' ')
     .trim() || null;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4a additions — aliased variants + new helpers
+// ---------------------------------------------------------------------------
+
+/** Alias: normalize a URL/hostname to bare lowercase domain. */
+export function normalizeDomain(raw) {
+  return normalizedDomain(raw);
+}
+
+/** Alias with E.164 strict variant: normalizePhone returns null on non-Swedish garbage. */
+export function normalizePhone(raw) {
+  if (!raw) return null;
+  const digits = String(raw).replace(/[^\d+]/g, '');
+  if (digits.startsWith('+46') && digits.length >= 11 && digits.length <= 13) return digits;
+  if (digits.startsWith('0046')) return '+46' + digits.slice(4);
+  if (digits.startsWith('46') && digits.length >= 11) return '+' + digits;
+  if (digits.startsWith('0') && digits.length >= 9 && digits.length <= 11) return '+46' + digits.slice(1);
+  return null;
+}
+
+/** Alias: normalize company name, stripping common Swedish suffixes. */
+export function normalizeName(name) {
+  if (!name) return null;
+  return String(name)
+    .toLowerCase()
+    .replace(/\s+(ab|hb|kb|enskild firma|ekonomisk förening)\b\.?$/i, '')
+    .replace(/[^\p{L}\p{N}\s&]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || null;
+}
+
+/** SHA1 hash for stable review dedup key. */
+export function makeReviewId(source, profileId, author, publishedAt) {
+  const h = createHash('sha1');
+  h.update([source, profileId || '', author || '', publishedAt || ''].join('|'));
+  return h.digest('hex');
+}
+
+/** Whether a Swedish postal code falls in Stockholms län (prefix 100–199). */
+const STOCKHOLM_PREFIXES = new Set();
+for (let p = 100; p <= 199; p++) STOCKHOLM_PREFIXES.add(String(p));
+
+export function isStockholmsLan(postalCode) {
+  if (!postalCode) return false;
+  const first3 = String(postalCode).replace(/\s/g, '').slice(0, 3);
+  return STOCKHOLM_PREFIXES.has(first3);
+}
+
+/** Swedish postal code → län name. Full map added in Phase 4b. */
+export function postalToState(postalCode) {
+  if (isStockholmsLan(postalCode)) return 'Stockholms län';
+  // TODO(4b): full län map
+  return null;
 }
