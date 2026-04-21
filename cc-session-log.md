@@ -837,4 +837,44 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 ### Notable decisions
 - services_text target was ≥30%; achieved 28.2% — SMB sites often embed services on homepage rather than a dedicated page. Acceptable.
 - about_text uses homepage as fallback (not NULL) when no /om-oss found, to maximize content coverage for the contractor detail page.
+
+---
+
+## Session: Select-all-matching on contacts + verify emails in discovery
+- **Date:** 2026-04-21
+- **PR:** [#56](https://github.com/jacobqvisth/crm-for-saas/pull/56)
+- **Branch:** feature/select-all-contacts-and-verify-in-discovery
+
+### What was built
+
+**Part 1 — /contacts: "Select all matching filters"**
+- Added `selectAllMatching` state to `contacts-page-client.tsx`. When all 50 page rows are selected and totalCount > page size, a Gmail-style banner appears: "All 50 on this page selected → Select all N matching current filters".
+- Clicking the link sets `selectAllMatching = true`; a second banner confirms "All N selected → Clear selection".
+- Action bar shows effective count (N total, not just page) while in selectAllMatching mode.
+- Filter/page changes reset `selectAllMatching` automatically (via `useEffect` fetchContacts hook).
+- All 4 bulk actions support both modes (`contactIds` array OR `filters` object):
+  - `POST /api/contacts/verify-email` — added `filters` branch; resolves IDs server-side via `resolveContactIdsByFilters`, caps at 50, returns `capped: true` + `totalRequested`.
+  - `POST /api/contacts/bulk-delete` — new route; accepts `contactIds` OR `filters`, caps at 5,000.
+  - `POST /api/contacts/bulk-update-lead-status` — new route; same two-mode shape.
+  - `POST /api/contact-lists/add-contacts` — new route; same two-mode shape.
+- Extracted shared filter logic into `src/lib/contacts-filter.ts` (`ContactFilters` type + `resolveContactIdsByFilters` helper).
+
+**Part 2 — /discovery: Verify emails before promote**
+- Migration `20260421000000_discovered_shops_email_status.sql`: adds `email_status TEXT` + `email_verified_at TIMESTAMPTZ` to `discovered_shops`; backfills `email_valid=true → 'valid'`, `false → 'invalid'`; adds index. `email_valid` retained for backward compat.
+- New `POST /api/discovery/verify-email`: accepts `{ shopIds }` OR `{ filters }` with same filter shape as promote/skip routes. Reuses Prospeo cache heuristics (90/30/7-day skip rules). Caps at 50 per call. Writes `email_status` + `email_verified_at` to shop row.
+- Discovery page: added "Verify Emails" button (ShieldCheck) to bulk action bar; confirmation modal with credit warning; toast shows Valid/Risky/Invalid/Skipped breakdown; refetches shop list on success.
+- Email column shows ✓ (green) for valid, ✓ (amber) for risky, ✓ (slate) for catch_all, ✗ (red) for invalid.
+- `verified_email` filter now queries `email_status = 'valid'` (migration backfill makes this a no-op for existing data).
+- Promote route (`promote/route.ts`) inherits `email_status` and `email_verified_at` from the shop row so promoted contacts land already-verified.
+
+### Build status
+- `npm run build` — clean (0 errors).
+- `npm run lint` — clean.
+- `npx tsc --noEmit` — clean.
+- Vercel deploy: live (HTTP 307 → auth as expected).
+
+### Notable decisions
+- Kept `email_valid` column on `discovered_shops` — deferred removal to a future cleanup migration.
+- No auto-verify-on-promote — Jacob wants manual control over Prospeo credit spend.
+- Prospeo cap remains 50/click for discovery (same as contacts). Manual click-through is fine at current volumes.
 - Pass B skipped after confirming 0 stragglers in DB.
