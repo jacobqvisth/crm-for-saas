@@ -989,3 +989,17 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 - **Change:** CLAUDE.md — replaced "Discovery staging" bullet with "Legacy staging" note pointing scrape pipeline to jacobqvisth/result-insurance (Supabase ugibcnidxrhcxflqamxs). Table still exists in wdgiwuhehqpkhpvdzzzl but no longer written from crm-saas jobs.
 - **Build:** lint + `tsc --noEmit` clean. `npm run build` skipped — worktree has no `.env.local`; docs-only change.
 - **Deploy:** https://crm-for-saas.vercel.app — 307 to login (expected).
+
+---
+
+## Session: Prospeo → MillionVerifier route swap
+- **Date:** 2026-04-22
+- **PR:** #63
+- **Branch:** `feature/mv-route-swap`
+- **Changes:**
+  - `src/app/api/contacts/verify-email/route.ts` — replaced Prospeo POST with MillionVerifier GET API; `mapProspeoStatus` → `mapMVStatus`; env var `PROSPEO_API_KEY` → `MILLIONVERIFIER_API_KEY`
+  - `src/app/api/discovery/verify-email/route.ts` — same swap for the discovered_shops verifier
+  - Status mapping: `ok`→valid, `error`→invalid, `unknown`→risky, catchall subresult→catch_all
+- **Build:** `npm run build` fails locally (pre-existing — no `.env.local` in worktree); `npm run lint` and `npx tsc --noEmit` both clean
+- **Deploy:** https://crm-for-saas.vercel.app (Vercel auto-deploy on merge to main)
+- **Action required:** `MILLIONVERIFIER_API_KEY` must be added to Vercel prod env before verify-email routes will work. Run: `cd ~/crm-for-saas && vercel env add MILLIONVERIFIER_API_KEY production` (mark sensitive, paste key from `.env.local`)
