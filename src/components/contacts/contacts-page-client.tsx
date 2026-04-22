@@ -21,6 +21,30 @@ const PAGE_SIZE = 50;
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 const CONTACT_STATUSES = ['active', 'bounced', 'unsubscribed', 'archived'] as const;
 
+const COUNTRY_FLAGS: Record<string, string> = {
+  EE: '🇪🇪', SE: '🇸🇪', FI: '🇫🇮', NO: '🇳🇴', DK: '🇩🇰',
+  LV: '🇱🇻', LT: '🇱🇹', CZ: '🇨🇿', SK: '🇸🇰', DE: '🇩🇪',
+  FR: '🇫🇷', GB: '🇬🇧', NL: '🇳🇱', PL: '🇵🇱', US: '🇺🇸',
+};
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  et: '🇪🇪 Estonian',
+  sv: '🇸🇪 Swedish',
+  fi: '🇫🇮 Finnish',
+  lv: '🇱🇻 Latvian',
+  lt: '🇱🇹 Lithuanian',
+  no: '🇳🇴 Norwegian',
+  da: '🇩🇰 Danish',
+};
+
+const ALL_SOURCES = ['discovery', 'csv', 'manual', 'prospeo'] as const;
+const SOURCE_LABELS: Record<string, string> = {
+  discovery: 'Discovery',
+  csv: 'CSV Import',
+  manual: 'Manual',
+  prospeo: 'Prospeo',
+};
+
 export function ContactsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,6 +57,8 @@ export function ContactsPageClient() {
   const [companies, setCompanies] = useState<Tables<'companies'>[]>([]);
   const [lists, setLists] = useState<Tables<'contact_lists'>[]>([]);
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
 
   // Table state from URL
   const page = Number(searchParams.get('page') || '1');
@@ -41,6 +67,10 @@ export function ContactsPageClient() {
   const statusFilter = searchParams.get('status') || '';
   const companyFilter = searchParams.get('company_id') || '';
   const countryFilter = searchParams.get('country_code') || '';
+  const emailStatusFilter = searchParams.get('email_status') || '';
+  const hasPhoneFilter = searchParams.get('has_phone') === 'true';
+  const sourceFilter = searchParams.get('source') || '';
+  const languageFilter = searchParams.get('language') || '';
 
   // Local state
   const [searchInput, setSearchInput] = useState(search);
@@ -63,6 +93,10 @@ export function ContactsPageClient() {
     status: statusFilter || undefined,
     company_id: companyFilter || undefined,
     country_code: countryFilter || undefined,
+    email_status: emailStatusFilter || undefined,
+    has_phone: hasPhoneFilter || undefined,
+    source: sourceFilter || undefined,
+    language: languageFilter || undefined,
   };
 
   // Update URL params
@@ -120,6 +154,20 @@ export function ContactsPageClient() {
       if (countryFilter) {
         query = query.eq('country_code', countryFilter);
       }
+      if (emailStatusFilter === 'unverified') {
+        query = query.or('email_status.is.null,email_status.eq.unknown');
+      } else if (emailStatusFilter) {
+        query = query.eq('email_status', emailStatusFilter);
+      }
+      if (hasPhoneFilter) {
+        query = query.not('phone', 'is', null).neq('phone', '');
+      }
+      if (sourceFilter) {
+        query = query.eq('source', sourceFilter);
+      }
+      if (languageFilter) {
+        query = query.eq('language', languageFilter);
+      }
 
       if (sortField === 'country_code') {
         query = query.order('country_code', { ascending: sortAsc, nullsFirst: false });
@@ -149,7 +197,7 @@ export function ContactsPageClient() {
     fetchContacts();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, page, search, leadStatusFilter, statusFilter, companyFilter, countryFilter, sortField, sortAsc]);
+  }, [workspaceId, page, search, leadStatusFilter, statusFilter, companyFilter, countryFilter, emailStatusFilter, hasPhoneFilter, sourceFilter, languageFilter, sortField, sortAsc]);
 
   // Fetch companies for filter dropdown
   useEffect(() => {
@@ -187,6 +235,47 @@ export function ContactsPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
+  // Fetch distinct sources for filter dropdown
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from('contacts')
+      .select('source')
+      .eq('workspace_id', workspaceId)
+      .not('source', 'is', null)
+      .then(({ data }) => {
+        if (!data) return;
+        const seen = new Set<string>();
+        for (const row of data) {
+          if (row.source) seen.add(row.source);
+        }
+        const found = ALL_SOURCES.filter(s => seen.has(s));
+        setSources(found.length > 0 ? found : [...ALL_SOURCES]);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
+  // Fetch distinct languages for filter dropdown
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from('contacts')
+      .select('language')
+      .eq('workspace_id', workspaceId)
+      .not('language', 'is', null)
+      .then(({ data }) => {
+        if (!data) return;
+        const seen = new Set<string>();
+        for (const row of data) {
+          if (row.language) seen.add(row.language);
+        }
+        const order = ['et', 'sv', 'fi', 'lv', 'lt', 'no', 'da'];
+        const found = order.filter(l => seen.has(l));
+        setLanguages(found);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
   // Fetch lists for bulk action
   useEffect(() => {
     if (!workspaceId) return;
@@ -200,7 +289,7 @@ export function ContactsPageClient() {
   }, [workspaceId]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const hasFilters = !!leadStatusFilter || !!statusFilter || !!companyFilter || !!countryFilter;
+  const hasFilters = !!(leadStatusFilter || statusFilter || companyFilter || countryFilter || emailStatusFilter || hasPhoneFilter || sourceFilter || languageFilter);
   const allSelected = contacts.length > 0 && selectedIds.size === contacts.length;
 
   const toggleSelect = (id: string) => {
@@ -355,9 +444,9 @@ export function ContactsPageClient() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
-        <div className="relative">
+      {/* Row 1: Search + Clear filters */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
@@ -375,10 +464,21 @@ export function ContactsPageClient() {
             </button>
           )}
         </div>
+        {(hasFilters || search) && (
+          <button
+            onClick={() => {
+              setSearchInput('');
+              updateParams({ lead_status: '', status: '', company_id: '', country_code: '', email_status: '', has_phone: '', source: '', language: '', search: '' });
+            }}
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium whitespace-nowrap"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      {/* Row 2: Filter dropdowns + toggles */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <select
           value={leadStatusFilter}
           onChange={(e) => updateParams({ lead_status: e.target.value })}
@@ -386,7 +486,7 @@ export function ContactsPageClient() {
         >
           <option value="">All Lead Statuses</option>
           {LEAD_STATUSES.map(s => (
-            <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
           ))}
         </select>
 
@@ -397,9 +497,69 @@ export function ContactsPageClient() {
         >
           <option value="">All Statuses</option>
           {CONTACT_STATUSES.map(s => (
-            <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
           ))}
         </select>
+
+        <select
+          value={countryFilter}
+          onChange={(e) => updateParams({ country_code: e.target.value })}
+          className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Countries</option>
+          {countries.map(c => (
+            <option key={c.code} value={c.code}>
+              {COUNTRY_FLAGS[c.code] ? `${COUNTRY_FLAGS[c.code]} ` : ''}{c.name} ({c.code})
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={emailStatusFilter}
+          onChange={(e) => updateParams({ email_status: e.target.value })}
+          className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Email Statuses</option>
+          <option value="valid">✅ Verified (valid)</option>
+          <option value="risky">⚠️ Risky</option>
+          <option value="catch_all">📬 Catch-all</option>
+          <option value="invalid">❌ Invalid</option>
+          <option value="unverified">— Not verified</option>
+        </select>
+
+        <select
+          value={sourceFilter}
+          onChange={(e) => updateParams({ source: e.target.value })}
+          className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Sources</option>
+          {sources.map(s => (
+            <option key={s} value={s}>{SOURCE_LABELS[s] ?? s}</option>
+          ))}
+        </select>
+
+        {languages.length > 0 && (
+          <select
+            value={languageFilter}
+            onChange={(e) => updateParams({ language: e.target.value })}
+            className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Languages</option>
+            {languages.map(l => (
+              <option key={l} value={l}>{LANGUAGE_LABELS[l] ?? l}</option>
+            ))}
+          </select>
+        )}
+
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={hasPhoneFilter}
+            onChange={(e) => updateParams({ has_phone: e.target.checked ? 'true' : '' })}
+            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          Has Phone
+        </label>
 
         <select
           value={companyFilter}
@@ -411,26 +571,6 @@ export function ContactsPageClient() {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-
-        <select
-          value={countryFilter}
-          onChange={(e) => updateParams({ country_code: e.target.value })}
-          className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="">All Countries</option>
-          {countries.map(c => (
-            <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
-          ))}
-        </select>
-
-        {hasFilters && (
-          <button
-            onClick={() => updateParams({ lead_status: '', status: '', company_id: '', country_code: '' })}
-            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-          >
-            Clear filters
-          </button>
-        )}
       </div>
 
       {/* Table */}
@@ -572,7 +712,9 @@ export function ContactsPageClient() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">
-                      {contact.country || contact.country_code || <span className="text-slate-400">—</span>}
+                      {contact.country_code
+                        ? `${COUNTRY_FLAGS[contact.country_code] ?? ''}${COUNTRY_FLAGS[contact.country_code] ? ' ' : ''}${contact.country || contact.country_code}`
+                        : <span className="text-slate-400">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <LeadStatusBadge status={contact.lead_status} />
