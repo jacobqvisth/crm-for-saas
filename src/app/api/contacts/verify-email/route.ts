@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveContactIdsByFilters, type ContactFilters } from "@/lib/contacts-filter";
 
-function mapProspeoStatus(status: string): string {
-  switch (status?.toUpperCase()) {
-    case "VALID":
+function mapMVStatus(result: string, subresult: string): string {
+  if (subresult === "catchall") return "catch_all";
+  switch (result) {
+    case "ok":
       return "valid";
-    case "RISKY":
-      return "risky";
-    case "CATCH_ALL":
-      return "catch_all";
-    case "INVALID":
+    case "error":
       return "invalid";
+    case "unknown":
+      return "risky";
     default:
       return "unknown";
   }
@@ -108,7 +107,7 @@ export async function POST(request: NextRequest) {
   let errors = 0;
   const results: Array<{ id: string; email: string; status: string }> = [];
 
-  const prospeoKey = process.env.PROSPEO_API_KEY;
+  const mvKey = process.env.MILLIONVERIFIER_API_KEY;
 
   for (let i = 0; i < contacts.length; i++) {
     const contact = contacts[i];
@@ -136,24 +135,18 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const prospeoRes = await fetch("https://api.prospeo.io/email-verifier", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-KEY": prospeoKey || "",
-        },
-        body: JSON.stringify({ email: contact.email }),
-      });
+      const mvUrl = `https://api.millionverifier.com/api/v3/?api=${mvKey}&email=${encodeURIComponent(contact.email)}`;
+      const mvRes = await fetch(mvUrl);
+      const mvData = await mvRes.json();
 
-      const prospeoData = await prospeoRes.json();
-
-      if (prospeoData.error) {
+      if (!mvRes.ok || mvData.error) {
         errors++;
         continue;
       }
 
-      const mappedStatus = mapProspeoStatus(
-        prospeoData.response?.status || ""
+      const mappedStatus = mapMVStatus(
+        mvData.result || "",
+        mvData.subresult || ""
       );
       const now = new Date().toISOString();
 
