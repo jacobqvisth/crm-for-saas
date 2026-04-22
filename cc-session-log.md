@@ -3,7 +3,7 @@ type: resource
 status: active
 tags: [wrenchlane-crm, cc-log, sessions]
 created: 2026-03-27
-updated: 2026-03-31
+updated: 2026-04-22
 ---
 
 # CC Session Log — Wrenchlane CRM
@@ -11,6 +11,69 @@ updated: 2026-03-31
 > Running log of all Claude Code sessions. Most recent first.
 > CC should append a new entry here at the end of every session.
 > Cowork reads this at session start instead of relying on Jacob pasting summaries.
+
+---
+
+## 2026-04-22 — Cowork-side data-ops: Slovakia (SK) scrape + email verification
+
+**Session type:** Cowork data-ops (not a CC build). Script added to repo via PR below.
+
+### Slovakia (SK) scrape — complete
+- Pipeline: 12 Apify `compass/crawler-google-places` runs — 1 country-wide (5 terms: autoservis, auto servis, autoopravovňa, autolakovňa, karoséria) + 2 Bratislava grids (main + BA-split) + 9 city grids (Košice, Prešov, Žilina, Nitra, Banská Bystrica, Trnava, Martin, Trenčín, Poprad).
+- Raw fetched: **4,918** items across all 12 datasets. Dedup removed 715 placeId dups + 625 secondary-key dups.
+- Final: **3,573 unique rows in `discovered_shops`** where `country_code='SK'`. 1,414 with email (40%), 3,271 with phone (92%), 683 unique cities.
+- Country-wide run took 45 min (dominant bottleneck — 5 terms + `scrapeContacts: true`); city grids completed in 8–10 min each in parallel.
+- Import script: `scripts/import-slovakia-shops.mjs` (committed via PR below). Fetches directly from Apify datasets; upserts on `google_place_id`; idempotent.
+- Key difference vs CZ script: `'Slovakia'` / `'SK'` country/country_code, `autoopravovňa` added to `INCLUDE_CATEGORY_REGEX`, 12 datasets vs 15.
+- Apify cost: ~$34 (4,918 items × $7/1k). Plan + actuals at `_reference/scrape-plan-SK.md` in vault.
+
+### Email verification (MillionVerifier)
+- 1,414 SK emails verified in 4 chunks of 400 / 400 / 400 / 214 at concurrency=80. 0 errors across all chunks.
+- Final SK distribution: **valid=791 / risky=288 / catch_all=290 / invalid=45 / unknown=0**. No null remaining.
+- MV credits used: ~1,414. Credits remaining after run: ~50,286.
+
+### Import script committed
+- Branch `chore/add-slovakia-import`, PR merged — `scripts/import-slovakia-shops.mjs` added.
+
+### Total `discovered_shops` table state (post-SK)
+- Total rows: **13,654** (CZ + SK + prior EE/LT/LV/SE-Stockholm rows)
+- SK rows: 3,573 | CZ rows: 6,295 (from prior session)
+
+---
+
+## 2026-04-22 — Cowork-side data-ops: Czech Republic scrape + MillionVerifier migration
+
+**Session type:** Cowork data-ops (not a CC build). Scripts added to repo, 2 API routes edited but **uncommitted — awaiting CC merge**.
+
+### Czech Republic (CZ) scrape — complete
+- Pipeline: 15 Apify `compass/crawler-google-places` runs (Wave 1: country-wide + Praha/Brno/Ostrava; Wave 2: 11 medium-city grids; + Kladno retry after geocoding miss).
+- Final: **6,295 unique rows in `discovered_shops`** where `country_code='CZ'`. 3,227 with email (51%), 5,700+ with phone (91%).
+- Dedup cascade applied: `google_place_id → domain → phone (last 9) → name+city`. 399 placeId dups + 1,108 secondary-key dups removed.
+- Import script committed: `scripts/import-czech-shops.mjs` (fetches directly from Apify datasets; no local JSON file). Idempotent on `google_place_id`.
+- Apify cost: ~$50. Duration: ~2 hours (parallel wave launches).
+- Plan + actuals: `_reference/scrape-plan-CZ.md` in planning vault.
+
+### MillionVerifier replaces Prospeo /email-verifier (Prospeo deprecated it Feb 2026)
+- **Bug discovered:** Prospeo's new deprecation response shape `{req_status:false, error_code:"DEPRECATED"}` bypassed our `data.error` check — every verify call silently mapped to `"unknown"` and poisoned the DB. Rolled back ~100 bogus stamps via `UPDATE discovered_shops SET email_status=NULL, email_verified_at=NULL WHERE email_verified_at > now() - interval '30 minutes'`.
+- **New reusable module:** `scripts/lib/email-verify.mjs` — `verifyEmail()`, `mapMillionVerifierResult()`, `shouldSkipVerification()`, `sleep()`. **Throws loudly** on any provider-side error (`result === 'error'` OR non-empty `error` field) — no silent mapping. Freshness cache: valid=90d, invalid=30d, risky=7d, catch_all/unknown always retry.
+- **New parameterized script:** `scripts/verify-emails.mjs --country <CC>` replaces the old `verify-czech-emails.mjs`. Flags: `--limit N`, `--concurrency N` (default 20, 80 is safe — MV SMTP handshake is ~7s/call), `--only-null` (skip already-verified rows), `--dry-run`, `--no-snapshot`. Halts on credit/quota/auth errors instead of eating credits blind. Paginates Supabase reads past the 1000-row cap.
+- **CZ verification run:** 2,849 emails verified via MV. Final distribution: **2,102 valid / 494 risky / 510 catch_all / 121 invalid / 0 unknown**. MV credits burned: ~2,000 (~$0.70).
+- **Prod API routes swapped (UNCOMMITTED on main — CC, please merge):**
+  - `src/app/api/discovery/verify-email/route.ts` — Prospeo call replaced with inlined MV helper (same throw-on-error pattern), early return if `MILLIONVERIFIER_API_KEY` missing.
+  - `src/app/api/contacts/verify-email/route.ts` — same swap, applied to the `/contacts` bulk-verify flow.
+  - Both routes still use the existing workspace-guard + 50-row cap + 200ms throttle patterns. No interface changes.
+  - **Env var needed in prod:** `vercel env add MILLIONVERIFIER_API_KEY production` — Jacob's local key is in `.env.local` and `.env.local.example` has the documented stub.
+
+### Action items for CC next session
+1. Review + commit the two uncommitted route edits. No other code depends on them.
+2. Run `npm run build && npm run lint && npx tsc --noEmit` before merging (pre-existing tiptap/test-insert type errors are unrelated to the MV swap — verified via `grep verify-email`).
+3. After merge, remind Jacob to run `vercel env add MILLIONVERIFIER_API_KEY production` so the in-app Verify button works in prod.
+4. (Optional) `scripts/verify-czech-emails.mjs` is now dead code — safe to delete.
+
+### Slovakia (SK) kickoff staged
+- Approved plan: `_reference/scrape-plan-SK.md` (planning vault).
+- Kickoff prompt: `_prompts/cowork-prompt-sk-scrape-kickoff.md` — paste into a fresh Cowork session.
+- Expected: ~2,200–3,200 unique, ~$24–32 Apify, 1.5–3 hours.
 
 ---
 
