@@ -28,8 +28,12 @@ type DiscoveredShop = {
   email_verified_at: string | null;
 };
 
+const SHOP_FIELDS =
+  "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category, email_valid, email_status, email_verified_at";
+const PAGE_SIZE = 1000;
+const INSERT_BATCH = 500;
+
 export async function POST(request: NextRequest) {
-  // Auth guard
   const serverClient = await createServerClient();
   const {
     data: { user },
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
       has_phone?: boolean;
       verified_email?: boolean;
       search?: string;
-      categories?: string[]; // included categories (null/absent = all)
+      categories?: string[];
     };
   };
 
@@ -57,13 +61,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "shop_ids required" }, { status: 400 });
   }
 
-  // Service role client for writes (discovered_shops has no RLS, companies/contacts do)
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Get the workspace ID (single-workspace app)
   const { data: workspace, error: wsError } = await supabase
     .from("workspaces")
     .select("id")
@@ -75,186 +77,244 @@ export async function POST(request: NextRequest) {
   }
   const workspaceId = workspace.id;
 
-  // Fetch shops — either by explicit IDs or by filter query (select_all mode)
-  let shopQuery = supabase
-    .from("discovered_shops")
-    .select(
-      "id, name, website, domain, phone, address, street, city, postal_code, country, country_code, primary_email, all_emails, all_phones, instagram_url, facebook_url, google_place_id, rating, review_count, category, email_valid, email_status, email_verified_at"
-    );
+  // --- 1. Fetch all matching shops (paginated to bypass PostgREST 1000-row cap) ---
+  const allShops: DiscoveredShop[] = [];
 
-  if (select_all && filters) {
-    const status = filters.status;
-    if (status && status !== "all") {
-      shopQuery = shopQuery.in("status", status.split(",").map((s) => s.trim()));
-    } else if (!status) {
-      shopQuery = shopQuery.in("status", ["new", "enriched"]);
-    }
-    if (filters.country_code) shopQuery = shopQuery.eq("country_code", filters.country_code.toUpperCase());
-    if (filters.has_email) shopQuery = shopQuery.not("primary_email", "is", null).neq("primary_email", "");
-    if (filters.has_phone) shopQuery = shopQuery.not("phone", "is", null).neq("phone", "");
-    if (filters.verified_email) shopQuery = shopQuery.eq("email_status", "valid");
-    if (filters.search?.trim()) {
-      const s = filters.search.trim();
-      shopQuery = shopQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
-    }
-    if (filters.categories && filters.categories.length > 0) {
-      shopQuery = shopQuery.overlaps("all_categories", filters.categories);
+  if (!select_all) {
+    // Explicit IDs — split into chunks to avoid query size limits
+    for (let offset = 0; offset < shop_ids!.length; offset += PAGE_SIZE) {
+      const chunk = shop_ids!.slice(offset, offset + PAGE_SIZE);
+      const { data, error } = await supabase
+        .from("discovered_shops")
+        .select(SHOP_FIELDS)
+        .in("id", chunk);
+      if (error) return NextResponse.json({ error: "Failed to fetch shops" }, { status: 500 });
+      if (data) allShops.push(...(data as DiscoveredShop[]));
     }
   } else {
-    shopQuery = shopQuery.in("id", shop_ids!);
+    // select_all with filters — paginate through all matching rows
+    let offset = 0;
+    while (true) {
+      let q = supabase.from("discovered_shops").select(SHOP_FIELDS);
+
+      if (filters) {
+        const status = filters.status;
+        if (status && status !== "all") {
+          q = q.in("status", status.split(",").map((s) => s.trim()));
+        } else if (!status) {
+          q = q.in("status", ["new", "enriched"]);
+        }
+        if (filters.country_code) q = q.eq("country_code", filters.country_code.toUpperCase());
+        if (filters.has_email) q = q.not("primary_email", "is", null).neq("primary_email", "");
+        if (filters.has_phone) q = q.not("phone", "is", null).neq("phone", "");
+        if (filters.verified_email) q = q.eq("email_status", "valid");
+        if (filters.search?.trim()) {
+          const s = filters.search.trim();
+          q = q.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
+        }
+        if (filters.categories && filters.categories.length > 0) {
+          q = q.overlaps("all_categories", filters.categories);
+        }
+      } else {
+        q = q.in("status", ["new", "enriched"]);
+      }
+
+      const { data, error } = await q.range(offset, offset + PAGE_SIZE - 1);
+      if (error) return NextResponse.json({ error: "Failed to fetch shops" }, { status: 500 });
+      if (!data || data.length === 0) break;
+      allShops.push(...(data as DiscoveredShop[]));
+      if (data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
   }
 
-  const { data: shops, error: fetchError } = await shopQuery;
-
-  if (fetchError || !shops) {
-    return NextResponse.json({ error: "Failed to fetch shops" }, { status: 500 });
-  }
-
-  const invalidEmail = (shops as DiscoveredShop[]).filter(s => s.email_valid === false);
-  const validShops = (shops as DiscoveredShop[]).filter(s => s.email_valid !== false);
+  const invalidEmail = allShops.filter((s) => s.email_valid === false);
+  const validShops = allShops.filter((s) => s.email_valid !== false);
   const skipped_invalid_email = invalidEmail.length;
 
-  // Mark invalid-email shops as skipped
-  if (invalidEmail.length > 0) {
+  // Mark invalid-email shops as skipped (chunked to avoid URL length limits)
+  for (let i = 0; i < invalidEmail.length; i += PAGE_SIZE) {
+    const chunk = invalidEmail.slice(i, i + PAGE_SIZE);
     await supabase
       .from("discovered_shops")
       .update({ status: "skipped" })
-      .in("id", invalidEmail.map(s => s.id));
+      .in("id", chunk.map((s) => s.id));
+  }
+
+  // --- 2. Pre-fetch all existing companies to build dedup maps ---
+  const domainMap = new Map<string, string>(); // lowercase domain → company id
+  const nameMap = new Map<string, string>(); // lowercase name → company id
+
+  let companyOffset = 0;
+  while (true) {
+    const { data: companies, error } = await supabase
+      .from("companies")
+      .select("id, domain, name")
+      .eq("workspace_id", workspaceId)
+      .range(companyOffset, companyOffset + PAGE_SIZE - 1);
+    if (error || !companies || companies.length === 0) break;
+    for (const c of companies) {
+      if (c.domain) domainMap.set(c.domain.toLowerCase(), c.id);
+      if (c.name) nameMap.set(c.name.toLowerCase(), c.id);
+    }
+    if (companies.length < PAGE_SIZE) break;
+    companyOffset += PAGE_SIZE;
+  }
+
+  // --- 3. Classify shops in memory ---
+  const duplicates: Array<{ shop: DiscoveredShop; companyId: string }> = [];
+  const newShops: DiscoveredShop[] = [];
+
+  for (const shop of validShops) {
+    const domain = shop.domain ?? (shop.website ? extractDomain(shop.website) : null);
+    const existingId =
+      (domain && domainMap.get(domain.toLowerCase())) ||
+      (shop.name && nameMap.get(shop.name.toLowerCase()));
+
+    if (existingId) {
+      duplicates.push({ shop, companyId: existingId });
+    } else {
+      newShops.push(shop);
+    }
+  }
+
+  const skipped_duplicates = duplicates.length;
+
+  // Mark duplicates as imported (chunked upserts)
+  for (let i = 0; i < duplicates.length; i += PAGE_SIZE) {
+    const chunk = duplicates.slice(i, i + PAGE_SIZE);
+    await supabase.from("discovered_shops").upsert(
+      chunk.map(({ shop, companyId }) => ({
+        id: shop.id,
+        status: "imported",
+        crm_company_id: companyId,
+      }))
+    );
   }
 
   let promoted = 0;
-  let skipped_duplicates = 0;
 
-  for (const shop of validShops) {
-    // Check for duplicate company by domain or name
-    let companyId: string | null = null;
-    let isDuplicate = false;
+  if (newShops.length > 0) {
+    // --- 4. Batch-insert companies ---
+    const insertedCompanyIds: (string | null)[] = new Array(newShops.length).fill(null);
 
-    if (shop.domain) {
-      const { data: existingByDomain } = await supabase
+    for (let i = 0; i < newShops.length; i += INSERT_BATCH) {
+      const chunk = newShops.slice(i, i + INSERT_BATCH);
+      const { data: inserted, error } = await supabase
         .from("companies")
-        .select("id")
-        .eq("workspace_id", workspaceId)
-        .eq("domain", shop.domain)
-        .maybeSingle();
+        .insert(
+          chunk.map((shop) => {
+            const websiteDomain =
+              shop.domain ?? (shop.website ? extractDomain(shop.website) : null);
+            return {
+              workspace_id: workspaceId,
+              name: shop.name,
+              website: shop.website ?? null,
+              domain: websiteDomain,
+              phone: shop.phone ?? null,
+              address: shop.address ?? shop.street ?? null,
+              city: shop.city ?? null,
+              postal_code: shop.postal_code ?? null,
+              country: shop.country ?? null,
+              country_code: shop.country_code ?? null,
+              instagram_url: shop.instagram_url ?? null,
+              facebook_url: shop.facebook_url ?? null,
+              google_place_id: shop.google_place_id ?? null,
+              rating: shop.rating ?? null,
+              review_count: shop.review_count ?? null,
+              industry: "Automotive",
+              category: shop.category ?? null,
+              tags: ["independent"],
+            };
+          })
+        )
+        .select("id");
 
-      if (existingByDomain) {
-        isDuplicate = true;
-        companyId = existingByDomain.id;
+      if (!error && inserted) {
+        if (inserted.length !== chunk.length) {
+          console.warn(`Company batch: expected ${chunk.length}, got ${inserted.length}`);
+        }
+        for (let j = 0; j < inserted.length; j++) {
+          insertedCompanyIds[i + j] = inserted[j].id;
+        }
       }
     }
 
-    if (!isDuplicate && shop.name) {
-      const { data: existingByName } = await supabase
-        .from("companies")
-        .select("id")
-        .eq("workspace_id", workspaceId)
-        .eq("name", shop.name)
-        .maybeSingle();
+    // --- 5. Batch-insert contacts (only for shops that got a company ID) ---
+    type ContactEntry = { shopIndex: number; companyId: string };
+    const contactEntries: ContactEntry[] = [];
+    for (let i = 0; i < newShops.length; i++) {
+      const companyId = insertedCompanyIds[i];
+      if (companyId) contactEntries.push({ shopIndex: i, companyId });
+    }
 
-      if (existingByName) {
-        isDuplicate = true;
-        companyId = existingByName.id;
+    const insertedContactIds = new Map<number, string>(); // shopIndex → contact id
+
+    for (let i = 0; i < contactEntries.length; i += INSERT_BATCH) {
+      const chunk = contactEntries.slice(i, i + INSERT_BATCH);
+      const { data: inserted, error } = await supabase
+        .from("contacts")
+        .insert(
+          chunk.map(({ shopIndex, companyId }) => {
+            const shop = newShops[shopIndex];
+            return {
+              workspace_id: workspaceId,
+              first_name: null,
+              last_name: null,
+              email: shop.primary_email ?? "",
+              phone: shop.phone ?? null,
+              address: shop.address ?? shop.street ?? null,
+              city: shop.city ?? null,
+              postal_code: shop.postal_code ?? null,
+              country: shop.country ?? null,
+              country_code: shop.country_code ?? null,
+              all_emails: shop.all_emails ?? null,
+              all_phones: shop.all_phones ?? null,
+              instagram_url: shop.instagram_url ?? null,
+              facebook_url: shop.facebook_url ?? null,
+              company_id: companyId,
+              is_primary: true,
+              source: "discovery",
+              language: deriveLanguage(shop.country_code),
+              email_status: shop.email_status ?? "unknown",
+              email_verified_at: shop.email_verified_at ?? null,
+              lead_status: "new",
+              status: "active",
+              tags: ["owner"],
+            };
+          })
+        )
+        .select("id");
+
+      if (!error && inserted) {
+        if (inserted.length !== chunk.length) {
+          console.warn(`Contact batch: expected ${chunk.length}, got ${inserted.length}`);
+        }
+        for (let j = 0; j < inserted.length; j++) {
+          insertedContactIds.set(chunk[j].shopIndex, inserted[j].id);
+        }
       }
     }
 
-    if (isDuplicate) {
-      skipped_duplicates++;
-      // Still mark as imported so it doesn't keep showing up
-      await supabase
-        .from("discovered_shops")
-        .update({
+    // --- 6. Batch-update discovered_shops for newly promoted rows ---
+    const shopUpdates = newShops
+      .map((shop, i) => {
+        const companyId = insertedCompanyIds[i];
+        if (!companyId) return null;
+        promoted++;
+        return {
+          id: shop.id,
           status: "imported",
           crm_company_id: companyId,
-        })
-        .eq("id", shop.id);
-      continue;
-    }
-
-    // Insert company
-    const websiteDomain = shop.domain ?? (shop.website ? extractDomain(shop.website) : null);
-    const { data: newCompany, error: companyError } = await supabase
-      .from("companies")
-      .insert({
-        workspace_id: workspaceId,
-        name: shop.name,
-        website: shop.website ?? null,
-        domain: websiteDomain,
-        phone: shop.phone ?? null,
-        address: shop.address ?? shop.street ?? null,
-        city: shop.city ?? null,
-        postal_code: shop.postal_code ?? null,
-        country: shop.country ?? null,
-        country_code: shop.country_code ?? null,
-        instagram_url: shop.instagram_url ?? null,
-        facebook_url: shop.facebook_url ?? null,
-        google_place_id: shop.google_place_id ?? null,
-        rating: shop.rating ?? null,
-        review_count: shop.review_count ?? null,
-        industry: 'Automotive',
-        category: shop.category ?? null,
-        tags: ['independent'],
+          crm_contact_id: insertedContactIds.get(i) ?? null,
+        };
       })
-      .select("id")
-      .single();
+      .filter((u): u is NonNullable<typeof u> => u !== null);
 
-    if (companyError || !newCompany) {
-      // Skip this shop on error
-      continue;
+    for (let i = 0; i < shopUpdates.length; i += PAGE_SIZE) {
+      const chunk = shopUpdates.slice(i, i + PAGE_SIZE);
+      await supabase.from("discovered_shops").upsert(chunk);
     }
-    companyId = newCompany.id;
-
-    // Insert placeholder contact
-    const { data: newContact, error: contactError } = await supabase
-      .from("contacts")
-      .insert({
-        workspace_id: workspaceId,
-        first_name: null,
-        last_name: null,
-        email: shop.primary_email ?? '',
-        phone: shop.phone ?? null,
-        address: shop.address ?? shop.street ?? null,
-        city: shop.city ?? null,
-        postal_code: shop.postal_code ?? null,
-        country: shop.country ?? null,
-        country_code: shop.country_code ?? null,
-        all_emails: shop.all_emails ?? null,
-        all_phones: shop.all_phones ?? null,
-        instagram_url: shop.instagram_url ?? null,
-        facebook_url: shop.facebook_url ?? null,
-        company_id: companyId,
-        is_primary: true,
-        source: 'discovery',
-        language: deriveLanguage(shop.country_code),
-        email_status: shop.email_status ?? 'unknown',
-        email_verified_at: shop.email_verified_at ?? null,
-        lead_status: 'new',
-        status: 'active',
-        tags: ['owner'],
-      })
-      .select("id")
-      .single();
-
-    if (contactError || !newContact) {
-      // Still mark company imported even if contact failed
-      await supabase
-        .from("discovered_shops")
-        .update({ status: "imported", crm_company_id: companyId })
-        .eq("id", shop.id);
-      continue;
-    }
-
-    // Mark shop as imported
-    await supabase
-      .from("discovered_shops")
-      .update({
-        status: "imported",
-        crm_company_id: companyId,
-        crm_contact_id: newContact.id,
-      })
-      .eq("id", shop.id);
-
-    promoted++;
   }
 
   return NextResponse.json({ promoted, skipped_duplicates, skipped_invalid_email });
@@ -271,13 +331,13 @@ function extractDomain(url: string): string | null {
 
 function deriveLanguage(countryCode: string | null): string | null {
   const map: Record<string, string> = {
-    EE: 'et',
-    SE: 'sv',
-    FI: 'fi',
-    LV: 'lv',
-    LT: 'lt',
-    NO: 'no',
-    DK: 'da',
+    EE: "et",
+    SE: "sv",
+    FI: "fi",
+    LV: "lv",
+    LT: "lt",
+    NO: "no",
+    DK: "da",
   };
   return countryCode ? (map[countryCode] ?? null) : null;
 }
