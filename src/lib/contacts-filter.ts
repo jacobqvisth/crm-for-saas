@@ -6,6 +6,10 @@ export type ContactFilters = {
   status?: string;
   company_id?: string;
   country_code?: string;
+  email_status?: string;
+  has_phone?: boolean;
+  source?: string;
+  language?: string;
 };
 
 /**
@@ -40,6 +44,20 @@ export async function resolveContactIdsByFilters(
   }
   if (filters.country_code) {
     query = query.eq("country_code", filters.country_code);
+  }
+  if (filters.email_status === "unverified") {
+    query = query.or("email_status.is.null,email_status.eq.unknown");
+  } else if (filters.email_status) {
+    query = query.eq("email_status", filters.email_status);
+  }
+  if (filters.has_phone) {
+    query = query.not("phone", "is", null).neq("phone", "");
+  }
+  if (filters.source) {
+    query = query.eq("source", filters.source);
+  }
+  if (filters.language) {
+    query = query.eq("language", filters.language);
   }
 
   const { data, error } = await query;
