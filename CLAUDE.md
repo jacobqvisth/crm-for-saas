@@ -195,3 +195,18 @@ Every 3–4 phases, a dedicated health check session runs: lint to zero, dead co
 - `cc-session-log.md` — CC appends a summary here after every session. Cowork reads this at startup to know what was last built.
 - CC prompts are stored in Jacob's planning vault and pasted in at session start — they are not in this repo.
 - `docs/icp/` — ICP research, personas, market data for email content.
+
+---
+
+## Vercel Build Cost Optimization (added 2026-04-22)
+
+### Ignored Build Step (ignoreCommand)
+The **crm-for-saas** Vercel project has this command set in project settings:
+```
+git diff HEAD^ HEAD --quiet -- src/ public/ package.json package-lock.json next.config.ts next.config.js next.config.mjs tsconfig.json middleware.ts middleware.js
+```
+Builds are SKIPPED when only docs/, scripts/, supabase/, _reference/, cc-session-log.md, etc. change.
+Builds run when src/, public/, or config files change.
+
+### Build Machine
+Switched from **Turbo** to **Standard** (cheaper). Change back in Vercel project settings if builds are slow.
