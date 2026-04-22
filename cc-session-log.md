@@ -982,6 +982,18 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 
 ---
 
+## Fix: Email status badge + MillionVerifier copy — 2026-04-22
+
+- **PR:** [#65](https://github.com/jacobqvisth/crm-for-saas/pull/65)
+- **Branch:** `fix/email-status-badge-verify-copy`
+- **File changed:** `src/components/contacts/contacts-page-client.tsx`
+- Added color-coded email status badge inline in the Email column (CheckCircle/XCircle from lucide-react): valid=emerald, risky=amber, catch_all=slate, invalid=red. Matches Discovery page behavior.
+- Updated stale "Prospeo (1 credit each)" copy in the Verify Email Addresses modal to "MillionVerifier".
+- **Build:** lint + `tsc --noEmit` clean. `npm run build` blocked by missing `.env.local` in worktree (pre-existing, not caused by this change).
+- **Deploy:** https://crm-for-saas.vercel.app — HTTP 307 to login (expected, live).
+
+---
+
 ## Chore: mark discovered_shops as legacy — 2026-04-21
 
 - **PR:** #60
