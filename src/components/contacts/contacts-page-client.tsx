@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, X, Plus, Upload, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, Tags, ListPlus, ShieldCheck } from 'lucide-react';
+import { Search, X, Plus, Upload, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, Tags, ListPlus, ShieldCheck, CheckCircle, XCircle } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
@@ -545,7 +545,20 @@ export function ContactsPageClient() {
                         {[contact.first_name, contact.last_name].filter(Boolean).join(' ') || '—'}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{contact.email}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        {contact.email_status === 'invalid' ? (
+                          <XCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+                        ) : contact.email_status === 'valid' ? (
+                          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+                        ) : contact.email_status === 'risky' ? (
+                          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                        ) : contact.email_status === 'catch_all' ? (
+                          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                        ) : null}
+                        <span>{contact.email}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-slate-600 max-w-[160px] truncate">
                       {contact.title || <span className="text-slate-400">—</span>}
                     </td>
@@ -685,7 +698,7 @@ export function ContactsPageClient() {
       {/* Verify Emails Modal */}
       <Modal open={showVerifyConfirm} onClose={() => setShowVerifyConfirm(false)} title="Verify Email Addresses">
         <p className="text-sm text-slate-600 mb-4">
-          This will verify {effectiveCount.toLocaleString()} email address{effectiveCount !== 1 ? 'es' : ''} using Prospeo (1 credit each). Already-verified contacts and contacts without an email will be skipped. Capped at 50 per click.
+          This will verify {effectiveCount.toLocaleString()} email address{effectiveCount !== 1 ? 'es' : ''} using MillionVerifier. Already-verified contacts and contacts without an email will be skipped. Capped at 50 per click.
         </p>
         <div className="flex justify-end gap-3">
           <button
