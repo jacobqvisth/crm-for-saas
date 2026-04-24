@@ -1,24 +1,36 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
 import Underline from "@tiptap/extension-underline";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bold,
   Italic,
   Underline as UnderlineIcon,
+  Image as ImageIcon,
+  Loader2,
   Link2,
   List,
   ListOrdered,
   RemoveFormatting,
   ChevronDown,
   Check,
+  UploadCloud,
 } from "lucide-react";
 import { VariableExtension, EDITOR_VARIABLES, humanizeVariable } from "./tiptap-variable-extension";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
 
 // ---------------------------------------------------------------------------
 // Plain-text → HTML migration for legacy content
@@ -52,6 +64,60 @@ function normalizeHtml(value: string): string {
   if (!value) return "";
   if (looksLikePlainText(value)) return plainToHtml(value);
   return value;
+}
+
+function getGoogleDriveFileId(url: URL): string | null {
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (host !== "drive.google.com" && host !== "docs.google.com") return null;
+
+  const fileMatch = url.pathname.match(/\/file\/d\/([^/]+)/);
+  if (fileMatch?.[1]) return fileMatch[1];
+
+  return url.searchParams.get("id");
+}
+
+function normalizeImageSrc(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const url = new URL(withProtocol);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+
+    const driveFileId = getGoogleDriveFileId(url);
+    if (driveFileId) {
+      return `https://drive.google.com/thumbnail?id=${encodeURIComponent(
+        driveFileId
+      )}&sz=w1200`;
+    }
+
+    return url.toString();
+  } catch {
+    return withProtocol;
+  }
+}
+
+function getImageFileFromList(files: FileList | null): File | null {
+  if (!files) return null;
+  return Array.from(files).find((file) => file.type.startsWith("image/")) ?? null;
+}
+
+function hasDraggedFiles(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes("Files");
+}
+
+function validateImageFile(file: File): string | null {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    return "Use a JPG, PNG, GIF, or WebP image.";
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return "Images can be up to 5 MB.";
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,11 +281,218 @@ function LinkDialog({ initial, onConfirm, onRemove, onCancel }: LinkDialogProps)
 }
 
 // ---------------------------------------------------------------------------
+// Image dialog
+// ---------------------------------------------------------------------------
+interface ImageDialogProps {
+  initialUrl: string;
+  initialAlt: string;
+  onConfirm: (url: string, alt: string) => void;
+  onUploadFile: (file: File) => Promise<void>;
+  onRemove: () => void;
+  onCancel: () => void;
+  uploading: boolean;
+  uploadError: string;
+  uploadDisabled?: boolean;
+}
+
+function ImageDialog({
+  initialUrl,
+  initialAlt,
+  onConfirm,
+  onUploadFile,
+  onRemove,
+  onCancel,
+  uploading,
+  uploadError,
+  uploadDisabled,
+}: ImageDialogProps) {
+  const [url, setUrl] = useState(initialUrl);
+  const [alt, setAlt] = useState(initialAlt);
+  const [dragging, setDragging] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState<"idle" | "loaded" | "error">(
+    "idle"
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const normalizedUrl = normalizeImageSrc(url);
+  const hasUrl = Boolean(url.trim());
+
+  useEffect(() => {
+    setPreviewStatus("idle");
+  }, [normalizedUrl]);
+
+  const handleFile = (file: File | null) => {
+    if (!file || uploadDisabled || uploading) return;
+    void onUploadFile(file);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5">
+        <h4 className="text-sm font-semibold text-slate-900 mb-3">Insert image</h4>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            handleFile(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            handleFile(getImageFileFromList(e.dataTransfer.files));
+          }}
+          disabled={uploadDisabled || uploading}
+          className={`mb-4 flex min-h-28 w-full flex-col items-center justify-center rounded-lg border border-dashed px-4 py-5 text-center transition-colors ${
+            dragging
+              ? "border-indigo-400 bg-indigo-50"
+              : "border-slate-300 bg-slate-50 hover:bg-slate-100"
+          } ${uploadDisabled || uploading ? "cursor-not-allowed opacity-60" : ""}`}
+        >
+          {uploading ? (
+            <Loader2 className="mb-2 h-5 w-5 animate-spin text-indigo-600" />
+          ) : (
+            <UploadCloud className="mb-2 h-5 w-5 text-slate-400" />
+          )}
+          <span className="text-sm font-medium text-slate-700">
+            {uploading ? "Uploading image..." : "Drop image here or choose file"}
+          </span>
+          <span className="mt-1 text-xs text-slate-500">
+            JPG, PNG, GIF, or WebP up to 5 MB
+          </span>
+        </button>
+        {uploadError && (
+          <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+            {uploadError}
+          </p>
+        )}
+        <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Image link
+            </label>
+            <input
+              autoFocus
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && normalizedUrl) {
+                  onConfirm(normalizedUrl, alt);
+                }
+                if (e.key === "Escape") onCancel();
+              }}
+              placeholder="Paste image URL or Drive share link"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            />
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Alt text
+            </label>
+            <input
+              type="text"
+              value={alt}
+              onChange={(e) => setAlt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && normalizedUrl) {
+                  onConfirm(normalizedUrl, alt);
+                }
+                if (e.key === "Escape") onCancel();
+              }}
+              placeholder="Brief description"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Preview
+            </label>
+            <div className="h-32 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+              {normalizedUrl ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    key={normalizedUrl}
+                    src={normalizedUrl}
+                    alt={alt || ""}
+                    onLoad={() => setPreviewStatus("loaded")}
+                    onError={() => setPreviewStatus("error")}
+                    className={`max-h-full max-w-full object-contain ${
+                      previewStatus === "error" ? "hidden" : ""
+                    }`}
+                  />
+                  {previewStatus === "error" && (
+                    <span className="px-3 text-center text-xs text-red-600">
+                      Image is not loading
+                    </span>
+                  )}
+                </>
+              ) : (
+                <ImageIcon className="w-6 h-6 text-slate-300" />
+              )}
+            </div>
+            {hasUrl && previewStatus === "error" && (
+              <p className="mt-2 text-xs text-slate-500">
+                Check that the file is public.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end">
+          {initialUrl && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+            >
+              Remove
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(normalizedUrl, alt)}
+            disabled={!normalizedUrl}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Check className="w-3.5 h-3.5 inline mr-1" />
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // RichEmailEditor
 // ---------------------------------------------------------------------------
 export interface RichEmailEditorProps {
   value: string;
   onChange: (html: string) => void;
+  workspaceId?: string;
   placeholder?: string;
   variables?: string[];
   onBlur?: () => void;
@@ -228,14 +501,98 @@ export interface RichEmailEditorProps {
 export function RichEmailEditor({
   value,
   onChange,
+  workspaceId,
   placeholder = "Start writing your email…",
   variables = [],
   onBlur,
 }: RichEmailEditorProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [showImageDialog, setShowImageDialog] = useState(false);
   const [currentLink, setCurrentLink] = useState("");
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
+  const [currentImageAlt, setCurrentImageAlt] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState("");
+  const [draggingImage, setDraggingImage] = useState(false);
+  const editorRef = useRef<Editor | null>(null);
+  const workspaceIdRef = useRef(workspaceId);
+
+  useEffect(() => {
+    workspaceIdRef.current = workspaceId;
+  }, [workspaceId]);
+
+  const insertImageBlock = useCallback(
+    (src: string, alt: string, position?: number) => {
+      const instance = editorRef.current;
+      if (!instance) return false;
+
+      const chain = instance.chain().focus();
+      if (typeof position === "number") {
+        chain.setTextSelection(position);
+      }
+
+      chain
+        .insertContent([
+          { type: "image", attrs: { src, alt: alt || null } },
+          { type: "paragraph" },
+        ])
+        .run();
+      return true;
+    },
+    []
+  );
+
+  const uploadAndInsertImage = useCallback(
+    async (file: File, position?: number) => {
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        setImageUploadError(validationError);
+        return false;
+      }
+
+      const currentWorkspaceId = workspaceIdRef.current;
+      if (!currentWorkspaceId) {
+        setImageUploadError("No workspace found for image upload.");
+        return false;
+      }
+
+      setUploadingImage(true);
+      setImageUploadError("");
+
+      try {
+        const formData = new FormData();
+        formData.append("workspaceId", currentWorkspaceId);
+        formData.append("file", file);
+
+        const response = await fetch("/api/email-images/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          url?: string;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.url) {
+          throw new Error(payload.error || "Image upload failed.");
+        }
+
+        insertImageBlock(payload.url, file.name, position);
+        return true;
+      } catch (error) {
+        setImageUploadError(
+          error instanceof Error ? error.message : "Image upload failed."
+        );
+        return false;
+      } finally {
+        setUploadingImage(false);
+      }
+    },
+    [insertImageBlock]
+  );
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         // Use TipTap's hardBreak (Shift+Enter) via StarterKit defaults
@@ -254,6 +611,13 @@ export function RichEmailEditor({
           target: "_blank",
         },
       }),
+      Image.configure({
+        inline: false,
+        allowBase64: false,
+        HTMLAttributes: {
+          style: "display:block;max-width:100%;height:auto;border:0;margin:12px 0;",
+        },
+      }),
       Placeholder.configure({ placeholder }),
       CharacterCount,
       VariableExtension,
@@ -270,8 +634,33 @@ export function RichEmailEditor({
         class:
           "outline-none min-h-[240px] max-h-[500px] overflow-y-auto px-3 py-2.5 text-sm text-slate-800 leading-relaxed prose prose-sm max-w-none",
       },
+      handleDrop(view, event) {
+        const file = getImageFileFromList(event.dataTransfer?.files ?? null);
+        if (!file) return false;
+
+        event.preventDefault();
+        setDraggingImage(false);
+        const position = view.posAtCoords({
+          left: event.clientX,
+          top: event.clientY,
+        })?.pos;
+        void uploadAndInsertImage(file, position);
+        return true;
+      },
+      handlePaste(_view, event) {
+        const file = getImageFileFromList(event.clipboardData?.files ?? null);
+        if (!file) return false;
+
+        event.preventDefault();
+        void uploadAndInsertImage(file);
+        return true;
+      },
     },
   });
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   // Sync external value changes (e.g. "Use Template" or "Generate with AI")
   const prevValueRef = useRef(value);
@@ -307,6 +696,55 @@ export function RichEmailEditor({
   const handleLinkRemove = () => {
     editor.chain().focus().unsetLink().run();
     setShowLinkDialog(false);
+  };
+
+  const handleImageOpen = () => {
+    const attrs = editor.getAttributes("image") as {
+      src?: string;
+      alt?: string;
+    };
+    setCurrentImageUrl(attrs.src || "");
+    setCurrentImageAlt(attrs.alt || "");
+    setShowImageDialog(true);
+  };
+
+  const handleImageConfirm = (url: string, alt: string) => {
+    const src = normalizeImageSrc(url);
+    if (!src) {
+      setShowImageDialog(false);
+      return;
+    }
+
+    const imageAttrs = {
+      src,
+      alt: alt.trim() || null,
+    };
+
+    if (editor.isActive("image")) {
+      editor.chain().focus().updateAttributes("image", imageAttrs).run();
+    } else {
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: "image", attrs: imageAttrs },
+          { type: "paragraph" },
+        ])
+        .run();
+    }
+    setShowImageDialog(false);
+  };
+
+  const handleImageRemove = () => {
+    editor.chain().focus().deleteSelection().run();
+    setShowImageDialog(false);
+  };
+
+  const handleImageUpload = async (file: File) => {
+    const inserted = await uploadAndInsertImage(file);
+    if (inserted) {
+      setShowImageDialog(false);
+    }
   };
 
   const charCount = editor.storage.characterCount?.characters?.() ?? 0;
@@ -347,6 +785,14 @@ export function RichEmailEditor({
           title="Insert link"
         >
           <Link2 className="w-4 h-4" />
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={handleImageOpen}
+          active={editor.isActive("image")}
+          title="Insert image"
+        >
+          <ImageIcon className="w-4 h-4" />
         </ToolbarButton>
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
@@ -396,10 +842,47 @@ export function RichEmailEditor({
       </div>
 
       {/* Editor area */}
-      <EditorContent editor={editor} />
+      <div
+        className="relative"
+        onDragEnter={(e) => {
+          if (hasDraggedFiles(e.dataTransfer)) {
+            setDraggingImage(true);
+          }
+        }}
+        onDragOver={(e) => {
+          if (hasDraggedFiles(e.dataTransfer)) {
+            e.preventDefault();
+            setDraggingImage(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setDraggingImage(false);
+          }
+        }}
+        onDrop={() => setDraggingImage(false)}
+      >
+        <EditorContent editor={editor} />
+        {draggingImage && (
+          <div className="pointer-events-none absolute inset-2 flex items-center justify-center rounded-lg border border-dashed border-indigo-400 bg-indigo-50/90 text-sm font-medium text-indigo-700">
+            Drop image to upload
+          </div>
+        )}
+      </div>
 
       {/* Footer: char count */}
-      <div className="flex justify-end px-3 py-1 border-t border-slate-100 bg-slate-50">
+      <div className="flex items-center justify-between gap-3 px-3 py-1 border-t border-slate-100 bg-slate-50">
+        <div className="min-h-4">
+          {uploadingImage && (
+            <span className="inline-flex items-center gap-1 text-xs text-indigo-600">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Uploading image...
+            </span>
+          )}
+          {!uploadingImage && imageUploadError && (
+            <span className="text-xs text-red-600">{imageUploadError}</span>
+          )}
+        </div>
         <span className="text-xs text-slate-400">{charCount} characters</span>
       </div>
 
@@ -409,6 +892,20 @@ export function RichEmailEditor({
           onConfirm={handleLinkConfirm}
           onRemove={handleLinkRemove}
           onCancel={() => setShowLinkDialog(false)}
+        />
+      )}
+
+      {showImageDialog && (
+        <ImageDialog
+          initialUrl={currentImageUrl}
+          initialAlt={currentImageAlt}
+          onConfirm={handleImageConfirm}
+          onUploadFile={handleImageUpload}
+          onRemove={handleImageRemove}
+          onCancel={() => setShowImageDialog(false)}
+          uploading={uploadingImage}
+          uploadError={imageUploadError}
+          uploadDisabled={!workspaceId}
         />
       )}
     </div>

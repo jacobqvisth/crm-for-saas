@@ -22,6 +22,13 @@ const EMAIL_CSS = `
     color: #1a73e8;
     text-decoration: underline;
   }
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 0;
+    margin: 12px 0;
+  }
   ul, ol {
     margin: 0 0 1em 0;
     padding-left: 1.5em;
