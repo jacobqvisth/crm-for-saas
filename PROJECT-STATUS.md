@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-14 (Workflow migration: CC now owns merge+deploy+test loop. GitHub Actions CI added. Vercel auto-deploy reconnected. PR #42)
+Last updated: 2026-04-24 (PR #69 — inline image upload in rich email editor; TipTap editor + CZ/SK scrapes + MillionVerifier swap + contacts page rewrite shipped since last update)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -74,7 +74,35 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Sequence UX 2 | Threading hint + Delete sequence — non-first email steps show "Re: <prior subject>" preview + Threaded reply badge; editor helper explains blank subject = same Gmail thread; DELETE /api/sequences/[id] with FK-ordered cascade + type-name-to-confirm modal | ✅ Merged | #37 |
 | Sequence UX 3 | Sequence detail UX clarity — Launch Campaign → Enroll List, Activate/Pause → Start/Pause Sending (promoted to top bar), Pause All behind ⋯ menu, amber paused banner, sending-status strip (sender/next send/last sent), Contacts tab 5→9 cols (Company, Last activity, Next send, Sent + Step as "2/5 · Email") | ✅ Merged | #38 |
 | Workflow migration | CC now owns merge+deploy+test loop. GitHub Actions CI added as safety net. Vercel auto-deploy reconnected. | ✅ Merged | #42 |
-| **Next** | Scrape more countries (SE, FI, LV, LT, NO, DK) via Apify + enrich owner contacts via Vibe Prospecting | 🔜 | — |
+| Latvia scrape | 973 shops (35% email, 94% phone, 46 cities). Import script `scripts/import-latvia-shops.mjs` with CSDD filter. | ✅ Merged | #43 |
+| Country filter (contacts + lists) | Country filter/column/sort on /contacts + Country field in list builder | ✅ Merged | #44 |
+| Dynamic list fix | Centralized dynamic list membership (`resolveListContactIds`), correct counts + enrollment end-to-end | ✅ Merged | #46 |
+| Sequence: change sender | Show real per-sequence sender in header + Change Sender modal | ✅ Merged | #48 |
+| Sequence duplicate translate | Translate email steps when duplicating a sequence | ✅ Merged | #49 |
+| Draft enrollment fix | Draft-sequence enrollments silently failing to queue emails | ✅ Merged | #50 |
+| Estimated send times | Show estimated send times in sequence contacts tab | ✅ Merged | #51 |
+| Phase SE-Stockholm-2/3/4a/4b/5 | Swedish contractor pipeline against Result Insurance DB (`ugibcnidxrhcxflqamxs`) — SF migration + gap-fill scrape + cert-flag + description enrichment + SF/DoRunner national + promote discovered_shops → contractor_directory | ✅ Merged | #52, #53, #55, #58, #59 |
+| Discovery: select-all-matching + verify | Gmail-style "select all N matching" on /contacts + verify emails in /discovery before promote (Prospeo, `email_status`/`email_verified_at` cols) | ✅ Merged | #56 |
+| Chore: mark legacy | `discovered_shops` marked legacy in CLAUDE.md (Swedish directory pipeline moved to result-insurance) | ✅ Merged | #60 |
+| Slovakia scrape | 3,573 shops (40% email, 92% phone, 683 cities). Import script `scripts/import-slovakia-shops.mjs`. | ✅ Merged | #62 |
+| Prospeo → MillionVerifier | Swap `verify-email` routes for contacts + discovery (Prospeo `/email-verifier` deprecated Feb 2026) — env var `MILLIONVERIFIER_API_KEY` | ✅ Merged | #63 |
+| Email status badge + MV copy | Show verified status badge in contacts table + update UI copy to MillionVerifier | ✅ Merged | #65 |
+| Bulk promote fix | Rewrite promote route with bulk ops — fixes Supabase 1k row cap + Vercel 10s timeout | ✅ Merged | #66 |
+| Contacts filter bar upgrade | Email status / source / language / has-phone filters + flag emojis | ✅ Merged | #67 |
+| Contacts page rewrite | Full rewrite — local filter state, Discovery-style layout, new columns | ✅ Merged | #68 |
+| Rich email editor (TipTap) | Replace plain textarea in sequence/template editors with TipTap — B/I/U, lists, links, variable chips, placeholder, character count, iframe preview with Gmail-safe CSS, plain-text → HTML migration on load | ✅ Shipped direct | 15d2f08 |
+| Rich email editor: images | Inline image upload (toolbar + drag-drop + paste) + URL embed with Google Drive share-link normalization. New `/api/email-images/upload` route + public `email-images` storage bucket. | ✅ Merged | #69 |
+| **Next** | Options: (B) CI red-on-main fix (add `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` as GH secrets); (C) Prospeo `/domain-to-email` enrichment on CZ/SK rows with website but no email; (D) Phase 26 A/B testing; (E) SE auto-repair-shop scrape for CRM outbound | 🔜 | — |
+
+### Discovered_shops rolling tally (Supabase `wdgiwuhehqpkhpvdzzzl`)
+Verified via SQL on 2026-04-24 — 13,654 total rows:
+| Country | Total | With Email | With Phone | Cities |
+|---|--:|--:|--:|--:|
+| Czech Republic (CZ) | 6,295 | 3,227 (51%) | 5,721 (91%) | 1,050 |
+| Slovakia (SK) | 3,573 | 1,414 (40%) | 3,271 (92%) | 683 |
+| Lithuania (LT) | 1,999 | 701 (35%) | 1,833 (92%) | 322 |
+| Latvia (LV) | 973 | 340 (35%) | 916 (94%) | 46 |
+| Estonia (EE) | 814 | 335 (41%) | 758 (93%) | 251 |
 
 ## Bugs Fixed (not by CC)
 - RLS infinite recursion on workspace_members — replaced self-referencing policies with auth.uid() + SECURITY DEFINER helpers
@@ -214,18 +242,23 @@ Stage 4: Enroll in sequences        →  via CRM UI
 - **Norway (NO)**: `bilverksted`, `bilservice`, `auto repair`
 - **Denmark (DK)**: `autoværksted`, `bilværksted`, `auto repair`
 
-### discovered_shops data by country
+### discovered_shops data by country (SQL-verified 2026-04-24)
 | Country | Scraped | Total | With Email | With Phone | Unique Cities | Status |
 |---------|---------|-------|------------|------------|---------------|--------|
 | Estonia (EE) | 2026-04-02 | 814 | 335 (41%) | 758 (93%) | 251 | ✅ In Supabase |
-| Lithuania (LT) | 2026-04-02 | 1999 | 667 (33%) | 1833 (92%) | 322 | ✅ In Supabase |
-| Latvia (LV) | 2026-04-15 | 973 | 341 (35%) | 915 (94%) | 46 | ✅ In Supabase |
-| Sweden (SE) | — | — | — | — | — | 🔜 Next |
+| Lithuania (LT) | 2026-04-02 | 1,999 | 701 (35%) | 1,833 (92%) | 322 | ✅ In Supabase |
+| Latvia (LV) | 2026-04-15 | 973 | 340 (35%) | 916 (94%) | 46 | ✅ In Supabase |
+| Czech Republic (CZ) | 2026-04-22 | 6,295 | 3,227 (51%) | 5,721 (91%) | 1,050 | ✅ In Supabase |
+| Slovakia (SK) | 2026-04-22 | 3,573 | 1,414 (40%) | 3,271 (92%) | 683 | ✅ In Supabase |
+| **Total** | — | **13,654** | **6,017 (44%)** | **12,499 (92%)** | **2,352** | — |
+| Sweden (SE) | — | — | — | — | — | 🔜 Not started (result-insurance SE directory is a separate project/DB) |
 
 ### Import scripts (in `/scripts/`)
 - `scripts/import-estonia-shops.mjs` — Estonia (814 shops, reads local JSON data file)
 - `scripts/import-lithuania-shops.mjs` — Lithuania (1999 shops, fetches from Apify dataset 96U2txGRRVKHyBPsF, needs APIFY_TOKEN env var)
 - `scripts/import-latvia-shops.mjs` — Latvia (973 shops, fetches 12 Apify datasets, filters CSDD, needs APIFY_TOKEN env var)
+- `scripts/import-slovakia-shops.mjs` — Slovakia (3,573 shops, 12 Apify runs)
+- `scripts/verify-emails.mjs` — parameterized MillionVerifier runner (`--country <CC>`, `--only-null`, `--limit N`, `--concurrency 20`, etc.) replacing the old Prospeo-based per-country scripts
 - Data files: `scripts/[country]-shops-data.json` (generated by Cowork, gitignored)
 
 ### Vibe Prospecting enrichment workflow (when ready)
