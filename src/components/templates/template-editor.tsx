@@ -244,6 +244,7 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
           <RichEmailEditor
             value={bodyHtml}
             onChange={setBodyHtml}
+            workspaceId={workspaceId ?? undefined}
             placeholder="Hi {{first_name}}, …"
             variables={TEMPLATE_VARIABLES}
           />

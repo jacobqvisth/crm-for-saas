@@ -468,6 +468,7 @@ export function EmailStepEditor({
           <RichEmailEditor
             value={bodyHtml}
             onChange={handleBodyChange}
+            workspaceId={workspaceId ?? undefined}
             placeholder="Hi {{first_name}}, …"
             variables={SEQUENCE_VARIABLES}
           />
