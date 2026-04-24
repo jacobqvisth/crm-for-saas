@@ -1003,3 +1003,33 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 - **Build:** `npm run build` fails locally (pre-existing — no `.env.local` in worktree); `npm run lint` and `npx tsc --noEmit` both clean
 - **Deploy:** https://crm-for-saas.vercel.app (Vercel auto-deploy on merge to main)
 - **Action required:** `MILLIONVERIFIER_API_KEY` must be added to Vercel prod env before verify-email routes will work. Run: `cd ~/crm-for-saas && vercel env add MILLIONVERIFIER_API_KEY production` (mark sensitive, paste key from `.env.local`)
+
+---
+
+## Session: Rich email editor — inline image upload + URL embed
+- **Date:** 2026-04-24
+- **PR:** #69
+- **Branch:** `feature/rich-email-editor-images`
+- **Merge commit:** `f6b5247`
+
+### What was built
+- **`src/components/sequences/rich-email-editor.tsx`**: Added `@tiptap/extension-image`. New toolbar image button, `ImageDialog` (upload via drop zone + URL field with live preview + alt text), drag-drop handler (`handleDrop`), paste handler (`handlePaste`), and full-editor drop-zone overlay. Google Drive share URLs (`drive.google.com/file/d/...` or `?id=...`) are auto-normalized to `drive.google.com/thumbnail?id=...&sz=w1200`.
+- **`src/app/api/email-images/upload/route.ts`** (NEW): `POST` accepts `{ workspaceId, file }` multipart. Auth'd via `createClient()` + workspace_member check. Service client writes to `email-images` bucket at `{workspaceId}/{userId}/{timestamp}-{uuid}.{ext}`. 5 MB cap; MIME whitelist `image/jpeg,png,gif,webp`. Returns `{ url, path }`. Also `ensureEmailImagesBucket` creates bucket on first call for safety.
+- **`supabase/migrations/20260423010000_email_images_storage.sql`** (NEW): Creates public `email-images` bucket with 5 MB limit + MIME whitelist. `SELECT` policy grants public read (bucket is public so images embed in Gmail). **Migration applied to prod project `wdgiwuhehqpkhpvdzzzl` via MCP during session.**
+- **`src/components/sequences/email-preview-frame.tsx`**: Added `img { display:block; max-width:100%; height:auto; margin:12px 0 }` to the inline email CSS so previews match Gmail rendering.
+- **`src/components/sequences/email-step-editor.tsx`** + **`src/components/templates/template-editor.tsx`**: Pass `workspaceId` prop down to `RichEmailEditor` so uploads know which workspace to authorize against.
+- **`package.json`**: Added `@tiptap/extension-image@^3.22.4`.
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- `npm run build` ✅ compiled in 6.1s, 61 routes built
+- Deploy: https://crm-for-saas.vercel.app (HTTP 307 → auth as expected)
+
+### Notable decisions
+- Public bucket + service-role-write pattern (rather than RLS-gated user-role writes) — write authz lives in the API route, not in a storage policy. Simpler, same security since the route checks workspace membership.
+- `allowBase64: false` on the TipTap Image extension to force uploads (prevents DataURI bloat in the stored HTML).
+- No DB migration for sequence/template rows — images are embedded in `body_html`/`body_override` as `<img src="...">`, no schema change.
+- Vault prompt `cc-prompt-phase-rich-email-editor.md` was the spec for the base TipTap swap (already shipped in 15d2f08). This image-support follow-on was not pre-prompted.
+
+---
