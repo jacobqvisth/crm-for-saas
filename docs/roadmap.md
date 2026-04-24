@@ -1,6 +1,6 @@
 # CRM Roadmap — Post Phase 8
 
-Last updated: 2026-03-24
+Last updated: 2026-03-24 — **⚠️ STALE.** For current phase state, see `PROJECT-STATUS.md` and `cc-session-log.md`. As of 2026-04-24 the roadmap below is largely complete (Phases 9–24 shipped + SE-Stockholm-1→5 + CZ/SK/LV/EE/LT scrapes + MillionVerifier swap + TipTap rich email editor). Kept for historical intent.
 
 ## Where We Are
 
