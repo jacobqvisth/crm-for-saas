@@ -1,0 +1,523 @@
+[
+  {
+    "label": "RS country-wide (5 terms)",
+    "runId": "evTefJ6khCF4QvZwB",
+    "datasetId": "GH2xz9jg4lsis6tBn",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.165Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "auto servis",
+        "automehaničar",
+        "autolimar",
+        "autolakirer"
+      ],
+      "countryCode": "rs"
+    },
+    "finishedAt": "2026-04-27T10:49:31.732Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 5147.232,
+      "computeUnits": 5.719146666666667
+    }
+  },
+  {
+    "label": "Belgrade — autoservis",
+    "runId": "hZIMhsVeL7w2WZsqE",
+    "datasetId": "dA6t4lbm0CpxfX6P2",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.162Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis"
+      ],
+      "locationQuery": "Belgrade, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:30:06.410Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 382.079,
+      "computeUnits": 0.4245322222222222
+    }
+  },
+  {
+    "label": "Belgrade — auto servis",
+    "runId": "9YKgH3K3fQ5uOtZPA",
+    "datasetId": "odfcfoTIBusRo3h5C",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.143Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "auto servis"
+      ],
+      "locationQuery": "Belgrade, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:32.993Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 228.63,
+      "computeUnits": 0.25403333333333333
+    }
+  },
+  {
+    "label": "Belgrade — autolimar",
+    "runId": "tSthEWegECm0K7yL1",
+    "datasetId": "6V9jf9DxvOonx8bIV",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.164Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autolimar"
+      ],
+      "locationQuery": "Belgrade, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:26:08.444Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 144.133,
+      "computeUnits": 0.16014777777777778
+    }
+  },
+  {
+    "label": "Novi Sad — autoservis",
+    "runId": "MJ5uFbIydlXbZJp94",
+    "datasetId": "ywENXYN8sdYQ3yE7x",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.137Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis"
+      ],
+      "locationQuery": "Novi Sad, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:26:24.017Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 159.46,
+      "computeUnits": 0.17717777777777777
+    }
+  },
+  {
+    "label": "Novi Sad — autolimar",
+    "runId": "iev8lYf710QNpborz",
+    "datasetId": "IOKRfyuqf67miTtIr",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.128Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autolimar"
+      ],
+      "locationQuery": "Novi Sad, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:24:48.191Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 63.9,
+      "computeUnits": 0.071
+    }
+  },
+  {
+    "label": "Niš — autoservis",
+    "runId": "xbnN3LL8X930eJp15",
+    "datasetId": "0OJnRLBb0ZUqr391T",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.158Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis"
+      ],
+      "locationQuery": "Niš, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:28:32.170Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 287.742,
+      "computeUnits": 0.31971333333333335
+    }
+  },
+  {
+    "label": "Niš — autolimar",
+    "runId": "zHLhZFhB00uwx2yXx",
+    "datasetId": "emYIflHwqQx9oWKIt",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.135Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autolimar"
+      ],
+      "locationQuery": "Niš, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:59.993Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 255.545,
+      "computeUnits": 0.2839388888888889
+    }
+  },
+  {
+    "label": "Kragujevac — autoservis",
+    "runId": "YCghXYEg6wJktKMUj",
+    "datasetId": "NfzQ6GqczLwpzi07p",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.128Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis"
+      ],
+      "locationQuery": "Kragujevac, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:24:39.895Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 55.438,
+      "computeUnits": 0.06159777777777778
+    }
+  },
+  {
+    "label": "Kragujevac — autolimar",
+    "runId": "7oHBuKosJgKgemAKG",
+    "datasetId": "50B2UaBG93QtHhG3a",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.139Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autolimar"
+      ],
+      "locationQuery": "Kragujevac, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:24:17.449Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 33.057,
+      "computeUnits": 0.03673
+    }
+  },
+  {
+    "label": "Subotica",
+    "runId": "OYoNpkc53iGnrC3kt",
+    "datasetId": "ccnYHxWGGxz0Vmswg",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.143Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Subotica, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:39.313Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 235.017,
+      "computeUnits": 0.26113
+    }
+  },
+  {
+    "label": "Leskovac",
+    "runId": "smbGNjShZnBqv2ubU",
+    "datasetId": "Xhk8LWxWEasECE7Aj",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.134Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Leskovac, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:14.475Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 210.03,
+      "computeUnits": 0.23336666666666667
+    },
+    "error": "502"
+  },
+  {
+    "label": "Pančevo",
+    "runId": "OssQeZog1yXqDzKLF",
+    "datasetId": "YSR1vrsRkgdx2AG8n",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.144Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Pančevo, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:25:11.230Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 86.831,
+      "computeUnits": 0.09647888888888889
+    }
+  },
+  {
+    "label": "Kruševac",
+    "runId": "MjAoqfFf7svVYkirI",
+    "datasetId": "ouGDwPUZPh3OecMsj",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.165Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Kruševac, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:05.981Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 201.659,
+      "computeUnits": 0.22406555555555555
+    },
+    "error": "502"
+  },
+  {
+    "label": "Kraljevo",
+    "runId": "mwKyjAlw92DBGZfF9",
+    "datasetId": "qjf7TEAlRjpb1UG0d",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.337Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Kraljevo, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:57.864Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 253.319,
+      "computeUnits": 0.2814655555555556
+    }
+  },
+  {
+    "label": "Novi Pazar",
+    "runId": "OwAVEj3Lfxitlr9AN",
+    "datasetId": "Kfnc1UB6xmDFUdmaZ",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.155Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Novi Pazar, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:57.565Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 253.291,
+      "computeUnits": 0.28143444444444443
+    }
+  },
+  {
+    "label": "Zrenjanin",
+    "runId": "TZMfdzKuATUo6HvIt",
+    "datasetId": "CRjALJHmFMm6qY3na",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.142Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Zrenjanin, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:27:33.809Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 229.484,
+      "computeUnits": 0.2549822222222222
+    }
+  },
+  {
+    "label": "Čačak",
+    "runId": "MYh53D63juL0GfZr2",
+    "datasetId": "8zhv19pdb5JccFn23",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.129Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Čačak, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:29:06.400Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 322.115,
+      "computeUnits": 0.35790555555555553
+    }
+  },
+  {
+    "label": "Šabac",
+    "runId": "wqo00R7oxWgcJ5sbb",
+    "datasetId": "825LndTPvMCDa458a",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.132Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Šabac, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:28:14.212Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 269.649,
+      "computeUnits": 0.29961
+    }
+  },
+  {
+    "label": "Smederevo",
+    "runId": "QdkMwY9jSBkQH33QQ",
+    "datasetId": "steevrWATR98ESAg7",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.146Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Smederevo, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:29:10.922Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 326.642,
+      "computeUnits": 0.36293555555555557
+    }
+  },
+  {
+    "label": "Valjevo",
+    "runId": "yEfx3zFQJgAMkYdDU",
+    "datasetId": "t00GM8ljBYJM4nwqM",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-27T09:23:44.147Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "sr",
+      "includeOpeningHours": true,
+      "searchStringsArray": [
+        "autoservis",
+        "autolimar"
+      ],
+      "locationQuery": "Valjevo, Serbia"
+    },
+    "finishedAt": "2026-04-27T09:26:01.165Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 136.913,
+      "computeUnits": 0.15212555555555557
+    }
+  }
+]
