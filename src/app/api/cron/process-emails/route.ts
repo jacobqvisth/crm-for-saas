@@ -21,12 +21,30 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // Get scheduled emails that are due
+  // Determine which senders still have daily capacity. PostgREST can't express a
+  // column-vs-column comparison ("daily_sends_count < max_daily_sends") cleanly,
+  // so pull all active accounts and filter in JS. The set is small (< 20 rows).
+  const { data: activeAccounts } = await supabase
+    .from("gmail_accounts")
+    .select("id, daily_sends_count, max_daily_sends")
+    .eq("status", "active");
+
+  const availableSenderIds = (activeAccounts || [])
+    .filter((a) => (a.max_daily_sends ?? 0) - (a.daily_sends_count ?? 0) > 0)
+    .map((a) => a.id);
+
+  if (availableSenderIds.length === 0) {
+    return NextResponse.json({ processed: 0, message: "No senders with capacity" });
+  }
+
+  // Get scheduled emails that are due — restricted to senders with remaining capacity
+  // so the LIMIT 100 window can't get jammed by rows pinned to a maxed-out sender.
   const { data: queueItems, error: queueError } = await supabase
     .from("email_queue")
     .select("*")
     .eq("status", "scheduled")
     .lte("scheduled_for", new Date().toISOString())
+    .in("sender_account_id", availableSenderIds)
     .order("scheduled_for")
     .limit(100);
 
