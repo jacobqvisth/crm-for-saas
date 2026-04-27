@@ -27,6 +27,12 @@ export type SequenceSettings = {
   stop_on_reply: boolean;
   stop_on_company_reply: boolean;
   sender_rotation: boolean;
+  /**
+   * Optional per-sequence auto-rotate pool. When undefined or empty, auto-rotate
+   * uses every active workspace Gmail account (today's behavior). When a non-empty
+   * array of gmail_accounts.id values is set, auto-rotate restricts to those accounts.
+   */
+  rotation_account_ids?: string[];
 };
 
 export interface Database {

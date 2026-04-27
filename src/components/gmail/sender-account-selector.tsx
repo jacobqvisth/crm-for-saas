@@ -18,6 +18,11 @@ interface SenderAccountSelectorProps {
   value: string | null;
   onChange: (accountId: string | null) => void;
   showCapacity?: boolean;
+  /**
+   * Optional override for the "Auto-rotate across all accounts" option label.
+   * Use this to surface per-sequence rotation pool info, e.g. "Auto-rotate (3 of 7 accounts)".
+   */
+  autoRotateLabel?: string;
 }
 
 export function SenderAccountSelector({
@@ -25,6 +30,7 @@ export function SenderAccountSelector({
   value,
   onChange,
   showCapacity = true,
+  autoRotateLabel,
 }: SenderAccountSelectorProps) {
   const [accounts, setAccounts] = useState<SenderAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +90,7 @@ export function SenderAccountSelector({
         onChange={(e) => onChange(e.target.value || null)}
         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
-        <option value="">Auto-rotate across all accounts</option>
+        <option value="">{autoRotateLabel ?? "Auto-rotate across all accounts"}</option>
         {accounts.map((account) => (
           <option
             key={account.id}

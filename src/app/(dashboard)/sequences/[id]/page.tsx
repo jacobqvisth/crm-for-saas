@@ -480,7 +480,12 @@ export default function SequenceDetailPage() {
         onClose={() => setEnrollOpen(false)}
         sequenceId={sequenceId}
         sequenceStatus={sequence?.status}
+        sequenceSettings={sequence?.settings}
         onEnrolled={load}
+        onOpenSettings={() => {
+          setEnrollOpen(false);
+          setSettingsOpen(true);
+        }}
       />
 
       {launchOpen && workspaceId && (

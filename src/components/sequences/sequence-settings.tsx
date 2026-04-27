@@ -10,6 +10,13 @@ import type { Tables, SequenceSettings as SequenceSettingsType } from "@/lib/dat
 
 type Sequence = Tables<"sequences">;
 
+interface RotationAccount {
+  id: string;
+  email_address: string;
+  display_name: string | null;
+  status: string;
+}
+
 const DAYS = [
   { value: 0, label: "Sun" },
   { value: 1, label: "Mon" },
@@ -55,6 +62,11 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
   const [stopOnReply, setStopOnReply] = useState(settings.stop_on_reply ?? true);
   const [stopOnCompanyReply, setStopOnCompanyReply] = useState(settings.stop_on_company_reply ?? true);
   const [senderRotation, setSenderRotation] = useState(settings.sender_rotation ?? true);
+  const [rotationAccountIds, setRotationAccountIds] = useState<string[]>(
+    settings.rotation_account_ids ?? []
+  );
+  const [rotationAccounts, setRotationAccounts] = useState<RotationAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -67,7 +79,35 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
     setStopOnReply(s.stop_on_reply ?? true);
     setStopOnCompanyReply(s.stop_on_company_reply ?? true);
     setSenderRotation(s.sender_rotation ?? true);
+    setRotationAccountIds(s.rotation_account_ids ?? []);
   }, [sequence]);
+
+  // Load Gmail accounts so the user can pick a per-sequence rotation pool.
+  useEffect(() => {
+    if (!workspaceId || !open) return;
+    setAccountsLoading(true);
+    fetch(`/api/gmail/accounts?workspaceId=${workspaceId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setRotationAccounts(data.accounts || []);
+        setAccountsLoading(false);
+      })
+      .catch(() => setAccountsLoading(false));
+  }, [workspaceId, open]);
+
+  const toggleRotationAccount = (id: string) => {
+    setRotationAccountIds((prev) =>
+      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllRotationAccounts = () => {
+    setRotationAccountIds(rotationAccounts.map((a) => a.id));
+  };
+
+  const deselectAllRotationAccounts = () => {
+    setRotationAccountIds([]);
+  };
 
   const toggleDay = (day: number) => {
     setSendDays((prev) =>
@@ -88,6 +128,11 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
       stop_on_reply: stopOnReply,
       stop_on_company_reply: stopOnCompanyReply,
       sender_rotation: senderRotation,
+      // Store only when a non-empty subset is picked. Empty array = "all active",
+      // which is also the default when undefined — keep the JSON tidy.
+      ...(rotationAccountIds.length > 0
+        ? { rotation_account_ids: rotationAccountIds }
+        : {}),
     };
 
     const { error } = await supabase
@@ -219,6 +264,62 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
             />
             <span className="text-sm text-slate-700">Rotate across all sender accounts</span>
           </label>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-slate-700">
+              Auto-rotate pool
+            </label>
+            {rotationAccounts.length > 0 && (
+              <div className="flex items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={selectAllRotationAccounts}
+                  className="text-indigo-600 hover:text-indigo-700"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={deselectAllRotationAccounts}
+                  className="text-slate-500 hover:text-slate-700"
+                >
+                  Deselect all
+                </button>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            When &quot;Auto-rotate across all accounts&quot; is selected at enrollment, emails for this sequence rotate only through the accounts checked here. Leave all unchecked to rotate across every active account in the workspace.
+          </p>
+          {accountsLoading ? (
+            <div className="text-sm text-slate-500 py-2">Loading accounts…</div>
+          ) : rotationAccounts.length === 0 ? (
+            <div className="text-sm text-slate-500 py-2">No Gmail accounts connected.</div>
+          ) : (
+            <div className="space-y-1.5 border border-slate-200 rounded-lg p-2 max-h-52 overflow-y-auto">
+              {rotationAccounts.map((account) => (
+                <label
+                  key={account.id}
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={rotationAccountIds.includes(account.id)}
+                    onChange={() => toggleRotationAccount(account.id)}
+                    className="rounded border-slate-300 text-indigo-600"
+                  />
+                  <span className="text-sm text-slate-700">
+                    {account.email_address}
+                    {account.status !== "active" && (
+                      <span className="ml-1 text-xs text-slate-400">({account.status})</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <button
