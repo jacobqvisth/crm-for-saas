@@ -14,6 +14,38 @@ updated: 2026-04-22
 
 ---
 
+## 2026-04-27 — Per-sequence editable auto-rotate pool
+
+**Session type:** CC feature build (full cycle: branch → build → PR → merge → deploy verify).
+
+- **PR:** [#71](https://github.com/jacobqvisth/crm-for-saas/pull/71) — squash-merged
+- **Branch:** `feature/per-sequence-rotation-pool`
+- **Spec:** `cc-prompt-per-sequence-rotation-pool.md` (vault, `_prompts/`)
+
+### What was built
+- **`src/lib/database.types.ts`**: Added optional `rotation_account_ids?: string[]` to `SequenceSettings`. No DB migration — `sequences.settings` is already JSONB.
+- **`src/lib/gmail/sender-rotation.ts`**: `getNextSender` now takes optional `allowedAccountIds`; when non-empty, filters via `.in("id", allowedAccountIds)`. Empty/undefined keeps the all-active behavior.
+- **`src/lib/sequences/enrollment.ts`**: When the user picks auto-rotate (no explicit `senderAccountId`), reads `settings.rotation_account_ids` and passes it to `getNextSender`. Skip reason when the pool has no capacity: `"No accounts in this sequence's rotation pool have capacity"`.
+- **`src/app/api/cron/process-emails/route.ts`**: Re-pin fallback (when an enrollment's pinned sender goes inactive) also respects the per-sequence pool.
+- **`src/components/sequences/sequence-settings.tsx`**: New "Auto-rotate pool" section — per-account checkboxes, Select all / Deselect all, helper copy. Empty arrays are not persisted (treated as undefined) so deselecting everyone falls back to "all active" rather than bricking the sequence.
+- **`src/components/gmail/sender-account-selector.tsx`**: Added optional `autoRotateLabel` prop so callers can override the default "Auto-rotate across all accounts" option text.
+- **`src/components/sequences/enroll-contacts-modal.tsx`**: When a pool is configured, the auto-rotate option label becomes `Auto-rotate (N of M accounts)` and a small "Edit pool" link deep-links into the settings panel.
+- **`src/app/(dashboard)/sequences/[id]/page.tsx`**: Wires `sequenceSettings` and `onOpenSettings` from the page into the enroll modal.
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- `npm run build` ✅ (had to use `/opt/homebrew/bin/node` locally — the harness's bundled node has a hardened-runtime Team-ID mismatch with `lightningcss-darwin-arm64` and `@next/swc-darwin-arm64`. Vercel's build env is unaffected.)
+- `npm run test:e2e:smoke` ✅ 8/8 passing
+- Deploy: https://crm-for-saas.vercel.app — HTTP 307 → /login (live, expected)
+
+### Notable decisions
+- Empty array vs. undefined: both mean "rotate across all active accounts". The picker doesn't persist an empty array — it just unsets the field — so an accidental "deselect all" can never block enrollments.
+- Cron re-pin path is pool-aware too. Without that, a paused in-pool sender would have re-pinned to a random workspace account and silently expanded the pool.
+- The `autoRotateLabel` selector prop is intentionally minimal — no editor inside the modal, just the count + deep-link, per spec.
+
+---
+
 ## 2026-04-22 — Cowork-side data-ops: Slovakia (SK) scrape + email verification
 
 **Session type:** Cowork data-ops (not a CC build). Script added to repo via PR below.
