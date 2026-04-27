@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { Modal } from "@/components/ui/modal";
-import { Search, Users, UserPlus, Loader2, AlertTriangle } from "lucide-react";
+import { Search, Users, UserPlus, Loader2, AlertTriangle, Settings } from "lucide-react";
 import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
 import { resolveListContactIds } from "@/lib/lists/filter-query";
 import toast from "react-hot-toast";
-import type { Tables } from "@/lib/database.types";
+import type { Tables, SequenceSettings } from "@/lib/database.types";
 
 type Contact = Tables<"contacts">;
 type ContactList = Tables<"contact_lists">;
@@ -18,7 +18,9 @@ interface EnrollContactsModalProps {
   onClose: () => void;
   sequenceId: string;
   sequenceStatus?: string;
+  sequenceSettings?: SequenceSettings;
   onEnrolled: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function EnrollContactsModal({
@@ -26,10 +28,24 @@ export function EnrollContactsModal({
   onClose,
   sequenceId,
   sequenceStatus,
+  sequenceSettings,
   onEnrolled,
+  onOpenSettings,
 }: EnrollContactsModalProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
+  const rotationPool = sequenceSettings?.rotation_account_ids ?? [];
+  const hasRotationPool = rotationPool.length > 0;
+  const [totalAccounts, setTotalAccounts] = useState<number | null>(null);
+
+  // Fetch the workspace account count so we can render "X of Y accounts" cleanly.
+  useEffect(() => {
+    if (!workspaceId || !open) return;
+    fetch(`/api/gmail/accounts?workspaceId=${workspaceId}`)
+      .then((r) => r.json())
+      .then((data) => setTotalAccounts((data.accounts || []).length))
+      .catch(() => setTotalAccounts(null));
+  }, [workspaceId, open]);
 
   const [tab, setTab] = useState<"search" | "list">("search");
   const [search, setSearch] = useState("");
@@ -285,15 +301,40 @@ export function EnrollContactsModal({
 
         {workspaceId && (
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">
-              Sender account
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-slate-700">
+                Sender account
+              </label>
+              {hasRotationPool && onOpenSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700"
+                >
+                  <Settings className="w-3 h-3" />
+                  Edit pool
+                </button>
+              )}
+            </div>
             <SenderAccountSelector
               workspaceId={workspaceId}
               value={senderAccountId}
               onChange={setSenderAccountId}
               showCapacity={true}
+              autoRotateLabel={
+                hasRotationPool
+                  ? `Auto-rotate (${rotationPool.length}${
+                      totalAccounts !== null ? ` of ${totalAccounts}` : ""
+                    } accounts)`
+                  : undefined
+              }
             />
+            {hasRotationPool && senderAccountId === null && (
+              <p className="text-xs text-slate-500">
+                This sequence rotates only through {rotationPool.length}
+                {totalAccounts !== null ? ` of ${totalAccounts}` : ""} workspace account{rotationPool.length === 1 ? "" : "s"}.
+              </p>
+            )}
           </div>
         )}
 

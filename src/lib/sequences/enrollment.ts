@@ -97,10 +97,16 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     // Determine sender
     let assignedSenderId = senderAccountId;
     if (!assignedSenderId) {
-      const sender = await getNextSender(workspaceId);
+      const rotationPool = settings.rotation_account_ids;
+      const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
+      const sender = await getNextSender(workspaceId, hasPool ? rotationPool : undefined);
       if (!sender) {
         result.skipped++;
-        result.reasons.push(`${contact.email}: No available sender accounts`);
+        result.reasons.push(
+          hasPool
+            ? `${contact.email}: No accounts in this sequence's rotation pool have capacity`
+            : `${contact.email}: No available sender accounts`
+        );
         continue;
       }
       assignedSenderId = sender.id;

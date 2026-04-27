@@ -337,7 +337,13 @@ export async function POST(request: NextRequest) {
 
             if (!pinnedAccount || pinnedAccount.status !== "active") {
               // Pinned sender went inactive — re-pin to a new available sender
-              const fallback = await getNextSender(account.workspace_id);
+              // Respect the sequence's rotation pool if one is configured.
+              const rotationPool = settings?.rotation_account_ids;
+              const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
+              const fallback = await getNextSender(
+                account.workspace_id,
+                hasPool ? rotationPool : undefined
+              );
               if (fallback) {
                 nextEmailSenderId = fallback.id;
                 await supabase
