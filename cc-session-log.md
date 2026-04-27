@@ -14,6 +14,29 @@ updated: 2026-04-22
 
 ---
 
+## 2026-04-27 — Fix: cron skips over-capacity senders before LIMIT
+
+**Session type:** CC bug fix (full cycle: branch → PR → merge → deploy verify).
+
+- **PR:** [#73](https://github.com/jacobqvisth/crm-for-saas/pull/73) — squash-merged (commit `9c89262`)
+- **Branch:** `fix/cron-skip-over-capacity-senders` (deleted on merge)
+- **Bug confirmed in prod earlier today**: hans.markebrant@ at 80/80 with 142 due-now rows blocked 281 Estonia rows pinned to hans.m@ (fully available). Cron was returning `{processed: 0}`. Jacob manually deferred the blocking rows to unblock today's send.
+
+### What changed
+- **`src/app/api/cron/process-emails/route.ts`**: Pre-fetch active gmail accounts, compute `availableSenderIds` in JS where `daily_sends_count < max_daily_sends`, and add `.in("sender_account_id", availableSenderIds)` to the queue query so the `LIMIT 100` window only sees rows that can actually send. Early-return `{processed: 0, message: "No senders with capacity"}` if all senders are maxed out. Per-sender circuit breaker, jitter, and 1-per-sender-per-run logic unchanged.
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- `npm run build` ⚠️ blocked locally by missing `lightningcss/lightningcss.darwin-arm64.node` (file lives in sibling `lightningcss-darwin-arm64/` but the wrapper looks for it inside `lightningcss/`). Pre-existing node_modules state issue, unrelated to this change. Vercel build env is unaffected — site is live.
+- `TEST_BASE_URL=https://crm-for-saas.vercel.app npm run test:e2e:smoke` ✅ 8/8 passing (incl. cron-secret API health checks)
+- Deploy: https://crm-for-saas.vercel.app — HTTP 307 → /login (live); `/api/cron/process-emails` returns 401 without CRON_SECRET (expected).
+
+### Follow-up
+- Add an explicit unit test for the head-of-line scenario (2 senders, oldest pinned to maxed sender, assert cron sends from available sender). Not done in this PR; flagged in PR #73 description.
+
+---
+
 ## 2026-04-27 — Per-sequence editable auto-rotate pool
 
 **Session type:** CC feature build (full cycle: branch → build → PR → merge → deploy verify).
