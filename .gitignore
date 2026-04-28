@@ -47,3 +47,6 @@ docs/prompts/
 
 # Cowork discovery pipeline data files
 scripts/*-shops-data.json
+
+# GB scrape checkpoint artefacts (regeneratable from registries — see scrape-plan-GB.md)
+_reference/gb-checkpoint/
