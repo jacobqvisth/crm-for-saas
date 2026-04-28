@@ -14,6 +14,29 @@ updated: 2026-04-22
 
 ---
 
+## 2026-04-28 — Fix: discovery promote silently skipped all rows
+
+**Session type:** CC bug fix (full cycle: branch → PR → merge → deploy verify).
+
+- **PR:** [#77](https://github.com/jacobqvisth/crm-for-saas/pull/77) — squash-merged (commit `4c4d030`)
+- **Branch:** `fix/discovery-promote-upsert-and-dedup` (deleted on merge)
+- **Triggered by:** Jacob attempted to promote LT shops from `/discovery`. Toast read "Promoted 0 shops · 1 duplicate skipped" but no rows changed in the DB. Same behavior for any LT row attempted.
+
+### Two bugs in `src/app/api/discovery/promote/route.ts`
+1. **Silent upsert failure.** `discovered_shops.name` is NOT NULL with no default. Both the duplicate-marking path and the newly-promoted update path used `.upsert([{id, status, crm_company_id}])` without `name`. PostgREST resolves upsert as `INSERT ... ON CONFLICT (id) DO UPDATE` — the INSERT side validates NOT NULL on the proposed row before the conflict triggers UPDATE, so Postgres rejected the entire statement. No error handling on those calls, so the API still returned `{promoted, skipped_duplicates}` while the DB stayed unchanged. Switched both call sites to per-row `.update().eq("id", shop.id)` which never hits the INSERT path.
+2. **Cross-country name dedup.** Dedup matched name globally — "AD Baltic" in EE collided with "AD Baltic" in LT (different domains, different businesses, different localizations). Name match is now country-scoped via `${country_code}:${name.toLowerCase()}` compound key. Domain match remains global since a domain identifies one business across markets.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `npm run build` skipped (lightningcss native-binding issue, pre-existing per PR #73 log).
+- Deploy: https://crm-for-saas.vercel.app — index 307 → /login (live); `/api/discovery/promote` returns 401 unauth (expected).
+
+### Follow-up
+- Test path: promote one LT row → confirm `companies` + `contacts` insert and `discovered_shops.status='imported'`. Then bulk-promote the 581 remaining verified-valid LT rows.
+
+---
+
 ## 2026-04-28 — Ops: EE/LV verification sweep + full MV coverage across both tables
 
 **Session type:** Ops + tooling (no app code change).
