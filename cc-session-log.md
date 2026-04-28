@@ -14,6 +14,43 @@ updated: 2026-04-22
 
 ---
 
+## 2026-04-28 — Ops: EE/LV verification sweep + full MV coverage across both tables
+
+**Session type:** Ops + tooling (no app code change).
+
+### Trigger
+EE and LV contacts were enrolled in active sequences with `email_status='unknown'` (LV: 232/279) or stale legacy MX-only "valid" (EE: 232/281). 5 EE bounces + 18 LV bounces had already accrued, hurting sender reputation. 508 emails were scheduled to send to unverified addresses.
+
+### What ran (in order)
+1. **Snapshot + pause queue.** Created `_ops_queue_pause_2026_04_28` (queue_id, contact_id, country_code, email, scheduled_for) and flipped 508 `email_queue` rows (275 EE + 233 LV) from `scheduled` → `cancelled` to halt sending.
+2. **Verified 527 active EE+LV contacts** with new MillionVerifier sweep — `scripts/verify-contacts-ee-lv.mjs` (concurrency 20, ~91s). Bypassed `shouldSkip` because legacy MX-only "valid" rows weren't trustworthy.
+3. **Re-enabled queue** (`status=scheduled`, `error_message=NULL`) for the 411 rows whose contact came back `email_status='valid'` (232 EE + 179 LV).
+4. **Paused 103 enrollments** (43 EE + 60 LV) for contacts now `risky`/`catch_all`/`invalid` — `sequence_enrollments.status='paused'` so cron won't queue future steps (per `src/app/api/cron/process-emails/route.ts:187`).
+5. **Backfilled MV verification across the rest of both tables.** All `discovered_shops` legacy/null cohorts (LT 701, EE 335, LV 340) plus 36 stragglers in `contacts` (`unknown`/null) verified via `scripts/verify-emails.mjs --country LT|EE|LV` and new `scripts/verify-contacts-unknown.mjs`.
+
+### Result — 100% MV coverage
+Every email in `contacts` (2,872) and `discovered_shops` (8,141) now has a fresh `email_status` from MillionVerifier. No more `null`/`unknown`/legacy-only rows.
+
+Notable downgrades: LT staging lost 119 of its legacy 690 "valids" (now 582 valid / 48 risky / 39 catch_all / 32 invalid). LV staging surfaced 95 non-deliverable from 340 previously-unverified (245 valid / 36 risky / 36 catch_all / 23 invalid).
+
+### What changed in this PR
+- `scripts/verify-contacts-ee-lv.mjs` (new) — one-shot sweep of EE/LV active enrollees against MV.
+- `scripts/verify-contacts-unknown.mjs` (new) — sweeps `contacts` rows where `email_status` is null or `unknown`.
+- This log entry.
+
+### Build status
+- `npm run lint` ✅ clean against the two new scripts
+- No `src/` changes — Vercel build skipped via `ignoreCommand` (only `scripts/` + log touched).
+
+### Reversibility
+`_ops_queue_pause_2026_04_28` retains the original `scheduled_for` for all 508 paused rows; 97 are permanently `cancelled` (status≠valid contacts) and can be recreated from the snapshot if ever needed.
+
+### Follow-up
+- LT contacts/companies are still 0 — Jacob's earlier import attempt didn't land. Worth retrying the import for the 582 LT shops now confirmed `valid`.
+- LV invalid rate (7.5% of contacts) is meaningfully higher than EE (2.8%) — flag for source-quality review.
+
+---
+
 ## 2026-04-27 — Fix: cron skips over-capacity senders before LIMIT
 
 **Session type:** CC bug fix (full cycle: branch → PR → merge → deploy verify).
