@@ -142,20 +142,24 @@ export async function POST(request: NextRequest) {
   }
 
   // --- 2. Pre-fetch all existing companies to build dedup maps ---
+  // Domain match is global (a domain identifies one business across countries).
+  // Name match is country-scoped (e.g. "AD Baltic" exists separately in EE/LV/LT).
   const domainMap = new Map<string, string>(); // lowercase domain → company id
-  const nameMap = new Map<string, string>(); // lowercase name → company id
+  const nameByCountry = new Map<string, string>(); // `${country_code}:${lowercase name}` → company id
 
   let companyOffset = 0;
   while (true) {
     const { data: companies, error } = await supabase
       .from("companies")
-      .select("id, domain, name")
+      .select("id, domain, name, country_code")
       .eq("workspace_id", workspaceId)
       .range(companyOffset, companyOffset + PAGE_SIZE - 1);
     if (error || !companies || companies.length === 0) break;
     for (const c of companies) {
       if (c.domain) domainMap.set(c.domain.toLowerCase(), c.id);
-      if (c.name) nameMap.set(c.name.toLowerCase(), c.id);
+      if (c.name && c.country_code) {
+        nameByCountry.set(`${c.country_code.toUpperCase()}:${c.name.toLowerCase()}`, c.id);
+      }
     }
     if (companies.length < PAGE_SIZE) break;
     companyOffset += PAGE_SIZE;
@@ -167,9 +171,13 @@ export async function POST(request: NextRequest) {
 
   for (const shop of validShops) {
     const domain = shop.domain ?? (shop.website ? extractDomain(shop.website) : null);
+    const nameKey =
+      shop.name && shop.country_code
+        ? `${shop.country_code.toUpperCase()}:${shop.name.toLowerCase()}`
+        : null;
     const existingId =
       (domain && domainMap.get(domain.toLowerCase())) ||
-      (shop.name && nameMap.get(shop.name.toLowerCase()));
+      (nameKey && nameByCountry.get(nameKey));
 
     if (existingId) {
       duplicates.push({ shop, companyId: existingId });
@@ -180,16 +188,14 @@ export async function POST(request: NextRequest) {
 
   const skipped_duplicates = duplicates.length;
 
-  // Mark duplicates as imported (chunked upserts)
-  for (let i = 0; i < duplicates.length; i += PAGE_SIZE) {
-    const chunk = duplicates.slice(i, i + PAGE_SIZE);
-    await supabase.from("discovered_shops").upsert(
-      chunk.map(({ shop, companyId }) => ({
-        id: shop.id,
-        status: "imported",
-        crm_company_id: companyId,
-      }))
-    );
+  // Mark duplicates as imported. Per-row .update() — bulk upsert previously
+  // failed silently because PostgREST's INSERT ON CONFLICT validates NOT NULL
+  // on the proposed insert row (discovered_shops.name is NOT NULL).
+  for (const { shop, companyId } of duplicates) {
+    await supabase
+      .from("discovered_shops")
+      .update({ status: "imported", crm_company_id: companyId })
+      .eq("id", shop.id);
   }
 
   let promoted = 0;
@@ -296,24 +302,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- 6. Batch-update discovered_shops for newly promoted rows ---
-    const shopUpdates = newShops
-      .map((shop, i) => {
-        const companyId = insertedCompanyIds[i];
-        if (!companyId) return null;
-        promoted++;
-        return {
-          id: shop.id,
+    // --- 6. Update discovered_shops for newly promoted rows. Per-row update
+    // for the same NOT-NULL reason as duplicate marking above. ---
+    for (let i = 0; i < newShops.length; i++) {
+      const companyId = insertedCompanyIds[i];
+      if (!companyId) continue;
+      promoted++;
+      const shop = newShops[i];
+      await supabase
+        .from("discovered_shops")
+        .update({
           status: "imported",
           crm_company_id: companyId,
           crm_contact_id: insertedContactIds.get(i) ?? null,
-        };
-      })
-      .filter((u): u is NonNullable<typeof u> => u !== null);
-
-    for (let i = 0; i < shopUpdates.length; i += PAGE_SIZE) {
-      const chunk = shopUpdates.slice(i, i + PAGE_SIZE);
-      await supabase.from("discovered_shops").upsert(chunk);
+        })
+        .eq("id", shop.id);
     }
   }
 
