@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
+import { countryFlag } from "@/lib/countries";
 import {
   MapPin,
   Phone,
@@ -79,26 +80,6 @@ type Filters = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const COUNTRY_FLAGS: Record<string, string> = {
-  EE: "🇪🇪",
-  SE: "🇸🇪",
-  FI: "🇫🇮",
-  NO: "🇳🇴",
-  DK: "🇩🇰",
-  LV: "🇱🇻",
-  LT: "🇱🇹",
-  DE: "🇩🇪",
-  FR: "🇫🇷",
-  GB: "🇬🇧",
-  NL: "🇳🇱",
-  PL: "🇵🇱",
-  US: "🇺🇸",
-};
-
-function countryFlag(code: string): string {
-  return COUNTRY_FLAGS[code] ?? "🏳️";
-}
 
 function stripProtocol(url: string): string {
   return url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
