@@ -14,6 +14,29 @@ updated: 2026-04-22
 
 ---
 
+## 2026-04-29 — Fix: discovery promote bulk path timed out after PR #77
+
+**Session type:** CC bug fix (full cycle: branch → PR → merge → deploy verify).
+
+- **PR:** [#81](https://github.com/jacobqvisth/crm-for-saas/pull/81) — squash-merged (commit `4fbd75a`)
+- **Branch:** `fix/discovery-promote-bulk` (deleted on merge)
+- **Triggered by:** PR #77 fix worked for single-row promote but bulk (50, all) silently failed. Cause: PR #77 replaced the bulk upsert with sequential per-row `.update()` calls — fine for 1 row, exceeded the Vercel function timeout for 50+.
+
+### Change in `src/app/api/discovery/promote/route.ts`
+- Restored bulk `upsert(...)` on both call sites (duplicate marking + newly-promoted updates) but included `name: shop.name` in the payload so PostgREST's INSERT side of `INSERT ... ON CONFLICT (id) DO UPDATE` satisfies the NOT NULL constraint on `discovered_shops.name`. The conflict path triggers UPDATE which sets `name` to the same existing value (no-op).
+- Added explicit `if (error) return 500` on both upsert calls so future silent-failure regressions surface as real errors instead of misleading `{promoted, skipped_duplicates}` counts.
+- Round trips for bulk now O(rows / PAGE_SIZE) instead of O(rows).
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- Deploy: https://crm-for-saas.vercel.app live (index 307; `/api/discovery/promote` 401 unauth as expected).
+
+### Follow-up
+- Confirm 50- and all-row LT promote work end-to-end in the UI; expect ~582 LT shops to land in `companies` + `contacts` and corresponding staging rows to flip to `imported`.
+
+---
+
 ## 2026-04-28 — Fix: discovery promote silently skipped all rows
 
 **Session type:** CC bug fix (full cycle: branch → PR → merge → deploy verify).
