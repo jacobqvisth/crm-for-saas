@@ -1,0 +1,522 @@
+[
+  {
+    "label": "Liverpool — garage",
+    "runId": "fJzTmUqV4kTXrsO1S",
+    "datasetId": "VaQnXOFpsRgcCtrUp",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.764Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.9779,
+          53.4106
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:45.100Z"
+  },
+  {
+    "label": "Liverpool — tyre fitting",
+    "runId": "fhjOeJXnlh2CdCTKk",
+    "datasetId": "KdDonBBREbAfvm9KX",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.732Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.9779,
+          53.4106
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:06:01.266Z"
+  },
+  {
+    "label": "Liverpool — mechanic",
+    "runId": "LJ25sKCLfyfOVw9SS",
+    "datasetId": "Zf8PPc1kh5oTkfgYP",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.734Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.9779,
+          53.4106
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:01.302Z"
+  },
+  {
+    "label": "Liverpool — accident repair centre",
+    "runId": "gbOafADb8jytalQuS",
+    "datasetId": "XIqEipnKjDVgjEZrd",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.752Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.9779,
+          53.4106
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:01:31.622Z"
+  },
+  {
+    "label": "Edinburgh — garage",
+    "runId": "jfCkKSfgjOfwSJu3e",
+    "datasetId": "55vXLOiZNGiU5mbP9",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.760Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1883,
+          55.9533
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:55.368Z"
+  },
+  {
+    "label": "Edinburgh — tyre fitting",
+    "runId": "HQUM6ZgezB9GQEDwE",
+    "datasetId": "q2MIhMYMhgfqyeKaF",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.754Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1883,
+          55.9533
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:05:43.804Z"
+  },
+  {
+    "label": "Edinburgh — mechanic",
+    "runId": "ndkk6K6HiEbXsEONE",
+    "datasetId": "jpZ7Oifxumg4dK1nN",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.733Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1883,
+          55.9533
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:25.997Z"
+  },
+  {
+    "label": "Edinburgh — accident repair centre",
+    "runId": "aCpm4v4cKg1wCmw1V",
+    "datasetId": "3jSrHgCN9L7JAXLk9",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.740Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1883,
+          55.9533
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:03:02.350Z"
+  },
+  {
+    "label": "Bristol — garage",
+    "runId": "uvYZwXY9z98e50zh5",
+    "datasetId": "PQe9oIc2YietdZpBD",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.754Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.5879,
+          51.4545
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:05:23.167Z"
+  },
+  {
+    "label": "Bristol — tyre fitting",
+    "runId": "GurUkM3DCrpXNJT3Z",
+    "datasetId": "zkyt1QPpSPNnq7083",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.741Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.5879,
+          51.4545
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:06:33.483Z"
+  },
+  {
+    "label": "Bristol — mechanic",
+    "runId": "TOWelxEtal1O1eft4",
+    "datasetId": "StTFk4r7DAzAbPikr",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.747Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.5879,
+          51.4545
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:30.131Z"
+  },
+  {
+    "label": "Bristol — accident repair centre",
+    "runId": "sWH5vd9g6sVP7GdJ1",
+    "datasetId": "VZrziyS2cclnCVLYt",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.744Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.5879,
+          51.4545
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:02:02.055Z"
+  },
+  {
+    "label": "Cardiff — garage",
+    "runId": "LuervJBY8LkG4hnJx",
+    "datasetId": "NyhxecgfCsnTssVqR",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.742Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1791,
+          51.4816
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:05:04.996Z"
+  },
+  {
+    "label": "Cardiff — tyre fitting",
+    "runId": "FE2Nyj5hG8IvICz0u",
+    "datasetId": "nlr5yf2W0gZolFpMU",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.759Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1791,
+          51.4816
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:03:43.345Z"
+  },
+  {
+    "label": "Cardiff — mechanic",
+    "runId": "z5SF4k5f3qaInySgk",
+    "datasetId": "sAqZqmJdOiTHqmsI2",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.752Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1791,
+          51.4816
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:59.702Z"
+  },
+  {
+    "label": "Cardiff — accident repair centre",
+    "runId": "r0TJvZ0ZOEGmt3CKi",
+    "datasetId": "vcNpEfpOTxHOwfTib",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.762Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -3.1791,
+          51.4816
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:04:05.543Z"
+  },
+  {
+    "label": "Belfast — garage",
+    "runId": "G80OF9FzDSoD02xIN",
+    "datasetId": "3LiCq0rTFutQOCoh1",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.736Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -5.9301,
+          54.5973
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:05:13.503Z"
+  },
+  {
+    "label": "Belfast — tyre fitting",
+    "runId": "3KLqKdL9zXMuxgSNR",
+    "datasetId": "FAjJrIadN9ZrAUub2",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.746Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -5.9301,
+          54.5973
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:03:34.996Z"
+  },
+  {
+    "label": "Belfast — mechanic",
+    "runId": "gyTLWdlH7bG74tKYP",
+    "datasetId": "1bZDykCrDdnLLqsJ1",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.736Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -5.9301,
+          54.5973
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:05:24.738Z"
+  },
+  {
+    "label": "Belfast — accident repair centre",
+    "runId": "iZBuYSzErujazptGb",
+    "datasetId": "K44vVmFxQdBmBqdZC",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T11:58:36.826Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -5.9301,
+          54.5973
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T12:03:25.649Z"
+  }
+]
