@@ -7,6 +7,7 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { FilterRow } from './filter-row';
 import type { Tables } from '@/lib/database.types';
 import type { ListFilter } from '@/lib/lists/filter-query';
+import { SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/countries';
 
 interface FilterBuilderProps {
   filters: ListFilter[];
@@ -31,23 +32,33 @@ export function FilterBuilder({ filters, onChange }: FilterBuilderProps) {
 
   useEffect(() => {
     if (!workspaceId) return;
+    // Always include the supported outbound countries (so UK and any other
+    // target country shows up even before any contacts have been added).
+    // Also union in any country_code that's actually present in contacts so
+    // unexpected codes from a fresh scrape auto-appear without a code change.
+    const seen = new Set<string>();
+    const list: { code: string; name: string }[] = [];
+    for (const c of SUPPORTED_OUTBOUND_COUNTRIES) {
+      seen.add(c.code);
+      list.push({ code: c.code, name: c.name });
+    }
     supabase
       .from('contacts')
       .select('country_code, country')
       .eq('workspace_id', workspaceId)
       .not('country_code', 'is', null)
       .then(({ data }) => {
-        if (!data) return;
-        const seen = new Set<string>();
-        const list: { code: string; name: string }[] = [];
-        for (const row of data) {
-          if (row.country_code && !seen.has(row.country_code)) {
-            seen.add(row.country_code);
-            list.push({ code: row.country_code, name: row.country || row.country_code });
+        if (data) {
+          for (const row of data) {
+            const code = row.country_code?.toUpperCase();
+            if (code && !seen.has(code)) {
+              seen.add(code);
+              list.push({ code, name: COUNTRY_NAMES[code] ?? row.country ?? code });
+            }
           }
         }
         list.sort((a, b) => a.name.localeCompare(b.name));
-        setCountries(list);
+        setCountries([...list]);
       });
   }, [workspaceId, supabase]);
 
