@@ -188,14 +188,27 @@ export async function POST(request: NextRequest) {
 
   const skipped_duplicates = duplicates.length;
 
-  // Mark duplicates as imported. Per-row .update() — bulk upsert previously
-  // failed silently because PostgREST's INSERT ON CONFLICT validates NOT NULL
-  // on the proposed insert row (discovered_shops.name is NOT NULL).
-  for (const { shop, companyId } of duplicates) {
-    await supabase
-      .from("discovered_shops")
-      .update({ status: "imported", crm_company_id: companyId })
-      .eq("id", shop.id);
+  // Mark duplicates as imported. Bulk upsert with `name` included to satisfy
+  // the NOT NULL constraint on discovered_shops.name — PostgREST resolves
+  // upsert as INSERT ... ON CONFLICT (id) DO UPDATE, and the INSERT side
+  // validates NOT NULL on the proposed row before the conflict path triggers
+  // UPDATE. Without `name`, the entire statement is silently rejected.
+  for (let i = 0; i < duplicates.length; i += PAGE_SIZE) {
+    const chunk = duplicates.slice(i, i + PAGE_SIZE);
+    const { error } = await supabase.from("discovered_shops").upsert(
+      chunk.map(({ shop, companyId }) => ({
+        id: shop.id,
+        name: shop.name,
+        status: "imported",
+        crm_company_id: companyId,
+      })),
+    );
+    if (error) {
+      return NextResponse.json(
+        { error: `Duplicate marking failed: ${error.message}` },
+        { status: 500 },
+      );
+    }
   }
 
   let promoted = 0;
@@ -302,21 +315,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- 6. Update discovered_shops for newly promoted rows. Per-row update
-    // for the same NOT-NULL reason as duplicate marking above. ---
-    for (let i = 0; i < newShops.length; i++) {
-      const companyId = insertedCompanyIds[i];
-      if (!companyId) continue;
-      promoted++;
-      const shop = newShops[i];
-      await supabase
-        .from("discovered_shops")
-        .update({
+    // --- 6. Bulk-update discovered_shops for newly promoted rows. Same
+    // upsert-with-name pattern as duplicate marking above. ---
+    const shopUpdates = newShops
+      .map((shop, i) => {
+        const companyId = insertedCompanyIds[i];
+        if (!companyId) return null;
+        promoted++;
+        return {
+          id: shop.id,
+          name: shop.name,
           status: "imported",
           crm_company_id: companyId,
           crm_contact_id: insertedContactIds.get(i) ?? null,
-        })
-        .eq("id", shop.id);
+        };
+      })
+      .filter((u): u is NonNullable<typeof u> => u !== null);
+
+    for (let i = 0; i < shopUpdates.length; i += PAGE_SIZE) {
+      const chunk = shopUpdates.slice(i, i + PAGE_SIZE);
+      const { error } = await supabase.from("discovered_shops").upsert(chunk);
+      if (error) {
+        return NextResponse.json(
+          { error: `Shop status update failed: ${error.message}` },
+          { status: 500 },
+        );
+      }
     }
   }
 
