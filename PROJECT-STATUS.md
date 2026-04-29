@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-28 (UK/GB scrape — 1,404 shops, first English-speaking market; registry-led pipeline with DVSA + Companies House)
+Last updated: 2026-04-29 (UK/GB batch 2 — city-grid scrape adds 7,151 net-new shops; GB total now 8,555 with 2,901 sendable emails)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
@@ -93,18 +93,19 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 | Rich email editor (TipTap) | Replace plain textarea in sequence/template editors with TipTap — B/I/U, lists, links, variable chips, placeholder, character count, iframe preview with Gmail-safe CSS, plain-text → HTML migration on load | ✅ Shipped direct | 15d2f08 |
 | Rich email editor: images | Inline image upload (toolbar + drag-drop + paste) + URL embed with Google Drive share-link normalization. New `/api/email-images/upload` route + public `email-images` storage bucket. | ✅ Merged | #69 |
 | Serbia scrape (RS) | 2,464 unique shops · 14% email · 90% phone · 465 cities. First non-EU country. 21 Apify runs ($25). MV-verified: 213 valid / 78 risky / 31 catch_all / 23 invalid. New scripts: `scrape-serbia-launch.mjs`, `scrape-serbia-poll.mjs`, `import-serbia-shops.mjs`, `verify-emails.mjs`, `lib/email-verify.mjs`. | ✅ Done | — |
-| UK/GB scrape | 1,404 unique shops · 50% email (445 valid + 155 catch_all) · 96% phone · 313 cities. **First English-speaking market.** Registry-led pipeline (new pattern): DVSA Active MOT Stations CSV (23,087 free) + Companies House SIC 45200 (61,459 free) + 1 Apify Maps country-wide run + pattern-MV (`info@`/`enquiries@`/`contact@`/etc) on the 314 domains missing email. **Total spend: $3.17** (vs ~$370 planned). 78,866-row registry spine kept on disk in `_reference/gb-checkpoint/` (gitignored, regeneratable). New script: `scripts/import-gb-shops.mjs`. Plan + audit trail: `_reference/scrape-plan-GB.md`. | ✅ Done | #76 + this session |
+| UK/GB scrape (batch 1) | 1,404 unique shops · 50% email (445 valid + 155 catch_all) · 96% phone · 313 cities. **First English-speaking market.** Registry-led pipeline (new pattern): DVSA Active MOT Stations CSV (23,087 free) + Companies House SIC 45200 (61,459 free) + 1 Apify Maps country-wide run + pattern-MV (`info@`/`enquiries@`/`contact@`/etc) on the 314 domains missing email. Spend: $3.17. 78,866-row registry spine kept on disk in `_reference/gb-checkpoint/` (gitignored, regeneratable). Scripts: `scripts/import-gb-shops.mjs`. Plan + audit trail: `_reference/scrape-plan-GB.md`. | ✅ Done | #76, #79 |
+| UK/GB scrape (batch 2 city-grid) | **+7,151 net-new shops** (8,555 GB total) via 32 Apify Maps runs across London (4 quadrants) + Birmingham + Manchester + Glasgow + Leeds × {garage, tyre fitting, mechanic, accident repair centre} at 15km radius. Then MV-verified all new emails + pattern-MV on the 1,630 new domains missing email. **Final GB sendable inventory: 2,901** (2,383 valid + 518 catch_all). Batch 2 spend: ~$62 (Apify $55.73 + MV $1.67 + pattern-MV $4.86). New scripts: `scripts/scrape-gb-launch.mjs`, `scripts/scrape-gb-poll.mjs`, `scripts/import-gb-citygrid.mjs`, `scripts/pattern-mv-gb.mjs`. | ✅ Done | this session |
 | **Next** | Options: (B) CI red-on-main fix (add `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` as GH secrets); (C) Apply pattern-MV recipe to CZ/SK/RS rows with website-but-no-email (Prospeo `/domain-to-email` is **DEPRECATED**; new working approach is pattern-guess + MillionVerifier — see GB scrape); (D) Phase 26 A/B testing; (E) SE auto-repair-shop scrape for CRM outbound; (F) Bosnia/N.Macedonia/Albania scrape (apply RS lessons — plan 10–20% email baseline for non-EU markets); (G) Optional GB Maps city-grid for top 10 cities (~$80, ~10K more rows) if 1,404 proves too small after first outbound test | 🔜 | — |
 
 ### Discovered_shops rolling tally (Supabase `wdgiwuhehqpkhpvdzzzl`)
-Verified via SQL on 2026-04-28 — 17,522 total rows:
+Verified via SQL on 2026-04-29 — 24,673 total rows:
 | Country | Total | With Email | With Phone | Cities |
 |---|--:|--:|--:|--:|
+| United Kingdom (GB) | 8,555 | 3,577 (42%) | ~7,800 (91%) | ~480 |
 | Czech Republic (CZ) | 6,295 | 3,227 (51%) | 5,721 (91%) | 1,050 |
 | Slovakia (SK) | 3,573 | 1,414 (40%) | 3,271 (92%) | 683 |
 | Serbia (RS) | 2,464 | 345 (14%) | 2,222 (90%) | 465 |
 | Lithuania (LT) | 1,999 | 701 (35%) | 1,833 (92%) | 322 |
-| United Kingdom (GB) | 1,404 | 698 (50%) | 1,353 (96%) | 313 |
 | Latvia (LV) | 973 | 340 (35%) | 916 (94%) | 46 |
 | Estonia (EE) | 814 | 335 (41%) | 758 (93%) | 251 |
 
@@ -256,8 +257,8 @@ Stage 4: Enroll in sequences        →  via CRM UI
 | Czech Republic (CZ) | 2026-04-22 | 6,295 | 3,227 (51%) | 5,721 (91%) | 1,050 | ✅ In Supabase |
 | Slovakia (SK) | 2026-04-22 | 3,573 | 1,414 (40%) | 3,271 (92%) | 683 | ✅ In Supabase |
 | Serbia (RS) | 2026-04-27 | 2,464 | 345 (14%) | 2,222 (90%) | 465 | ✅ In Supabase (first non-EU; MV: 213 valid / 78 risky / 31 catch_all / 23 invalid) |
-| United Kingdom (GB) | 2026-04-28 | 1,404 | 698 (50%) | 1,353 (96%) | 313 | ✅ In Supabase (first English-speaking; registry-led pipeline; MV: 445 valid / 70 risky / 155 catch_all / 28 invalid; pattern-MV lifted email coverage from 37% → 50% for $0.88) |
-| **Total** | — | **17,522** | **7,060 (40%)** | **16,074 (92%)** | **3,130** | — |
+| United Kingdom (GB) | 2026-04-28 / -29 | 8,555 | 3,577 (42%) | ~7,800 (91%) | ~480 | ✅ In Supabase. **First English-speaking market.** Two-batch scrape: country-wide + city-grid (London 4q + Birmingham/Manchester/Glasgow/Leeds × 4 terms). **Sendable inventory: 2,901** (2,383 valid + 518 catch_all). Total spend ~$65 (Apify $58 + MV $1.96 + pattern-MV $5.74). |
+| **Total** | — | **24,673** | **9,939 (40%)** | **~22,521 (91%)** | **~3,297** | — |
 | Sweden (SE) | — | — | — | — | — | 🔜 Not started (result-insurance SE directory is a separate project/DB) |
 
 ### Import scripts (in `/scripts/`)
@@ -267,7 +268,10 @@ Stage 4: Enroll in sequences        →  via CRM UI
 - `scripts/import-slovakia-shops.mjs` — Slovakia (3,573 shops, 12 Apify runs)
 - `scripts/import-serbia-shops.mjs` — Serbia (2,464 shops, 21 Apify runs; reads dataset IDs from `scripts/serbia-runs.json`; Kosovo filter included)
 - `scripts/scrape-serbia-launch.mjs` + `scripts/scrape-serbia-poll.mjs` — Serbia run launcher + poller (one-shot pattern, can be templated for future countries)
-- `scripts/import-gb-shops.mjs` — UK/GB (1,404 shops, registry-led pipeline; reads `_reference/gb-checkpoint/gb-maps-final.json` which is built from DVSA Active MOT Stations + Companies House SIC 45200 + 1 Apify Maps country-wide run + pattern-MV enrichment). Plan + reproducibility steps: `_reference/scrape-plan-GB.md`.
+- `scripts/import-gb-shops.mjs` — UK/GB batch 1 (1,404 shops, country-wide; reads `_reference/gb-checkpoint/gb-maps-final.json`). Plan + reproducibility: `_reference/scrape-plan-GB.md`.
+- `scripts/scrape-gb-launch.mjs` + `scripts/scrape-gb-poll.mjs` — UK/GB batch 2 city-grid run launcher + poller (32 runs across 8 grid points × 4 terms).
+- `scripts/import-gb-citygrid.mjs` — UK/GB batch 2 importer (reads dataset IDs from `scripts/gb-runs.json`, dedups by google_place_id against existing GB rows).
+- `scripts/pattern-mv-gb.mjs` — pattern-guess (info@/enquiries@/contact@/office@/sales@) + MillionVerifier across all GB rows with website-but-no-email. Idempotent — re-running only enriches new rows.
 - `scripts/verify-emails.mjs` — parameterized MillionVerifier runner (`--country <CC>`, `--only-null`, `--limit N`, `--concurrency 20|80`, `--dry-run`, `--no-snapshot`). Built 2026-04-27 from spec.
 - `scripts/lib/email-verify.mjs` — MV wrapper used by `verify-emails.mjs`. Throws loudly on `result: error` and unrecognized result values (no silent "unknown" mapping). Built 2026-04-27.
 - Data files: `scripts/[country]-shops-data.json` (generated by Cowork, gitignored). Serbia uses `scripts/serbia-runs.json` (run ledger, not gitignored — small file).

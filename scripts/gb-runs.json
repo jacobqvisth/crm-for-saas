@@ -1,0 +1,1026 @@
+[
+  {
+    "label": "London NE — garage",
+    "runId": "8MN34Bdw08MBNbL8Z",
+    "datasetId": "4dlRuMPccWEcUJUUG",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.150Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:26:27.664Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 281.294,
+      "computeUnits": 0.3125488888888889
+    }
+  },
+  {
+    "label": "London NE — tyre fitting",
+    "runId": "daQqYdINL2p5CsUzj",
+    "datasetId": "Jmi7byQXGWzAbH5oY",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.156Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:24.609Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 398.247,
+      "computeUnits": 0.44249666666666665
+    }
+  },
+  {
+    "label": "London NE — mechanic",
+    "runId": "6yqvngbX5mAMP54kc",
+    "datasetId": "a26GbZHPpgdp4JHc6",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.147Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:24.883Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 338.549,
+      "computeUnits": 0.37616555555555553
+    }
+  },
+  {
+    "label": "London NE — accident repair centre",
+    "runId": "x0dXJJKIBhyeXWcRF",
+    "datasetId": "DQIFOmPpiSlwedGnd",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.149Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:29:54.635Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 488.008,
+      "computeUnits": 0.5422311111111111
+    }
+  },
+  {
+    "label": "London NW — garage",
+    "runId": "zesy2GzssQhtvKR3t",
+    "datasetId": "BTDfV5VeM4cb0v7qS",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.148Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:26:20.014Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 273.612,
+      "computeUnits": 0.30401333333333336
+    }
+  },
+  {
+    "label": "London NW — tyre fitting",
+    "runId": "jWkHqevNuntOvkLlh",
+    "datasetId": "U0DLjMX2XC3bzFQ7W",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.145Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:47.170Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 420.656,
+      "computeUnits": 0.46739555555555556
+    }
+  },
+  {
+    "label": "London NW — mechanic",
+    "runId": "OLWww29QSAz4fsGXV",
+    "datasetId": "C1rddsAwwx3KskQei",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.151Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:26:34.932Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 288.521,
+      "computeUnits": 0.3205788888888889
+    }
+  },
+  {
+    "label": "London NW — accident repair centre",
+    "runId": "eg5m3kgyCaWfNRzwG",
+    "datasetId": "tQv5xZrS0mqSYP8uK",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.123Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.55
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:29:58.548Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 492.268,
+      "computeUnits": 0.5469644444444445
+    }
+  },
+  {
+    "label": "London SE — garage",
+    "runId": "fgwpYXKowJB0BMdlr",
+    "datasetId": "TCXY7gTl4wdFbFy09",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.154Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:52.687Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 366.031,
+      "computeUnits": 0.4067011111111111
+    }
+  },
+  {
+    "label": "London SE — tyre fitting",
+    "runId": "AuXllJZ07qYrUtLmR",
+    "datasetId": "EQ8u8Wyxjuy1Psn38",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.147Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:20.992Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 394.406,
+      "computeUnits": 0.4382288888888889
+    }
+  },
+  {
+    "label": "London SE — mechanic",
+    "runId": "E9EuQCm4DL8uWyeUK",
+    "datasetId": "zjyrfC2TzHt6bk9md",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.148Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:15.115Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 328.805,
+      "computeUnits": 0.3653388888888889
+    }
+  },
+  {
+    "label": "London SE — accident repair centre",
+    "runId": "Ld7aZNZcomNUWt6vp",
+    "datasetId": "IQfoSxAXiZoadL4Km",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.122Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.05,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:30:00.733Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 494.212,
+      "computeUnits": 0.5491244444444444
+    }
+  },
+  {
+    "label": "London SW — garage",
+    "runId": "TJTiBAWsYgkrcxhfn",
+    "datasetId": "iJfnjQC7X9v9o45LD",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.165Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:10.012Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 323.564,
+      "computeUnits": 0.35951555555555553
+    }
+  },
+  {
+    "label": "London SW — tyre fitting",
+    "runId": "mvpC2ZuzAKL7U7ZJH",
+    "datasetId": "lVCiisfOSEK50DyuO",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.132Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:48.148Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 421.779,
+      "computeUnits": 0.46864333333333336
+    }
+  },
+  {
+    "label": "London SW — mechanic",
+    "runId": "PdYHUz52VodfFhAlm",
+    "datasetId": "NoQ8goQJHIuageoJo",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.162Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:24.553Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 338.15,
+      "computeUnits": 0.37572222222222224
+    }
+  },
+  {
+    "label": "London SW — accident repair centre",
+    "runId": "lIXI3NnDw3xZelDg4",
+    "datasetId": "GdeWagSUJwknrj9Wx",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.187Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -0.205,
+          51.45
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:30:05.123Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 498.719,
+      "computeUnits": 0.5541322222222222
+    }
+  },
+  {
+    "label": "Birmingham — garage",
+    "runId": "fCZJZx0opbCXvQaEA",
+    "datasetId": "Ap1WaG8XMSgtYybza",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.153Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.8904,
+          52.4862
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:03.337Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 376.787,
+      "computeUnits": 0.4186522222222222
+    }
+  },
+  {
+    "label": "Birmingham — tyre fitting",
+    "runId": "tWE0Q4j1m99W4zqUz",
+    "datasetId": "tSoG413dSYMOniC2B",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.138Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.8904,
+          52.4862
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:27.418Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 400.937,
+      "computeUnits": 0.4454855555555556
+    }
+  },
+  {
+    "label": "Birmingham — mechanic",
+    "runId": "Zh70e7PAhUP7nV2Xr",
+    "datasetId": "T0DGZ4peOpJaxehOF",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.176Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.8904,
+          52.4862
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:11.560Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 325.144,
+      "computeUnits": 0.3612711111111111
+    }
+  },
+  {
+    "label": "Birmingham — accident repair centre",
+    "runId": "rZrcegDdH6Xzp1kfg",
+    "datasetId": "47ESWnIeUHEu8k29H",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.144Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.8904,
+          52.4862
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:05.521Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 318.917,
+      "computeUnits": 0.35435222222222224
+    }
+  },
+  {
+    "label": "Manchester — garage",
+    "runId": "0wifoYkAChevrzKm9",
+    "datasetId": "qBvgdA1ZwK6ELCUqx",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.142Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.2426,
+          53.4808
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:55.089Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 368.419,
+      "computeUnits": 0.40935444444444447
+    }
+  },
+  {
+    "label": "Manchester — tyre fitting",
+    "runId": "GYcX418YOieVKsYum",
+    "datasetId": "x519PhkBtN2froaDa",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.201Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.2426,
+          53.4808
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:45.425Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 418.819,
+      "computeUnits": 0.46535444444444446
+    }
+  },
+  {
+    "label": "Manchester — mechanic",
+    "runId": "8cjGiPUXQNOsiOIOm",
+    "datasetId": "w9rSg4fpYeP2KDzkM",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.162Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.2426,
+          53.4808
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:16.861Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 330.35,
+      "computeUnits": 0.3670555555555556
+    }
+  },
+  {
+    "label": "Manchester — accident repair centre",
+    "runId": "c9q7B1OhaagKD73gB",
+    "datasetId": "D6aIVKRUeoNNLYykL",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.131Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -2.2426,
+          53.4808
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:39.152Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 412.538,
+      "computeUnits": 0.4583755555555556
+    }
+  },
+  {
+    "label": "Glasgow — garage",
+    "runId": "V68CLJXWymhHjW9LP",
+    "datasetId": "y5p3gGOyQahTaylxj",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.135Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -4.2518,
+          55.8642
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:18.937Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 332.647,
+      "computeUnits": 0.36960777777777776
+    }
+  },
+  {
+    "label": "Glasgow — tyre fitting",
+    "runId": "eFmAgH9OJIk9tBcUv",
+    "datasetId": "y4eK5trCfHdaS4QL0",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.158Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -4.2518,
+          55.8642
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:29:29.837Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 463.43,
+      "computeUnits": 0.5149222222222222
+    }
+  },
+  {
+    "label": "Glasgow — mechanic",
+    "runId": "sRwXf0DWKaQnoXBUw",
+    "datasetId": "hCEfvppYb9ZsezJpC",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.133Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -4.2518,
+          55.8642
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:26:31.103Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 284.716,
+      "computeUnits": 0.31635111111111114
+    }
+  },
+  {
+    "label": "Glasgow — accident repair centre",
+    "runId": "laCMGs1VnlZIEbs9r",
+    "datasetId": "7jP99GJvUQS8BDoRw",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.153Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -4.2518,
+          55.8642
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:28:02.114Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 375.774,
+      "computeUnits": 0.41752666666666666
+    }
+  },
+  {
+    "label": "Leeds — garage",
+    "runId": "UWY90vujOrd0hJ4R2",
+    "datasetId": "AMkKU8opisVh9D3IK",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.148Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "garage"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.5491,
+          53.8008
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:47.721Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 361.371,
+      "computeUnits": 0.40152333333333334
+    }
+  },
+  {
+    "label": "Leeds — tyre fitting",
+    "runId": "fOVa00Vs5o38USZrk",
+    "datasetId": "L9NWd2ed0G9aJd6Vi",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.155Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "tyre fitting"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.5491,
+          53.8008
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:29:28.504Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 462.081,
+      "computeUnits": 0.5134233333333333
+    }
+  },
+  {
+    "label": "Leeds — mechanic",
+    "runId": "STDkuwGtKaXZdSCq4",
+    "datasetId": "47t4u9m8e25t9DTxp",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.150Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "mechanic"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.5491,
+          53.8008
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:07.333Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 320.923,
+      "computeUnits": 0.3565811111111111
+    }
+  },
+  {
+    "label": "Leeds — accident repair centre",
+    "runId": "0nJXaoIajDjP0zFF7",
+    "datasetId": "hSXwRPNJipHlrqAFe",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-04-29T08:21:46.137Z",
+    "input": {
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "language": "en",
+      "includeOpeningHours": true,
+      "includeHistogram": false,
+      "searchStringsArray": [
+        "accident repair centre"
+      ],
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          -1.5491,
+          53.8008
+        ],
+        "radiusKm": 15
+      }
+    },
+    "finishedAt": "2026-04-29T08:27:44.217Z",
+    "stats": {
+      "itemCount": null,
+      "datasetItemCount": null,
+      "runtimeSecs": 357.617,
+      "computeUnits": 0.3973522222222222
+    }
+  }
+]
