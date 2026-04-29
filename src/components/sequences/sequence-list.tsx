@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { useRouter } from "next/navigation";
+import { SUPPORTED_OUTBOUND_COUNTRIES, SUPPORTED_LANGUAGES } from "@/lib/countries";
 import {
   Plus,
   Search,
@@ -43,26 +44,8 @@ interface SequenceWithStats extends Sequence {
   health?: SequenceHealth;
 }
 
-const COUNTRIES = [
-  { code: "EE", name: "Estonia", defaultLang: "et" },
-  { code: "SE", name: "Sweden", defaultLang: "sv" },
-  { code: "FI", name: "Finland", defaultLang: "fi" },
-  { code: "LV", name: "Latvia", defaultLang: "lv" },
-  { code: "LT", name: "Lithuania", defaultLang: "lt" },
-  { code: "NO", name: "Norway", defaultLang: "no" },
-  { code: "DK", name: "Denmark", defaultLang: "da" },
-] as const;
-
-const LANGUAGES = [
-  { code: "et", label: "Estonian" },
-  { code: "sv", label: "Swedish" },
-  { code: "fi", label: "Finnish" },
-  { code: "lv", label: "Latvian" },
-  { code: "lt", label: "Lithuanian" },
-  { code: "no", label: "Norwegian" },
-  { code: "da", label: "Danish" },
-  { code: "en", label: "English" },
-] as const;
+const COUNTRIES = SUPPORTED_OUTBOUND_COUNTRIES;
+const LANGUAGES = SUPPORTED_LANGUAGES;
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   draft: { label: "Draft", className: "bg-slate-100 text-slate-600" },

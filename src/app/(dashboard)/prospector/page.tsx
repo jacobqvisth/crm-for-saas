@@ -168,17 +168,27 @@ const SUGGESTED_JOB_TITLES = [
 type LanguageInfo = { code: string; label: string };
 
 const COUNTRY_LANGUAGE: Record<string, LanguageInfo> = {
-  Sweden:      { code: "sv", label: "Swedish" },
-  Norway:      { code: "no", label: "Norwegian" },
-  Denmark:     { code: "da", label: "Danish" },
-  Finland:     { code: "fi", label: "Finnish" },
-  Iceland:     { code: "is", label: "Icelandic" },
-  Germany:     { code: "de", label: "German" },
-  France:      { code: "fr", label: "French" },
-  Netherlands: { code: "nl", label: "Dutch" },
-  Spain:       { code: "es", label: "Spanish" },
-  Italy:       { code: "it", label: "Italian" },
-  Poland:      { code: "pl", label: "Polish" },
+  Sweden:           { code: "sv", label: "Swedish" },
+  Norway:           { code: "no", label: "Norwegian" },
+  Denmark:          { code: "da", label: "Danish" },
+  Finland:          { code: "fi", label: "Finnish" },
+  Iceland:          { code: "is", label: "Icelandic" },
+  Estonia:          { code: "et", label: "Estonian" },
+  Latvia:           { code: "lv", label: "Latvian" },
+  Lithuania:        { code: "lt", label: "Lithuanian" },
+  "Czech Republic": { code: "cs", label: "Czech" },
+  Slovakia:         { code: "sk", label: "Slovak" },
+  Serbia:           { code: "sr", label: "Serbian" },
+  Germany:          { code: "de", label: "German" },
+  France:           { code: "fr", label: "French" },
+  Netherlands:      { code: "nl", label: "Dutch" },
+  Spain:            { code: "es", label: "Spanish" },
+  Italy:            { code: "it", label: "Italian" },
+  Poland:           { code: "pl", label: "Polish" },
+  "United Kingdom": { code: "en", label: "English" },
+  Ireland:          { code: "en", label: "English" },
+  "United States":  { code: "en", label: "English" },
+  Australia:        { code: "en", label: "English" },
 };
 
 // English title → { languageCode: localTranslation }

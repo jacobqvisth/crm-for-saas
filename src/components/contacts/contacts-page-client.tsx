@@ -10,6 +10,7 @@ import {
 import { format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
+import { countryFlag, LANGUAGE_LABELS } from '@/lib/countries';
 import { LeadStatusBadge } from '@/components/ui/badge';
 import { SlideOver } from '@/components/ui/slide-over';
 import { Modal } from '@/components/ui/modal';
@@ -32,16 +33,6 @@ const LEAD_STATUS_TABS = [
   { label: 'Churned', value: 'churned' },
 ];
 
-const COUNTRY_FLAGS: Record<string, string> = {
-  EE: '🇪🇪', SE: '🇸🇪', FI: '🇫🇮', NO: '🇳🇴', DK: '🇩🇰',
-  LV: '🇱🇻', LT: '🇱🇹', CZ: '🇨🇿', SK: '🇸🇰', DE: '🇩🇪',
-  FR: '🇫🇷', GB: '🇬🇧', NL: '🇳🇱', PL: '🇵🇱', US: '🇺🇸',
-};
-
-function countryFlag(code: string): string {
-  return COUNTRY_FLAGS[code] ?? '🏳️';
-}
-
 const ALL_SOURCES = ['discovery', 'csv', 'manual', 'prospeo'] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -49,16 +40,6 @@ const SOURCE_LABELS: Record<string, string> = {
   csv: 'CSV Import',
   manual: 'Manual',
   prospeo: 'Prospeo',
-};
-
-const LANGUAGE_LABELS: Record<string, string> = {
-  et: '🇪🇪 Estonian',
-  sv: '🇸🇪 Swedish',
-  fi: '🇫🇮 Finnish',
-  lv: '🇱🇻 Latvian',
-  lt: '🇱🇹 Lithuanian',
-  no: '🇳🇴 Norwegian',
-  da: '🇩🇰 Danish',
 };
 
 type LocalFilters = {
