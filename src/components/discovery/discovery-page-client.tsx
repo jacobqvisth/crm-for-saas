@@ -485,7 +485,10 @@ export function DiscoveryPageClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.error ?? `Failed (${res.status})`);
+      }
       const data = await res.json();
       toast.success(
         `Promoted ${data.promoted} shop${data.promoted !== 1 ? "s" : ""}` +
@@ -495,8 +498,8 @@ export function DiscoveryPageClient() {
       setSelectedIds(new Set());
       setSelectAllPages(false);
       fetchShops();
-    } catch {
-      toast.error("Promote failed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Promote failed");
     } finally {
       setBulkLoading(false);
     }

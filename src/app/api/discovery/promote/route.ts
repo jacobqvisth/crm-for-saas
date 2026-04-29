@@ -214,6 +214,31 @@ export async function POST(request: NextRequest) {
   let promoted = 0;
 
   if (newShops.length > 0) {
+    // Within-batch domain collision detection. The companies table has a
+    // partial UNIQUE index on (workspace_id, domain) WHERE domain IS NOT NULL.
+    // Some scraped "domains" are directory listings (e.g. vz.lt, info.lt,
+    // auto.lt) shared by dozens of unrelated shops. Inserting them all with
+    // the same domain trips the UNIQUE and rolls back the whole batch. For
+    // domains that appear more than once in this batch, drop the domain on
+    // the duplicates so each shop still becomes a separate company.
+    const batchDomainCount = new Map<string, number>();
+    const resolvedDomains: (string | null)[] = newShops.map((shop) => {
+      const d = shop.domain ?? (shop.website ? extractDomain(shop.website) : null);
+      if (d) batchDomainCount.set(d.toLowerCase(), (batchDomainCount.get(d.toLowerCase()) ?? 0) + 1);
+      return d;
+    });
+    // Also exclude domains that already exist in companies (duplicates dedup
+    // map will have caught these for *some* of these shops, but only the
+    // first-matched one — same-domain shops that fell through still need
+    // their domain nulled.)
+    const insertableDomains: (string | null)[] = resolvedDomains.map((d) => {
+      if (!d) return null;
+      const lower = d.toLowerCase();
+      if (batchDomainCount.get(lower)! > 1) return null;
+      if (domainMap.has(lower)) return null;
+      return d;
+    });
+
     // --- 4. Batch-insert companies ---
     const insertedCompanyIds: (string | null)[] = new Array(newShops.length).fill(null);
 
@@ -222,34 +247,36 @@ export async function POST(request: NextRequest) {
       const { data: inserted, error } = await supabase
         .from("companies")
         .insert(
-          chunk.map((shop) => {
-            const websiteDomain =
-              shop.domain ?? (shop.website ? extractDomain(shop.website) : null);
-            return {
-              workspace_id: workspaceId,
-              name: shop.name,
-              website: shop.website ?? null,
-              domain: websiteDomain,
-              phone: shop.phone ?? null,
-              address: shop.address ?? shop.street ?? null,
-              city: shop.city ?? null,
-              postal_code: shop.postal_code ?? null,
-              country: shop.country ?? null,
-              country_code: shop.country_code ?? null,
-              instagram_url: shop.instagram_url ?? null,
-              facebook_url: shop.facebook_url ?? null,
-              google_place_id: shop.google_place_id ?? null,
-              rating: shop.rating ?? null,
-              review_count: shop.review_count ?? null,
-              industry: "Automotive",
-              category: shop.category ?? null,
-              tags: ["independent"],
-            };
-          })
+          chunk.map((shop, j) => ({
+            workspace_id: workspaceId,
+            name: shop.name,
+            website: shop.website ?? null,
+            domain: insertableDomains[i + j],
+            phone: shop.phone ?? null,
+            address: shop.address ?? shop.street ?? null,
+            city: shop.city ?? null,
+            postal_code: shop.postal_code ?? null,
+            country: shop.country ?? null,
+            country_code: shop.country_code ?? null,
+            instagram_url: shop.instagram_url ?? null,
+            facebook_url: shop.facebook_url ?? null,
+            google_place_id: shop.google_place_id ?? null,
+            rating: shop.rating ?? null,
+            review_count: shop.review_count ?? null,
+            industry: "Automotive",
+            category: shop.category ?? null,
+            tags: ["independent"],
+          })),
         )
         .select("id");
 
-      if (!error && inserted) {
+      if (error) {
+        return NextResponse.json(
+          { error: `Company insert failed: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      if (inserted) {
         if (inserted.length !== chunk.length) {
           console.warn(`Company batch: expected ${chunk.length}, got ${inserted.length}`);
         }
@@ -305,7 +332,13 @@ export async function POST(request: NextRequest) {
         )
         .select("id");
 
-      if (!error && inserted) {
+      if (error) {
+        return NextResponse.json(
+          { error: `Contact insert failed: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      if (inserted) {
         if (inserted.length !== chunk.length) {
           console.warn(`Contact batch: expected ${chunk.length}, got ${inserted.length}`);
         }
