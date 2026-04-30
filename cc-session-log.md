@@ -1200,3 +1200,26 @@ All three filters now seed from `SUPPORTED_OUTBOUND_COUNTRIES` in `src/lib/count
 - Branch was already named `fix/lists-country-filter` from the original Lists-only fix; PR #86 title and body were updated to reflect the broader scope before squash-merging rather than splitting into a separate PR.
 - Did **not** bundle in the orphan `.claude/worktrees/wonderful-chatelet` deletion that's been sitting in the working tree — that's the cause of the recent CI failures (phantom submodule, no `.gitmodules` entry) and should be a separate fix-forward.
 
+
+## Session: Sender accounts panel on /settings (Phase A of email-account limits/health)
+- **Date:** 2026-04-30
+- **PR:** [#89](https://github.com/jacobqvisth/crm-for-saas/pull/89)
+- **Branch:** `feature/sender-accounts-on-settings-page`
+- **Merge commit:** `a02cf4c`
+
+### What was built
+The per-account daily-limit editor and status badges already lived at `/settings/email`, but Jacob never saw them on the main `/settings` page he lands on. This is Phase A of the plan in `_prompts/cc-prompt-email-account-limits-and-health.md` — **discoverability only**, no schema change, no new API.
+
+- **`src/components/settings/sender-accounts-summary.tsx`** (NEW): Renders one row per `gmail_accounts` row with email + status badge (`active`/`paused`/`disconnected`/`rate_limited`), today's-sends progress bar (green / yellow ≥70 / red ≥90), inline `max_daily_sends` editor (1–500, save button only appears when dirty), and the circuit-breaker `pause_reason` if status is `paused`. "Manage all sender accounts" / "Email Integration →" links deep-link to `/settings/email` for the full editor.
+- **`src/app/(dashboard)/settings/page.tsx`**: Inserted a new "Sender Accounts" section between Team Members and Configuration with a Mail icon header and a quick-link to `/settings/email`.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.9s, 61 routes built
+- Deploy: https://crm-for-saas.vercel.app/settings (HTTP 307 → auth as expected)
+
+### Notable decisions
+- Reuses existing `PATCH /api/settings/email/[accountId]` route for limit edits — no new endpoint.
+- Queries `gmail_accounts` directly via the supabase browser client, matching the pattern already used in `email-settings-client.tsx`. The `/api/gmail/accounts` route was rejected because it does not return `pause_reason` and we want that surfaced.
+- Phase B (real `health_score` cron with reply rate, open rate, token-expiry, last-successful-send, and a first-touch-unsubscribe spam proxy) and Phase C (in-app alert banner on `/dashboard`) are still in the plan doc and not built — Jacob wanted to evaluate Phase A first.
