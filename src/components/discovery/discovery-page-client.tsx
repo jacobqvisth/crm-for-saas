@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
-import { countryFlag } from "@/lib/countries";
+import { countryFlag, SUPPORTED_OUTBOUND_COUNTRIES } from "@/lib/countries";
 import {
   MapPin,
   Phone,
@@ -605,10 +605,27 @@ export function DiscoveryPageClient() {
   const allSelected = shops.length > 0 && selectedIds.size === shops.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
 
-  // ── Country options from stats
-  const countryOptions = stats
-    ? Object.keys(stats.by_country).sort()
-    : [];
+  // ── Country options: always show every supported outbound country, then
+  // union in any extra ISO codes that actually appear in stats.by_country
+  // (so a fresh scrape with an unexpected code still surfaces).
+  const countryOptions = (() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const c of SUPPORTED_OUTBOUND_COUNTRIES) {
+      seen.add(c.code);
+      list.push(c.code);
+    }
+    if (stats) {
+      for (const cc of Object.keys(stats.by_country)) {
+        const code = cc.toUpperCase();
+        if (!seen.has(code)) {
+          seen.add(code);
+          list.push(code);
+        }
+      }
+    }
+    return list.sort();
+  })();
 
   // ── Category options from stats (sorted alphabetically)
   const categoryOptions = stats
