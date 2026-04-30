@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { GitBranch, Mail, Sparkles, ShieldCheck, Users } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
+import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
 const settingsItems = [
   {
@@ -46,6 +47,23 @@ export default function SettingsPage() {
           <h2 className="text-base font-semibold text-slate-900">Team Members</h2>
         </div>
         <TeamSettings />
+      </section>
+
+      {/* Sender Accounts */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-slate-500" />
+            <h2 className="text-base font-semibold text-slate-900">Sender Accounts</h2>
+          </div>
+          <Link
+            href="/settings/email"
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+          >
+            Email Integration →
+          </Link>
+        </div>
+        <SenderAccountsSummary />
       </section>
 
       {/* Settings cards */}
