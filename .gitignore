@@ -50,3 +50,7 @@ scripts/*-shops-data.json
 
 # GB scrape checkpoint artefacts (regeneratable from registries — see scrape-plan-GB.md)
 _reference/gb-checkpoint/
+
+# Claude Code per-worktree state — never commit. A stale gitlink under here
+# was previously breaking CI checkout with "fatal: No url found for submodule path".
+.claude/worktrees/
