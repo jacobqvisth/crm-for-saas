@@ -10,7 +10,7 @@ import {
 import { format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
-import { countryFlag, LANGUAGE_LABELS } from '@/lib/countries';
+import { countryFlag, LANGUAGE_LABELS, SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/countries';
 import { LeadStatusBadge } from '@/components/ui/badge';
 import { SlideOver } from '@/components/ui/slide-over';
 import { Modal } from '@/components/ui/modal';
@@ -233,22 +233,30 @@ export function ContactsPageClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
-  // Fetch distinct countries
+  // Fetch distinct countries — seed with SUPPORTED_OUTBOUND_COUNTRIES so every
+  // targeted market is always selectable, then union in any country_code that
+  // actually appears in contacts (so unexpected ISO codes auto-show up).
   useEffect(() => {
     if (!workspaceId) return;
+    const seen = new Set<string>();
+    const list: { code: string; name: string }[] = [];
+    for (const c of SUPPORTED_OUTBOUND_COUNTRIES) {
+      seen.add(c.code);
+      list.push({ code: c.code, name: c.name });
+    }
     supabase.from('contacts').select('country_code, country').eq('workspace_id', workspaceId).not('country_code', 'is', null)
       .then(({ data }) => {
-        if (!data) return;
-        const seen = new Set<string>();
-        const list: { code: string; name: string }[] = [];
-        for (const row of data) {
-          if (row.country_code && !seen.has(row.country_code)) {
-            seen.add(row.country_code);
-            list.push({ code: row.country_code, name: row.country ?? row.country_code });
+        if (data) {
+          for (const row of data) {
+            const code = row.country_code?.toUpperCase();
+            if (code && !seen.has(code)) {
+              seen.add(code);
+              list.push({ code, name: COUNTRY_NAMES[code] ?? row.country ?? code });
+            }
           }
         }
         list.sort((a, b) => a.name.localeCompare(b.name));
-        setCountries(list);
+        setCountries([...list]);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
