@@ -1171,3 +1171,32 @@ No-op — straggler count was 0. All 2,542 shops already had `contact_info_scrap
 - Vault prompt `cc-prompt-phase-rich-email-editor.md` was the spec for the base TipTap swap (already shipped in 15d2f08). This image-support follow-on was not pre-prompted.
 
 ---
+
+## Session: Country dropdowns always show all supported targets
+- **Date:** 2026-04-30
+- **PR:** [#86](https://github.com/jacobqvisth/crm-for-saas/pull/86)
+- **Branch:** `fix/lists-country-filter`
+- **Merge commit:** `c29ec66`
+
+### What was built
+Country dropdowns across the UI only listed countries that already had data in the table they were filtering, so newly-targeted markets (UK, LT, SK, etc.) were not selectable until the first row existed. Reproducing on prod: `/lists` → Create List → Country filter showed only CZ/EE/LV/RS even though we now scrape GB, LT, SK, etc. Same issue on `/contacts` and `/discovery`.
+
+All three filters now seed from `SUPPORTED_OUTBOUND_COUNTRIES` in `src/lib/countries.ts` (CZ, DK, EE, FI, GB, LT, LV, NO, RS, SE, SK) and union in any extra ISO codes that actually appear in the underlying data — so a fresh scrape with an unexpected code (PL, IE, etc.) still auto-appears without a code change.
+
+- **`src/components/lists/filter-builder.tsx`** (commit `6513192`, originally PR #86's first commit): Create-List dialog country filter. Always seeds the dropdown from `SUPPORTED_OUTBOUND_COUNTRIES`, then unions in any `country_code` present in `contacts`.
+- **`src/components/contacts/contacts-page-client.tsx`**: `/contacts` page top-bar country filter. Same seed-then-union pattern, against the contacts table.
+- **`src/components/discovery/discovery-page-client.tsx`**: `/discovery` page country filter. `countryOptions` now seeds from `SUPPORTED_OUTBOUND_COUNTRIES` and unions in any extra codes from `stats.by_country`.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.3s, 61 routes built
+- Deploy: https://crm-for-saas.vercel.app (HTTP 307 → auth as expected)
+
+### Notable decisions
+- `/prospector` country picker left untouched — it uses Apollo's full ~200-country list and is a different surface area (talks to Apollo's API, not our own contacts/shops).
+- Sequence duplicate dialog already reads from `SUPPORTED_OUTBOUND_COUNTRIES` — no change needed.
+- Contact / Company detail "Country" inline-edit fields are free-text, not dropdowns — out of scope.
+- Branch was already named `fix/lists-country-filter` from the original Lists-only fix; PR #86 title and body were updated to reflect the broader scope before squash-merging rather than splitting into a separate PR.
+- Did **not** bundle in the orphan `.claude/worktrees/wonderful-chatelet` deletion that's been sitting in the working tree — that's the cause of the recent CI failures (phantom submodule, no `.gitmodules` entry) and should be a separate fix-forward.
+
