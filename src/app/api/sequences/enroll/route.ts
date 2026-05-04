@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { enrollContacts } from "@/lib/sequences/enrollment";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 
+// Large list enrolls (1000+) need more than the default 60s.
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
