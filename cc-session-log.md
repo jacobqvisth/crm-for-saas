@@ -1251,3 +1251,30 @@ Jacob asked what the orange "N paused" badge on `/sequences` means, and asked fo
 - Used raw integer counts (not percentages) for the new columns to match the existing Enrolled and Sent columns' style — Jacob can eyeball ratios.
 - Tooltips on the column headers explain the definitions on hover.
 - Did **not** also surface a separate "Completed" (status = `completed` only, excluding replied/bounced/unsub) breakdown — would have added a fourth column and the operational signal Jacob actually needs ("do I need more contacts?") is captured by the binary Active vs Done split.
+
+
+## Session: Split paused into Paused + Co-Paused columns and add Done % (/sequences)
+- **Date:** 2026-05-04
+- **PR:** [#93](https://github.com/jacobqvisth/crm-for-saas/pull/93)
+- **Branch:** `feature/sequences-pause-breakdown-and-done-pct`
+- **Merge commit:** `b292bdf`
+
+### What was built
+Follow-up to PR #91. Jacob asked to (a) move the orange "N paused" badge out of the Name cell into its own column, (b) split it by reason so it's clear *why* enrollments are paused, and (c) add a Done % column.
+
+- **`src/components/sequences/sequence-list.tsx`**:
+  - Removed the orange "N paused" health badge from the Name cell. The `auth_issue` and `high_bounces` badges still render there (unchanged).
+  - Added two columns in its place: **Paused** (`status = 'paused'` — manual pause) and **Co-Paused** (`status = 'company_paused'` — auto, set by `cron/check-replies` when another contact at the same company replied). Both columns have tooltip headers explaining the definitions.
+  - Added a **Done %** column = `pct(done, enrolled)`.
+  - Refactored the per-sequence enrollment count queries into a small local `enrollmentCount(status)` helper to keep the `Promise.all` block tidy now that there are four count queries instead of two.
+  - Final table column order between Enrolled and Sent: **Active · Paused · Co-Paused · Done · Done %**, so `Enrolled = Active + Paused + Co-Paused + Done` reconciles cleanly per row.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 5.8s, 61 routes built
+
+### Notable decisions
+- Did **not** modify the `/api/sequences/health` endpoint. It still returns `paused_count`; the UI just stops reading it. Avoids regressing the auth_issue / high_bounces logic in the same change.
+- Chose **two columns** ("Paused" + "Co-Paused") over one column with a tooltip-only breakdown, because Jacob's stated need was to *see* the reasons at a glance, not have to hover. Adds two columns to the table — table is now 14 columns wide and will horizontal-scroll on narrow screens, which seems fine for a desktop-first dashboard.
+- Label "Co-Paused" was picked over "Auto-paused" or "Reply-suppressed" because it ties back to the underlying `company_paused` status name in the DB, which keeps the mental model and the schema lined up.
