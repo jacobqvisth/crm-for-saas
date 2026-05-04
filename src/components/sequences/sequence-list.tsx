@@ -34,6 +34,8 @@ interface SequenceWithStats extends Sequence {
   steps_count: number;
   stats: {
     enrolled: number;
+    active: number;
+    done: number;
     sent: number;
     opened: number;
     clicked: number;
@@ -43,6 +45,8 @@ interface SequenceWithStats extends Sequence {
   };
   health?: SequenceHealth;
 }
+
+const DONE_STATUSES = ["completed", "replied", "bounced", "unsubscribed"];
 
 const COUNTRIES = SUPPORTED_OUTBOUND_COUNTRIES;
 const LANGUAGES = SUPPORTED_LANGUAGES;
@@ -109,18 +113,30 @@ export function SequenceList() {
 
         // Try to get stats from the DB function
         let stats = {
-          enrolled: 0, sent: 0, opened: 0, clicked: 0,
+          enrolled: 0, active: 0, done: 0, sent: 0, opened: 0, clicked: 0,
           replied: 0, bounced: 0, unsubscribed: 0,
         };
 
-        const { data: statsData } = await supabase.rpc("get_sequence_stats", {
-          p_sequence_id: seq.id,
-        });
+        const [{ data: statsData }, { count: activeCount }, { count: doneCount }] = await Promise.all([
+          supabase.rpc("get_sequence_stats", { p_sequence_id: seq.id }),
+          supabase
+            .from("sequence_enrollments")
+            .select("id", { count: "exact", head: true })
+            .eq("sequence_id", seq.id)
+            .eq("status", "active"),
+          supabase
+            .from("sequence_enrollments")
+            .select("id", { count: "exact", head: true })
+            .eq("sequence_id", seq.id)
+            .in("status", DONE_STATUSES),
+        ]);
 
         if (statsData) {
           const s = (typeof statsData === "string" ? JSON.parse(statsData) : statsData) as Record<string, number>;
           stats = {
             enrolled: s.enrolled || 0,
+            active: activeCount || 0,
+            done: doneCount || 0,
             sent: s.sent || 0,
             opened: s.opened || 0,
             clicked: s.clicked || 0,
@@ -128,6 +144,9 @@ export function SequenceList() {
             bounced: s.bounced || 0,
             unsubscribed: s.unsubscribed || 0,
           };
+        } else {
+          stats.active = activeCount || 0;
+          stats.done = doneCount || 0;
         }
 
         return {
@@ -357,6 +376,8 @@ export function SequenceList() {
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Steps</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Enrolled</th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Currently being sent (status = active)">Active</th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Reached a terminal state (completed all steps, replied, bounced, or unsubscribed)">Done</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Sent</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Open %</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">
@@ -422,6 +443,8 @@ export function SequenceList() {
                     </td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.steps_count}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.enrolled}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.active}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.done}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.sent}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">
                       {pct(seq.stats.opened, seq.stats.sent)}%
