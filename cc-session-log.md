@@ -1498,3 +1498,32 @@ Three throttle improvements driven by a research question on how the existing li
 - **Per-account interval, not workspace-wide.** Jacob's stated goal is "no user sending the same email too often" — but different inboxes warrant different paces (a 30-day-old domain is fine at 60s, a 6-month-old one might want 300s). Per-account knob lets him tune that without one global slider.
 - **No new variables or template-aware throttle.** The hardcoded 60s was already the right shape, just rigid. Per-account configurable interval covers the same use case more flexibly without new mechanism.
 - **PR #107 → #108.** Original branch `feature/sequence-throttles` rebased onto main after PR #105 (sender health check) landed and conflicted in `gmail-account-card.tsx`. Force-push was harness-blocked, so pushed the rebased commit under a new branch name (`feature/sequence-throttles-v2`), closed #107, opened #108. Single commit on main, no remote history rewrite.
+
+
+## Session: Rate-limit retry fix + lower default sequence caps
+- **Date:** 2026-05-04
+- **PR:** [#110](https://github.com/jacobqvisth/crm-for-saas/pull/110)
+- **Branch:** `feature/rate-limit-retry-and-defaults`
+
+### What was built
+Two follow-ups to the throttle work in #108, both driven by Jacob noticing that with min_send_interval=600 the actual send cadence was ~20 min instead of the intended 10 min.
+
+- **Rate-limit retry path** in `src/app/api/cron/process-emails/route.ts`: when `sendEmail()` returns an error starting with `"Send rate limit"` (the per-account interval gate), the cron now special-cases it. Re-fetches `gmail_accounts.updated_at` + `min_send_interval_seconds`, reschedules `scheduled_for` to exactly `lastActivity + intervalSeconds + 5s`, and does NOT count it toward the 3-retry budget. Generic 15-min retry path unchanged for real failures (token errors, bounces, etc).
+- **Default sequence caps lowered** in `src/app/(dashboard)/sequences/new/page.tsx`: new sequences now default to `daily_limit_per_sender=15` (was 80) and `daily_limit_total=150` (was undefined/uncapped). Settings drawer fallback in `src/components/sequences/sequence-settings.tsx` also lowered to 15 for the per-sender field.
+
+### Why
+With the 5-min cron tick (`*/5 * * * *`) and a 600s min_send_interval, the first attempt at T+5min would hit the interval gate and return rate-limit error. The generic failure handler then bumped scheduled_for by +15min (for token-refresh-style transient errors), which combined to give ~20min between sends instead of the configured 10min. Worse, three rate-limit retries in a row would mark the queue item `failed`. Special-casing the rate-limit error path means 600s configured = ~10min actual.
+
+Default cap drop from 80→15 reflects that 6 active inboxes × 80 = 480 sendable per day per sequence, which is too aggressive for inboxes that haven't fully warmed up yet. 15 × 6 = 90/sequence, plus the 150 total floor, gives a reasonable ramp.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ 62 routes built
+- `npm run test:e2e:smoke` ✅ 8/8 passed
+- Vercel deploy: prod returns 307 (auth redirect, route registered)
+
+### Notable decisions
+- **Re-fetch the account row in the rate-limit branch** rather than threading `lastActivity` + `intervalSeconds` back from `sendEmail()` via the result type. One extra query in a cold path is simpler than expanding the SendEmailResult shape.
+- **Did NOT backfill existing sequences.** Defaults only apply to new sequences. Existing ones keep whatever explicit `daily_limit_per_sender` they have (most are at the old 80 default). Provided Jacob with a one-line `UPDATE sequences SET settings = settings || jsonb_build_object(...)` he can run in Studio if he wants the tightening to apply universally.
+- **+5s safety jitter** on the rescheduled time. The interval check in `send.ts` is `now - lastActivity < intervalMs` (strict less-than), so being exactly at the boundary should pass — but DB clock drift and scheduling latency mean a few extra seconds of cushion costs nothing and prevents flapping.
