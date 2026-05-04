@@ -1223,3 +1223,31 @@ The per-account daily-limit editor and status badges already lived at `/settings
 - Reuses existing `PATCH /api/settings/email/[accountId]` route for limit edits — no new endpoint.
 - Queries `gmail_accounts` directly via the supabase browser client, matching the pattern already used in `email-settings-client.tsx`. The `/api/gmail/accounts` route was rejected because it does not return `pause_reason` and we want that surfaced.
 - Phase B (real `health_score` cron with reply rate, open rate, token-expiry, last-successful-send, and a first-touch-unsubscribe spam proxy) and Phase C (in-app alert banner on `/dashboard`) are still in the plan doc and not built — Jacob wanted to evaluate Phase A first.
+
+
+## Session: Active and Done columns on /sequences
+- **Date:** 2026-05-04
+- **PR:** [#91](https://github.com/jacobqvisth/crm-for-saas/pull/91)
+- **Branch:** `feature/sequences-active-done-columns`
+- **Merge commit:** `5ab2c31`
+
+### What was built
+Jacob asked what the orange "N paused" badge on `/sequences` means, and asked for a column that shows how many enrollments have finished walking the sequence so he knows when to top up with more contacts.
+
+- **`src/components/sequences/sequence-list.tsx`**: Added two columns between Enrolled and Sent.
+  - **Active** = `sequence_enrollments.status = 'active'` — currently being sent, consuming sender capacity.
+  - **Done** = `status IN ('completed','replied','bounced','unsubscribed')` — terminal states (finished all steps, replied, bounced, or unsubscribed).
+  - Together with the existing "N paused" health badge, the row math is `Enrolled = Active + Paused + Done`.
+  - Counts are loaded via two extra `count: 'exact', head: true` queries per sequence, run in `Promise.all` alongside the existing `get_sequence_stats` RPC — no new RPC, no schema change.
+  - `DONE_STATUSES` constant defined once at the top of the module so the source-of-truth list is in one place.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 5.7s, 61 routes built
+
+### Notable decisions
+- Did **not** modify the `get_sequence_stats` Postgres RPC. It's not checked into `supabase/migrations/`, so its current source isn't in the repo — modifying it blind risked regressing the existing Open/Reply/Bounce numbers. Two extra count queries per sequence is a few hundred ms at worst on the current sequence list size and matches the per-sequence query pattern already used by `/api/sequences/health`.
+- Used raw integer counts (not percentages) for the new columns to match the existing Enrolled and Sent columns' style — Jacob can eyeball ratios.
+- Tooltips on the column headers explain the definitions on hover.
+- Did **not** also surface a separate "Completed" (status = `completed` only, excluding replied/bounced/unsub) breakdown — would have added a fourth column and the operational signal Jacob actually needs ("do I need more contacts?") is captured by the binary Active vs Done split.
