@@ -205,6 +205,77 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // --- Sequence-level daily caps (total + per-sender) ---
+      // Both knobs live on sequence.settings JSON. Either is "off" when 0/undefined.
+      // When a cap is met, defer this queue item to the start of the next eligible
+      // send window (per the sequence schedule) rather than cancel — caps are
+      // soft-throttles meant to spread output over multiple days, not stop it.
+      {
+        const seqSettings = (enrollment.sequences as unknown as {
+          settings?: SequenceSettings | null;
+        })?.settings;
+        const totalCap = seqSettings?.daily_limit_total ?? 0;
+        const perSenderCap = seqSettings?.daily_limit_per_sender ?? 0;
+
+        if ((totalCap > 0 || perSenderCap > 0) && enrollment.sequence_id) {
+          const todayStart = new Date();
+          todayStart.setUTCHours(0, 0, 0, 0);
+          const todayStartIso = todayStart.toISOString();
+
+          const { data: stepRows } = await supabase
+            .from("sequence_steps")
+            .select("id")
+            .eq("sequence_id", enrollment.sequence_id);
+          const stepIds = (stepRows || []).map((r) => r.id);
+
+          if (stepIds.length > 0) {
+            let totalSent = 0;
+            let perSenderSent = 0;
+
+            if (totalCap > 0) {
+              const { count } = await supabase
+                .from("email_queue")
+                .select("*", { count: "exact", head: true })
+                .eq("status", "sent")
+                .gte("sent_at", todayStartIso)
+                .in("step_id", stepIds);
+              totalSent = count ?? 0;
+            }
+
+            if (perSenderCap > 0) {
+              const { count } = await supabase
+                .from("email_queue")
+                .select("*", { count: "exact", head: true })
+                .eq("status", "sent")
+                .gte("sent_at", todayStartIso)
+                .eq("sender_account_id", senderAccountId)
+                .in("step_id", stepIds);
+              perSenderSent = count ?? 0;
+            }
+
+            const totalHit = totalCap > 0 && totalSent >= totalCap;
+            const perSenderHit = perSenderCap > 0 && perSenderSent >= perSenderCap;
+
+            if (totalHit || perSenderHit) {
+              const tomorrowMidnightUtc = new Date();
+              tomorrowMidnightUtc.setUTCHours(24, 0, 0, 0);
+              const nextWindow = seqSettings
+                ? getNextSendTime(seqSettings, tomorrowMidnightUtc)
+                : tomorrowMidnightUtc;
+              await supabase
+                .from("email_queue")
+                .update({
+                  status: "scheduled" as const,
+                  scheduled_for: nextWindow.toISOString(),
+                })
+                .eq("id", item.id);
+              continue;
+            }
+          }
+        }
+      }
+      // --- End sequence-level daily caps ---
+
       // Check suppressions: email-level OR domain-level block
       const emailDomain = item.to_email.split("@")[1]?.toLowerCase();
       const { data: suppression } = await supabase

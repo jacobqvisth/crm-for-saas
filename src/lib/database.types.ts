@@ -23,7 +23,13 @@ export type SequenceSettings = {
   send_start_hour: number;
   send_end_hour: number;
   timezone: string;
+  /** Hard cap on emails this sequence can send per day from any single sender. Enforced in cron. */
   daily_limit_per_sender: number;
+  /**
+   * Optional hard cap on emails this sequence can send per day TOTAL across every sender combined.
+   * When undefined or 0, no total cap is applied. Enforced in cron alongside daily_limit_per_sender.
+   */
+  daily_limit_total?: number;
   stop_on_reply: boolean;
   stop_on_company_reply: boolean;
   sender_rotation: boolean;
@@ -966,6 +972,7 @@ export interface Database {
           token_expires_at: string;
           daily_sends_count: number;
           max_daily_sends: number;
+          min_send_interval_seconds: number;
           status: string;
           pause_reason: string | null;
           created_at: string;
@@ -982,6 +989,7 @@ export interface Database {
           token_expires_at: string;
           daily_sends_count?: number;
           max_daily_sends?: number;
+          min_send_interval_seconds?: number;
           status?: string;
           pause_reason?: string | null;
           created_at?: string;
@@ -998,6 +1006,7 @@ export interface Database {
           token_expires_at?: string;
           daily_sends_count?: number;
           max_daily_sends?: number;
+          min_send_interval_seconds?: number;
           status?: string;
           pause_reason?: string | null;
           updated_at?: string;
