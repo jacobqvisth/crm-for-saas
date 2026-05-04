@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { resolveTxt, resolveMx } from "node:dns/promises";
+import { resolveTxt, resolveMx, resolve4 } from "node:dns/promises";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -95,6 +95,70 @@ async function checkDMARC(domain: string): Promise<CheckResult> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { level: "error", label: "DMARC", detail: `DNS lookup failed: ${msg}` };
+  }
+}
+
+// Domain-based blocklists (DBLs) — query format is `<domain>.<list-host>`.
+// We use domain DBLs rather than IP DNSBLs because Gmail/Workspace egress IPs
+// rotate per send, so an IP check is meaningless for outbound from this app.
+//
+// Spamhaus DBL convention: an A record means LISTED. The first three octets
+// usually classify the listing (127.0.1.X). 127.0.1.255 is reserved to mean
+// "your DNS resolver has been blocked by Spamhaus" (over-quota or public
+// resolver) — we surface that as "lookup unavailable" instead of "listed".
+//
+// SURBL/URIBL follow a similar convention. We treat any return code ending in
+// .255 as "blocked, not listed" defensively.
+const BLOCKLISTS: Array<{ name: string; host: string; about: string }> = [
+  {
+    name: "Spamhaus DBL",
+    host: "dbl.spamhaus.org",
+    about: "Spamhaus Domain Block List — abused/spammer-owned domains.",
+  },
+  {
+    name: "SURBL",
+    host: "multi.surbl.org",
+    about: "SURBL multi list — domains seen in spam/phish messages.",
+  },
+  {
+    name: "URIBL",
+    host: "multi.uribl.com",
+    about: "URIBL multi list — black, grey, and abuse-tracker categories.",
+  },
+];
+
+async function checkBlocklist(
+  domain: string,
+  list: (typeof BLOCKLISTS)[number],
+): Promise<CheckResult> {
+  const query = `${domain}.${list.host}`;
+  try {
+    const records = await resolve4(query);
+    // Special-case "your resolver is blocked / over quota" markers.
+    if (records.some((ip) => ip.endsWith(".255"))) {
+      return {
+        level: "neutral",
+        label: list.name,
+        detail: "Lookup blocked (DNS resolver rate-limited or public-resolver rejected). Re-run from a different network if needed.",
+      };
+    }
+    return {
+      level: "error",
+      label: list.name,
+      detail: `LISTED (return: ${records.join(", ")}). ${list.about} Request delisting from the operator.`,
+      value: query,
+    };
+  } catch (e: unknown) {
+    const err = e as { code?: string };
+    if (err.code === "ENOTFOUND" || err.code === "ENODATA") {
+      // NXDOMAIN / no record = not listed.
+      return { level: "good", label: list.name, detail: "not listed" };
+    }
+    return {
+      level: "neutral",
+      label: list.name,
+      detail: `Lookup unavailable: ${err.code ?? String(e)}`,
+    };
   }
 }
 
@@ -245,15 +309,25 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Could not parse domain from email address" }, { status: 400 });
   }
 
-  const [spf, dkim, dmarc, mx, internal] = await Promise.all([
+  const [spf, dkim, dmarc, mx, internal, ...blocklists] = await Promise.all([
     checkSPF(domain),
     checkDKIM(domain),
     checkDMARC(domain),
     checkMX(domain),
     computeInternalStats(supabase, account.id, account.status, account.pause_reason),
+    ...BLOCKLISTS.map((b) => checkBlocklist(domain, b)),
   ]);
 
-  const checks: CheckResult[] = [spf, dkim, dmarc, mx, internal.bounce, internal.reply, internal.pause];
+  const checks: CheckResult[] = [
+    spf,
+    dkim,
+    dmarc,
+    mx,
+    internal.bounce,
+    internal.reply,
+    internal.pause,
+    ...blocklists,
+  ];
   const errors = checks.filter((c) => c.level === "error").length;
   const warns = checks.filter((c) => c.level === "warn").length;
   const overall: CheckLevel = errors > 0 ? "error" : warns > 0 ? "warn" : "good";
@@ -271,6 +345,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     checks: {
       auth: [spf, dkim, dmarc, mx],
       stats: [internal.bounce, internal.reply, internal.pause],
+      blocklists,
     },
   });
 }
