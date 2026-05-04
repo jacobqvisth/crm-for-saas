@@ -1365,3 +1365,29 @@ Enrolling a 1000-contact dynamic list (United Kingdom — Great Britain) into th
 - **Did not also add a guard at the API layer** (e.g. POST /api/sequences/enroll splitting contactIds before calling enrollContacts). Single fix at the lib boundary is enough — every caller benefits.
 - **Did not audit other `.in()` call sites in the codebase for the same bug** in this PR. There are likely others (large-bulk operations on contacts, email_queue, etc.), but each requires its own sweep + test. Tracked as a follow-up.
 - **Diagnostic script kept locally as `scripts/diagnose-gb-enroll.mjs`** (not committed in this PR). Useful as a template for future "why did N skip" investigations.
+
+
+## Session: Make 1000+ list enrolls actually finish (perf + resolve cap)
+- **Date:** 2026-05-04
+- **PR:** [#102](https://github.com/jacobqvisth/crm-for-saas/pull/102)
+- **Branch:** `fix/enrollment-perf-and-list-resolve-cap`
+- **Merge commit:** `409c496`
+
+### What was built
+Two stacked bugs that combined to make enrolling a 3280-contact UK dynamic list either silently truncate at 1000 or hang the UI in "Enrolling…" until Vercel killed the function.
+
+- **`src/lib/lists/filter-query.ts`** — `resolveListContactIds` now paginates with `.range()` until a short page is returned, on both the dynamic-filter and static `contact_list_members` paths. Previously the default Supabase select silently capped results at 1000 rows.
+- **`src/lib/sequences/enrollment.ts`** — pre-fetched the eligible sender pool ONCE (round-robin in JS by index) and pre-fetched all `email_templates` referenced by any step ONCE (Map lookup in the loop). The previous loop did one `getNextSender` query and one template fetch per contact, so a 1000-list was ~3000 sequential round trips and reliably timed out at Vercel's 60s function limit. Falls back to per-row `getNextSender` if the pool query came back empty so the existing "no sender capacity" skip reason still surfaces.
+- **`src/app/api/sequences/enroll/route.ts`** — added `export const maxDuration = 300` for genuinely large lists.
+
+### Bonus: true round-robin distribution
+The previous per-contact `getNextSender` always returned the same lowest-count account because `daily_sends_count` doesn't change during the enrollment call — every contact in a batch got pinned to the same sender. The new pre-fetch + JS round-robin gives true distribution within a batch.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean (`.next/` validator.ts errors were stale dev-server output, unrelated)
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 5.8s, 61 routes built
+
+### Notable decisions
+- **Did not refactor to bulk inserts.** Per-contact insert + queue insert is still 2N round trips (4000 round trips for a 2000-contact fresh batch). At typical Supabase latency that fits in 60s, and with maxDuration=300 there's plenty of headroom. If the workspace ever grows to 10k+ enrollments per batch we'd revisit. Tracked as a follow-up only if needed.
+- **Did not audit the rest of the codebase for similar 1000-row cap bugs.** filter-query is the most exposed spot but other paths (analytics, batch-export, large dashboard pulls) might silently cap too. Not in this PR's scope.
