@@ -1391,3 +1391,37 @@ The previous per-contact `getNextSender` always returned the same lowest-count a
 ### Notable decisions
 - **Did not refactor to bulk inserts.** Per-contact insert + queue insert is still 2N round trips (4000 round trips for a 2000-contact fresh batch). At typical Supabase latency that fits in 60s, and with maxDuration=300 there's plenty of headroom. If the workspace ever grows to 10k+ enrollments per batch we'd revisit. Tracked as a follow-up only if needed.
 - **Did not audit the rest of the codebase for similar 1000-row cap bugs.** filter-query is the most exposed spot but other paths (analytics, batch-export, large dashboard pulls) might silently cap too. Not in this PR's scope.
+
+
+## Session: Per-user editable email signatures auto-applied to sequences
+- **Date:** 2026-05-04
+- **PR:** [#101](https://github.com/jacobqvisth/crm-for-saas/pull/101)
+- **Branch:** `feature/user-signatures`
+- **Merge commit:** `27d32b5`
+
+### What was built
+HubSpot-style per-user signatures so multi-sender sequences automatically apply the right person's signature regardless of which connected Gmail inbox is sending.
+
+- **Migration `20260504000000_user_profiles_and_signatures.sql`** (applied via Supabase Studio before merge):
+  - New table `user_profiles` keyed by `user_id` (PK, FK auth.users) with `full_name`, `title`, `signature_html`, `signature_updated_at`, `created_at`, `updated_at`. RLS: each user can SELECT/INSERT/UPDATE their own row only; service-role cron path bypasses RLS for cross-user signature lookup.
+  - `sequence_steps.include_signature BOOLEAN NOT NULL DEFAULT true` for per-step suppression.
+- **`/settings/profile` page** (`src/app/(dashboard)/settings/profile/page.tsx`): name + title fields plus a signature editor with two modes — TipTap rich editor (reuses `RichEmailEditor`) and raw HTML mode with live preview. Save persists via `/api/settings/profile`.
+- **`/api/settings/profile` route** GET/POST upserting the caller's own user_profiles row.
+- **Send-time injection** in `src/lib/gmail/send.ts`: after looking up the gmail_accounts row, joins to user_profiles via `user_id` and appends `signature_html` to the HTML body (plus a stripped plaintext version to the alternative). Auto-suppressed when `replyToMessageId` is set so signatures don't stack inside Gmail threads — single source of truth, applies to both cron sends and inbox-reply sends.
+- **Cron toggle wiring** in `src/app/api/cron/process-emails/route.ts`: before each `sendEmail()` call, reads `sequence_steps.include_signature` for the queued item's `step_id` and forwards it as the `includeSignature` param. Defaults to `true` if step row missing or column null.
+- **Editor checkbox** in `src/components/sequences/email-step-editor.tsx`: per-step "Append sender signature" toggle wired to `step.include_signature` via `onUpdate`.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean (after fixing two `react/no-unescaped-entities` warnings on `'` in copy)
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ 62 routes built, includes `/settings/profile`
+- `npm run test:e2e:smoke` ✅ 8/8 passed
+- Vercel deploy: `curl -I https://crm-for-saas.vercel.app/settings/profile` → 307 (auth redirect, route registered)
+
+### Notable decisions
+- **User-level, not mailbox-level.** Jacob pushed back on my initial proposal to store the signature on `gmail_accounts`. Reality: each *person* (Jacob, Hans, Magnus) has their own signature, and each connects multiple Google accounts to send from. Per-user storage means one edit applies across all of that person's mailboxes — matches the mental model and mirrors HubSpot's pattern (which is also user-keyed because their data model is 1:1 user↔inbox).
+- **No `{{sender_signature}}` variable for v1.** Auto-append + per-step suppression covers the use case. Skipped to avoid adding the variable to `resolveVariables()` and `EDITOR_VARIABLES` registries.
+- **Auto-suppress on thread replies.** Detected via `replyToMessageId` being set (already populated for follow-up emails by the cron and for manual inbox replies). Avoids the HubSpot-community complaint about signatures stacking inside long threads. Applies regardless of the per-step toggle.
+- **Single-row RLS for user_profiles.** No workspace_id column — signature is global to a person across all their workspaces. If multi-workspace per-user-with-different-sigs becomes a thing, revisit.
+- **Migration applied via Supabase Studio, not CLI.** `supabase db push` was unusable due to migration-history drift between local folder and prod (24 prod migrations not in local; CLAUDE.md flags this as expected since "tables already exist"). Ran the SQL through Studio's editor manually before merging the code.
+- **Did not commit branch hygiene fix.** Initial commit landed on local `main` by accident (a `git checkout -b feature/user-signatures origin/main` apparently didn't take); recovered by force-pointing the feature branch to the new commit and resetting local main to origin. No remote impact.
