@@ -1341,3 +1341,27 @@ The yellow Pause Sending button on the sequence detail page only flipped `sequen
 ### Notable decisions
 - **Revert (back to `scheduled`) instead of cancel** for sequence-level pause. Sequence pause is meant to be reversible — cancelling would lose the queue items forever. Per-enrollment pause/terminal still cancels queue items, matching the durable-decision intent.
 - **Per-item gate, not pre-filter at queue fetch.** Simpler patch surface; bounded waste (LIMIT 100 per cron run, paused-sequence items get cycled but never sent). If a workspace ends up with lots of paused sequences and lots of queued items the wasted DB churn could matter — flagged in PR body as a follow-up to add a `sequences!inner` filter at the queue fetch.
+
+
+## Session: Chunk large contactId .in() lists in enrollContacts
+- **Date:** 2026-05-04
+- **PR:** [#99](https://github.com/jacobqvisth/crm-for-saas/pull/99)
+- **Branch:** `fix/enrollment-chunk-large-in-clauses`
+- **Merge commit:** `90628ed`
+
+### What was built
+Enrolling a 1000-contact dynamic list (United Kingdom — Great Britain) into the UK sequence reported "Enrolled 0, skipped 1000" with no useful detail. Root cause: PostgREST puts `.in()` filter values directly in the request URL, ~1000 UUIDs blow past the URL length limit, the request returns `{"message":"Bad Request"}`, and the Supabase client surfaces it as `data: null` — which hit the existing `if (!contacts)` early-return path with reason "No contacts found". The reasons array isn't shown in the toast, so the failure looked like a phantom filter rejecting every row.
+
+- **`src/lib/sequences/enrollment.ts`**: chunk `contactIds` into batches of 200 (each URL stays well under 8 KB), run one `.in()` per chunk, accumulate results. Surface any PostgREST error in the `reasons` array instead of dropping it. Early-return condition switched from `!contacts` to `contacts.length === 0`.
+- Added `ContactWithCompany` type alias (`Tables<"contacts"> & { companies: Tables<"companies"> | null }`) to keep the chunked accumulator typed.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.1s, 61 routes built
+
+### Notable decisions
+- **Chunk size 200.** A UUID is 36 chars; 200 of them in an IN clause is ~7.4 KB of URL — comfortably under the 8 KB request line limit nginx defaults to. Could go higher but 200 gives margin and ~5 round-trips for a 1000-contact list, which is fine.
+- **Did not also add a guard at the API layer** (e.g. POST /api/sequences/enroll splitting contactIds before calling enrollContacts). Single fix at the lib boundary is enough — every caller benefits.
+- **Did not audit other `.in()` call sites in the codebase for the same bug** in this PR. There are likely others (large-bulk operations on contacts, email_queue, etc.), but each requires its own sweep + test. Tracked as a follow-up.
+- **Diagnostic script kept locally as `scripts/diagnose-gb-enroll.mjs`** (not committed in this PR). Useful as a template for future "why did N skip" investigations.
