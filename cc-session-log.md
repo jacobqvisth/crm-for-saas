@@ -1319,3 +1319,25 @@ Applied against prod (`wdgiwuhehqpkhpvdzzzl`):
 - **Bulk Resume implementation chose fan-out-to-existing-endpoint over server-side bulk endpoint.** N HTTP requests at concurrency 10 is acceptable for UI bulk actions on hundreds of rows. Avoids duplicating the variable-resolution + queue-insert logic already living in the single-row endpoint.
 - **Did not also fix the misleading "Pause Sending" button on the sequence detail page.** It only flips `sequences.status='paused'` but the cron filters by enrollment status, so emails keep sending. Flagged in the PR body as a follow-up — separate change.
 - **Recovery scripts kept as committed artifacts** (next chore PR) so they're available as templates if a similar incident happens again on another sequence.
+
+
+## Session: Cron respects sequences.status — Pause Sending finally pauses
+- **Date:** 2026-05-04
+- **PR:** [#97](https://github.com/jacobqvisth/crm-for-saas/pull/97)
+- **Branch:** `fix/cron-respect-sequence-status`
+- **Merge commit:** `b8217eb`
+
+### What was built
+- **`src/app/api/cron/process-emails/route.ts`**: After the existing `enrollment.status === 'active'` gate (which cancels queue items for terminal/individually-paused enrollments — durable decisions), added a sequence-status gate. If `enrollment.sequences.status !== 'active'`, the queue item is reverted from `sending` back to `scheduled` and the loop continues. Items get re-picked up automatically once the user clicks **Start Sending** and `sequences.status` flips back to `active`.
+
+### Why
+The yellow Pause Sending button on the sequence detail page only flipped `sequences.status`. The cron only checked `enrollment.status`, not the sequence status, so emails kept sending after a pause. The amber banner ("No emails will send until you press Start Sending") was a lie.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.1s, 61 routes built
+
+### Notable decisions
+- **Revert (back to `scheduled`) instead of cancel** for sequence-level pause. Sequence pause is meant to be reversible — cancelling would lose the queue items forever. Per-enrollment pause/terminal still cancels queue items, matching the durable-decision intent.
+- **Per-item gate, not pre-filter at queue fetch.** Simpler patch surface; bounded waste (LIMIT 100 per cron run, paused-sequence items get cycled but never sent). If a workspace ends up with lots of paused sequences and lots of queued items the wasted DB churn could matter — flagged in PR body as a follow-up to add a `sequences!inner` filter at the queue fetch.
