@@ -30,7 +30,7 @@ interface HealthCheckResponse {
   email: string;
   overall: CheckLevel;
   summary: string;
-  checks: { auth: CheckResult[]; stats: CheckResult[] };
+  checks: { auth: CheckResult[]; stats: CheckResult[]; blocklists?: CheckResult[] };
 }
 
 const LEVEL_STYLE: Record<CheckLevel, { icon: typeof CheckCircle2; className: string; label: string }> = {
@@ -357,6 +357,14 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
             {health.checks.stats.map((c) => (
               <CheckRow key={c.label} check={c} />
             ))}
+            {health.checks.blocklists && health.checks.blocklists.length > 0 && (
+              <>
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium pt-2">Blocklists (domain reputation)</p>
+                {health.checks.blocklists.map((c) => (
+                  <CheckRow key={c.label} check={c} />
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
