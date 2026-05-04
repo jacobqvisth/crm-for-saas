@@ -1278,3 +1278,44 @@ Follow-up to PR #91. Jacob asked to (a) move the orange "N paused" badge out of 
 - Did **not** modify the `/api/sequences/health` endpoint. It still returns `paused_count`; the UI just stops reading it. Avoids regressing the auth_issue / high_bounces logic in the same change.
 - Chose **two columns** ("Paused" + "Co-Paused") over one column with a tooltip-only breakdown, because Jacob's stated need was to *see* the reasons at a glance, not have to hover. Adds two columns to the table — table is now 14 columns wide and will horizontal-scroll on narrow screens, which seems fine for a desktop-first dashboard.
 - Label "Co-Paused" was picked over "Auto-paused" or "Reply-suppressed" because it ties back to the underlying `company_paused` status name in the DB, which keeps the mental model and the schema lined up.
+
+
+## Session: Status-aware bulk Pause/Resume + recovery from accidental bulk-Resume
+- **Date:** 2026-05-04
+- **PR:** [#95](https://github.com/jacobqvisth/crm-for-saas/pull/95)
+- **Branch:** `fix/sequences-bulk-update-status-safety`
+- **Merge commit:** `656a967`
+
+### What happened
+Jacob hit "Select all → Resume" on the Contacts tabs of the Latvia and Estonia sequences. The bulk handler (`bulkUpdateStatus("active")` in `src/components/sequences/sequence-contacts-tab.tsx`) was just `UPDATE sequence_enrollments SET status='active' WHERE id IN (...)` with no FROM-status check, so it flipped every selected row to active — including 36 terminal rows (`completed_at NOT NULL`) and 117 paused/co_paused rows that were no longer wanted in the active pool.
+
+No emails actually sent — the cron processes scheduled queue items and check `enrollment.status === 'active'` at send time, but for these 153 wrongly-flipped rows there were no scheduled items (they were cancelled at original termination/pause). The 405 always-active enrollments were no-ops on the bulk update; their pipeline kept flowing.
+
+### What was built (fix)
+- **`src/components/sequences/sequence-contacts-tab.tsx`**: Replaced `bulkUpdateStatus(status)` with two purpose-built handlers.
+  - **`bulkPause`**: filters to `status='active'` before flipping to paused; also cancels scheduled email_queue items, mirroring the single-row `/api/sequences/enrollments/[id]` PATCH action=pause logic. Skipped rows reported in the toast.
+  - **`bulkResume`**: fans out to `/api/sequences/enrollments/[id]` PATCH action=resume at concurrency 10. That endpoint already enforces `paused`/`company_paused` as the only valid FROM, sets status='active', and queues the next pending step. Skipped (not paused) rows reported in the toast.
+
+### Recovery (out-of-band ops, not in this PR)
+Two one-off scripts in `scripts/`:
+- **`scripts/diagnose-bulk-resume.mjs`** — read-only state inspector (status counts, queue items, terminal vs paused vs always-active classification).
+- **`scripts/revert-bulk-resume.mjs`** — dry-run by default, `--apply` to write. Three-bucket revert:
+  1. Terminal (completed_at NOT NULL) → derive correct status from `email_events` (reply/bounce) + `unsubscribes`, default to `completed`. Priority: unsubscribed > replied > bounced > completed.
+  2. Was-paused (no live queue item, has cancelled queue item) → revert to `paused`.
+  3. Always-active (has a live queue item) → leave alone, pipeline intact.
+
+Applied against prod (`wdgiwuhehqpkhpvdzzzl`):
+- Latvia: 24 → replied / 10 → unsubscribed / 2 → completed / 117 (split across both seqs) → paused.
+- Estonia: ditto, totals above are combined.
+- Final state: Latvia 174 active / 74 paused / 4 completed / 19 replied / 8 unsubscribed; Estonia 231 active / 43 paused / 5 replied / 2 unsubscribed. Both sums reconcile to original enrolled counts (279 and 281).
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.1s, 61 routes built
+
+### Notable decisions
+- **Heuristic for separating originally-paused from always-active enrollments** (post-bulk-Resume, when the data state had already been corrupted): used `email_queue.status` history. An active enrollment with no live queue items (`scheduled`/`pending`/`sending`) but at least one cancelled queue item was almost certainly paused before — pause/co_paused operations cancel queued items, leaving a fingerprint. An active enrollment with a live queue item is part of the normal pipeline and must not be touched. Result: zero ambiguous cases on Latvia/Estonia (all 117 candidates had cancelled fingerprints).
+- **Bulk Resume implementation chose fan-out-to-existing-endpoint over server-side bulk endpoint.** N HTTP requests at concurrency 10 is acceptable for UI bulk actions on hundreds of rows. Avoids duplicating the variable-resolution + queue-insert logic already living in the single-row endpoint.
+- **Did not also fix the misleading "Pause Sending" button on the sequence detail page.** It only flips `sequences.status='paused'` but the cron filters by enrollment status, so emails keep sending. Flagged in the PR body as a follow-up — separate change.
+- **Recovery scripts kept as committed artifacts** (next chore PR) so they're available as templates if a similar incident happens again on another sequence.
