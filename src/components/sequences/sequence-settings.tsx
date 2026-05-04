@@ -58,7 +58,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
   const [startHour, setStartHour] = useState(settings.send_start_hour ?? 9);
   const [endHour, setEndHour] = useState(settings.send_end_hour ?? 17);
   const [timezone, setTimezone] = useState(settings.timezone || "Europe/Stockholm");
-  const [dailyLimit, setDailyLimit] = useState(settings.daily_limit_per_sender ?? 80);
+  const [dailyLimit, setDailyLimit] = useState(settings.daily_limit_per_sender ?? 15);
   const [dailyLimitTotal, setDailyLimitTotal] = useState<number | "">(
     settings.daily_limit_total && settings.daily_limit_total > 0
       ? settings.daily_limit_total
@@ -80,7 +80,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
     setStartHour(s.send_start_hour ?? 9);
     setEndHour(s.send_end_hour ?? 17);
     setTimezone(s.timezone || "Europe/Stockholm");
-    setDailyLimit(s.daily_limit_per_sender ?? 80);
+    setDailyLimit(s.daily_limit_per_sender ?? 15);
     setDailyLimitTotal(s.daily_limit_total && s.daily_limit_total > 0 ? s.daily_limit_total : "");
     setStopOnReply(s.stop_on_reply ?? true);
     setStopOnCompanyReply(s.stop_on_company_reply ?? true);
