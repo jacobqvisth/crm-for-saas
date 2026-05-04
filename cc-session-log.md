@@ -1462,3 +1462,39 @@ A per-account "Check health" button on each connected Gmail account in `/setting
 - **DKIM tries multiple selectors instead of asking the user.** Google Workspace defaults to `google`, but Postmark/SendGrid/Klaviyo use other conventions. The 6-selector probe covers the common cases without UI friction. If we ever support custom selectors per account, surface a textbox in the card.
 - **Reply rate as a soft inbox-placement signal.** Real inbox-placement testing requires a paid service (Glockapps / MailReach). A persistently low reply rate at meaningful volume is a cheap proxy worth surfacing as a yellow flag rather than nothing.
 - **Did not also surface OPEN rate** — already gameable by image proxies (Apple MPP) and arguably less actionable than reply rate. Intentionally kept the panel short.
+
+
+## Session: Enforce sequence-level daily caps + per-sender configurable send interval
+- **Date:** 2026-05-04
+- **PR:** [#108](https://github.com/jacobqvisth/crm-for-saas/pull/108) (replaced [#107](https://github.com/jacobqvisth/crm-for-saas/pull/107) which conflicted with PR #105 on `gmail-account-card.tsx`)
+- **Branch:** `feature/sequence-throttles-v2`
+- **Merge commit:** `9c27d16`
+
+### What was built
+Three throttle improvements driven by a research question on how the existing limits interact. Found that one of them — the per-sender daily limit on sequence settings — was wired in the UI ("Daily Send Limit (per sender)" — 80 by default) but never enforced anywhere in the send pipeline; it only powered `estimate-send-times.ts`'s UI prediction.
+
+- **Migration `20260504010000_sender_throttle_and_sequence_caps.sql`** (applied via Supabase Studio before merge):
+  - `gmail_accounts.min_send_interval_seconds INTEGER NOT NULL DEFAULT 60`. Replaces the hard-coded 60s constant in `src/lib/gmail/send.ts` so warm/established inboxes can be paced more conservatively (range 30–3600s).
+- **Daily caps enforcement** in `src/app/api/cron/process-emails/route.ts` (after sequence-status check, before suppression/contact/threading queries):
+  - Reads `seqSettings.daily_limit_per_sender` and `seqSettings.daily_limit_total` from `enrollment.sequences.settings`.
+  - Counts today's `email_queue` rows where `status='sent'`, `sent_at >= UTC midnight`, and `step_id IN (sequence's steps)`. Per-sender variant adds `sender_account_id = X`.
+  - When either cap is hit, defers `scheduled_for` to the start of tomorrow's send window via `getNextSendTime(seqSettings, tomorrowMidnightUTC)` and skips. Items wait, they don't get cancelled.
+  - Both caps off (0/undefined) = no enforcement, today's behavior.
+- **Per-account interval** in `src/lib/gmail/send.ts`: `MIN_SEND_INTERVAL_MS = 60000` constant replaced with `account.min_send_interval_seconds * 1000`. Default 60s preserved.
+- **UI: Sequence Settings drawer** (`src/components/sequences/sequence-settings.tsx`): existing "Daily Send Limit (per sender)" relabeled "Daily limit per sender" with explanatory subtext, plus new "Daily total (across all senders)" input next to it. Blank input = no total cap (omitted from settings JSON to keep it tidy).
+- **UI: Gmail account card** (`src/components/settings/gmail-account-card.tsx`): "Min seconds between sends" input added below the existing "Max daily sends" row, with inline save button.
+- **API**: PATCH `/api/settings/email/[accountId]` accepts `min_send_interval_seconds` (validated 30–3600).
+
+### Build status
+- `npx tsc --noEmit` ✅ clean (after clearing stale `.next` from PR #105's removed health-check route)
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ 62 routes built
+- `npm run test:e2e:smoke` ✅ 8/8 passed
+- Vercel deploy: `curl -I https://crm-for-saas.vercel.app/settings/email` → 307 (auth redirect, route registered)
+
+### Notable decisions
+- **Counting via `step_id IN (...)`, not via enrollments join.** `email_queue` doesn't carry `sequence_id` directly. Two options: (a) inner-join via `sequence_enrollments.sequence_id` using PostgREST's foreign-table embedding, or (b) fetch the sequence's step ids first (small list, ≤10) and use `.in('step_id', stepIds)`. Picked (b) — simpler, works within PostgREST's type-narrowing surface, two head-only count queries per item.
+- **Deferred to tomorrow's send window, not +24h flat.** Using `getNextSendTime()` respects send_days/send_start_hour/timezone, so a Friday cap-hit on a Mon-Fri sequence defers to Monday morning rather than Saturday morning.
+- **Per-account interval, not workspace-wide.** Jacob's stated goal is "no user sending the same email too often" — but different inboxes warrant different paces (a 30-day-old domain is fine at 60s, a 6-month-old one might want 300s). Per-account knob lets him tune that without one global slider.
+- **No new variables or template-aware throttle.** The hardcoded 60s was already the right shape, just rigid. Per-account configurable interval covers the same use case more flexibly without new mechanism.
+- **PR #107 → #108.** Original branch `feature/sequence-throttles` rebased onto main after PR #105 (sender health check) landed and conflicted in `gmail-account-card.tsx`. Force-push was harness-blocked, so pushed the rebased commit under a new branch name (`feature/sequence-throttles-v2`), closed #107, opened #108. Single commit on main, no remote history rewrite.
