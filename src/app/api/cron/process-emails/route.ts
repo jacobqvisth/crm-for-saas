@@ -277,6 +277,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Per-step signature toggle. Default to true if step row missing or column null.
+      let includeSignature = true;
+      if (item.step_id) {
+        const { data: stepRow } = await supabase
+          .from("sequence_steps")
+          .select("include_signature")
+          .eq("id", item.step_id)
+          .maybeSingle();
+        if (stepRow && stepRow.include_signature === false) {
+          includeSignature = false;
+        }
+      }
+
       // Send the email
       const result = await sendEmail({
         accountId: senderAccountId,
@@ -286,6 +299,7 @@ export async function POST(request: NextRequest) {
         trackingId: item.tracking_id,
         replyToMessageId,
         replyToThreadId,
+        includeSignature,
       });
 
       if (result.success) {

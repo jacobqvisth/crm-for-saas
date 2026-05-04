@@ -13,6 +13,12 @@ interface SendEmailParams {
   trackingId?: string;
   replyToMessageId?: string;
   replyToThreadId?: string;
+  /**
+   * When true (default), append the sender's signature_html (from user_profiles)
+   * to the body. Auto-suppressed when replyToMessageId is set so signatures don't
+   * stack inside an existing thread.
+   */
+  includeSignature?: boolean;
 }
 
 interface SendEmailResult {
@@ -46,6 +52,10 @@ function applyTracking(htmlBody: string, trackingId: string): string {
   tracked = injectTrackingPixel(tracked, trackingId, appUrl);
 
   return tracked;
+}
+
+function appendSignature(htmlBody: string, signatureHtml: string): string {
+  return `${htmlBody}<br><br>${signatureHtml}`;
 }
 
 function buildMimeMessage(params: {
@@ -153,12 +163,33 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     ? `${account.display_name} <${account.email_address}>`
     : account.email_address;
 
+  // Look up the sender's signature and append it to the body.
+  // Skip for thread replies — sigs stacking inside an existing thread is HubSpot-style noise.
+  let finalHtmlBody = params.htmlBody;
+  let finalTextBody = params.textBody;
+  const includeSignature = params.includeSignature !== false && !params.replyToMessageId;
+  if (includeSignature && account.user_id) {
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("signature_html")
+      .eq("user_id", account.user_id)
+      .maybeSingle();
+    const signatureHtml = profile?.signature_html;
+    if (signatureHtml && signatureHtml.trim()) {
+      finalHtmlBody = appendSignature(finalHtmlBody, signatureHtml);
+      if (finalTextBody) {
+        const sigText = signatureHtml.replace(/<[^>]*>/g, "").trim();
+        finalTextBody = `${finalTextBody}\n\n${sigText}`;
+      }
+    }
+  }
+
   const mimeMessage = buildMimeMessage({
     from: fromAddress,
     to: params.to,
     subject: params.subject,
-    htmlBody: params.htmlBody,
-    textBody: params.textBody,
+    htmlBody: finalHtmlBody,
+    textBody: finalTextBody,
     trackingId: params.trackingId,
     replyToMessageId: params.replyToMessageId,
   });

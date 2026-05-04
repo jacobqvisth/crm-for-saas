@@ -101,6 +101,35 @@ export interface Database {
           },
         ];
       };
+      user_profiles: {
+        Row: {
+          user_id: string;
+          full_name: string | null;
+          title: string | null;
+          signature_html: string | null;
+          signature_updated_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          full_name?: string | null;
+          title?: string | null;
+          signature_html?: string | null;
+          signature_updated_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          full_name?: string | null;
+          title?: string | null;
+          signature_html?: string | null;
+          signature_updated_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       contacts: {
         Row: {
           id: string;
@@ -688,6 +717,7 @@ export interface Database {
           condition_type: "opened" | "clicked" | "replied" | null;
           condition_branch_yes: number | null;
           condition_branch_no: number | null;
+          include_signature: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -704,6 +734,7 @@ export interface Database {
           condition_type?: "opened" | "clicked" | "replied" | null;
           condition_branch_yes?: number | null;
           condition_branch_no?: number | null;
+          include_signature?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -720,6 +751,7 @@ export interface Database {
           condition_type?: "opened" | "clicked" | "replied" | null;
           condition_branch_yes?: number | null;
           condition_branch_no?: number | null;
+          include_signature?: boolean;
           updated_at?: string;
         };
         Relationships: [

@@ -298,6 +298,7 @@ export function EmailStepEditor({
 
   const [subject, setSubject] = useState(step.subject_override || "");
   const [bodyHtml, setBodyHtml] = useState(step.body_override || "");
+  const [includeSignature, setIncludeSignature] = useState(step.include_signature !== false);
   const [showPreview, setShowPreview] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
@@ -336,7 +337,13 @@ export function EmailStepEditor({
     setSubject(step.subject_override || "");
     setBodyHtml(step.body_override || "");
     setSelectedTemplateId(step.template_id || "");
+    setIncludeSignature(step.include_signature !== false);
   }, [step]);
+
+  const handleSignatureToggle = (checked: boolean) => {
+    setIncludeSignature(checked);
+    onUpdate({ include_signature: checked });
+  };
 
   const handleTemplateSelect = async (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -473,6 +480,22 @@ export function EmailStepEditor({
             variables={SEQUENCE_VARIABLES}
           />
         )}
+
+        <label className="mt-2 inline-flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeSignature}
+            onChange={(e) => handleSignatureToggle(e.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span>
+            Append sender signature to this email.{" "}
+            <span className="text-slate-400">
+              (Each sender&apos;s signature is set in their Profile &amp; Signature settings.
+              Auto-suppressed on thread replies regardless of this toggle.)
+            </span>
+          </span>
+        </label>
       </div>
 
       {showGenerateModal && workspaceId && (
