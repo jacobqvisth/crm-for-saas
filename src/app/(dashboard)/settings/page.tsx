@@ -1,11 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, Sparkles, ShieldCheck, Users } from 'lucide-react';
+import { GitBranch, Mail, Sparkles, ShieldCheck, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
 const settingsItems = [
+  {
+    title: 'Profile & Signature',
+    description: 'Your name, title, and email signature applied to outgoing sequences',
+    href: '/settings/profile',
+    icon: UserIcon,
+  },
   {
     title: 'Pipelines',
     description: 'Manage your sales pipelines, stages, and probabilities',
