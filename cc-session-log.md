@@ -1425,3 +1425,40 @@ HubSpot-style per-user signatures so multi-sender sequences automatically apply 
 - **Single-row RLS for user_profiles.** No workspace_id column — signature is global to a person across all their workspaces. If multi-workspace per-user-with-different-sigs becomes a thing, revisit.
 - **Migration applied via Supabase Studio, not CLI.** `supabase db push` was unusable due to migration-history drift between local folder and prod (24 prod migrations not in local; CLAUDE.md flags this as expected since "tables already exist"). Ran the SQL through Studio's editor manually before merging the code.
 - **Did not commit branch hygiene fix.** Initial commit landed on local `main` by accident (a `git checkout -b feature/user-signatures origin/main` apparently didn't take); recovered by force-pointing the feature branch to the new commit and resetting local main to origin. No remote impact.
+
+
+## Session: Per-account sender health check button on /settings/email
+- **Date:** 2026-05-04
+- **PR:** [#105](https://github.com/jacobqvisth/crm-for-saas/pull/105)
+- **Branch:** `feature/sender-health-check`
+- **Merge commit:** `daf01d5`
+
+### What was built
+A per-account "Check health" button on each connected Gmail account in `/settings/email`. Click runs a server-side check and renders an inline expandable panel inside the card with green / yellow / red indicators and actionable detail text per signal. No external service, no schema change.
+
+- **NEW: `src/app/api/gmail/accounts/[id]/health-check/route.ts`** — Node runtime, workspace_member auth, all checks parallelized via `Promise.all`. `maxDuration = 60` for cold-start DNS. Returns `{ overall, summary, checks: { auth: [...], stats: [...] } }`.
+  - **Authentication (DNS via `node:dns/promises`)**
+    - **SPF**: presence + Google include + qualifier (`-all` strict / `~all` soft-fail).
+    - **DKIM**: tries selectors `google`, `default`, `selector1`, `selector2`, `k1`, `mailo`. Reports which matched.
+    - **DMARC**: presence + policy. Warn on `p=none`, good on `quarantine`/`reject`.
+    - **MX**: presence + Google detection.
+  - **Sending stats (last 30 days, internal)**
+    - **Bounce rate**: 0–3% good, 3–8% warn, ≥8% error.
+    - **Reply rate**: warn if very low and ≥50 sends; neutral if volume too low.
+    - **Account status**: surfaces circuit-breaker pause reason when present.
+- **`src/components/settings/gmail-account-card.tsx`**: ShieldCheck button + inline expandable result panel with per-row icons. Co-located `CheckRow` helper component.
+
+### Cleanup landed in this PR
+- `.gitignore`: added `supabase/.temp/` (Supabase CLI's local cache) and untracked the existing files there.
+- Carried in two pre-existing untracked files that had been sitting in the working tree across earlier sessions: `AGENTS.md` (Codex agent config) and `scripts/diagnose-gb-enroll.mjs` (the one-off diagnostic from PR #99/#102 work). Useful as templates so kept rather than deleted.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean (`.next/` validator.ts errors were stale dev-server output, unrelated)
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.5s, 62 routes (new health-check route is the +1)
+
+### Notable decisions
+- **No schema change.** Computed on-demand at click time. If we ever want history/trending, add a `gmail_account_health_checks` table later — not needed for the immediate "is this account healthy *right now*" use case.
+- **DKIM tries multiple selectors instead of asking the user.** Google Workspace defaults to `google`, but Postmark/SendGrid/Klaviyo use other conventions. The 6-selector probe covers the common cases without UI friction. If we ever support custom selectors per account, surface a textbox in the card.
+- **Reply rate as a soft inbox-placement signal.** Real inbox-placement testing requires a paid service (Glockapps / MailReach). A persistently low reply rate at meaningful volume is a cheap proxy worth surfacing as a yellow flag rather than nothing.
+- **Did not also surface OPEN rate** — already gameable by image proxies (Apple MPP) and arguably less actionable than reply rate. Intentionally kept the panel short.
