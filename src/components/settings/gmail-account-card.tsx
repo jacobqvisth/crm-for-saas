@@ -60,6 +60,10 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
   const [savingLimit, setSavingLimit] = useState(false);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
+  const [intervalSeconds, setIntervalSeconds] = useState(
+    account.min_send_interval_seconds ?? 60
+  );
+  const [savingInterval, setSavingInterval] = useState(false);
 
   async function handleCheckHealth() {
     setCheckingHealth(true);
@@ -145,6 +149,29 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
     setSavingLimit(false);
   }
 
+  async function handleUpdateInterval() {
+    if (intervalSeconds === (account.min_send_interval_seconds ?? 60)) return;
+    if (intervalSeconds < 30 || intervalSeconds > 3600) {
+      toast.error("Interval must be between 30 and 3600 seconds");
+      return;
+    }
+
+    setSavingInterval(true);
+    const res = await fetch(`/api/settings/email/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ min_send_interval_seconds: intervalSeconds }),
+    });
+
+    if (!res.ok) {
+      toast.error("Failed to update interval");
+    } else {
+      toast.success("Send interval updated");
+      onUpdate();
+    }
+    setSavingInterval(false);
+  }
+
   function handleReconnect() {
     window.location.href = "/api/auth/gmail/connect";
   }
@@ -225,6 +252,34 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
             className="rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100 disabled:opacity-50"
           >
             {savingLimit ? "Saving..." : "Save"}
+          </button>
+        )}
+      </div>
+
+      {/* Min send interval input */}
+      <div className="mt-2 flex items-center gap-2">
+        <label
+          className="text-xs text-slate-500 whitespace-nowrap"
+          title="Minimum seconds between two consecutive sends from this account. Raise for warm/established inboxes; keep low for fresh ones."
+        >
+          Min seconds between sends:
+        </label>
+        <input
+          type="number"
+          min={30}
+          max={3600}
+          step={30}
+          value={intervalSeconds}
+          onChange={(e) => setIntervalSeconds(Number(e.target.value))}
+          className="w-20 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+        />
+        {intervalSeconds !== (account.min_send_interval_seconds ?? 60) && (
+          <button
+            onClick={handleUpdateInterval}
+            disabled={savingInterval}
+            className="rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            {savingInterval ? "Saving..." : "Save"}
           </button>
         )}
       </div>

@@ -59,6 +59,11 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
   const [endHour, setEndHour] = useState(settings.send_end_hour ?? 17);
   const [timezone, setTimezone] = useState(settings.timezone || "Europe/Stockholm");
   const [dailyLimit, setDailyLimit] = useState(settings.daily_limit_per_sender ?? 80);
+  const [dailyLimitTotal, setDailyLimitTotal] = useState<number | "">(
+    settings.daily_limit_total && settings.daily_limit_total > 0
+      ? settings.daily_limit_total
+      : ""
+  );
   const [stopOnReply, setStopOnReply] = useState(settings.stop_on_reply ?? true);
   const [stopOnCompanyReply, setStopOnCompanyReply] = useState(settings.stop_on_company_reply ?? true);
   const [senderRotation, setSenderRotation] = useState(settings.sender_rotation ?? true);
@@ -76,6 +81,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
     setEndHour(s.send_end_hour ?? 17);
     setTimezone(s.timezone || "Europe/Stockholm");
     setDailyLimit(s.daily_limit_per_sender ?? 80);
+    setDailyLimitTotal(s.daily_limit_total && s.daily_limit_total > 0 ? s.daily_limit_total : "");
     setStopOnReply(s.stop_on_reply ?? true);
     setStopOnCompanyReply(s.stop_on_company_reply ?? true);
     setSenderRotation(s.sender_rotation ?? true);
@@ -132,6 +138,10 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
       // which is also the default when undefined — keep the JSON tidy.
       ...(rotationAccountIds.length > 0
         ? { rotation_account_ids: rotationAccountIds }
+        : {}),
+      // Same pattern: omit when blank/0 ⇒ "no total cap".
+      ...(typeof dailyLimitTotal === "number" && dailyLimitTotal > 0
+        ? { daily_limit_total: dailyLimitTotal }
         : {}),
     };
 
@@ -219,18 +229,43 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Daily Send Limit (per sender)
-          </label>
-          <input
-            type="number"
-            value={dailyLimit}
-            onChange={(e) => setDailyLimit(Number(e.target.value))}
-            min={1}
-            max={500}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Daily limit per sender
+            </label>
+            <p className="text-xs text-slate-500 mb-1.5">
+              Max emails this sequence sends from any single sender per day.
+            </p>
+            <input
+              type="number"
+              value={dailyLimit}
+              onChange={(e) => setDailyLimit(Number(e.target.value))}
+              min={1}
+              max={500}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Daily total (across all senders)
+            </label>
+            <p className="text-xs text-slate-500 mb-1.5">
+              Hard cap on this sequence&apos;s total daily output. Blank = no cap.
+            </p>
+            <input
+              type="number"
+              value={dailyLimitTotal}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDailyLimitTotal(v === "" ? "" : Math.max(0, Number(v)));
+              }}
+              min={0}
+              max={5000}
+              placeholder="e.g. 200"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+            />
+          </div>
         </div>
 
         <div className="space-y-3">

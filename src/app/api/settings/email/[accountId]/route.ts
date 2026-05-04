@@ -40,14 +40,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   const body = await request.json();
-  const { max_daily_sends, status, pause_reason } = body as {
+  const { max_daily_sends, min_send_interval_seconds, status, pause_reason } = body as {
     max_daily_sends?: number;
+    min_send_interval_seconds?: number;
     status?: string;
     pause_reason?: string;
   };
 
   const update: Record<string, unknown> = {};
   if (max_daily_sends !== undefined) update.max_daily_sends = max_daily_sends;
+  if (min_send_interval_seconds !== undefined) {
+    if (
+      typeof min_send_interval_seconds !== "number" ||
+      min_send_interval_seconds < 30 ||
+      min_send_interval_seconds > 3600
+    ) {
+      return NextResponse.json(
+        { error: "min_send_interval_seconds must be between 30 and 3600" },
+        { status: 400 }
+      );
+    }
+    update.min_send_interval_seconds = min_send_interval_seconds;
+  }
   if (status !== undefined) {
     update.status = status;
     // When resuming, clear pause_reason
