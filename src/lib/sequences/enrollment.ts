@@ -2,7 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "./variables";
 import { getNextSendTime, calculateStepScheduleTime } from "./scheduler";
-import type { SequenceSettings } from "@/lib/database.types";
+import type { SequenceSettings, Tables } from "@/lib/database.types";
+
+type ContactWithCompany = Tables<"contacts"> & {
+  companies: Tables<"companies"> | null;
+};
 
 interface EnrollParams {
   sequenceId: string;
@@ -61,14 +65,25 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
 
   const firstStep = steps?.[0];
 
-  // Get contacts
-  const { data: contacts } = await supabase
-    .from("contacts")
-    .select("*, companies(*)")
-    .in("id", contactIds)
-    .eq("workspace_id", workspaceId);
+  // Get contacts. PostgREST puts the IN list in the URL, so a single .in() with
+  // ~1000+ UUIDs blows past the URL length limit and the request fails with
+  // "Bad Request". Chunk to keep each request safe.
+  const CHUNK_SIZE = 200;
+  const contacts: ContactWithCompany[] = [];
+  for (let i = 0; i < contactIds.length; i += CHUNK_SIZE) {
+    const chunk = contactIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("*, companies(*)")
+      .in("id", chunk)
+      .eq("workspace_id", workspaceId);
+    if (error) {
+      return { enrolled: 0, skipped: contactIds.length, reasons: [`Failed to load contacts: ${error.message}`] };
+    }
+    if (data) contacts.push(...(data as unknown as ContactWithCompany[]));
+  }
 
-  if (!contacts) {
+  if (contacts.length === 0) {
     return { enrolled: 0, skipped: contactIds.length, reasons: ["No contacts found"] };
   }
 
