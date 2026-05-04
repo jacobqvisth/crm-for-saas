@@ -227,21 +227,87 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
     }
   };
 
-  const bulkUpdateStatus = async (status: string) => {
+  const bulkPause = async () => {
     if (!workspaceId || selected.size === 0) return;
 
-    const { error } = await supabase
+    // Only flip currently-active enrollments. Already-paused or terminal rows are skipped.
+    const { data: eligible } = await supabase
       .from("sequence_enrollments")
-      .update({ status })
-      .in("id", Array.from(selected));
+      .select("id")
+      .in("id", Array.from(selected))
+      .eq("status", "active");
 
-    if (error) {
-      toast.error("Failed to update enrollments");
-    } else {
-      toast.success(`${selected.size} enrollment(s) updated`);
+    const eligibleIds = (eligible || []).map((r) => r.id);
+    if (eligibleIds.length === 0) {
+      toast("No active enrollments to pause", { icon: "ℹ️" });
       setSelected(new Set());
-      load();
+      return;
     }
+
+    const { error: pauseError } = await supabase
+      .from("sequence_enrollments")
+      .update({ status: "paused" })
+      .in("id", eligibleIds);
+
+    if (pauseError) {
+      toast.error("Failed to pause enrollments");
+      return;
+    }
+
+    // Mirror the single-pause endpoint: cancel any scheduled queue items.
+    await supabase
+      .from("email_queue")
+      .update({ status: "cancelled" as const })
+      .in("enrollment_id", eligibleIds)
+      .eq("status", "scheduled");
+
+    const skipped = selected.size - eligibleIds.length;
+    toast.success(
+      skipped > 0
+        ? `${eligibleIds.length} paused, ${skipped} skipped (not active)`
+        : `${eligibleIds.length} enrollment(s) paused`
+    );
+    setSelected(new Set());
+    load();
+  };
+
+  const bulkResume = async () => {
+    if (!workspaceId || selected.size === 0) return;
+
+    // Resume needs to happen per-row because each enrollment has its own next-step
+    // template, contact variables, and scheduling. The single-row endpoint at
+    // /api/sequences/enrollments/[id] already does the right thing — only allows
+    // paused/company_paused → active, sets status=active, and queues the next step.
+    // We just fan out to it.
+    const ids = Array.from(selected);
+    let succeeded = 0;
+    let skipped = 0;
+    const CONCURRENCY = 10;
+
+    for (let i = 0; i < ids.length; i += CONCURRENCY) {
+      const chunk = ids.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map((id) =>
+          fetch(`/api/sequences/enrollments/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "resume" }),
+          })
+            .then((r) => r.ok)
+            .catch(() => false)
+        )
+      );
+      succeeded += results.filter(Boolean).length;
+      skipped += results.filter((r) => !r).length;
+    }
+
+    toast.success(
+      skipped > 0
+        ? `${succeeded} resumed, ${skipped} skipped (not paused)`
+        : `${succeeded} enrollment(s) resumed`
+    );
+    setSelected(new Set());
+    load();
   };
 
   const bulkRemove = async () => {
@@ -318,13 +384,13 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
         <div className="flex items-center gap-2 mb-4 p-3 bg-indigo-50 rounded-lg">
           <span className="text-sm font-medium text-indigo-700">{selected.size} selected</span>
           <button
-            onClick={() => bulkUpdateStatus("paused")}
+            onClick={bulkPause}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white rounded-md border border-slate-300 hover:bg-slate-50"
           >
             <Pause className="w-3 h-3" /> Pause
           </button>
           <button
-            onClick={() => bulkUpdateStatus("active")}
+            onClick={bulkResume}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white rounded-md border border-slate-300 hover:bg-slate-50"
           >
             <Play className="w-3 h-3" /> Resume
