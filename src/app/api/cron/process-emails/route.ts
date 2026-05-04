@@ -600,6 +600,31 @@ export async function POST(request: NextRequest) {
         }
 
         processed++;
+      } else if (result.error?.startsWith("Send rate limit")) {
+        // The per-account min_send_interval gate refused the send. Not a real
+        // failure — the next item is just too close to the previous one. Defer
+        // to exactly when the interval will have elapsed (with 5s safety jitter)
+        // so it gets picked up on the next cron tick that crosses that boundary.
+        // Don't count this toward the 3-retry budget. Without this branch, generic
+        // retry logic would reschedule +15min and fail items unnecessarily when
+        // min_send_interval > cron tick frequency (5min).
+        const { data: senderRow } = await supabase
+          .from("gmail_accounts")
+          .select("updated_at, min_send_interval_seconds")
+          .eq("id", senderAccountId)
+          .single();
+        const intervalSeconds = senderRow?.min_send_interval_seconds ?? 60;
+        const lastActivityMs = senderRow?.updated_at
+          ? new Date(senderRow.updated_at).getTime()
+          : Date.now();
+        const nextAttempt = new Date(lastActivityMs + intervalSeconds * 1000 + 5000);
+        await supabase
+          .from("email_queue")
+          .update({
+            status: "scheduled" as const,
+            scheduled_for: nextAttempt.toISOString(),
+          })
+          .eq("id", item.id);
       } else {
         // Send failed — retry logic
         const retryCount = (item as unknown as { retry_count?: number }).retry_count || 0;
