@@ -201,19 +201,43 @@ export async function resolveListContactIds(
   supabase: SupabaseClient<Database>,
   list: ResolvableList,
 ): Promise<string[]> {
+  // Supabase REST caps result sets at 1000 rows by default. Paginate explicitly
+  // so a list with > 1000 contacts (e.g. a country-wide dynamic list) returns
+  // every member, not just the first page.
+  const PAGE = 1000;
+
   if (list.is_dynamic === true) {
     const filters = (list.filters as ListFilter[] | null) ?? [];
-    const { data, error } = await buildFilterQuery(supabase, list.workspace_id, filters, 'id');
-    if (error) throw error;
-    return (data ?? []).map((c: { id: string }) => c.id);
+    const out: string[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await buildFilterQuery(
+        supabase,
+        list.workspace_id,
+        filters,
+        'id',
+        { range: [offset, offset + PAGE - 1] },
+      );
+      if (error) throw error;
+      const page = (data ?? []) as { id: string }[];
+      out.push(...page.map((c) => c.id));
+      if (page.length < PAGE) break;
+    }
+    return out;
   }
 
-  const { data, error } = await supabase
-    .from('contact_list_members')
-    .select('contact_id')
-    .eq('list_id', list.id);
-  if (error) throw error;
-  return (data ?? []).map((m) => m.contact_id);
+  const out: string[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
+      .from('contact_list_members')
+      .select('contact_id')
+      .eq('list_id', list.id)
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    out.push(...page.map((m) => m.contact_id));
+    if (page.length < PAGE) break;
+  }
+  return out;
 }
 
 export function describeFilter(filter: ListFilter, companyName?: string): string {

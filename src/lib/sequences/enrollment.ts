@@ -8,6 +8,8 @@ type ContactWithCompany = Tables<"contacts"> & {
   companies: Tables<"companies"> | null;
 };
 
+type EmailTemplate = Pick<Tables<"email_templates">, "id" | "subject" | "body_html">;
+
 interface EnrollParams {
   sequenceId: string;
   contactIds: string[];
@@ -89,6 +91,49 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
 
   const settings = sequence.settings as SequenceSettings;
 
+  // Pre-fetch eligible senders ONCE so we don't issue a getNextSender query per
+  // contact. We round-robin through the result in JS — fast, deterministic
+  // distribution within this batch. Falls back to per-row getNextSender if no
+  // explicit senderAccountId override AND we somehow can't load the pool.
+  let pooledSenders: Array<{ id: string }> = [];
+  let senderIdx = 0;
+  if (!senderAccountId) {
+    const rotationPool = settings.rotation_account_ids;
+    const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
+
+    let senderQuery = supabase
+      .from("gmail_accounts")
+      .select("id, daily_sends_count, max_daily_sends, status, workspace_id")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active")
+      .order("daily_sends_count", { ascending: true });
+    if (hasPool) senderQuery = senderQuery.in("id", rotationPool);
+
+    const { data: poolRows } = await senderQuery;
+    pooledSenders = (poolRows || []).filter(
+      (a) => (a.max_daily_sends ?? 0) - (a.daily_sends_count ?? 0) > 0
+    );
+
+    if (pooledSenders.length === 0) {
+      // No pool capacity — fall through to per-row getNextSender so the
+      // existing skip-with-reason path still fires.
+    }
+  }
+
+  // Pre-fetch all templates referenced by any step so we don't re-query inside
+  // the per-contact loop. Typical sequence has 2-5 templates max.
+  const templateIds = [
+    ...new Set((steps || []).map((s) => s.template_id).filter((x): x is string => !!x)),
+  ];
+  const templateById = new Map<string, EmailTemplate>();
+  if (templateIds.length > 0) {
+    const { data: templates } = await supabase
+      .from("email_templates")
+      .select("id, subject, body_html")
+      .in("id", templateIds);
+    for (const t of templates || []) templateById.set(t.id, t);
+  }
+
   for (const contact of contacts) {
     // Validation checks
     if (enrolledContactIds.has(contact.id)) {
@@ -109,22 +154,29 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       continue;
     }
 
-    // Determine sender
+    // Determine sender. Use the pre-fetched pool (round-robin in JS), falling
+    // back to the per-row getNextSender path if the pool is empty (so the
+    // existing "no senders" skip reason still surfaces).
     let assignedSenderId = senderAccountId;
     if (!assignedSenderId) {
-      const rotationPool = settings.rotation_account_ids;
-      const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
-      const sender = await getNextSender(workspaceId, hasPool ? rotationPool : undefined);
-      if (!sender) {
-        result.skipped++;
-        result.reasons.push(
-          hasPool
-            ? `${contact.email}: No accounts in this sequence's rotation pool have capacity`
-            : `${contact.email}: No available sender accounts`
-        );
-        continue;
+      if (pooledSenders.length > 0) {
+        assignedSenderId = pooledSenders[senderIdx % pooledSenders.length].id;
+        senderIdx++;
+      } else {
+        const rotationPool = settings.rotation_account_ids;
+        const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
+        const sender = await getNextSender(workspaceId, hasPool ? rotationPool : undefined);
+        if (!sender) {
+          result.skipped++;
+          result.reasons.push(
+            hasPool
+              ? `${contact.email}: No accounts in this sequence's rotation pool have capacity`
+              : `${contact.email}: No available sender accounts`
+          );
+          continue;
+        }
+        assignedSenderId = sender.id;
       }
-      assignedSenderId = sender.id;
     }
 
     // Create enrollment — pin the sender so all steps use the same account
@@ -158,12 +210,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       let bodyHtml = firstStep.body_override || "";
 
       if (firstStep.template_id) {
-        const { data: template } = await supabase
-          .from("email_templates")
-          .select("*")
-          .eq("id", firstStep.template_id)
-          .single();
-
+        const template = templateById.get(firstStep.template_id);
         if (template) {
           subject = firstStep.subject_override || template.subject;
           bodyHtml = firstStep.body_override || template.body_html;
@@ -212,12 +259,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
         let bodyHtml = nextStep.body_override || "";
 
         if (nextStep.template_id) {
-          const { data: template } = await supabase
-            .from("email_templates")
-            .select("*")
-            .eq("id", nextStep.template_id)
-            .single();
-
+          const template = templateById.get(nextStep.template_id);
           if (template) {
             subject = nextStep.subject_override || template.subject;
             bodyHtml = nextStep.body_override || template.body_html;
