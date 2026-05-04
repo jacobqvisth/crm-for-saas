@@ -27,7 +27,7 @@ interface SendEmailResult {
   error?: string;
 }
 
-const MIN_SEND_INTERVAL_MS = 60 * 1000; // 60 seconds between sends per account
+const DEFAULT_MIN_SEND_INTERVAL_SECONDS = 60;
 
 function getTrackingBaseUrl(): string {
   return (
@@ -143,12 +143,17 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     return { success: false, error: "Daily send limit reached" };
   }
 
-  // Check minimum send interval (60s between sends per account)
+  // Check minimum send interval (per-account, configurable; default 60s).
   if (account.updated_at) {
+    const intervalSeconds = account.min_send_interval_seconds ?? DEFAULT_MIN_SEND_INTERVAL_SECONDS;
+    const intervalMs = intervalSeconds * 1000;
     const lastActivity = new Date(account.updated_at).getTime();
     const now = Date.now();
-    if (now - lastActivity < MIN_SEND_INTERVAL_MS) {
-      return { success: false, error: "Send rate limit: minimum 60 seconds between sends" };
+    if (now - lastActivity < intervalMs) {
+      return {
+        success: false,
+        error: `Send rate limit: minimum ${intervalSeconds} seconds between sends`,
+      };
     }
   }
 
