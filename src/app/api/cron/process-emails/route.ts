@@ -192,6 +192,19 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // If the parent sequence is paused/draft/archived, do not send. Revert the
+      // queue item to 'scheduled' so it will be re-picked up once the sequence is
+      // back to 'active'. Don't cancel — sequence-level pause is meant to be
+      // reversible, unlike per-enrollment pause/terminal which is durable.
+      const seqStatus = (enrollment.sequences as { status?: string } | null)?.status;
+      if (seqStatus !== "active") {
+        await supabase
+          .from("email_queue")
+          .update({ status: "scheduled" as const })
+          .eq("id", item.id);
+        continue;
+      }
+
       // Check suppressions: email-level OR domain-level block
       const emailDomain = item.to_email.split("@")[1]?.toLowerCase();
       const { data: suppression } = await supabase
