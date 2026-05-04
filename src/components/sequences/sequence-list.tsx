@@ -35,6 +35,8 @@ interface SequenceWithStats extends Sequence {
   stats: {
     enrolled: number;
     active: number;
+    paused: number;
+    company_paused: number;
     done: number;
     sent: number;
     opened: number;
@@ -113,30 +115,45 @@ export function SequenceList() {
 
         // Try to get stats from the DB function
         let stats = {
-          enrolled: 0, active: 0, done: 0, sent: 0, opened: 0, clicked: 0,
+          enrolled: 0, active: 0, paused: 0, company_paused: 0, done: 0,
+          sent: 0, opened: 0, clicked: 0,
           replied: 0, bounced: 0, unsubscribed: 0,
         };
 
-        const [{ data: statsData }, { count: activeCount }, { count: doneCount }] = await Promise.all([
+        const enrollmentCount = (status: string | string[]) => {
+          const q = supabase
+            .from("sequence_enrollments")
+            .select("id", { count: "exact", head: true })
+            .eq("sequence_id", seq.id);
+          return Array.isArray(status) ? q.in("status", status) : q.eq("status", status);
+        };
+
+        const [
+          { data: statsData },
+          { count: activeCount },
+          { count: pausedCount },
+          { count: companyPausedCount },
+          { count: doneCount },
+        ] = await Promise.all([
           supabase.rpc("get_sequence_stats", { p_sequence_id: seq.id }),
-          supabase
-            .from("sequence_enrollments")
-            .select("id", { count: "exact", head: true })
-            .eq("sequence_id", seq.id)
-            .eq("status", "active"),
-          supabase
-            .from("sequence_enrollments")
-            .select("id", { count: "exact", head: true })
-            .eq("sequence_id", seq.id)
-            .in("status", DONE_STATUSES),
+          enrollmentCount("active"),
+          enrollmentCount("paused"),
+          enrollmentCount("company_paused"),
+          enrollmentCount(DONE_STATUSES),
         ]);
+
+        const breakdown = {
+          active: activeCount || 0,
+          paused: pausedCount || 0,
+          company_paused: companyPausedCount || 0,
+          done: doneCount || 0,
+        };
 
         if (statsData) {
           const s = (typeof statsData === "string" ? JSON.parse(statsData) : statsData) as Record<string, number>;
           stats = {
             enrolled: s.enrolled || 0,
-            active: activeCount || 0,
-            done: doneCount || 0,
+            ...breakdown,
             sent: s.sent || 0,
             opened: s.opened || 0,
             clicked: s.clicked || 0,
@@ -145,8 +162,7 @@ export function SequenceList() {
             unsubscribed: s.unsubscribed || 0,
           };
         } else {
-          stats.active = activeCount || 0;
-          stats.done = doneCount || 0;
+          Object.assign(stats, breakdown);
         }
 
         return {
@@ -377,7 +393,10 @@ export function SequenceList() {
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Steps</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Enrolled</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Currently being sent (status = active)">Active</th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Manually paused (you clicked Pause on this enrollment, or used Pause all on the sequence)">Paused</th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Auto-paused because another contact at the same company replied — sibling reply suppression">Co-Paused</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Reached a terminal state (completed all steps, replied, bounced, or unsubscribed)">Done</th>
+                <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3" title="Done ÷ Enrolled">Done %</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Sent</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Open %</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">
@@ -429,11 +448,6 @@ export function SequenceList() {
                             High bounces
                           </span>
                         )}
-                        {(healthData[seq.id]?.paused_count ?? 0) > 0 && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
-                            {healthData[seq.id].paused_count} paused
-                          </span>
-                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -444,7 +458,12 @@ export function SequenceList() {
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.steps_count}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.enrolled}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.active}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.paused}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.company_paused}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.done}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">
+                      {pct(seq.stats.done, seq.stats.enrolled)}%
+                    </td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">{seq.stats.sent}</td>
                     <td className="px-4 py-3 text-center text-sm text-slate-600">
                       {pct(seq.stats.opened, seq.stats.sent)}%
