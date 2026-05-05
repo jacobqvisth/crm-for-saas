@@ -1649,3 +1649,59 @@ Phase C of the Sweden roadmap: city-grid Apify scrape over the entire Stockholm 
 - **Chain tagging is opportunistic, not authoritative.** A 14-pattern regex catches obvious chain affiliations from the name field. Independent shops that happen to mention "MECA" in a partner-program disclosure may be false-positive — fix-forward later if it matters.
 - **Inspection stations filter at the import step, not at the Apify step.** `skipClosedPlaces: false` was set so we capture closed shops for cleanliness, then filter `Bilprovningen / Carspect / Opus / DEKRA / Applus / besiktning-only` names during import. Easier to audit the 147 filtered names afterward than to tune Apify's inclusion filter.
 - **51% email coverage is well above the 35% prior estimate.** Stockholm density + chain workshops both contributed — chains list a generic `info@` mailbox that always extracts cleanly. Independent shops are at ~40-45%.
+
+
+## Session: Sweden full-country expansion (phase 2)
+- **Date:** 2026-05-05
+- **PR:** Sweden full-country (this entry)
+- **Branch:** `feature/sweden-full-country`
+
+### What was built
+Phase A of the Sweden roadmap — extends the Stockholm metro pilot to the rest of the country. **+7,364 net-new workshops** (9,856 from Apify Maps + 803 from Lemlist = **10,659 SE total in `discovered_shops`**).
+
+- **`scripts/start-sweden-runs-phase2.mjs`** — kicks off 30 cells × 5 search terms = 150 async runs covering: Göteborg metro (3), Malmö-Lund-Helsingborg (3), 12 mid-size cities (Uppsala, Västerås, Örebro, Linköping, Norrköping, Jönköping, Borås, Eskilstuna, Halmstad, Växjö, Karlstad, Trollhättan), mid-north (Gävle, Sundsvall, Falun-Borlänge, Östersund), far north (Umeå, Skellefteå, Luleå, Kiruna at 50km radius — sparse), south residuals (Kalmar, Karlskrona, Kristianstad, Visby/Gotland). Same Apify per-run input as phase 1: `scrapeContacts: true`, `scrapePlaceDetailPage: true`, `maxImages: 0`, `maxReviews: 0`. Persists to `scripts/se-runs-phase2.json` (gitignored alongside `se-runs.json` via the `se-runs*.json` pattern).
+- **Reused the four phase-1 helper scripts with a `--runs-file=<path>` flag** added to each:
+  - `retry-pending-sweden-runs.mjs --runs-file=se-runs-phase2.json`
+  - `poll-sweden-runs.mjs --runs-file=se-runs-phase2.json`
+  - `reconcile-sweden-runs.mjs --runs-file=se-runs-phase2.json`
+- **`import-sweden-shops.mjs` updated to glob `se-runs*.json`** so phase 1 + phase 2 datasets are pulled together. Idempotent on `google_place_id` so re-running doesn't double-count phase-1 rows already in the DB.
+
+### Results
+| | Phase 1 (Stockholm) | Phase 2 (rest of country) | Combined |
+|---|--:|--:|--:|
+| Cells | 11 | 30 | 41 |
+| Search terms | 5 | 5 | 5 |
+| Apify runs | 55 | 150 | 205 |
+| All SUCCEEDED | ✅ 55/55 | ✅ 150/150 | ✅ |
+| Compute units | 19.65 | 41.92 | **61.57** |
+| Unique workshops imported | 2,492 | +7,364 | **9,856** |
+| With email | 1,261 (51%) | 3,718 (50%) | 4,979 (51%) |
+| With phone | 92% | 91% | 91% |
+| With website | 80% | 78% | 78% |
+| Cities covered | 106 | +418 | **524** |
+| Inspection rows filtered | 147 | +194 | 341 |
+| Chain-tagged | 345 | +811 | 1,156 |
+| MX-valid emails | 1,315 | +3,671 | **4,986** |
+| Newly cross-linked | 33 | +16 | 49 (this run total) |
+
+**Grand total SE inventory in `discovered_shops`:**
+- 10,659 rows
+- **5,669 MX-valid prospect emails ready for outreach**
+- 74 rows cross-linked to existing customer companies (will not appear in `/discovery` promote queue)
+- All 9,856 Apify rows have `google_maps_url` + `lat/lng` for one-click seller navigation
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- Vercel: skipped (only docs/scripts touched — `ignoreCommand` does its job)
+
+### Apify cost
+- Phase 1 + Phase 2 combined: 61.57 compute units
+- ~9,856 unique places at $0.005 worst-case = **~\$50 actual spend** (well under the $90 + $150 = $240 combined budget)
+
+### Notable decisions
+- **Same race condition as phase 1**, fixed the same way: poll + retry-pending + start owned the same JSON file from independent processes. Reconcile script pulled truth from Apify (fetched all 205 recent compass~crawler-google-places runs, matched on `searchStringsArray + customGeolocation.coordinates`, recovered 118 lost runId associations). The `--runs-file=` arg made the same script reusable for both phases.
+- **One unified `discovered_shops` import** — `import-sweden-shops.mjs` now globs `se-runs*.json` so future phases (Norway, Denmark, etc.) just drop another `<country>-runs.json` next to it. The dedup-on-`google_place_id` upsert handles re-imports cleanly.
+- **Far-north cells use 50km radius** vs 15-30km in the south — Norrland (Umeå, Skellefteå, Luleå, Kiruna) has very low workshop density, so a wider net per cell is more cost-efficient than tighter overlapping circles. Hit ~30-100 places per cell up there vs ~400-500 in Stockholm cells.
+- **Chain breakdown** (full Sweden): Mekonomen 272, Autoexperten 212, MECA 141, Bilia 126, Däckia 71, Euromaster 69, AD Bildelar 65, Vianor 60, Din Bil 44, Speedy 42, Bosch Car Service 30, First Stop 21, Pitstop 3 = 1,156 chain-tagged. Independents: 8,700.
+- **All 1,331 + 3,718 = 5,049 emails MX-checked** with per-domain caching (1,222 + 808 = 2,030 unique domains, 60% cache reuse). 5,669 ended up `email_status='valid'` (the 9 valid from Lemlist verified earlier + 1,315 + 3,671 + 803 already-tagged Lemlist deliverables = 5,669). 63 invalid (no MX or NXDOMAIN or bad format).

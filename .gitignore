@@ -48,7 +48,7 @@ docs/prompts/
 # Discovery pipeline data files (regeneratable, not versioned)
 scripts/*-shops-data.json
 scripts/lemlist-*.json
-scripts/se-runs.json
+scripts/se-runs*.json
 
 # GB scrape checkpoint artefacts (regeneratable from registries — see scrape-plan-GB.md)
 _reference/gb-checkpoint/
