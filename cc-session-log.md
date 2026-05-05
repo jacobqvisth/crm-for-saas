@@ -1705,3 +1705,49 @@ Phase A of the Sweden roadmap — extends the Stockholm metro pilot to the rest 
 - **Far-north cells use 50km radius** vs 15-30km in the south — Norrland (Umeå, Skellefteå, Luleå, Kiruna) has very low workshop density, so a wider net per cell is more cost-efficient than tighter overlapping circles. Hit ~30-100 places per cell up there vs ~400-500 in Stockholm cells.
 - **Chain breakdown** (full Sweden): Mekonomen 272, Autoexperten 212, MECA 141, Bilia 126, Däckia 71, Euromaster 69, AD Bildelar 65, Vianor 60, Din Bil 44, Speedy 42, Bosch Car Service 30, First Stop 21, Pitstop 3 = 1,156 chain-tagged. Independents: 8,700.
 - **All 1,331 + 3,718 = 5,049 emails MX-checked** with per-domain caching (1,222 + 808 = 2,030 unique domains, 60% cache reuse). 5,669 ended up `email_status='valid'` (the 9 valid from Lemlist verified earlier + 1,315 + 3,671 + 803 already-tagged Lemlist deliverables = 5,669). 63 invalid (no MX or NXDOMAIN or bad format).
+
+
+## Session: SE pattern-MV + shop_type bucketing
+- **Date:** 2026-05-05
+- **PR:** SE pattern-MV + shop_type (this entry)
+- **Branch:** `feature/se-pattern-mv-shop-type`
+
+### What was built
+Two unrelated improvements to the Sweden discovered_shops dataset shipped together since they overlapped in time:
+
+#### 1. Pattern-MV on website-but-no-email rows
+After the full-country Apify scrape left 4,887 SE rows with website but no email, I ran a pattern-guess + MillionVerifier pass to lift coverage. Adapted from `scripts/pattern-mv-gb.mjs` with Sweden-tuned patterns and a chain-domain guard.
+
+- **`scripts/pattern-mv-se.mjs`** — for each unique domain that appears in ≤3 SE rows (chain-domain guard skips multi-tenant domains like `autoexperten.se` where one mailbox shouldn't link to many physical shops), tries `info@`, `kontakt@`, `service@`, `verkstad@`, `bokning@` against MillionVerifier in order, stops at first 'valid', falls back to 'catch_all' if no valid hit.
+- 4,524 unique domains in the candidate set; 3,313 chain-shared domains skipped, **1,211 probed**.
+- 4,024 MV calls (~$2.82 in MV credits) → 523 'valid' + 121 'catch_all' = **644 domain hits → 707 net-new email rows**.
+- **Sweden sendable inventory: 5,669 → 6,376** (+12% lift on a 2-minute, $3 investment).
+
+#### 2. `shop_type` bucketing
+Sweden's 10,659 rows were a noisy mix of auto repair / tire / dealer / inspection / motorcycle / parts. Sequence enrollment needs a clean filter, so added a `shop_type` column with rule-based classification.
+
+- **`supabase/migrations/20260505030000_discovered_shops_shop_type.sql`** — adds the column, classifies via `category` + `all_categories[]` set-overlap operator. First cut put 4,771 SE rows in 'other' which was clearly too many.
+- **`supabase/migrations/20260505040000_discovered_shops_shop_type_refine.sql`** — refinement after inspection of the 'other' bucket revealed adjacent ICP being lost (Auto machine shop 337, Auto tune up 102, Auto electrical 42, Engine rebuilding 27, Auto restoration 24) plus inspection stations escaping the name-regex filter (97 'Car inspection station' rows). Reclassifies into 7 new/refined buckets: `auto_repair` (broadened), `tire_combo`, `tire_only`, `auto_glass`, `auto_body`, `truck_repair`, `inspection`, `dealer`, `parts`, `motorcycle`, `other`.
+
+**Final SE distribution:**
+| shop_type | total | sendable emails |
+|---|--:|--:|
+| auto_repair | 4,360 | 2,150 |
+| other | 2,444 | 1,797 |
+| dealer | 870 | 675 |
+| tire_only | 854 | 392 |
+| truck_repair | 806 | 543 |
+| parts | 426 | 300 |
+| auto_body | 301 | 138 |
+| auto_glass | 250 | 220 |
+| tire_combo | 128 | 74 |
+| motorcycle | 123 | 75 |
+| inspection | 97 | 12 |
+
+**Core ICP** (auto_repair + tire_combo + auto_glass + auto_body): **5,039 shops · 2,582 sendable emails**.
+
+### Notable decisions
+- **Chain-domain guard for pattern-MV**. A single `info@autoexperten.se` mailbox shouldn't be assigned as the email for 50 different physical Autoexperten workshops — each location has its own mailbox. Threshold: skip domains shared by >3 SE rows.
+- **`tire_only` vs `tire_combo` split was clean**. Of 980 tire-shop primary listings, 81% were 'tire_only' (just `Tire shop` / `Wheel store` / `Tire repair`) and 19% had `Auto repair shop` or `Mechanic` in `all_categories[]` — the second bucket is real combo workshops worth keeping in ICP.
+- **'other' bucket still has 2,444 rows worth investigating.** Likely some have NULL category from Google + sparse `all_categories[]`. Could re-run with website-content classification or AI labelling in a follow-up if these matter.
+- **MV cost was 7× lower than estimated.** Estimated $14-20, actual $2.82. The early-exit on `valid` (mean 3.3 calls/domain instead of 5) and the chain-domain guard cutting 73% of candidate domains explain the difference.
