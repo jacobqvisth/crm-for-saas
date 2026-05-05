@@ -48,23 +48,38 @@ export async function PATCH(
   }
 
   // When activating, promote all pending queue rows → scheduled with fresh scheduled_for.
-  // This handles the case where contacts were enrolled while the sequence was draft/paused.
+  // Handles enrollments created while the sequence was draft/paused.
+  //
+  // Two scale gotchas, both bit a 1995-contact Czech sequence:
+  //  1. Supabase select() defaults to a 1000-row cap — must paginate via .range().
+  //  2. PostgREST puts .in(...) values in the URL; ~1000 UUIDs blows past the URL
+  //     length limit and the request silently fails with "Bad Request" (data: null).
+  //     Same chunking pattern PR #99/#102 applied to enrollContacts.
   if (validStatus === "active") {
-    const { data: enrollments } = await supabase
-      .from("sequence_enrollments")
-      .select("id")
-      .eq("sequence_id", sequenceId);
+    const enrollmentIds: string[] = [];
+    const PAGE = 1000;
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await supabase
+        .from("sequence_enrollments")
+        .select("id")
+        .eq("sequence_id", sequenceId)
+        .range(offset, offset + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      enrollmentIds.push(...data.map((e) => e.id));
+      if (data.length < PAGE) break;
+    }
 
-    if (enrollments && enrollments.length > 0) {
-      const enrollmentIds = enrollments.map((e) => e.id);
+    if (enrollmentIds.length > 0) {
       const settings = sequence.settings as SequenceSettings;
-      const scheduledFor = getNextSendTime(settings);
-
-      await supabase
-        .from("email_queue")
-        .update({ status: "scheduled", scheduled_for: scheduledFor.toISOString() })
-        .in("enrollment_id", enrollmentIds)
-        .eq("status", "pending");
+      const scheduledFor = getNextSendTime(settings).toISOString();
+      const CHUNK = 200;
+      for (let i = 0; i < enrollmentIds.length; i += CHUNK) {
+        await supabase
+          .from("email_queue")
+          .update({ status: "scheduled", scheduled_for: scheduledFor })
+          .in("enrollment_id", enrollmentIds.slice(i, i + CHUNK))
+          .eq("status", "pending");
+      }
     }
   }
 
