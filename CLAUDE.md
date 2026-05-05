@@ -10,9 +10,7 @@ Self-hosted CRM with email sequencing (like HubSpot Sales + Lemlist) for a SaaS 
 
 ## Workflow
 
-**CC owns the full build-test-merge-deploy cycle. Do not wait for Cowork to merge.**
-
-Each CC session follows this loop:
+The team works in Claude Code end-to-end on this project — there is no separate "Cowork plans, CC implements" split anymore. Whoever picks up the task owns the full build-test-merge-deploy cycle:
 
 1. `git fetch origin && git rebase origin/main` on a new branch
 2. Build the feature
@@ -20,11 +18,11 @@ Each CC session follows this loop:
 4. Push branch, open PR (`gh pr create`), merge immediately (`gh pr merge --squash --repo jacobqvisth/crm-for-saas`)
 5. Vercel auto-deploys on every push to `main` — wait up to 90 s and verify the deploy URL is live (`curl -I https://crm-for-saas.vercel.app`)
 6. Append to `cc-session-log.md`: phase/task, date, PR #, branch, bullet list of what was built, build status, deploy URL, anything skipped or notable
-7. Done. No hand-off to Cowork needed.
+7. Update `PROJECT-STATUS.md` if the work changes overall project state. Done.
 
-**Cowork's role** is now only: write prompts (in the vault, not this repo), update `PROJECT-STATUS.md` based on `cc-session-log.md`, fix-forward if CI fails (check with `gh run list --branch main --limit 5`).
+**GitHub Actions CI** runs on every push to `main` and every PR — it's a safety net, not a gate. Don't wait for it. If it fails, fix forward in the next session.
 
-**GitHub Actions CI** runs on every push to `main` and every PR — it's a safety net, not a gate. CC does not wait for it. If it fails, fix forward in the next session.
+**Schema changes** apply directly to prod. Use `psql` with `SUPABASE_DB_PASSWORD` from `.env.local` to apply migrations during the same session, then commit the SQL file. Studio paste is also fine for one-offs.
 
 ## Autonomy
 
@@ -85,14 +83,18 @@ This app uses a `(dashboard)` route group for layout only. Routes are:
 - **`workspace_members` table has special policies** — do NOT add policies that self-reference `workspace_members` directly (causes infinite recursion). Use `user_id = auth.uid()` or SECURITY DEFINER helper functions instead.
 
 ### Database Schema
-All tables already exist in Supabase. Do NOT create new tables or run migrations unless explicitly asked. The tables are:
+The CRM is a hybrid of prospect-discovery + outreach + actual-customer management. Tables:
 - **Core CRM:** workspaces, workspace_members, contacts, companies, pipelines, deals, deal_contacts, activities
-- **Legacy staging:** discovered_shops (unused in this project). The contractor-directory scrape pipeline now lives in jacobqvisth/result-insurance against Supabase project ugibcnidxrhcxflqamxs. Do **not** write to this table from crm-saas jobs. If a CRM-prospecting scrape feature is ever added here, start a fresh table rather than reusing this schema.
+- **Customer lifecycle:** subscriptions (Stripe history per company), usage_events (generic event stream — login, diagnostic, subscription, etc. — built for the dashboard merge)
+- **Prospect staging:** discovered_shops (Apify Google Maps imports + manual prospect lists land here, then are promoted to companies+contacts via the `/discovery` page)
 - **Lists:** contact_lists, contact_list_members
 - **Email:** gmail_accounts, email_templates, sequences, sequence_steps, sequence_enrollments, email_queue, email_events, unsubscribes
+- **Compliance:** suppressions (unified DNC + bounce + unsubscribe list, scoped per workspace)
 
 ### contacts — full field list
-id, workspace_id, email (required), first_name, last_name, phone, title, city, country, country_code, address, postal_code, company_id (FK → companies), is_primary, status, lead_status, source, email_status, email_verified_at, seniority, linkedin_url, instagram_url, facebook_url, all_emails TEXT[], all_phones TEXT[], language, tags TEXT[], notes, last_contacted_at, custom_fields JSONB, created_at, updated_at
+**Identity:** id, workspace_id, email (required), first_name, last_name, phone, title, city, country, country_code, address, postal_code, company_id (FK → companies), is_primary, status, lead_status, source, email_status, email_verified_at, seniority, linkedin_url, instagram_url, facebook_url, all_emails TEXT[], all_phones TEXT[], language, tags TEXT[], notes, last_contacted_at, custom_fields JSONB, created_at, updated_at
+
+**Wrenchlane-app user fields** (added 2026-05-05): wl_user_id (UUID, unique, AWS Cognito sub — populated only for actual app users), app_username, app_role ('admin' | 'mechanic'), last_login_at, last_active_at, login_count, credits_remaining, user_plan_type, user_subscription_status, user_stripe_customer_id, user_stripe_subscription_id, diagnostics_total, diagnostics_first_at, diagnostics_last_at, diagnostics_last_30d
 
 Key notes:
 - One contact → one company (company_id nullable). No multi-company associations.
@@ -100,10 +102,14 @@ Key notes:
 - `language` = 2-letter locale code: et, sv, fi, lv, lt, no, da — determines which sequence variant to enroll in
 - `all_emails` / `all_phones` = extra emails/phones scraped from website; `email` is the one used by sequences
 - `tags` = free-form array e.g. ['owner', 'decision-maker', 'vip']
-- `source` = 'csv' | 'discovery' | 'manual' | 'prospeo'
+- `source` = 'csv' | 'discovery' | 'manual' | 'prospeo' | 'wl-app' | 'lemlist' (legacy)
+- `lead_status` = 'new' | 'contacted' | 'engaged' | 'qualified' | 'customer' | 'unqualified' | 'churned'
+- `wl_user_id` is the canonical identity for app users — search/dedupe by this when present
 
 ### companies — full field list
-id, workspace_id, name (required), domain, website, phone, address, city, postal_code, country, country_code, industry, category, description, employee_count, annual_revenue, revenue_range, founded_year, linkedin_url, instagram_url, facebook_url, google_place_id, rating DECIMAL(3,1), review_count, tech_stack TEXT[], parent_company_id (FK → companies self-ref), tags TEXT[], notes, custom_fields JSONB, created_at, updated_at
+**Identity / firmographic:** id, workspace_id, name (required), domain, website, phone, address, city, postal_code, country, country_code, industry, category, description, employee_count, annual_revenue, revenue_range, founded_year, linkedin_url, instagram_url, facebook_url, google_place_id, rating DECIMAL(3,1), review_count, tech_stack TEXT[], parent_company_id (FK → companies self-ref), tags TEXT[], notes, source, custom_fields JSONB, created_at, updated_at
+
+**Workshop / customer-state fields** (added 2026-05-05): wl_workshop_id (UUID, unique — dashboard workshop UUID), lifecycle_stage, customer_status, plan, plan_billing_cycle, mrr_cents, arr_cents, currency, trial_ends_at, activated_at, churned_at, churn_reason, stripe_customer_id, stripe_subscription_id, subscription_status, payment_status, acquisition_source, created_by_agent, account_owner_id, member_count, last_active_at, health_score
 
 Key notes:
 - `parent_company_id` = self-referencing FK for chain/franchise hierarchy (e.g. Mekonomen AB → local Mekonomen shops). One level deep is enough.
@@ -111,6 +117,24 @@ Key notes:
 - `rating` / `review_count` = Google Maps rating, useful for ICP scoring
 - `category` = shop type: 'auto repair', 'tire shop', 'bodywork', etc.
 - `tags` = free-form array e.g. ['chain', 'franchise', 'independent', 'vip', 'skip']
+- `source` = 'wl-app' | 'discovery' | 'manual' | 'lemlist' (legacy) — what system this row came from
+- `lifecycle_stage` = 'lead' | 'mql' | 'sql' | 'trial' | 'paying' | 'churned' | 'reactivation' — sales/CS funnel stage
+- `customer_status` = 'trialing' | 'active' | 'paused' | 'inactive' | 'churned' — operational status (mirrors Stripe sub.status)
+- `mrr_cents` = normalized monthly recurring (yearly plans / 12). Currently null pending the price-map wire-up; backfill from Stripe when the integration lands.
+- `acquisition_source` = 'sales' | 'plg' | 'referral' | 'paid' | 'organic' | 'partner' | 'event' | 'unknown'
+- `wl_workshop_id` is the canonical identity for app workshops — search/dedupe by this when present
+
+### subscriptions — full field list
+id, workspace_id, company_id (FK), stripe_customer_id, stripe_subscription_id (unique), plan, status, current_period_start, current_period_end, trial_start, trial_end, cancel_at_period_end, canceled_at, mrr_cents, currency, metadata JSONB, created_at, updated_at
+
+One row per Stripe subscription. A company can have multiple over time (churned + came back). Most fields are null on initial import — they're meant to be populated by Stripe webhook → `usage_events` ingest, with the latest snapshot mirrored here.
+
+### usage_events — full field list
+id, workspace_id, company_id (FK, nullable), contact_id (FK, nullable), event_type, event_at, source, metadata JSONB, external_id, created_at
+
+Generic time-series event stream. Idempotent on (source, external_id). Designed for the dashboard merge — login events, diagnostic events, Stripe webhooks all funnel here. Aggregations (`diagnostics_total`, `last_active_at`, etc.) get computed from this table when needed instead of being denormalized forever.
+
+`event_type` is open-ended but conventional values: `login`, `diagnostic_started`, `diagnostic_completed`, `subscription_created`, `subscription_updated`, `subscription_canceled`, `invoice_paid`, `invoice_failed`, `feature_used`.
 
 ### Supabase Project
 - Project ID: `wdgiwuhehqpkhpvdzzzl`

@@ -45,8 +45,9 @@ next-env.d.ts
 # CC prompts — local only, not versioned
 docs/prompts/
 
-# Cowork discovery pipeline data files
+# Discovery pipeline data files (regeneratable, not versioned)
 scripts/*-shops-data.json
+scripts/lemlist-*.json
 
 # GB scrape checkpoint artefacts (regeneratable from registries — see scrape-plan-GB.md)
 _reference/gb-checkpoint/
