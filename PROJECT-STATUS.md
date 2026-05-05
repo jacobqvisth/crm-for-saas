@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-04-29 (UK/GB batch 3 — tier-2 city-grid (Liverpool/Edinburgh/Bristol/Cardiff/Belfast) adds 3,193 net-new shops; GB total now 11,674 with 4,026 sendable emails)
+Last updated: 2026-05-04 (sending pipeline hardening — per-user editable signatures #101, sequence-level daily caps + per-sender configurable send interval #108, rate-limit retry fix + lower default sequence caps #110)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
