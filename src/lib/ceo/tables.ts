@@ -1,0 +1,14 @@
+export const TABLES = {
+  sourceAccounts: "dashboard_source_accounts",
+  syncRuns: "dashboard_sync_runs",
+  rawMetricRows: "dashboard_raw_metric_rows",
+  metricSnapshots: "dashboard_metric_snapshots",
+  funnelSnapshots: "dashboard_funnel_snapshots",
+  users: "dashboard_users",
+  workshops: "dashboard_workshops",
+  subscriptions: "dashboard_subscriptions",
+  diagnostics: "dashboard_diagnostics",
+  diagnosticChats: "dashboard_diagnostic_chats",
+  motorUsage: "dashboard_motor_usage",
+  costEntries: "dashboard_cost_entries",
+} as const;
