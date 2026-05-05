@@ -1557,3 +1557,44 @@ Extends the per-account "Check health" feature shipped in PR #105 with three dom
 - **Three lists, not more.** Spamhaus DBL + SURBL + URIBL cover the major commercial blocklists most providers consult. Adding more (Sorbs, Barracuda, etc.) would mostly add noise; the three picked are the highest-signal.
 - **Resolver-rejected = neutral, not error.** Spamhaus's `127.0.1.255` "your resolver is blocked" response is technically an A record, so a naive listing check would falsely flag every domain when Vercel's resolver is throttled. The `.255` suffix special-case keeps that signal honest.
 - **Built in a worktree (`/tmp/crm-blocklist`)** so the parallel `feature/sequence-throttles` branch checkout in `~/crm-for-saas` was untouched. cc-session-log entry committed via the same worktree pattern.
+
+
+## Session: Workshop CRM schema + import existing customers from app
+- **Date:** 2026-05-05
+- **PR:** [#115](https://github.com/jacobqvisth/crm-for-saas/pull/115)
+- **Branch:** `feature/workshop-crm-schema`
+- **Merge commit:** `6de8478`
+
+### What was built
+Extends the CRM to model Wrenchlane platform customers (workshops + their app users), so prospects, trial users, and paying customers can live in one workspace with a continuous lifecycle.
+
+- **Migrations** (applied to prod via psql + `SUPABASE_DB_PASSWORD` from `.env.local`):
+  - `20260505000000_workshop_crm_schema.sql` — adds 24 columns to `companies` (workshop/customer state: lifecycle_stage, customer_status, plan, mrr_cents, trial_ends_at, stripe_*, acquisition_source, member_count, etc.) and 14 to `contacts` (app user state: app_role, last_login_at, login_count, credits_remaining, diagnostics_*). Creates `subscriptions` table (Stripe subscription history) and `usage_events` table (generic event stream — login/diagnostic/subscription/invoice events; idempotent on `(source, external_id)`; future-proofed for the dashboard merge so denormalized aggregates can be recomputed instead of perpetually maintained).
+  - `20260505010000_workshop_crm_schema_fixup.sql` — adds `companies.source` (was missing in the first cut), drops the partial `WHERE x IS NOT NULL` unique indexes on `wl_workshop_id` / `wl_user_id` and recreates them as full unique indexes (PostgREST's upsert can't use partial indexes as `ON CONFLICT` arbiters).
+
+- **Source-of-truth IDs**: `companies.wl_workshop_id` (dashboard workshop UUID) and `contacts.wl_user_id` (AWS Cognito sub) — both unique-but-nullable. Populated only for rows that originated from the Wrenchlane platform; null for prospects, scrape imports, manual adds. Keep the existing `companies.id` / `contacts.id` as the CRM-internal IDs.
+
+- **`scripts/import-wl-users.mjs`** — loads the 333-row existing-customers CSV (`/tmp/wl-users.csv`) into the wrenchlane.com workspace (`d946ea1f-74b4-492e-ae6a-d50f59ff04f0`):
+  - 255 workshops → companies
+  - 316 users → contacts (1 row dropped: non-UUID test account `circamatteo-testsab`)
+  - 132 unique Stripe subscriptions → subscriptions
+  - **Cross-link** with `discovered_shops`: 25 lemlist prospect rows flagged as already-customer (22 exact-email match + 3 single-customer-domain match). Chain domains (autoexperten.se, mekonomen.se, bdgroup.se) and free-mail providers (hotmail.se) intentionally skipped — they're shared by multiple workshops, so domain-match would over-link.
+  - Lifecycle distribution: 99 trial / 63 lead / 56 churned / 37 paying. Acquisition: 46 sales (had `workshop_created_by_agent` set) / 209 unknown.
+
+- **`scripts/import-lemlist-history-se.mjs`** — separate idempotent script that loaded the legacy Lemlist export (`/tmp/Downloads/contacts-04-21-2026.csv`, 2,183 rows). Sweden subset (1,005 rows): 803 prospects → discovered_shops (with full Lemlist state in `raw_data.lemlist`), 200 bounced + 2 unsubscribed → suppressions table. Norway + Poland (926 rows) saved to `scripts/lemlist-no-pl-history.json` (gitignored) for the eventual NO/PL scrapes.
+
+- **CLAUDE.md updates**: workflow note simplified (CC works end-to-end on this project, no Cowork/CC split anymore); schema docs updated with all the new columns; `source` / `lifecycle_stage` / `customer_status` / `acquisition_source` enums documented.
+
+- **`.gitignore`**: added `scripts/lemlist-*.json` so the NO/PL contact data isn't accidentally committed.
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- Vercel deploy: skipped (only docs/, scripts/, supabase/ touched — `ignoreCommand` does its job). Prod URL still 307 (auth redirect, expected).
+
+### Notable decisions
+- **One workspace, two populations.** Both prospects (lemlist + future scrape) and customers (wl-app) live in the wrenchlane.com workspace under different `source` and `lifecycle_stage` values. Splitting them across workspaces would force delete/recreate when a prospect converts and lose history. Lifecycle is a continuum.
+- **Lemlist is being phased out.** The 803 historical rows keep `source='lemlist'` for provenance, but no new code references it. Going forward, the CRM's own sequencing (Phase 5+) owns outreach.
+- **`mrr_cents` left null on initial import.** Don't have the plan→price map yet; backfill from Stripe when the integration lands. `plan` and `plan_billing_cycle` are populated from the CSV directly, so MRR can be computed retroactively.
+- **`usage_events` future-proofs the dashboard merge.** Designed to absorb login events, diagnostic events, Stripe webhooks, anything else from the dashboard codebase later. Aggregations (`diagnostics_total`, `last_active_at`, etc.) computed from this table on demand instead of being denormalized forever.
+- **`SUPABASE_DB_PASSWORD` workflow.** Schema changes now apply directly via psql in the same session that writes the migration. CLAUDE.md updated with this. No more "apply via Studio out of band". Also documented the password reset path in case it's needed again.
