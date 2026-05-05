@@ -120,16 +120,28 @@ export default function SequenceDetailPage() {
 
     // Load sending status: get distinct senders from this sequence's enrollments,
     // fall back to first active workspace account if no enrollments yet.
-    const { data: enrollmentRows } = await supabase
-      .from("sequence_enrollments")
-      .select("id, sender_account_id")
-      .eq("sequence_id", sequenceId);
+    // Paginate past Supabase's 1000-row default — sequences with >1000 enrollments
+    // would otherwise undercount senders and miss queue rows on the .in() below.
+    const enrollmentRows: { id: string; sender_account_id: string | null }[] = [];
+    {
+      const PAGE = 1000;
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await supabase
+          .from("sequence_enrollments")
+          .select("id, sender_account_id")
+          .eq("sequence_id", sequenceId)
+          .range(offset, offset + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        enrollmentRows.push(...data);
+        if (data.length < PAGE) break;
+      }
+    }
 
-    const enrollIds = (enrollmentRows || []).map((e) => e.id);
+    const enrollIds = enrollmentRows.map((e) => e.id);
 
     // Count enrollments per sender_account_id
     const senderCountMap = new Map<string, number>();
-    for (const row of enrollmentRows || []) {
+    for (const row of enrollmentRows) {
       if (!row.sender_account_id) continue;
       senderCountMap.set(
         row.sender_account_id,
@@ -171,27 +183,35 @@ export default function SequenceDetailPage() {
     let nextSend: string | null = null;
     let lastSent: string | null = null;
 
+    // Chunk the .in() — ~1000 UUIDs in a single PostgREST URL fails silently with
+    // "Bad Request". Take the min/max across chunks in JS.
     if (enrollIds.length > 0) {
-      const [{ data: nextEmail }, { data: lastSentEmail }] = await Promise.all([
-        supabase
-          .from("email_queue")
-          .select("scheduled_for")
-          .eq("status", "scheduled")
-          .in("enrollment_id", enrollIds)
-          .order("scheduled_for", { ascending: true })
-          .limit(1),
-        supabase
-          .from("email_queue")
-          .select("sent_at")
-          .eq("status", "sent")
-          .in("enrollment_id", enrollIds)
-          .not("sent_at", "is", null)
-          .order("sent_at", { ascending: false })
-          .limit(1),
-      ]);
+      const CHUNK = 200;
+      for (let i = 0; i < enrollIds.length; i += CHUNK) {
+        const chunk = enrollIds.slice(i, i + CHUNK);
+        const [{ data: nextEmail }, { data: lastSentEmail }] = await Promise.all([
+          supabase
+            .from("email_queue")
+            .select("scheduled_for")
+            .eq("status", "scheduled")
+            .in("enrollment_id", chunk)
+            .order("scheduled_for", { ascending: true })
+            .limit(1),
+          supabase
+            .from("email_queue")
+            .select("sent_at")
+            .eq("status", "sent")
+            .in("enrollment_id", chunk)
+            .not("sent_at", "is", null)
+            .order("sent_at", { ascending: false })
+            .limit(1),
+        ]);
 
-      nextSend = nextEmail?.[0]?.scheduled_for ?? null;
-      lastSent = lastSentEmail?.[0]?.sent_at ?? null;
+        const candidateNext = nextEmail?.[0]?.scheduled_for ?? null;
+        if (candidateNext && (!nextSend || candidateNext < nextSend)) nextSend = candidateNext;
+        const candidateLast = lastSentEmail?.[0]?.sent_at ?? null;
+        if (candidateLast && (!lastSent || candidateLast > lastSent)) lastSent = candidateLast;
+      }
     }
 
     setSendingStatus({
