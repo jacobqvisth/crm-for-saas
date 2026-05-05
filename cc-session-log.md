@@ -1598,3 +1598,54 @@ Extends the CRM to model Wrenchlane platform customers (workshops + their app us
 - **`mrr_cents` left null on initial import.** Don't have the plan→price map yet; backfill from Stripe when the integration lands. `plan` and `plan_billing_cycle` are populated from the CSV directly, so MRR can be computed retroactively.
 - **`usage_events` future-proofs the dashboard merge.** Designed to absorb login events, diagnostic events, Stripe webhooks, anything else from the dashboard codebase later. Aggregations (`diagnostics_total`, `last_active_at`, etc.) computed from this table on demand instead of being denormalized forever.
 - **`SUPABASE_DB_PASSWORD` workflow.** Schema changes now apply directly via psql in the same session that writes the migration. CLAUDE.md updated with this. No more "apply via Studio out of band". Also documented the password reset path in case it's needed again.
+
+
+## Session: Sweden Stockholm metro Apify scrape + extras schema
+- **Date:** 2026-05-05
+- **PR:** Sweden Stockholm metro (this entry)
+- **Branch:** `feature/sweden-stockholm-scrape`
+
+### What was built
+Phase C of the Sweden roadmap: city-grid Apify scrape over the entire Stockholm county (11 cells × 5 Swedish search terms = 55 async runs). All 55 runs SUCCEEDED with 0 failures. **2,492 unique Stockholm-metro workshops imported** to `discovered_shops`.
+
+- **Schema migration `20260505020000_discovered_shops_extras.sql`** — captures the freebie fields the Apify Google Maps Scraper returns at no extra cost: `google_maps_url` (direct GMaps deep link for sellers — one click from CRM to navigation), `description`, `permanently_closed`, `temporarily_closed`, `price_level`, `additional_info` (JSONB: payment methods, accessibility, service options), `plus_code`, `popular_times` (popularity histogram), plus `linkedin_url` / `twitter_url` / `youtube_url` to round out social URLs alongside the existing `instagram_url` / `facebook_url`.
+- **`scripts/start-sweden-runs.mjs`** — kicks off 11 cells × 5 terms async via Apify REST API. Cells: 4 city-core (15km radius — Stockholm NE/NW/SE/SW), 4 inner ring (20km — Outer N/S/E/W), 3 county fringe (25-30km — Norrtälje, Sigtuna/Arlanda, Nynäshamn/Haninge). Search terms: `bilverkstad`, `bilreparation`, `mekaniker`, `däckverkstad`, `bilservice`. Per-run input: `scrapeContacts: true` (+$0.001/place gives email + socials), `scrapePlaceDetailPage: true` (free — gives description + additional_info), `maxImages: 0` and `maxReviews: 0` (explicit zero — no per-image or per-review cost).
+- **`scripts/retry-pending-sweden-runs.mjs`** — Apify rejected the first 23 of 55 with "memory-limit-exceeded" because the actor defaults to 4096 MB and 32 × 4096 hits the 131072 MB account cap. This script polls and re-kicks failed-to-start records every 60s until all 55 are scheduled.
+- **`scripts/poll-sweden-runs.mjs`** — watches Apify `actor-runs/{id}` until every record reaches a terminal state, persists status + stats back to `se-runs.json`. Final result: 55 SUCCEEDED, 0 failed, 19.65 compute units total.
+- **`scripts/reconcile-sweden-runs.mjs`** — recovery for a race condition: `start-sweden-runs.mjs` and `poll-sweden-runs.mjs` and `retry-pending-sweden-runs.mjs` all read/write the same `se-runs.json` from independent processes. Poll's "read once at startup, write own snapshot" pattern overwrote retry's runId updates. This script lists all `compass~crawler-google-places` runs from the last 90 minutes, fetches each run's INPUT key-value, matches them to the records by `(searchStringsArray[0], customGeolocation.coordinates)`, and patches the runIds back in. Recovered 20 lost runId associations.
+- **`scripts/import-sweden-shops.mjs`** — fetches the 55 Apify datasets, dedupes on `placeId`, applies a Sweden-specific inspection-station filter (`Bilprovningen | Carspect | Opus Bilprovning | DEKRA | Applus | Svensk Bilprovning | besiktning`-without-`verkstad` — 147 inspection rows filtered out), tags chain workshops via 14 patterns (`Mekonomen | Autoexperten | MECA | Bosch Car Service | Bilia | AD Bildelar | Däckia | Vianor | Speedy | Euromaster | BD Group | Din Bil | First Stop | Pitstop` — 345 rows tagged), maps all 30+ Apify fields into the new `discovered_shops` columns, and runs the cross-link pass against existing customers at the end (27 exact-email + 6 single-customer-domain matches = 33 newly linked).
+- **`scripts/verify-emails-se.mjs`** — Node-native MX verification (uses `dns/promises.resolveMx`, no Python required like the original skill template). Per-domain cache: 1,331 emails resolved through 808 unique domains. Bulk-marked all rows valid first, then patched the 16 invalids (11 no-MX + 5 invalid-format).
+- **`scripts/se-runs.json`** + **`scripts/lemlist-no-pl-history.json`** added to `.gitignore` (PII + regeneratable from Apify / source CSV).
+
+### Final Sweden discovered_shops state
+| | |
+|---|---|
+| **Total SE rows** | **3,295** |
+|   from Apify Google Maps (this scrape) | 2,492 |
+|   from Lemlist legacy import | 803 |
+| **MX-valid emails** | **1,998 (60.6%)** |
+| With phone | 92% |
+| With website | 80% |
+| With Google Maps URL + lat/lng | 2,492 (all Apify rows) |
+| Cross-linked to existing customers | 58 (33 new + 25 from earlier wl-users import) |
+| Chain-tagged | 345 |
+| Cities covered | 106 |
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- 3 new scripts (start / retry / poll) + 1 reconciliation + 1 import + 1 verify = all `.mjs`, outside the Next.js build path
+- Vercel: skipped (only docs/scripts/migrations touched — `ignoreCommand` does its job)
+
+### Apify cost
+- **19.65 compute units total** across 55 runs
+- **2,492 unique places at $0.005 worst-case = $12.46**, well below the $90 estimate
+- The compute units cost is separately metered; total bill should be under $30
+
+### Notable decisions
+- **Race condition fixed by external reconciliation, not by serializing the scripts.** Three short-lived scripts each owned the same JSON file from independent processes — easier to add a one-shot reconciler that pulls truth from Apify than to introduce locking. Ran once, recovered all 20 lost runIds.
+- **`google_maps_url` is the seller-UX win.** Latitude/longitude alone don't put a workshop on a map — sellers need a click-through. The constructed URL (`https://www.google.com/maps/place/?q=place_id:<placeId>`) opens directly in Google Maps with the correct pin. All 2,492 Apify rows have it.
+- **Per-domain MX cache cuts 1,331 lookups to 808.** Many shops at the same chain (autoexperten.se, mekonomen.se, bdgroup.se) point to one domain — no reason to verify each independently.
+- **Chain tagging is opportunistic, not authoritative.** A 14-pattern regex catches obvious chain affiliations from the name field. Independent shops that happen to mention "MECA" in a partner-program disclosure may be false-positive — fix-forward later if it matters.
+- **Inspection stations filter at the import step, not at the Apify step.** `skipClosedPlaces: false` was set so we capture closed shops for cleanliness, then filter `Bilprovningen / Carspect / Opus / DEKRA / Applus / besiktning-only` names during import. Easier to audit the 147 filtered names afterward than to tune Apify's inclusion filter.
+- **51% email coverage is well above the 35% prior estimate.** Stockholm density + chain workshops both contributed — chains list a generic `info@` mailbox that always extracts cleanly. Independent shops are at ~40-45%.
