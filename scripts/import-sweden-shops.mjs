@@ -37,8 +37,19 @@ if (!apifyToken) { console.error('Missing APIFY_TOKEN'); process.exit(1) }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
 
-const RUNS_PATH = join(__dirname, 'se-runs.json')
-const records = JSON.parse(readFileSync(RUNS_PATH, 'utf8'))
+// Reads ALL se-runs*.json files in scripts/ so phase 1 + phase 2 are imported together.
+// On re-run, the upsert with ignoreDuplicates means already-imported placeIds are no-ops.
+const SCRIPTS_DIR = __dirname
+const runsFiles = (await import('fs')).readdirSync(SCRIPTS_DIR)
+  .filter(f => /^se-runs.*\.json$/.test(f))
+  .sort()
+console.log(`Reading runs from: ${runsFiles.join(', ')}`)
+const records = []
+for (const f of runsFiles) {
+  const part = JSON.parse(readFileSync(join(SCRIPTS_DIR, f), 'utf8'))
+  console.log(`  ${f}: ${part.length} records`)
+  records.push(...part)
+}
 const succeeded = records.filter(r => r.status === 'SUCCEEDED' && r.datasetId)
 const skipped   = records.filter(r => r.status !== 'SUCCEEDED')
 console.log(`Datasets to import: ${succeeded.length}  (skipped non-SUCCEEDED: ${skipped.length})`)

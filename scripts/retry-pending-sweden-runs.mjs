@@ -17,7 +17,9 @@ dotenv.config({ path: join(__dirname, '../.env.local') })
 const APIFY_TOKEN = process.env.APIFY_TOKEN
 if (!APIFY_TOKEN) { console.error('Missing APIFY_TOKEN'); process.exit(1) }
 
-const RUNS_PATH = join(__dirname, 'se-runs.json')
+const RUNS_FILE_ARG = process.argv.find(a => a.startsWith('--runs-file='))
+const RUNS_PATH = join(__dirname, RUNS_FILE_ARG ? RUNS_FILE_ARG.split('=')[1] : 'se-runs.json')
+console.log(`Using runs file: ${RUNS_PATH}`)
 const ACTOR_ID  = 'compass~crawler-google-places'
 const RUN_URL   = `https://api.apify.com/v2/acts/${ACTOR_ID}/runs?token=${APIFY_TOKEN}`
 
