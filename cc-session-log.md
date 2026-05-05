@@ -1527,3 +1527,33 @@ Default cap drop from 80→15 reflects that 6 active inboxes × 80 = 480 sendabl
 - **Re-fetch the account row in the rate-limit branch** rather than threading `lastActivity` + `intervalSeconds` back from `sendEmail()` via the result type. One extra query in a cold path is simpler than expanding the SendEmailResult shape.
 - **Did NOT backfill existing sequences.** Defaults only apply to new sequences. Existing ones keep whatever explicit `daily_limit_per_sender` they have (most are at the old 80 default). Provided Jacob with a one-line `UPDATE sequences SET settings = settings || jsonb_build_object(...)` he can run in Studio if he wants the tightening to apply universally.
 - **+5s safety jitter** on the rescheduled time. The interval check in `send.ts` is `now - lastActivity < intervalMs` (strict less-than), so being exactly at the boundary should pass — but DB clock drift and scheduling latency mean a few extra seconds of cushion costs nothing and prevents flapping.
+
+
+## Session: Add domain blocklist (DBL) checks to sender health panel
+- **Date:** 2026-05-05
+- **PR:** [#112](https://github.com/jacobqvisth/crm-for-saas/pull/112)
+- **Branch:** `feature/sender-health-blocklists`
+- **Merge commit:** `9eae078`
+
+### What was built
+Extends the per-account "Check health" feature shipped in PR #105 with three domain-based blocklist lookups: **Spamhaus DBL** (`dbl.spamhaus.org`), **SURBL** (`multi.surbl.org`), and **URIBL** (`multi.uribl.com`).
+
+- **`src/app/api/gmail/accounts/[id]/health-check/route.ts`**
+  - Imported `resolve4` from `node:dns/promises`.
+  - New `checkBlocklist(domain, list)` helper. Query is `<domain>.<list-host>` (no octet reversal — that's for IP DNSBLs). An A record back = LISTED; NXDOMAIN/ENODATA = not listed; a return ending in `.255` = lookup rejected by the operator (resolver rate-limit / public-resolver block) → surfaced as "lookup unavailable" (neutral) rather than falsely red.
+  - Three list configs (`Spamhaus DBL` / `SURBL` / `URIBL`) run in parallel inside the existing `Promise.all` block.
+  - Response now includes `checks.blocklists: CheckResult[]`.
+- **`src/components/settings/gmail-account-card.tsx`**
+  - Type updated to include `blocklists?: CheckResult[]`.
+  - New "Blocklists (domain reputation)" section in the inline panel, same row treatment as the auth/stats sections.
+
+### Build status
+- `npx tsc --noEmit` ✅ clean
+- `npm run lint` ✅ clean
+- `PATH="/opt/homebrew/bin:$PATH" npm run build` ✅ compiled in 6.8s (the `/login` prerender error in the worktree-only build is the known missing-env-var issue, same as the existing CI red on main — Vercel built cleanly)
+
+### Notable decisions
+- **Domain DBLs over IP DNSBLs.** Gmail/Workspace egress IPs rotate per send, so an IP-based RBL check (Spamhaus ZEN etc.) is meaningless for outbound from this app. Domain reputation is what controls inbox placement here.
+- **Three lists, not more.** Spamhaus DBL + SURBL + URIBL cover the major commercial blocklists most providers consult. Adding more (Sorbs, Barracuda, etc.) would mostly add noise; the three picked are the highest-signal.
+- **Resolver-rejected = neutral, not error.** Spamhaus's `127.0.1.255` "your resolver is blocked" response is technically an A record, so a naive listing check would falsely flag every domain when Vercel's resolver is throttled. The `.255` suffix special-case keeps that signal honest.
+- **Built in a worktree (`/tmp/crm-blocklist`)** so the parallel `feature/sequence-throttles` branch checkout in `~/crm-for-saas` was untouched. cc-session-log entry committed via the same worktree pattern.
