@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { countryFlag, SUPPORTED_OUTBOUND_COUNTRIES } from "@/lib/countries";
+import { CORE_ICP_SHOP_TYPES, shopTypeLabel } from "@/lib/shop-types";
 import {
   MapPin,
   Phone,
@@ -65,6 +66,7 @@ type Stats = {
   by_status: Record<string, number>;
   by_country: Record<string, number>;
   by_category: Record<string, number>;
+  by_shop_type: Record<string, number>;
   with_email: number;
   with_phone: number;
 };
@@ -74,9 +76,10 @@ type Filters = {
   status: string; // "new,enriched" | "new" | "enriched" | "imported" | "skipped" | "all"
   has_email: boolean;
   has_phone: boolean;
-  verified_email: boolean;
+  email_deliverable: boolean; // true = email_status IN ('valid','catch_all')
   search: string;
   included_categories: string[] | null; // null = no filter (all categories shown)
+  shop_types: string[] | null; // null = no filter
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -360,6 +363,143 @@ function CategoryFilterDropdown({
   );
 }
 
+// ─── Shop Type Filter Dropdown ────────────────────────────────────────────────
+// shop_type is the canonical ICP classifier added by the SE cleanup. Same
+// null-means-all pattern as CategoryFilterDropdown. The "Core ICP" preset
+// matches the sequence enrollment filter (auto_repair + tire_combo + auto_glass
+// + auto_body).
+
+function ShopTypeFilterDropdown({
+  shopTypes,
+  included,
+  onChange,
+}: {
+  shopTypes: { value: string; count: number }[];
+  included: string[] | null;
+  onChange: (included: string[] | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const allValues = shopTypes.map((s) => s.value);
+  const checkedSet = included === null ? new Set(allValues) : new Set(included);
+  const isFiltered = included !== null;
+  const checkedCount = checkedSet.size;
+  const totalCount = allValues.length;
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const toggle = (value: string) => {
+    const next = new Set(checkedSet);
+    if (next.has(value)) {
+      next.delete(value);
+    } else {
+      next.add(value);
+    }
+    if (next.size === totalCount) {
+      onChange(null);
+    } else {
+      onChange(Array.from(next));
+    }
+  };
+
+  const selectAll = () => onChange(null);
+  const clearAll = () => onChange([]);
+  const selectCoreIcp = () => {
+    const present = allValues.filter((v) => CORE_ICP_SHOP_TYPES.includes(v as (typeof CORE_ICP_SHOP_TYPES)[number]));
+    onChange(present.length === totalCount ? null : present);
+  };
+
+  // Buttons render in this order: Core ICP (Auto repair etc.) first, then the rest alphabetically.
+  const orderedTypes = (() => {
+    const core: typeof shopTypes = [];
+    const rest: typeof shopTypes = [];
+    for (const t of shopTypes) {
+      if (CORE_ICP_SHOP_TYPES.includes(t.value as (typeof CORE_ICP_SHOP_TYPES)[number])) core.push(t);
+      else rest.push(t);
+    }
+    core.sort((a, b) => a.value.localeCompare(b.value));
+    rest.sort((a, b) => a.value.localeCompare(b.value));
+    return [...core, ...rest];
+  })();
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-sm transition-colors ${
+          isFiltered
+            ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+            : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
+        }`}
+      >
+        <ChevronDown className="w-3.5 h-3.5" />
+        {isFiltered ? `Shop type: ${checkedCount} of ${totalCount}` : "All shop types"}
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-64 py-2">
+          <div className="flex items-center justify-between px-3 pb-2 border-b border-slate-100">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+              Shop type
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={selectCoreIcp}
+                className="text-xs text-indigo-600 hover:text-indigo-800"
+              >
+                Core ICP
+              </button>
+              <button
+                onClick={selectAll}
+                className="text-xs text-indigo-600 hover:text-indigo-800"
+              >
+                All
+              </button>
+              <button
+                onClick={clearAll}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {orderedTypes.map(({ value, count }) => {
+              const isCore = CORE_ICP_SHOP_TYPES.includes(value as (typeof CORE_ICP_SHOP_TYPES)[number]);
+              return (
+                <label
+                  key={value}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checkedSet.has(value)}
+                    onChange={() => toggle(value)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className={`text-sm flex-1 ${isCore ? "text-slate-900 font-medium" : "text-slate-700"}`}>
+                    {shopTypeLabel(value)}
+                  </span>
+                  <span className="text-xs text-slate-400">({count.toLocaleString()})</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function DiscoveryPageClient() {
@@ -377,9 +517,10 @@ export function DiscoveryPageClient() {
     status: "", // empty = default (new + enriched)
     has_email: false,
     has_phone: false,
-    verified_email: false,
+    email_deliverable: false,
     search: "",
     included_categories: null, // null = all categories shown
+    shop_types: null, // null = all shop types
   });
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -431,10 +572,13 @@ export function DiscoveryPageClient() {
       if (filters.status) params.set("status", filters.status);
       if (filters.has_email) params.set("has_email", "true");
       if (filters.has_phone) params.set("has_phone", "true");
-      if (filters.verified_email) params.set("verified_email", "true");
+      if (filters.email_deliverable) params.set("email_deliverable", "true");
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (filters.included_categories !== null && filters.included_categories.length > 0) {
         params.set("categories", filters.included_categories.join(","));
+      }
+      if (filters.shop_types !== null && filters.shop_types.length > 0) {
+        params.set("shop_types", filters.shop_types.join(","));
       }
 
       const res = await fetch(`/api/discovery/shops?${params.toString()}`);
@@ -447,7 +591,7 @@ export function DiscoveryPageClient() {
     } finally {
       setLoadingShops(false);
     }
-  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.verified_email, debouncedSearch, filters.included_categories]);
+  }, [page, filters.country_code, filters.status, filters.has_email, filters.has_phone, filters.email_deliverable, debouncedSearch, filters.included_categories, filters.shop_types]);
 
   useEffect(() => {
     fetchShops();
@@ -474,9 +618,10 @@ export function DiscoveryPageClient() {
               status: filters.status,
               has_email: filters.has_email,
               has_phone: filters.has_phone,
-              verified_email: filters.verified_email,
+              email_deliverable: filters.email_deliverable,
               search: debouncedSearch,
               categories: filters.included_categories ?? undefined,
+              shop_types: filters.shop_types ?? undefined,
             },
           }
         : { shop_ids: ids };
@@ -516,9 +661,10 @@ export function DiscoveryPageClient() {
               status: filters.status,
               has_email: filters.has_email,
               has_phone: filters.has_phone,
-              verified_email: filters.verified_email,
+              email_deliverable: filters.email_deliverable,
               search: debouncedSearch,
               categories: filters.included_categories ?? undefined,
+              shop_types: filters.shop_types ?? undefined,
             },
           }
         : { shop_ids: ids };
@@ -550,9 +696,10 @@ export function DiscoveryPageClient() {
               status: filters.status,
               has_email: filters.has_email,
               has_phone: filters.has_phone,
-              verified_email: filters.verified_email,
+              email_deliverable: filters.email_deliverable,
               search: debouncedSearch,
               categories: filters.included_categories ?? undefined,
+              shop_types: filters.shop_types ?? undefined,
             },
           }
         : { shopIds: Array.from(selectedIds) };
@@ -632,6 +779,13 @@ export function DiscoveryPageClient() {
     ? Object.entries(stats.by_category)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, count]) => ({ name, count }))
+    : [];
+
+  // ── Shop type options from stats (alpha-sorted; the dropdown reorders core ICP first)
+  const shopTypeOptions = stats?.by_shop_type
+    ? Object.entries(stats.by_shop_type)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([value, count]) => ({ value, count }))
     : [];
 
   // ── Status tab config
@@ -748,18 +902,28 @@ export function DiscoveryPageClient() {
               Has phone
             </label>
 
-            {/* Verified email */}
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+            {/* Deliverable email — valid + catch_all */}
+            <label
+              className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none"
+              title="email_status IN ('valid', 'catch_all') — matches the sequence enrollment filter"
+            >
               <input
                 type="checkbox"
-                checked={filters.verified_email}
-                onChange={(e) => setFilters((f) => ({ ...f, verified_email: e.target.checked }))}
+                checked={filters.email_deliverable}
+                onChange={(e) => setFilters((f) => ({ ...f, email_deliverable: e.target.checked }))}
                 className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
               />
-              Verified email
+              Deliverable email
             </label>
 
-            {/* Category filter */}
+            {/* Shop type filter (canonical ICP classifier) */}
+            <ShopTypeFilterDropdown
+              shopTypes={shopTypeOptions}
+              included={filters.shop_types}
+              onChange={(included) => setFilters((f) => ({ ...f, shop_types: included }))}
+            />
+
+            {/* Category filter (raw Google Maps categories) */}
             <CategoryFilterDropdown
               categories={categoryOptions}
               included={filters.included_categories}

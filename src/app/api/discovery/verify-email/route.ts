@@ -41,9 +41,10 @@ type DiscoveryFilters = {
   status?: string;
   has_email?: boolean;
   has_phone?: boolean;
-  verified_email?: boolean;
+  email_deliverable?: boolean;
   search?: string;
   categories?: string[];
+  shop_types?: string[];
 };
 
 export async function POST(request: NextRequest) {
@@ -88,13 +89,16 @@ export async function POST(request: NextRequest) {
     if (filters.country_code) idQuery = idQuery.eq("country_code", filters.country_code.toUpperCase());
     if (filters.has_email) idQuery = idQuery.not("primary_email", "is", null).neq("primary_email", "");
     if (filters.has_phone) idQuery = idQuery.not("phone", "is", null).neq("phone", "");
-    if (filters.verified_email) idQuery = idQuery.eq("email_status", "valid");
+    if (filters.email_deliverable) idQuery = idQuery.in("email_status", ["valid", "catch_all"]);
     if (filters.search?.trim()) {
       const s = filters.search.trim();
       idQuery = idQuery.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
     }
     if (filters.categories && filters.categories.length > 0) {
       idQuery = idQuery.overlaps("all_categories", filters.categories);
+    }
+    if (filters.shop_types && filters.shop_types.length > 0) {
+      idQuery = idQuery.in("shop_type", filters.shop_types);
     }
     const { data: rows, error: idError } = await idQuery;
     if (idError) return NextResponse.json({ error: idError.message }, { status: 500 });
