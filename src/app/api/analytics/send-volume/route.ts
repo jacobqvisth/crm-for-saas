@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { notNull } from "@/lib/types/guards";
 
 export interface SendVolumeEntry {
   date: string;
@@ -56,7 +57,7 @@ export async function GET() {
     return NextResponse.json(series);
   }
 
-  const trackingIds = queueItems.map((q) => q.tracking_id).filter(Boolean);
+  const trackingIds = queueItems.map((q) => q.tracking_id).filter(notNull);
 
   // Get bounce and reply events for these tracking IDs
   const { data: events } = await supabase
@@ -82,10 +83,10 @@ export async function GET() {
     if (!q.sent_at) continue;
     const date = q.sent_at.slice(0, 10);
     sentByDate.set(date, (sentByDate.get(date) ?? 0) + 1);
-    if (bounceSet.has(q.tracking_id)) {
+    if (q.tracking_id && bounceSet.has(q.tracking_id)) {
       bouncedByDate.set(date, (bouncedByDate.get(date) ?? 0) + 1);
     }
-    if (replySet.has(q.tracking_id)) {
+    if (q.tracking_id && replySet.has(q.tracking_id)) {
       repliedByDate.set(date, (repliedByDate.get(date) ?? 0) + 1);
     }
   }

@@ -158,11 +158,11 @@ export function DealActivityTimeline({ dealId }: DealActivityTimelineProps) {
                       {metadata.from_stage} → {metadata.to_stage}
                     </p>
                   )}
-                  {activity.description && (
-                    <p className="text-xs text-slate-500 mt-0.5">{activity.description}</p>
+                  {activity.body && (
+                    <p className="text-xs text-slate-500 mt-0.5">{activity.body}</p>
                   )}
                   <p className="text-xs text-slate-400 mt-1">
-                    {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
                   </p>
                 </div>
               </div>

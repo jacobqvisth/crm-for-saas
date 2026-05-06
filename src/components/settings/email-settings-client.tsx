@@ -98,13 +98,13 @@ export function EmailSettingsClient() {
   }
 
   const activeAccounts = accounts.filter((a) => a.status === "active");
-  const totalSendsToday = accounts.reduce((sum, a) => sum + a.daily_sends_count, 0);
+  const totalSendsToday = accounts.reduce((sum, a) => sum + (a.daily_sends_count ?? 0), 0);
   const totalCapacity = activeAccounts.reduce(
-    (sum, a) => sum + Math.max(0, a.max_daily_sends - a.daily_sends_count),
+    (sum, a) => sum + Math.max(0, (a.max_daily_sends ?? 0) - (a.daily_sends_count ?? 0)),
     0
   );
   const totalMaxCapacity = activeAccounts.reduce(
-    (sum, a) => sum + a.max_daily_sends,
+    (sum, a) => sum + (a.max_daily_sends ?? 0),
     0
   );
 

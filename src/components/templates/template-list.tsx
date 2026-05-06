@@ -241,7 +241,7 @@ export function TemplateList() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-sm text-slate-500">
-                            {format(new Date(template.updated_at), "MMM d, yyyy")}
+                            {template.updated_at ? format(new Date(template.updated_at), "MMM d, yyyy") : "—"}
                           </span>
                         </td>
                         <td className="px-4 py-3">

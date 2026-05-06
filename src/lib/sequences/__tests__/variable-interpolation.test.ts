@@ -48,6 +48,22 @@ const contact = {
   custom_fields: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  // wl-app fields (null defaults for non-app-user contacts)
+  wl_user_id: null,
+  app_username: null,
+  app_role: null,
+  last_login_at: null,
+  last_active_at: null,
+  login_count: null,
+  credits_remaining: null,
+  user_plan_type: null,
+  user_subscription_status: null,
+  user_stripe_customer_id: null,
+  user_stripe_subscription_id: null,
+  diagnostics_total: null,
+  diagnostics_first_at: null,
+  diagnostics_last_at: null,
+  diagnostics_last_30d: null,
 } satisfies Contact;
 
 const company: Company = {
@@ -82,6 +98,30 @@ const company: Company = {
   custom_fields: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  // workshop/customer fields (null defaults for non-customer companies)
+  source: null,
+  wl_workshop_id: null,
+  lifecycle_stage: null,
+  customer_status: null,
+  plan: null,
+  plan_billing_cycle: null,
+  mrr_cents: null,
+  arr_cents: null,
+  currency: null,
+  trial_ends_at: null,
+  activated_at: null,
+  churned_at: null,
+  churn_reason: null,
+  stripe_customer_id: null,
+  stripe_subscription_id: null,
+  subscription_status: null,
+  payment_status: null,
+  acquisition_source: null,
+  created_by_agent: null,
+  account_owner_id: null,
+  member_count: null,
+  last_active_at: null,
+  health_score: null,
 };
 
 // ---------------------------------------------------------------------------

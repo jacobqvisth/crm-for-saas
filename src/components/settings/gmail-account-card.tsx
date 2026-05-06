@@ -56,7 +56,7 @@ const statusColors: Record<string, { bg: string; text: string; label: string }> 
 export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAccountCardProps) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [resuming, setResuming] = useState(false);
-  const [maxSends, setMaxSends] = useState(account.max_daily_sends);
+  const [maxSends, setMaxSends] = useState(account.max_daily_sends ?? 50);
   const [savingLimit, setSavingLimit] = useState(false);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
@@ -84,10 +84,10 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
     }
   }
 
-  const status = statusColors[account.status] || statusColors.disconnected;
+  const status = statusColors[account.status ?? 'disconnected'] || statusColors.disconnected;
   const sendPercentage = Math.min(
     100,
-    Math.round((account.daily_sends_count / account.max_daily_sends) * 100)
+    Math.round(((account.daily_sends_count ?? 0) / (account.max_daily_sends || 1)) * 100)
   );
 
   async function handleDisconnect() {

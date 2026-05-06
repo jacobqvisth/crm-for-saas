@@ -107,13 +107,13 @@ export function ActivityFeed({ activities, showFilters = false }: ActivityFeedPr
                 <p className="text-sm text-slate-700 truncate">
                   {activity.subject || activity.type.replace(/_/g, " ")}
                 </p>
-                {activity.description && (
+                {activity.body && (
                   <p className="text-xs text-slate-400 truncate mt-0.5">
-                    {activity.description}
+                    {activity.body}
                   </p>
                 )}
                 <p className="text-xs text-slate-400 mt-1">
-                  {formatDistanceToNow(new Date(activity.created_at), {
+                  {activity.created_at && formatDistanceToNow(new Date(activity.created_at), {
                     addSuffix: true,
                   })}
                 </p>

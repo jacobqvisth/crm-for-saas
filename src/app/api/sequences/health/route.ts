@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { notNull } from "@/lib/types/guards";
 
 interface SequenceHealth {
   auth_issue: boolean;
@@ -86,7 +87,7 @@ export async function GET() {
         .gte("sent_at", sevenDaysAgo);
 
       if (recentSentEmails && recentSentEmails.length > 0) {
-        const trackingIds = recentSentEmails.map((e) => e.tracking_id);
+        const trackingIds = recentSentEmails.map((e) => e.tracking_id).filter(notNull);
         const { count: bounceCount } = await supabase
           .from("email_events")
           .select("id", { count: "exact", head: true })

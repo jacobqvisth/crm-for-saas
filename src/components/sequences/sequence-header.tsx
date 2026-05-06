@@ -76,7 +76,7 @@ export function SequenceHeader({
   const [name, setName] = useState(sequence.name);
   const [changeSenderOpen, setChangeSenderOpen] = useState(false);
 
-  const badge = STATUS_BADGES[sequence.status] || STATUS_BADGES.draft;
+  const badge = STATUS_BADGES[sequence.status ?? 'draft'] || STATUS_BADGES.draft;
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
   const saveName = async () => {

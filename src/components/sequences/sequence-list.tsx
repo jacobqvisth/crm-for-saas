@@ -426,7 +426,7 @@ export function SequenceList() {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {sortedSequences.map((seq) => {
-                const badge = STATUS_BADGES[seq.status] || STATUS_BADGES.draft;
+                const badge = STATUS_BADGES[seq.status ?? 'draft'] || STATUS_BADGES.draft;
                 return (
                   <tr
                     key={seq.id}

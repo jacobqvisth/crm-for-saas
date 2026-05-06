@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { notNull } from "@/lib/types/guards";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
 import { ArrowLeft, Pause, Play, Mail } from "lucide-react";
@@ -112,7 +113,7 @@ export default function SequenceAnalyticsPage() {
         .in("enrollment_id", ids)
         .eq("status", "sent");
 
-      const trackingIds = (sentEmails || []).map((e) => e.tracking_id).filter(Boolean);
+      const trackingIds = (sentEmails || []).map((e) => e.tracking_id).filter(notNull);
 
       if (trackingIds.length > 0) {
         const { data: events } = await supabase
@@ -182,7 +183,7 @@ export default function SequenceAnalyticsPage() {
         .eq("status", "sent");
 
       if (sentByAccount && sentByAccount.length > 0) {
-        const allTrackingIds = sentByAccount.map((r) => r.tracking_id).filter(Boolean);
+        const allTrackingIds = sentByAccount.map((r) => r.tracking_id).filter(notNull);
 
         const { data: breakdownEvents } = allTrackingIds.length > 0
           ? await supabase
@@ -203,6 +204,7 @@ export default function SequenceAnalyticsPage() {
         const bySender = new Map<string, { email_address: string; sent: number; opens: number; replies: number }>();
         for (const row of sentByAccount) {
           const accountId = row.sender_account_id;
+          if (!accountId) continue;
           const emailAddress = (row.gmail_accounts as { email_address: string } | null)?.email_address ?? accountId;
           if (!bySender.has(accountId)) {
             bySender.set(accountId, { email_address: emailAddress, sent: 0, opens: 0, replies: 0 });

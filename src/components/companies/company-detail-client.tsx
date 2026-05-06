@@ -17,109 +17,12 @@ import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
 import type { Tables, Json } from '@/lib/database.types';
 
-// Local extended types — global database.types.ts hasn't been regenerated since
-// the 2026-05-05 / 06 schema changes (workshop CRM + discovered_shops extras).
-// Adding the new columns here keeps the change self-contained.
-type Company = Tables<'companies'> & {
-  source?: string | null
-  wl_workshop_id?: string | null
-  lifecycle_stage?: string | null
-  customer_status?: string | null
-  plan?: string | null
-  plan_billing_cycle?: string | null
-  mrr_cents?: number | null
-  arr_cents?: number | null
-  currency?: string | null
-  trial_ends_at?: string | null
-  activated_at?: string | null
-  churned_at?: string | null
-  churn_reason?: string | null
-  stripe_customer_id?: string | null
-  stripe_subscription_id?: string | null
-  subscription_status?: string | null
-  payment_status?: string | null
-  acquisition_source?: string | null
-  created_by_agent?: string | null
-  account_owner_id?: string | null
-  member_count?: number | null
-  last_active_at?: string | null
-  health_score?: number | null
-}
-type Contact = Tables<'contacts'> & {
-  wl_user_id?: string | null
-  app_username?: string | null
-  app_role?: string | null
-  last_login_at?: string | null
-  last_active_at?: string | null
-  login_count?: number | null
-  credits_remaining?: number | null
-  user_plan_type?: string | null
-  user_subscription_status?: string | null
-  user_stripe_customer_id?: string | null
-  user_stripe_subscription_id?: string | null
-  diagnostics_total?: number | null
-  diagnostics_first_at?: string | null
-  diagnostics_last_at?: string | null
-  diagnostics_last_30d?: number | null
-}
+type Company = Tables<'companies'>;
+type Contact = Tables<'contacts'>;
 type Activity = Tables<'activities'>;
-type Subscription = {
-  id: string
-  workspace_id: string
-  company_id: string
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
-  plan: string | null
-  status: string | null
-  current_period_start: string | null
-  current_period_end: string | null
-  trial_start: string | null
-  trial_end: string | null
-  cancel_at_period_end: boolean
-  canceled_at: string | null
-  mrr_cents: number | null
-  currency: string | null
-  metadata: Json
-  created_at: string
-  updated_at: string
-}
-type UsageEvent = {
-  id: string
-  workspace_id: string
-  company_id: string | null
-  contact_id: string | null
-  event_type: string
-  event_at: string
-  source: string | null
-  metadata: Json
-  external_id: string | null
-  created_at: string
-}
-type DiscoveredShop = {
-  id: string
-  name: string
-  google_place_id: string | null
-  google_maps_url: string | null
-  domain: string | null
-  website: string | null
-  primary_email: string | null
-  phone: string | null
-  city: string | null
-  country_code: string | null
-  rating: number | null
-  review_count: number | null
-  email_status: string | null
-  email_valid: boolean | null
-  permanently_closed: boolean | null
-  temporarily_closed: boolean | null
-  description: string | null
-  additional_info: Json | null
-  shop_type: string | null
-  scraped_at: string | null
-  source: string | null
-  raw_data: Json | null
-  crm_company_id: string | null
-}
+type Subscription = Tables<'subscriptions'>;
+type UsageEvent = Tables<'usage_events'>;
+type DiscoveredShop = Tables<'discovered_shops'>;
 
 const INDUSTRIES = [
   'Technology', 'Healthcare', 'Finance', 'Education', 'Manufacturing',
@@ -1037,8 +940,8 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
                                 </Link>
                               </td>
                               <td className="px-3 py-2 text-slate-600">{contact.email}</td>
-                              <td className="px-3 py-2"><LeadStatusBadge status={contact.lead_status} /></td>
-                              <td className="px-3 py-2 text-slate-500">{format(new Date(contact.created_at), 'MMM d, yyyy')}</td>
+                              <td className="px-3 py-2"><LeadStatusBadge status={contact.lead_status ?? 'new'} /></td>
+                              <td className="px-3 py-2 text-slate-500">{format(new Date(contact.created_at ?? Date.now()), 'MMM d, yyyy')}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1093,11 +996,11 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
                             <p className="text-sm font-medium text-slate-900">
                               {activity.subject || activity.type.replace(/_/g, ' ')}
                             </p>
-                            {activity.description && (
-                              <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.description}</p>
+                            {activity.body && (
+                              <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
                             )}
                             <p className="text-xs text-slate-400 mt-1">
-                              {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                              {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
                             </p>
                           </div>
                         </div>

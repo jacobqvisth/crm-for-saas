@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { notNull } from "@/lib/types/guards";
 import {
   BarChart,
   Bar,
@@ -65,7 +66,7 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
         .eq("workspace_id", workspaceId);
 
       const sent = (queueItems || []).filter((q) => q.status === "sent").length;
-      const trackingIds = (queueItems || []).map((q) => q.tracking_id).filter(Boolean);
+      const trackingIds = (queueItems || []).map((q) => q.tracking_id).filter(notNull);
 
       let opened = 0;
       let clicked = 0;

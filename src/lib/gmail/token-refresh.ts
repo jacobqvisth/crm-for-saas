@@ -36,6 +36,9 @@ export async function getValidAccessToken(accountId: string): Promise<RefreshRes
     return { error: "Gmail account is disconnected" };
   }
 
+  if (!account.token_expires_at || !account.access_token || !account.refresh_token) {
+    return { error: "Gmail account has incomplete token data" };
+  }
   const tokenExpiresAt = new Date(account.token_expires_at);
   const now = new Date();
   // Refresh if token expires within 5 minutes

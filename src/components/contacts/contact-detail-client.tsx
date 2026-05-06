@@ -19,25 +19,7 @@ import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
 import type { Tables, Json } from '@/lib/database.types';
 
-// Local extended type — global database.types.ts hasn't been regenerated
-// since the 2026-05-05 schema added wl-app fields. Inline the additions.
-type Contact = Tables<'contacts'> & {
-  wl_user_id?: string | null
-  app_username?: string | null
-  app_role?: string | null
-  last_login_at?: string | null
-  last_active_at?: string | null
-  login_count?: number | null
-  credits_remaining?: number | null
-  user_plan_type?: string | null
-  user_subscription_status?: string | null
-  user_stripe_customer_id?: string | null
-  user_stripe_subscription_id?: string | null
-  diagnostics_total?: number | null
-  diagnostics_first_at?: string | null
-  diagnostics_last_at?: string | null
-  diagnostics_last_30d?: number | null
-}
+type Contact = Tables<'contacts'>;
 type Activity = Tables<'activities'>;
 type Company = Tables<'companies'>;
 
@@ -518,7 +500,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Lead Status</label>
                 <select
-                  value={contact.lead_status}
+                  value={contact.lead_status ?? 'new'}
                   onChange={(e) => updateField('lead_status', e.target.value)}
                   className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -530,7 +512,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Status</label>
                 <select
-                  value={contact.status}
+                  value={contact.status ?? 'active'}
                   onChange={(e) => updateField('status', e.target.value)}
                   className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -963,11 +945,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-900">{getActivityTitle(activity)}</p>
-                      {activity.description && (
-                        <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.description}</p>
+                      {activity.body && (
+                        <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
                       )}
                       <p className="text-xs text-slate-400 mt-1">
-                        {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
                       </p>
                     </div>
                   </div>
