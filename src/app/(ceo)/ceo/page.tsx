@@ -9,7 +9,7 @@ export default async function DashboardIndex({
   const params = await searchParams;
   const range = Array.isArray(params.range) ? params.range[0] : params.range;
   const target = range
-    ? `/dashboard/app-usage?range=${encodeURIComponent(range)}`
-    : "/dashboard/app-usage";
+    ? `/ceo/app-usage?range=${encodeURIComponent(range)}`
+    : "/ceo/app-usage";
   redirect(target);
 }
