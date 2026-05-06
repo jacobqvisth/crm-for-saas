@@ -1789,3 +1789,47 @@ After the unstick the cron picked up rows on the next 5-minute tick. First send 
 - **Page.tsx fix bundled** even though the page-level bug is cosmetic (header copy mis-shows "No emails queued" when scheduled rows exist on >1000-enrollment sequences). Same root cause, same fix shape, didn't make sense to leave it for later.
 - **Kept both ops scripts in `scripts/`** rather than throwing them away. `cz-diagnose.mjs` is a generic stuck-sequence dump (parameterize the sequence ID for next time); `cz-unstick-pending.mjs` is the chunked promotion that's safe to re-run if anything else gets stuck on `pending`.
 - **min_send_interval=600s on every sender** is the throughput governor here, not anything in the sequence settings or cron. Worth flagging if Jacob wants to drain the queue faster: lower the interval (60s default in code) or raise `max_daily_sends`.
+
+
+## Session: SE 'other' bucket cleanup
+- **Date:** 2026-05-06
+- **PR:** SE 'other' cleanup (this entry)
+- **Branch:** `feature/se-other-cleanup`
+
+### What was built
+After PR #122 added shop_type and reclassified the SE inventory, 2,444 rows (23% of total) remained in `shop_type='other'`. Inspection revealed two big chunks were ICP that should have been classified:
+
+1. **803 Lemlist legacy rows** — chain workshops (Mekonomen, Autoexperten, BD Group) imported from CSV. They never had a Google `category` field, so they fell through every classification rule.
+2. **859 NULL-category Apify rows** — Google Maps returned them for auto-repair searches (`bilverkstad`/`bilreparation`/`mekaniker`/`bilservice`) but didn't categorize them. The `raw_data->>'term'` field preserved which search surfaced each, providing the signal needed to classify retroactively.
+
+`supabase/migrations/20260506000000_discovered_shops_shop_type_other_cleanup.sql`:
+- **Step 1**: `source='lemlist'` + `shop_type='other'` → `auto_repair`. 803 rows.
+- **Step 2**: `category IS NULL` + `source='google_maps'` + `raw_data->>'term' IN (...)` → `auto_repair` (or `tire_only` if term was däckverkstad). ~858 rows.
+- **Step 3-6**: Specific category buckets for the rest — auto_specialty, non_auto_vehicle, salvage, towing.
+
+### Final SE shop_type distribution (after cleanup)
+| shop_type | total | sendable |
+|---|--:|--:|
+| auto_repair | 5,218 | 2,923 |
+| other | 1,064 | 655 |
+| dealer | 870 | 675 |
+| tire_only | 855 | 392 |
+| truck_repair | 806 | 543 |
+| parts | 426 | 300 |
+| auto_body | 301 | 138 |
+| auto_specialty | 258 | 182 |
+| auto_glass | 250 | 220 |
+| non_auto_vehicle | 191 | 145 |
+| tire_combo | 128 | 74 |
+| motorcycle | 123 | 75 |
+| inspection | 97 | 12 |
+| salvage | 53 | 33 |
+| towing | 19 | 9 |
+
+**Core ICP (auto_repair + tire_combo + auto_glass + auto_body): 5,897 shops · 3,355 sendable emails** (was 5,039 / 2,582 before this cleanup, so +858 shops and +773 sendable emails).
+
+### Notable decisions
+- **`raw_data->>'term'` was the saving signal** for the 859 NULL-category Apify rows. We didn't add it for this purpose, but persisting the search term that surfaced each Apify result is a useful provenance trail — if Google can't tell us what kind of shop it is, the search query that matched it is the next best thing.
+- **Lemlist rows kept `source='lemlist'` for provenance** even though `shop_type` flips to `auto_repair`. The two columns are orthogonal: `source` says where the row originated, `shop_type` says what kind of business it is.
+- **The remaining 1,064 'other' rows** are mostly true non-ICP — gas stations (120), car washes (159), chauffeurs (94), department stores, manufacturers, auto brokers. Probably not worth further refinement unless outreach performance later suggests we're missing a segment.
+- **Sequence enrollment filter is now one clean WHERE clause**: `shop_type IN ('auto_repair','tire_combo','auto_glass','auto_body') AND email_status IN ('valid','catch_all') AND crm_company_id IS NULL`. Gives 3,355 prospects ready for the first campaign.
