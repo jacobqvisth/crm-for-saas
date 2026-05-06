@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
   Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2, X,
+  Activity as ActivityIcon, Wrench, Clock, BadgeCheck,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -18,7 +19,25 @@ import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
 import type { Tables, Json } from '@/lib/database.types';
 
-type Contact = Tables<'contacts'>;
+// Local extended type — global database.types.ts hasn't been regenerated
+// since the 2026-05-05 schema added wl-app fields. Inline the additions.
+type Contact = Tables<'contacts'> & {
+  wl_user_id?: string | null
+  app_username?: string | null
+  app_role?: string | null
+  last_login_at?: string | null
+  last_active_at?: string | null
+  login_count?: number | null
+  credits_remaining?: number | null
+  user_plan_type?: string | null
+  user_subscription_status?: string | null
+  user_stripe_customer_id?: string | null
+  user_stripe_subscription_id?: string | null
+  diagnostics_total?: number | null
+  diagnostics_first_at?: string | null
+  diagnostics_last_at?: string | null
+  diagnostics_last_30d?: number | null
+}
 type Activity = Tables<'activities'>;
 type Company = Tables<'companies'>;
 
@@ -676,6 +695,112 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 </div>
               )}
             </div>
+
+            {/* App User — only when contact is a Wrenchlane platform user */}
+            {contact.wl_user_id && (
+              <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 text-emerald-600" />
+                  <h3 className="text-sm font-medium text-slate-700">App User</h3>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {contact.app_role && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                      contact.app_role === 'admin'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {contact.app_role}
+                    </span>
+                  )}
+                  {contact.app_username && (
+                    <span className="text-xs text-slate-600 font-mono">@{contact.app_username}</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono break-all">
+                  {contact.wl_user_id}
+                </div>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  {contact.last_login_at && (
+                    <div>
+                      <dt className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" />Last login</dt>
+                      <dd className="text-slate-900 mt-0.5">{formatDistanceToNow(new Date(contact.last_login_at), { addSuffix: true })}</dd>
+                    </div>
+                  )}
+                  {contact.last_active_at && (
+                    <div>
+                      <dt className="text-slate-500 flex items-center gap-1"><ActivityIcon className="w-3 h-3" />Last active</dt>
+                      <dd className="text-slate-900 mt-0.5">{formatDistanceToNow(new Date(contact.last_active_at), { addSuffix: true })}</dd>
+                    </div>
+                  )}
+                  {contact.login_count != null && (
+                    <div>
+                      <dt className="text-slate-500">Total logins</dt>
+                      <dd className="text-slate-900 mt-0.5">{contact.login_count.toLocaleString()}</dd>
+                    </div>
+                  )}
+                  {contact.credits_remaining != null && (
+                    <div>
+                      <dt className="text-slate-500">Credits</dt>
+                      <dd className="text-slate-900 mt-0.5">{contact.credits_remaining.toLocaleString()}</dd>
+                    </div>
+                  )}
+                </dl>
+                {(contact.diagnostics_total != null || contact.diagnostics_last_30d != null) && (
+                  <div className="bg-slate-50 rounded-md p-3">
+                    <div className="flex items-center gap-1 text-xs text-slate-600 mb-2">
+                      <Wrench className="w-3 h-3" /> Diagnostics
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-lg font-semibold text-slate-900 leading-none">
+                          {(contact.diagnostics_total ?? 0).toLocaleString()}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-1">All-time</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold text-slate-900 leading-none">
+                          {(contact.diagnostics_last_30d ?? 0).toLocaleString()}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-1">Last 30 days</div>
+                      </div>
+                    </div>
+                    {(contact.diagnostics_first_at || contact.diagnostics_last_at) && (
+                      <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500 space-y-0.5">
+                        {contact.diagnostics_first_at && (
+                          <div>First: {format(new Date(contact.diagnostics_first_at), 'MMM d, yyyy')}</div>
+                        )}
+                        {contact.diagnostics_last_at && (
+                          <div>Latest: {format(new Date(contact.diagnostics_last_at), 'MMM d, yyyy')}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(contact.user_plan_type || contact.user_subscription_status) && (
+                  <div className="text-xs space-y-1">
+                    {contact.user_plan_type && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">User plan</span>
+                        <span className="text-slate-900 font-mono">{contact.user_plan_type}</span>
+                      </div>
+                    )}
+                    {contact.user_subscription_status && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">User sub status</span>
+                        <span className="text-slate-900">{contact.user_subscription_status}</span>
+                      </div>
+                    )}
+                    {contact.user_stripe_customer_id && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Stripe customer</span>
+                        <span className="text-slate-900 font-mono text-[10px] truncate ml-2">{contact.user_stripe_customer_id}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Custom Fields */}
             <div className="mt-6 pt-4 border-t border-slate-200">
