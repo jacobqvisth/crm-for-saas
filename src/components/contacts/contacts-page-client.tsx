@@ -10,7 +10,7 @@ import {
 import { format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
-import { countryFlag, LANGUAGE_LABELS, SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/countries';
+import { countryFlag, SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/countries';
 import { LeadStatusBadge } from '@/components/ui/badge';
 import { SlideOver } from '@/components/ui/slide-over';
 import { Modal } from '@/components/ui/modal';
@@ -46,24 +46,20 @@ type LocalFilters = {
   search: string;
   lead_status: string;
   status: string;
-  company_id: string;
   country_code: string;
   email_status: string;
   has_phone: boolean;
   source: string;
-  language: string;
 };
 
 const DEFAULT_FILTERS: LocalFilters = {
   search: '',
   lead_status: '',
   status: '',
-  company_id: '',
   country_code: '',
   email_status: '',
   has_phone: false,
   source: '',
-  language: '',
 };
 
 const DROPDOWN_CLASS =
@@ -81,7 +77,6 @@ export function ContactsPageClient() {
   const [lists, setLists] = useState<Tables<'contact_lists'>[]>([]);
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
   const [sources, setSources] = useState<string[]>([]);
-  const [languages, setLanguages] = useState<string[]>([]);
 
   // Header stats (workspace-level, not filtered)
   const [statsTotal, setStatsTotal] = useState(0);
@@ -127,12 +122,10 @@ export function ContactsPageClient() {
     search: filters.search || undefined,
     lead_status: filters.lead_status || undefined,
     status: filters.status || undefined,
-    company_id: filters.company_id || undefined,
     country_code: filters.country_code || undefined,
     email_status: filters.email_status || undefined,
     has_phone: filters.has_phone || undefined,
     source: filters.source || undefined,
-    language: filters.language || undefined,
   };
 
   // Fetch contacts
@@ -160,9 +153,6 @@ export function ContactsPageClient() {
     if (filters.status) {
       query = query.eq('status', filters.status as NonNullable<Contact['status']>);
     }
-    if (filters.company_id) {
-      query = query.eq('company_id', filters.company_id);
-    }
     if (filters.country_code) {
       query = query.eq('country_code', filters.country_code);
     }
@@ -176,9 +166,6 @@ export function ContactsPageClient() {
     }
     if (filters.source) {
       query = query.eq('source', filters.source);
-    }
-    if (filters.language) {
-      query = query.eq('language', filters.language);
     }
 
     query = query.order('created_at', { ascending: false });
@@ -200,7 +187,7 @@ export function ContactsPageClient() {
     setSelectedIds(new Set());
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, page, debouncedSearch, filters.lead_status, filters.status, filters.company_id, filters.country_code, filters.email_status, filters.has_phone, filters.source, filters.language]);
+  }, [workspaceId, page, debouncedSearch, filters.lead_status, filters.status, filters.country_code, filters.email_status, filters.has_phone, filters.source]);
 
   useEffect(() => {
     fetchContacts();
@@ -275,20 +262,6 @@ export function ContactsPageClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
-  // Fetch distinct languages
-  useEffect(() => {
-    if (!workspaceId) return;
-    supabase.from('contacts').select('language').eq('workspace_id', workspaceId).not('language', 'is', null)
-      .then(({ data }) => {
-        if (!data) return;
-        const seen = new Set<string>();
-        for (const row of data) { if (row.language) seen.add(row.language); }
-        const order = ['et', 'sv', 'fi', 'lv', 'lt', 'no', 'da'];
-        setLanguages(order.filter(l => seen.has(l)));
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
-
   // Fetch lists for bulk action
   useEffect(() => {
     if (!workspaceId) return;
@@ -302,8 +275,8 @@ export function ContactsPageClient() {
   const effectiveCount = selectAllMatching ? totalCount : selectedIds.size;
   const hasActiveFilters =
     filters.search !== '' || filters.lead_status !== '' || filters.status !== '' ||
-    filters.company_id !== '' || filters.country_code !== '' || filters.email_status !== '' ||
-    filters.has_phone !== false || filters.source !== '' || filters.language !== '';
+    filters.country_code !== '' || filters.email_status !== '' ||
+    filters.has_phone !== false || filters.source !== '';
 
   const toggleSelect = (id: string) => {
     setSelectAllMatching(false);
@@ -501,20 +474,6 @@ export function ContactsPageClient() {
               ))}
             </select>
 
-            {/* Language */}
-            {languages.length > 0 && (
-              <select
-                value={filters.language}
-                onChange={e => setFilters(f => ({ ...f, language: e.target.value }))}
-                className={DROPDOWN_CLASS}
-              >
-                <option value="">All languages</option>
-                {languages.map(l => (
-                  <option key={l} value={l}>{LANGUAGE_LABELS[l] ?? l}</option>
-                ))}
-              </select>
-            )}
-
             {/* Contact Status */}
             <select
               value={filters.status}
@@ -526,18 +485,6 @@ export function ContactsPageClient() {
               <option value="bounced">Bounced</option>
               <option value="unsubscribed">Unsubscribed</option>
               <option value="archived">Archived</option>
-            </select>
-
-            {/* Company */}
-            <select
-              value={filters.company_id}
-              onChange={e => setFilters(f => ({ ...f, company_id: e.target.value }))}
-              className={DROPDOWN_CLASS}
-            >
-              <option value="">All companies</option>
-              {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
             </select>
 
             {/* Has Phone */}
@@ -594,9 +541,7 @@ export function ContactsPageClient() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Phone</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Country</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Language</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Lead Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Source</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Created</th>
                 </tr>
               </thead>
@@ -604,7 +549,7 @@ export function ContactsPageClient() {
                 {/* Select-all-matching banner */}
                 {!loading && allSelected && !selectAllMatching && totalCount > contacts.length && (
                   <tr>
-                    <td colSpan={10} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
+                    <td colSpan={8} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
                       All {contacts.length} contacts on this page are selected.{' '}
                       <button
                         onClick={() => setSelectAllMatching(true)}
@@ -617,7 +562,7 @@ export function ContactsPageClient() {
                 )}
                 {!loading && selectAllMatching && (
                   <tr>
-                    <td colSpan={10} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
+                    <td colSpan={8} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
                       All {totalCount.toLocaleString()} contacts matching current filters are selected.{' '}
                       <button
                         onClick={() => { setSelectAllMatching(false); setSelectedIds(new Set()); }}
@@ -646,7 +591,7 @@ export function ContactsPageClient() {
                   ))
                 ) : contacts.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center">
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <p className="text-slate-500 font-medium">No contacts found</p>
                       <p className="text-slate-400 text-sm mt-1">
                         {hasActiveFilters ? 'Try adjusting your filters' : 'Add your first contact or import from CSV'}
@@ -722,18 +667,8 @@ export function ContactsPageClient() {
                           ? `${countryFlag(contact.country_code)} ${contact.country ?? contact.country_code}`
                           : <span className="text-slate-400">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {contact.language
-                          ? (LANGUAGE_LABELS[contact.language] ?? contact.language)
-                          : <span className="text-slate-400">—</span>}
-                      </td>
                       <td className="px-4 py-3">
                         <LeadStatusBadge status={contact.lead_status ?? 'new'} />
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-500">
-                        {contact.source
-                          ? (SOURCE_LABELS[contact.source] ?? contact.source)
-                          : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-4 py-3 text-slate-500">
                         {format(new Date(contact.created_at ?? Date.now()), 'MMM d, yyyy')}

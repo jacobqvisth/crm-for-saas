@@ -14,6 +14,26 @@ updated: 2026-04-22
 
 ---
 
+## Session: contacts page cleanup + churned lead_status from workshop state
+- **Date:** 2026-05-06
+- **PR:** TBD
+- **Branch:** `fix/contacts-page-cleanup`
+
+### What changed (per Jacob's feedback)
+- **Removed "All companies" filter dropdown** (kept the company-search picker on the bulk action bar and the "Add Contact" form).
+- **Removed "All languages" filter dropdown** + the distinct-languages fetcher.
+- **Removed "Language" + "Source" columns** from the contacts table. Source filter dropdown stays — Jacob only flagged the columns.
+- **Patched `scripts/import-wl-users.mjs`** so contact `lead_status` is derived from the workshop's `lifecycle_stage`: churned workshops produce churned contacts, every other state (trial, paying, lead) produces `customer`. Adds a `leadStatusFromWorkshop(row)` helper alongside the existing `lifecycleStage()` mapping.
+- **Backfilled 316 existing wl-app contacts** inline against prod. Result: 259 customer / 57 churned (was 316 customer / 0 churned). SE-specific: 174 customer / 7 churned, all now visible in the right tabs.
+
+### "Contacted" tab — not a bug, no data
+Jacob flagged "the contacted filter does not seem to work." It does — there are just zero contacts with `lead_status='contacted'`. There's no automatic state transition when a sequence sends an email (would be a feature, not a fix). Manual transitions happen via the bulk-action bar's "Change Lead Status" dropdown or the per-contact detail page. Flagged for him to decide whether to add auto-transition later.
+
+### Notable decisions
+- **Mapping `lead='lead'` → contact.lead_status='customer'`**, not `'qualified'`. Workshops in stage='lead' have signed up for the app but never run a diagnostic — they're still customers in our model (they have an account), just inactive. Treating them as `qualified` would imply they're prospects, which they're not.
+- **Source filter dropdown kept**, source column removed. Reasoning: Jacob's feedback was specific ("the columns, language and source"; "remove the language drop down"); didn't include "source dropdown". The source filter remains useful when triaging where a batch came from.
+
+
 ## Session: backfill wl-app customer country_code (Customer + country filter)
 - **Date:** 2026-05-06
 - **PR:** TBD chore

@@ -100,6 +100,14 @@ function customerStatus(row) {
   return null
 }
 
+// Map a user's workshop state to the contact's lead_status. Mirrors
+// lifecycleStage(): churned workshops produce churned contacts, everything
+// else (trial / paying / lead) produces customer.
+function leadStatusFromWorkshop(row) {
+  const stage = lifecycleStage(row)
+  return stage === 'churned' ? 'churned' : 'customer'
+}
+
 function acquisitionSource(row) {
   return NULL(row.workshop_created_by_agent) ? 'sales' : 'unknown'
 }
@@ -212,7 +220,7 @@ function contactRecord(row) {
     app_role:                    role,
     is_primary:                  role === 'admin',
     source:                      'wl-app',
-    lead_status:                 'customer',
+    lead_status:                 leadStatusFromWorkshop(row),
     last_login_at:               ISO(row.last_login),
     last_active_at:              ISO(row.last_active),
     login_count:                 INT(row.login_count),
