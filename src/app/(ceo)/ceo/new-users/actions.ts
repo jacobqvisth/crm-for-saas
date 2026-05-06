@@ -7,5 +7,5 @@ export async function refreshNewUsersAction() {
   await runSourceSync("core_app");
   await runSourceSync("app_store_connect");
   await runSourceSync("ga4");
-  revalidatePath("/dashboard/new-users");
+  revalidatePath("/ceo/new-users");
 }

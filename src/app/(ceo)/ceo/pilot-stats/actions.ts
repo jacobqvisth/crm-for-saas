@@ -5,5 +5,5 @@ import { runSourceSync } from "@/lib/ceo/sync/runner";
 
 export async function refreshPilotStatsAction() {
   await runSourceSync("core_app");
-  revalidatePath("/dashboard/pilot-stats");
+  revalidatePath("/ceo/pilot-stats");
 }

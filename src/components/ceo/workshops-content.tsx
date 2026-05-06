@@ -156,7 +156,7 @@ export function WorkshopListContent({
             Apply
           </button>
           {(query || status !== "all") && (
-            <Link className="button" href="/dashboard/workshops">
+            <Link className="button" href="/ceo/workshops">
               Clear
             </Link>
           )}
@@ -198,7 +198,7 @@ export function WorkshopListContent({
                 <tr key={item.workshopId}>
                   <td>
                     <div className="table-primary">
-                      <Link href={`/dashboard/workshops/${item.workshopId}`}>
+                      <Link href={`/ceo/workshops/${item.workshopId}`}>
                         <strong>{item.name}</strong>
                       </Link>
                       <span>
@@ -289,7 +289,7 @@ export function WorkshopDetailContent({
       <section className="panel">
         <div className="hero-grid">
           <div className="hero-copy">
-            <Link className="meta-pill" href="/dashboard/workshops">
+            <Link className="meta-pill" href="/ceo/workshops">
               Back to workshops
             </Link>
             <p className="eyebrow">Workshop Detail</p>

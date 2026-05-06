@@ -52,7 +52,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "usage",
     label: "Usage",
     glyph: "US",
-    href: "/dashboard/app-usage",
+    href: "/ceo/app-usage",
     title: "Usage",
     description:
       "GA4 unique users, sessions, page views, and event volume — bucketed to match the selected range. Filter by platform: web, iOS, Android, or all.",
@@ -61,7 +61,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "new-users",
     label: "New Users",
     glyph: "NU",
-    href: "/dashboard/new-users",
+    href: "/ceo/new-users",
     title: "New Users",
     description:
       "Top of the funnel. iOS / Android downloads, sign-ups, first diagnoses, and average days from sign-up to first diagnosis.",
@@ -70,7 +70,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "dashboard",
     label: "Overview - test",
     glyph: "OV",
-    href: "/dashboard/overview",
+    href: "/ceo/overview",
     title: "Command Center",
     description:
       "One place to read the company: growth, activation, revenue, operations, and trust in the numbers.",
@@ -79,7 +79,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "pilot-stats",
     label: "Pilot Stats - test",
     glyph: "PS",
-    href: "/dashboard/pilot-stats",
+    href: "/ceo/pilot-stats",
     title: "Pilot Stats",
     description:
       "Mirror of the legacy Streamlit overview. Total users, workshops, diagnostics, AI cost, activity, and per-workshop volume.",
@@ -88,7 +88,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "acquisition",
     label: "Acquisition - test",
     glyph: "AQ",
-    href: "/dashboard/acquisition",
+    href: "/ceo/acquisition",
     title: "Acquisition",
     description:
       "Paid demand, campaign efficiency, funnel handoff, and where traffic is producing real activation.",
@@ -97,7 +97,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "organic-search",
     label: "Organic Search - test",
     glyph: "OS",
-    href: "/dashboard/organic-search",
+    href: "/ceo/organic-search",
     title: "Organic Search",
     description:
       "Search Console clicks, impressions, top queries, top pages, and how organic discovery is trending.",
@@ -106,7 +106,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "product",
     label: "Product - test",
     glyph: "PD",
-    href: "/dashboard/product",
+    href: "/ceo/product",
     title: "Product",
     description:
       "Usage, diagnostics throughput, platform mix, and workshop movement from signup into value.",
@@ -115,7 +115,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "workshops",
     label: "Workshops - test",
     glyph: "WS",
-    href: "/dashboard/workshops",
+    href: "/ceo/workshops",
     title: "Workshop Drilldown",
     description:
       "A deeper account-level view of workshops, members, billing state, activity, and diagnostics usage.",
@@ -124,7 +124,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "operations",
     label: "Operations - test",
     glyph: "OP",
-    href: "/dashboard/operations",
+    href: "/ceo/operations",
     title: "Operations",
     description:
       "Diagnostics engine throughput, AI cost, Motor database usage, and efficiency of the product machinery.",
@@ -133,7 +133,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "lifecycle",
     label: "Lifecycle - test",
     glyph: "LC",
-    href: "/dashboard/lifecycle",
+    href: "/ceo/lifecycle",
     title: "Lifecycle",
     description:
       "Customer.io campaign performance, messaging quality, and retention-touch effectiveness.",
@@ -142,7 +142,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "revenue",
     label: "Revenue - test",
     glyph: "RV",
-    href: "/dashboard/revenue",
+    href: "/ceo/revenue",
     title: "Revenue",
     description:
       "Stripe-backed subscription health, plan mix, paid growth, and workshop billing posture.",
@@ -151,7 +151,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "data-health",
     label: "Data Health - test",
     glyph: "DH",
-    href: "/dashboard/data-health",
+    href: "/ceo/data-health",
     title: "Data Health",
     description:
       "Freshness, recent sync runs, canonical coverage, and how much confidence to place in every view.",
@@ -160,7 +160,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "settings",
     label: "Playbook - test",
     glyph: "PB",
-    href: "/dashboard/settings",
+    href: "/ceo/settings",
     title: "Playbook",
     description:
       "Source priorities, dashboard operating rules, and how the CEO should read this system.",
