@@ -195,6 +195,10 @@ function contactRecord(row) {
   const email = (NULL(row.email) || '').toLowerCase() || null
   const { first, last } = splitName(row.name)
   const role = NULL(row.user_role)
+  // The contact's country_code is denormalized from its workshop (company)
+  // so /contacts country filter works without joining. The wl-app sync
+  // doesn't ship a per-user country, so we copy the workshop's.
+  const workshopCountry = NULL(row.workshop_country) ?? null;
   return {
     workspace_id:                WORKSPACE_ID,
     wl_user_id:                  NULL(row.internal_user_id),
@@ -203,6 +207,7 @@ function contactRecord(row) {
     first_name:                  first,
     last_name:                   last,
     phone:                       NULL(row.phone),
+    country_code:                workshopCountry,
     app_username:                NULL(row.username),
     app_role:                    role,
     is_primary:                  role === 'admin',

@@ -14,6 +14,27 @@ updated: 2026-04-22
 
 ---
 
+## Session: backfill wl-app customer country_code (Customer + country filter)
+- **Date:** 2026-05-06
+- **PR:** TBD chore
+- **Branch:** `fix/wl-app-contact-country`
+
+### What was wrong
+Jacob filtered `/contacts` to **Customer + Sweden** and saw "No contacts found" even though 181 of his 316 paying app users are at SE workshops.
+
+Root cause: `scripts/import-wl-users.mjs` (the wl-app sync) populates `companies.country_code` from `meta.workshop_country` but never sets `contacts.country_code` on the user rows. All 316 customer contacts had `country_code=NULL` while their company had it.
+
+The contacts list filter does `eq('country_code', filters.country_code)` on the contact, not the joined company — so customer + country filtering missed all of them.
+
+### Fix
+- **`scripts/import-wl-users.mjs`** — added `country_code: NULL(row.workshop_country)` to the contact record so future syncs denormalize the workshop's country onto each user.
+- **One-off backfill** (run from inline node script, not committed): updated all 316 wl-app customer contacts' `country_code` + `country` from their company. Verification post-backfill: 181 SE / 316 total customers, breakdown DK 5 / NO 1 / and a handful of bad-data outliers (ZW, CN, AD, BD, UM, BY, FR) that came in misclassified from the wl-app source — flagged but not addressed in this session.
+
+### Notable decisions
+- **Denormalize, don't join.** Could have changed the contacts filter to `OR contact.country_code = X OR company.country_code = X`, but that's a more invasive UI/API change and leaves the data shape inconsistent (other contact sources like discovery already populate the field). Mirroring the existing pattern is simpler.
+- **Backfill not kept as a script** — the patch to `import-wl-users.mjs` is the durable fix; future syncs won't drift again. A re-runnable backfill template feels like over-engineering for what is now a one-off correction.
+
+
 ## Session: drop auto_glass from Core ICP + un-promote 219 pure auto-glass shops
 - **Date:** 2026-05-06
 - **PR (preset change):** [#135](https://github.com/jacobqvisth/crm-for-saas/pull/135)
