@@ -13,7 +13,12 @@
 // time a cleanup migration leaves stranded ICP rows.
 //
 // Usage:
-//   node scripts/backfill-promote-icp-by-shop-type.mjs --country SE [--dry-run]
+//   node scripts/backfill-promote-icp-by-shop-type.mjs --country SE --workspace <uuid> [--dry-run]
+//   node scripts/backfill-promote-icp-by-shop-type.mjs --country SE --user-email jacob@wrenchlane.com [--dry-run]
+//
+// Workspace must be explicit. The earlier version did .from("workspaces").limit(1)
+// without ORDER BY, which non-deterministically picked a workspace and dumped
+// 4,690 rows into the wrong one. Don't repeat that.
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
@@ -27,7 +32,14 @@ const getArg = (name, fallback = null) => {
 
 const COUNTRY = (getArg("--country", "SE") ?? "SE").toUpperCase();
 const DRY_RUN = args.includes("--dry-run");
+const WORKSPACE_ARG = getArg("--workspace");
+const USER_EMAIL = getArg("--user-email");
 const CORE_ICP = ["auto_repair", "tire_combo", "auto_glass", "auto_body"];
+
+if (!WORKSPACE_ARG && !USER_EMAIL) {
+  console.error("ERROR: must specify --workspace <uuid> or --user-email <email>");
+  process.exit(1);
+}
 
 const env = Object.fromEntries(
   readFileSync(`${process.env.HOME}/crm-for-saas/.env.local`, "utf8")
@@ -91,10 +103,21 @@ async function fetchTargets() {
 }
 
 // ── 2. Pre-fetch all companies for dedup ───────────────────────────────────
-async function fetchWorkspace() {
-  const { data, error } = await sb.from("workspaces").select("id").limit(1).single();
-  if (error || !data) throw error ?? new Error("No workspace found");
-  return data.id;
+async function resolveWorkspaceId() {
+  if (WORKSPACE_ARG) return WORKSPACE_ARG;
+  // --user-email path: find the user, then their first workspace_members row
+  const { data: list, error: e1 } = await sb.auth.admin.listUsers();
+  if (e1) throw e1;
+  const u = list.users.find((u) => u.email === USER_EMAIL);
+  if (!u) throw new Error(`No user with email ${USER_EMAIL}`);
+  const { data: m, error: e2 } = await sb
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", u.id)
+    .limit(1)
+    .single();
+  if (e2 || !m) throw e2 ?? new Error("No workspace_members row");
+  return m.workspace_id;
 }
 
 async function fetchCompanyDedupMaps(workspaceId) {
@@ -126,7 +149,8 @@ const targets = await fetchTargets();
 console.log(`[${COUNTRY}] Matching unpromoted ICP rows: ${targets.length}`);
 if (targets.length === 0) process.exit(0);
 
-const workspaceId = await fetchWorkspace();
+const workspaceId = await resolveWorkspaceId();
+console.log(`Workspace: ${workspaceId}`);
 const { domainMap, nameByCountry } = await fetchCompanyDedupMaps(workspaceId);
 console.log(`Companies pre-fetched: ${domainMap.size} unique domains, ${nameByCountry.size} name+country keys`);
 

@@ -14,6 +14,38 @@ updated: 2026-04-22
 
 ---
 
+## Session: workspace-scoping fix + relocate misallocated contacts/companies
+- **Date:** 2026-05-06
+- **PR (route fix):** [#133](https://github.com/jacobqvisth/crm-for-saas/pull/133)
+- **PR (scripts + log):** TBD chore
+- **Branch:** `fix/promote-workspace-scoping`
+
+### What was wrong
+Jacob filtered `/contacts` to country=Sweden and saw "No contacts found" even though 3,584 SE contacts existed in the DB. Diagnosis: `src/app/api/discovery/promote/route.ts` resolved the workspace via `.from("workspaces").select("id").limit(1).single()` with no ORDER BY. Postgres returned non-deterministic results once multiple workspaces existed, and at some point the "first" row flipped — silently dumping promote results into a workspace the active user wasn't a member of.
+
+Misallocation in prod: 4,690 rows (3,584 SE + 1,106 CZ contacts/companies) had landed in `264b795c` ("Jacob Qvisth's Workspace" — owned by the secondary `jacob.qvisth@gmail.com` account) instead of `d946ea1f` ("My Workspace" — the wrenchlane.com session). The 1,106 CZ companies in `264b795c` were domain-collision duplicates of companies in `d946ea1f`, created when the same shops were promoted across two non-deterministic runs.
+
+### Fix
+- **`src/app/api/discovery/promote/route.ts`** — replaced the `.limit(1)` workspace lookup with a `workspace_members.user_id = auth.uid()` lookup, mirroring the canonical pattern in `src/lib/hooks/use-workspace.ts` and the auth callback.
+- **`scripts/backfill-promote-icp-by-shop-type.mjs`** — workspace is now an explicit `--workspace` (or `--user-email`) argument; the old "first workspace" pattern was removed.
+- **`scripts/move-workspace-data.mjs`** (new) — re-runnable migration that moves all companies + contacts from one workspace to another. Handles the partial UNIQUE `(workspace_id, domain)` index by merging colliding companies, reattaching contacts to the kept company, deleting duplicate contacts whose email already exists at the target, and re-pointing every `discovered_shops.crm_company_id` and `crm_contact_id` so the company/contact-detail pages remain consistent.
+
+### Migration result
+- Domain collisions merged: 1,106
+- Duplicate FROM contacts deleted (same email already in TO): 1,104
+- Contacts re-pointed to merged-into companies: 2
+- Companies moved (workspace_id flip): 3,584
+- Contacts moved (workspace_id flip): 3,584
+- `discovered_shops` pointers re-pointed: 2,210
+- `264b795c` after: companies=0, contacts=0
+- `d946ea1f` after: companies=10,555, contacts=10,621 (gained 3,584 SE contacts and 3,584 SE companies)
+
+### Notable decisions
+- **Kept the secondary workspace `264b795c` in place** (Jacob explicitly opted not to delete it). It's now empty but still has its owner membership for `jacob.qvisth@gmail.com`. Easy to revisit later.
+- **Used the well-known 200-chunk `.in()` pattern** when validating orphan pointers (the same gotcha PR #99/#102 fixed for sequence enrollment) — an earlier 500-chunk pass appeared to find 6,500 orphans but was just URL-truncated. With proper chunking, 0 orphan pointers remain.
+- **Scripts are kept as templates**, not deleted after the one-off run. Both have explicit safety arguments (`--from`/`--to` UUIDs, `--dry-run`, `--workspace` required) so a careless re-run can't repeat the original mistake.
+
+
 ## Session: discovery shop_type filter + deliverable-email semantics
 - **Date:** 2026-05-06
 - **PR:** [#129](https://github.com/jacobqvisth/crm-for-saas/pull/129)
