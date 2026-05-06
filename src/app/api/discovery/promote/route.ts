@@ -51,9 +51,10 @@ export async function POST(request: NextRequest) {
       status?: string;
       has_email?: boolean;
       has_phone?: boolean;
-      verified_email?: boolean;
+      email_deliverable?: boolean;
       search?: string;
       categories?: string[];
+      shop_types?: string[];
     };
   };
 
@@ -107,13 +108,16 @@ export async function POST(request: NextRequest) {
         if (filters.country_code) q = q.eq("country_code", filters.country_code.toUpperCase());
         if (filters.has_email) q = q.not("primary_email", "is", null).neq("primary_email", "");
         if (filters.has_phone) q = q.not("phone", "is", null).neq("phone", "");
-        if (filters.verified_email) q = q.eq("email_status", "valid");
+        if (filters.email_deliverable) q = q.in("email_status", ["valid", "catch_all"]);
         if (filters.search?.trim()) {
           const s = filters.search.trim();
           q = q.or(`name.ilike.%${s}%,city.ilike.%${s}%,domain.ilike.%${s}%`);
         }
         if (filters.categories && filters.categories.length > 0) {
           q = q.overlaps("all_categories", filters.categories);
+        }
+        if (filters.shop_types && filters.shop_types.length > 0) {
+          q = q.in("shop_type", filters.shop_types);
         }
       } else {
         q = q.in("status", ["new", "enriched"]);

@@ -16,12 +16,16 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status"); // comma-separated or single
   const has_email = searchParams.get("has_email");
   const has_phone = searchParams.get("has_phone");
-  const verified_email = searchParams.get("verified_email");
+  const email_deliverable = searchParams.get("email_deliverable");
   const search = searchParams.get("search")?.trim();
   const categories_raw = searchParams.get("categories");
   const categories = categories_raw
     ? categories_raw.split(",").map((s) => s.trim()).filter(Boolean)
     : null; // null = no filter (show all)
+  const shop_types_raw = searchParams.get("shop_types");
+  const shop_types = shop_types_raw
+    ? shop_types_raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : null; // null = no filter
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const per_page = Math.min(
     200,
@@ -50,8 +54,8 @@ export async function GET(request: NextRequest) {
     query = query.not("phone", "is", null).neq("phone", "");
   }
 
-  if (verified_email === "true") {
-    query = query.eq("email_status", "valid");
+  if (email_deliverable === "true") {
+    query = query.in("email_status", ["valid", "catch_all"]);
   }
 
   if (search) {
@@ -65,6 +69,10 @@ export async function GET(request: NextRequest) {
   // as long as "Auto repair" is checked, even if "ATV repair" is not.
   if (categories !== null && categories.length > 0) {
     query = query.overlaps("all_categories", categories);
+  }
+
+  if (shop_types !== null && shop_types.length > 0) {
+    query = query.in("shop_type", shop_types);
   }
 
   const from = (page - 1) * per_page;

@@ -15,7 +15,7 @@ export async function GET() {
   // 3 categories contributes +1 to each of its 3 buckets).
   const { data, error } = await supabase
     .from("discovered_shops")
-    .select("status, country_code, primary_email, phone, category, all_categories") as {
+    .select("status, country_code, primary_email, phone, category, all_categories, shop_type") as {
       data: {
         status: string;
         country_code: string | null;
@@ -23,6 +23,7 @@ export async function GET() {
         phone: string | null;
         category: string | null;
         all_categories: string[] | null;
+        shop_type: string | null;
       }[] | null;
       error: { message: string } | null;
     };
@@ -36,6 +37,7 @@ export async function GET() {
   const by_status: Record<string, number> = {};
   const by_country: Record<string, number> = {};
   const by_category: Record<string, number> = {};
+  const by_shop_type: Record<string, number> = {};
   let with_email = 0;
   let with_phone = 0;
 
@@ -65,6 +67,10 @@ export async function GET() {
       by_category["Uncategorized"] = (by_category["Uncategorized"] ?? 0) + 1;
     }
 
+    // shop_type — single bucket per row, fall back to "unclassified" when null
+    const st = row.shop_type ?? "unclassified";
+    by_shop_type[st] = (by_shop_type[st] ?? 0) + 1;
+
     // email / phone
     if (row.primary_email) with_email++;
     if (row.phone) with_phone++;
@@ -75,6 +81,7 @@ export async function GET() {
     by_status,
     by_country,
     by_category,
+    by_shop_type,
     with_email,
     with_phone,
   });
