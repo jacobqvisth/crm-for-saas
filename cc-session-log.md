@@ -14,6 +14,42 @@ updated: 2026-04-22
 
 ---
 
+## Session: discovery shop_type filter + deliverable-email semantics
+- **Date:** 2026-05-06
+- **PR:** [#129](https://github.com/jacobqvisth/crm-for-saas/pull/129)
+- **Branch:** `feature/discovery-shop-type-filter`
+- **Merge commit:** `22a6de9`
+
+### What was wrong
+After PR #124 (SE 'other' bucket cleanup) reclassified ~1,660 SE rows into core ICP `shop_type` buckets, Jacob tried to bulk-promote SE auto-repair shops with verified emails and found 928 still stuck in `discovered_shops.status='new'`. The cleanup made `shop_type` the canonical ICP classifier — but the discovery UI still filtered by Google Maps `category` only.
+
+The 928 unpromoted SE auto_repair valid-email rows broke down as:
+- 753 with `category=NULL` (Lemlist legacy chain shops + NULL-category Apify hits, both reclassified by the cleanup using `source` and `raw_data->>'term'` rather than Google's category field)
+- 734 from `source='lemlist'` specifically
+
+So when Jacob applied a category filter in the UI, those rows were excluded from "select all matching" even though they belong in the core ICP. Across SE, the gap was ~1,253 shops (auto_repair + auto_glass + auto_body + tire_combo, status=new, email_status IN valid|catch_all).
+
+Secondary issue: the "Verified email" toggle was `email_status='valid'` only. The SE plan's deliverable definition is `email_status IN ('valid','catch_all')`, so catch-all rows couldn't be promoted via the toggle either.
+
+### Fix
+- **`src/lib/shop-types.ts`** (new) — `CORE_ICP_SHOP_TYPES` constant + display labels.
+- **`src/app/api/discovery/{shops,promote,skip,verify-email}/route.ts`** — added `shop_types` filter (PostgREST `.in('shop_type', ...)`) and renamed `verified_email` → `email_deliverable` with widened semantics (`.in('email_status', ['valid','catch_all'])`).
+- **`src/app/api/discovery/stats/route.ts`** — added `by_shop_type` aggregation so the UI dropdown can show counts.
+- **`src/components/discovery/discovery-page-client.tsx`** — new `ShopTypeFilterDropdown` (mirrors `CategoryFilterDropdown`) with a one-click **Core ICP** preset that selects auto_repair + tire_combo + auto_glass + auto_body. The "Verified email" toggle was renamed to "Deliverable email" and now matches the canonical sequence enrollment filter. Shop type is rendered as a separate filter from category, with core ICP types visually grouped at the top.
+
+### Build status
+- `npm run build` ✅ clean (8.2s)
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- Vercel deploy: triggered by PR #129 merge, prod returned 307 on `/` (auth redirect) and 200 on `/discovery` (expected).
+
+### Notable decisions
+- **Replaced `verified_email` rather than adding a parallel `email_deliverable` flag.** The deliverable definition is the canonical one used by sequence enrollment; a `valid`-only toggle was strictly narrower than the actual ICP and never useful in practice. No external API consumers, so the breaking rename is contained to the discovery client.
+- **`shop_type` and Google `category` filters live side-by-side**, not merged. They answer different questions: `shop_type` is the workshop's ICP classification (set deliberately by us), `category` is Google Maps' raw label set (often missing or overly granular). Both have legitimate uses — Jacob may want to filter by Google "Auto repair shop" specifically when triaging new scrapes, even within the `auto_repair` bucket.
+- **"Core ICP" preset is a button, not the default state.** A default-on filter would silently hide other ICP types from the list view, which is wrong — the discovery surface is also used for non-core inventory triage. The preset is one click away when you want it.
+- **No backfill of the 1,253 SE missing rows yet** — the new filter makes it a one-click operation in the UI; flagged to Jacob to run when convenient.
+
+
 ## 2026-04-29 — Fix: discovery promote bulk path timed out after PR #77
 
 **Session type:** CC bug fix (full cycle: branch → PR → merge → deploy verify).
