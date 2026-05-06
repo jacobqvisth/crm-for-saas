@@ -1751,3 +1751,41 @@ Sweden's 10,659 rows were a noisy mix of auto repair / tire / dealer / inspectio
 - **`tire_only` vs `tire_combo` split was clean**. Of 980 tire-shop primary listings, 81% were 'tire_only' (just `Tire shop` / `Wheel store` / `Tire repair`) and 19% had `Auto repair shop` or `Mechanic` in `all_categories[]` — the second bucket is real combo workshops worth keeping in ICP.
 - **'other' bucket still has 2,444 rows worth investigating.** Likely some have NULL category from Google + sparse `all_categories[]`. Could re-run with website-content classification or AI labelling in a follow-up if these matter.
 - **MV cost was 7× lower than estimated.** Estimated $14-20, actual $2.82. The early-exit on `valid` (mean 3.3 calls/domain instead of 5) and the chain-domain guard cutting 73% of candidate domains explain the difference.
+
+
+## Session: Czech sequence stuck — chunk activate-promotion past 1000 enrollments
+- **Date:** 2026-05-05
+- **PR:** [#119](https://github.com/jacobqvisth/crm-for-saas/pull/119)
+- **Branch:** `fix/activate-promotion-chunking`
+- **Merge commit:** `159a0d3`
+
+### What was wrong
+Jacob noticed the Czech Republic sequence (1995 enrollments) had been "Active" for a day with **0 sent**, "No emails queued" in the header, and empty EST. SEND on every contact row. All 1995 `email_queue` rows were stuck in `status='pending'`.
+
+The activate handler (`PATCH /api/sequences/[id]`) is supposed to promote `pending` → `scheduled` when a sequence flips to active. Two compounding scale bugs silently no-op'd it:
+
+1. **Supabase 1000-row default cap** — `select("id").eq("sequence_id", ...)` only returned the first 1000 of 1995 enrollment IDs.
+2. **PostgREST URL-length limit on `.in()`** — even 1000 UUIDs in a single `.in("enrollment_id", [...])` blows past the URL length cap and silently returns Bad Request (`data: null`). Same gotcha PR #99/#102 fixed for `enrollContacts` / `resolveListContactIds`; this code path was missed.
+
+The sequence detail page's `load()` had the same shape of bugs in its senders/nextSend/lastSent lookup — explains why the header showed "No emails queued" instead of the actual scheduled count.
+
+### Fix
+- **`src/app/api/sequences/[id]/route.ts`** — paginate enrollment fetch via `.range()` past 1000 rows; chunk the `.in()` update at 200 ids. Matches `enrollContacts` pattern exactly.
+- **`src/app/(dashboard)/sequences/[id]/page.tsx`** — paginate enrollments, chunk the `email_queue` `.in()` queries, take min/max across chunks in JS for nextSend/lastSent.
+
+### Ops fix (already run against prod)
+- **`scripts/cz-unstick-pending.mjs`** — chunked update that promoted the 1995 stuck Czech rows to `scheduled` with `scheduled_for=now()` (idempotent, kept as a template).
+- **`scripts/cz-diagnose.mjs`** — read-only diagnostic that confirmed the diagnosis (sequence status, enrollment count by status, queue rows by status, sender pool capacity, step config).
+
+After the unstick the cron picked up rows on the next 5-minute tick. First send fired at 22:15 CEST; **20 sent in the first ~80 minutes** of in-window time. Throughput is paced by `gmail_accounts.min_send_interval_seconds=600` (10 min between sends per account) × 5 senders = ~30 sends/hour during the 7-18 Stockholm window, capped at 250/day across the pool. ~8 days to drain 1995.
+
+### Build status
+- `npm run lint` ✅ clean
+- `npx tsc --noEmit` ✅ clean
+- Vercel deploy: triggered by PR #119 merge (src/ change). Prod returned 307 (auth redirect — expected).
+
+### Notable decisions
+- **Treat the deployed unstick as separate from the code fix.** The one-off script promoted the stuck rows immediately so Czech could start sending; the code PR prevents the next big-sequence activation from silently failing. Either could ship without the other.
+- **Page.tsx fix bundled** even though the page-level bug is cosmetic (header copy mis-shows "No emails queued" when scheduled rows exist on >1000-enrollment sequences). Same root cause, same fix shape, didn't make sense to leave it for later.
+- **Kept both ops scripts in `scripts/`** rather than throwing them away. `cz-diagnose.mjs` is a generic stuck-sequence dump (parameterize the sequence ID for next time); `cz-unstick-pending.mjs` is the chunked promotion that's safe to re-run if anything else gets stuck on `pending`.
+- **min_send_interval=600s on every sender** is the throughput governor here, not anything in the sequence settings or cron. Worth flagging if Jacob wants to drain the queue faster: lower the interval (60s default in code) or raise `max_daily_sends`.
