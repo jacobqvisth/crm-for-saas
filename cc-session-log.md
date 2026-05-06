@@ -14,6 +14,36 @@ updated: 2026-04-22
 
 ---
 
+## Session: drop auto_glass from Core ICP + un-promote 219 pure auto-glass shops
+- **Date:** 2026-05-06
+- **PR (preset change):** [#135](https://github.com/jacobqvisth/crm-for-saas/pull/135)
+- **PR (script + log):** TBD chore
+- **Branch:** `feature/core-icp-drop-auto-glass`
+
+### What was wrong
+After the SE backfill landed and Jacob looked at `/contacts` filtered to Sweden, he flagged that `Carglass` (a pure auto-glass-replacement chain like the European Belron subsidiary) had been promoted. His scoping rule: "the ones that only have auto glass should be un-promoted; combos of auto_body + auto_glass we keep."
+
+Root cause: today's PR #129 hard-coded `auto_glass` into `CORE_ICP_SHOP_TYPES` because the SE 'other' bucket cleanup PR's stated sequence enrollment filter included it. That stated filter no longer matches Jacob's actual ICP — pure glass shops aren't a fit for mechanic-focused outreach.
+
+### Fix
+- **`src/lib/shop-types.ts`** — removed `auto_glass` from `CORE_ICP_SHOP_TYPES`. The "Core ICP" preset in the discovery dropdown now selects `auto_repair + tire_combo + auto_body` only.
+- **`scripts/unpromote-auto-glass-only.mjs`** (new) — re-runnable un-promote helper. Filters by `shop_type='auto_glass' AND status='imported' AND all_categories does NOT contain auto-body keywords`. Carefully handles shared companies: if a chain like Carglass has multiple locations linked to one company row, the shared company stays alive; only the target shops' soft pointers are unhooked.
+
+### Run result (SE only — other countries' shop_type field isn't populated)
+- SE imported auto_glass before: 220 (219 pure-glass + 1 combo)
+- Shops moved to status='skipped': 219
+- Contacts deleted: 119 (the rest were dedup-promoted with `crm_contact_id=NULL`)
+- Companies deleted: 119 (had no other shop refs)
+- Companies kept (shared with non-target shops, e.g. Carglass chain locations): 6
+- Combo kept: 1 (Auto body parts supplier | Auto glass shop | Glazier)
+- Verification: `Carglass` SE removed; SE workspace went from 3,584 → 3,465 contacts.
+
+### Notable decisions
+- **Conservative shared-company handling.** The promote route's dedup links multiple shops to one company when they share a domain or name+country. For 6 of the 125 distinct target companies, at least one non-target shop still references them — those companies were kept (just unhooked from the un-promoted shops) so the non-target shops don't end up with broken pointers.
+- **Body-keyword detection is regex-based on `all_categories`** rather than checking shop_type alone. The combo cohort uses Google's category labels (e.g. "Auto body parts supplier") to qualify — a single shop can have several Google categories, and that's the signal for a combo classification.
+- **Non-SE pure-glass shops (4 found: GB My Car Glass, CZ Carglass, etc.) are still imported** under `shop_type='other'` because the SE 'other' bucket cleanup migration was SE-only. Flagged to Jacob — broader cleanup pending his call.
+
+
 ## Session: workspace-scoping fix + relocate misallocated contacts/companies
 - **Date:** 2026-05-06
 - **PR (route fix):** [#133](https://github.com/jacobqvisth/crm-for-saas/pull/133)
