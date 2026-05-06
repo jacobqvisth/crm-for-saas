@@ -1869,3 +1869,56 @@ After PR #122 added shop_type and reclassified the SE inventory, 2,444 rows (23%
 - **Lemlist rows kept `source='lemlist'` for provenance** even though `shop_type` flips to `auto_repair`. The two columns are orthogonal: `source` says where the row originated, `shop_type` says what kind of business it is.
 - **The remaining 1,064 'other' rows** are mostly true non-ICP — gas stations (120), car washes (159), chauffeurs (94), department stores, manufacturers, auto brokers. Probably not worth further refinement unless outreach performance later suggests we're missing a segment.
 - **Sequence enrollment filter is now one clean WHERE clause**: `shop_type IN ('auto_repair','tire_combo','auto_glass','auto_body') AND email_status IN ('valid','catch_all') AND crm_company_id IS NULL`. Gives 3,355 prospects ready for the first campaign.
+
+## 2026-05-06 — Absorb wl-dashboard CEO Growth Dashboard into crm-for-saas (PR #120 + #126 + #127)
+
+- **PRs:** #120 (feat), #126 (styling fix), #127 (href fix)
+- **Branches:** `feat/absorb-ceo-dashboard`, `fix/ceo-styles`, `fix/ceo-section-hrefs`
+- **Merge commits:** `af017fb`, `25db671`, `b831c51`
+- **Old wl-dashboard side:** PR #43 on `jacobqvisth/wl-dashboard` (redirect to crm-for-saas/ceo)
+
+### What was built
+
+The standalone `wl-dashboard` repo + Supabase project + Vercel project is being retired. Its functionality now lives entirely inside `crm-for-saas` as a gated `/ceo/*` route group. After this work: one repo, one Supabase, one Vercel project for both the CRM and the CEO Growth Dashboard.
+
+**PR #120 — code + DB absorption:**
+- 12 `dashboard_*` tables + indexes + RLS + cron source seeds bundled into `supabase/migrations/20260506010000_absorb_ceo_dashboard_schema.sql`.
+- ~20.5K rows of historical analytics data copied from old wl-dashboard Supabase (`ivjlbknopdvadawjqpxl`) → CRM Supabase (`wdgiwuhehqpkhpvdzzzl`) before the PR via service-role transfer; row counts verified table-by-table.
+- 73 source files copied + namespaced under `src/{app/(ceo)/ceo,components/ceo,lib/ceo,config/ceo}/`.
+- New API routes `src/app/api/ceo-sync/{all,[source]}/route.ts` (cron-driven, Bearer SYNC_SECRET).
+- Auth gate added to `src/lib/supabase/middleware.ts`: `/ceo/*` requires authenticated email matching `CEO_ALLOWED_EMAILS`.
+- Sidebar gains a conditional "CEO Dashboard" link visible only to allowlisted emails.
+- Compatibility shim `src/lib/ceo/supabase.ts` routes copied wl-dashboard `createSupabase{Server,Service}Client()` calls to a service-role client (avoids the data leak from `authenticated can read` RLS on dashboard_* tables in the multi-tenant CRM context).
+
+**Ops sequence after #120 merged:**
+- 22 env vars set on `crm-for-saas` Vercel via `vercel env add` (production + preview + development scopes): GA4, Customer.io, Google OAuth, Google Ads, App Store Connect, Stripe, AWS/S3 + the new `CEO_ALLOWED_EMAILS`, `NEXT_PUBLIC_CEO_ALLOWED_EMAILS`, `SYNC_SECRET`.
+- `vercel redeploy` triggered to pick up env vars.
+- Smoke-tested `/api/ceo-sync/all` with Bearer SYNC_SECRET → 6/7 sources succeed: ga4 (+283), google_ads (+115), search_console (+6,790), customer_io (+640), stripe (+443), app_store_connect (+5). `core_app` fails — pre-existing Postgres bulk-upsert bug ("ON CONFLICT DO UPDATE command cannot affect row a second time" — duplicate user_ids in the S3 export not deduplicated before bulk upsert). Bug exists in old wl-dashboard too. Filed for follow-up.
+- 7 pg_cron jobs installed on CRM Supabase (`ceo-sync-{core-app-twice-daily,ga4,google-ads,search-console,customer-io,stripe,app-store}`) — same schedule as before, hitting `/api/ceo-sync/*` endpoints.
+- 5 old pg_cron jobs unscheduled on old wl-dashboard Supabase.
+- Old `wl-dashboard` repo got PR #43 (`vercel.json` 308 redirects + dropped Vercel cron). After deploy, `wl-dashboard-three.vercel.app/*` permanently redirects to `crm-for-saas.vercel.app/ceo/*`.
+
+**PR #126 — styling fix:**
+The (ceo) route group had no layout file, so /ceo/* fell through to the root layout (no sidebar). And wl-dashboard's bespoke 1,889-line CSS wasn't migrated, leaving content as an unstyled text dump.
+- New `src/app/(ceo)/layout.tsx` mirroring `(dashboard)/layout.tsx` — WorkspaceProvider + CRM Sidebar + `bg-slate-50` main panel.
+- Rewrote `src/components/ceo/dashboard-shell.tsx` in Tailwind matching CRM patterns (slate/indigo, card-on-bg-slate-50). Dropped the embedded sidebar / brand lockup / profile chip / sign-out — all redundant with the CRM Sidebar.
+- New `src/app/(ceo)/ceo-legacy.css` — wl-dashboard's globals.css imported only by the CEO layout. Scoped to /ceo/* via Next.js layout-CSS scoping; doesn't leak onto other CRM routes.
+- `supabase/ceo-cron.sql` committed for reference (the SQL used to install/retire pg_cron jobs).
+
+**PR #127 — href fix:**
+Section nav, drilldown links, and `revalidatePath` calls still pointed at `/dashboard/*` (wl-dashboard's old URL structure). In CRM that path is the CRM dashboard — clicking any CEO section tab 404'd. Bulk-rewrote `"/dashboard/` → `"/ceo/` in 7 files.
+
+### Build/deploy
+- All three PRs: `npm run build` green, `npm run lint` green, `npx tsc --noEmit` green.
+- Vercel auto-deployed on each merge. Final state verified: all `/ceo/*` routes return 307 (auth-gated), `/api/ceo-sync/all` returns 401 without Bearer (gated), `/login` and existing CRM routes unaffected. `wl-dashboard-three.vercel.app/dashboard/overview` returns 308 with Location `https://crm-for-saas.vercel.app/ceo/overview`.
+
+### Notable decisions
+- **DBs stay separate by company, not by app.** WrenchLane gets one Supabase (CRM + CEO data); Result Insurance / Hantverkarbolaget / Kundbolaget keep their own (different legal entity). One DB per company, multiple apps per DB.
+- **Service-role client for the CEO data path.** dashboard_* tables have `authenticated can read` RLS from the wl-dashboard era. In a multi-tenant CRM, that would let any logged-in user query CEO data via PostgREST. Routing the shim through a service-role client (server-only, never browser-exposed) plus the middleware email gate gives defense-in-depth without rewriting the RLS.
+- **Untyped Supabase client in the shim, deliberately.** CRM's `Database` type didn't include the `dashboard_*` tables; regenerating it would have surfaced ~142 strict-null errors across pre-existing CRM code. Keeping the shim untyped deferred that — type regen happened separately in PR #128.
+- **Phase-2 styling work is queued.** The legacy CSS keeps the CEO content components functional but they don't yet match CRM's visual language at the component-internal level. Bespoke class names (bar-list, data-table, chart-area, hero-grid, etc.) to be replaced with Tailwind incrementally — not a blocker.
+
+### Follow-ups
+- **`core_app` sync bug** — dedupe user_ids/workshop_ids in JS before the bulk upsert call (`src/lib/ceo/sync/sources/core-app.ts`). 6 of 7 sources are unaffected; data won't drift fast (twice-daily schedule + each user's stats get rewritten on next sync anyway).
+- **2-week verification window** then retire: archive `jacobqvisth/wl-dashboard` GitHub repo, delete the `wl-dashboard` Vercel project, delete the `ivjlbknopdvadawjqpxl` Supabase project (~$25/mo savings).
+- **Phase-2 Tailwind rewrite** of CEO content components — replace 100+ bespoke class names from `ceo-legacy.css` with Tailwind/CRM patterns, file by file.
