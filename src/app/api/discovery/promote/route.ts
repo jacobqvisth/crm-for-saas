@@ -67,16 +67,22 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: workspace, error: wsError } = await supabase
-    .from("workspaces")
-    .select("id")
+  // Resolve workspace from the authenticated user's membership, not "first
+  // row in workspaces". Pre-PR #132 this used .from("workspaces").limit(1)
+  // with no ORDER BY, which returned non-deterministic results once a second
+  // workspace existed in the table — caused 4,690 contacts to land in the
+  // wrong workspace before being relocated.
+  const { data: membership, error: memError } = await supabase
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", user.id)
     .limit(1)
     .single();
 
-  if (wsError || !workspace) {
-    return NextResponse.json({ error: "Could not resolve workspace" }, { status: 500 });
+  if (memError || !membership) {
+    return NextResponse.json({ error: "No workspace membership found for user" }, { status: 500 });
   }
-  const workspaceId = workspace.id;
+  const workspaceId = membership.workspace_id;
 
   // --- 1. Fetch all matching shops (paginated to bypass PostgREST 1000-row cap) ---
   const allShops: DiscoveredShop[] = [];
