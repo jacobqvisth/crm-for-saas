@@ -37,7 +37,7 @@ export async function getNextSender(
 
   // Find the first account with remaining capacity
   const available = accounts.find(
-    (account) => account.daily_sends_count < account.max_daily_sends
+    (account) => (account.daily_sends_count ?? 0) < (account.max_daily_sends ?? 0)
   );
 
   return available || null;

@@ -37,7 +37,7 @@ export function DealContacts({ dealId }: DealContactsProps) {
     if (!workspaceId) return;
     const { data, error } = await supabase
       .from('deal_contacts')
-      .select('id, deal_id, contact_id, role, contact:contacts(*)')
+      .select('deal_id, contact_id, role, contact:contacts(*)')
       .eq('deal_id', dealId);
 
     if (error) {
@@ -48,7 +48,7 @@ export function DealContacts({ dealId }: DealContactsProps) {
     const parsed = (data || [])
       .filter((d): d is typeof d & { contact: Contact } => d.contact !== null)
       .map(d => ({
-        id: d.id,
+        id: `${d.deal_id}_${d.contact_id}`, // synthetic key for React (deal_contacts has no `id` PK)
         deal_id: d.deal_id,
         contact_id: d.contact_id,
         role: d.role,

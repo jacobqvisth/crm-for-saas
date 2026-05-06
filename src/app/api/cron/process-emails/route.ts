@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
   // Group by sender to respect daily limits
   const bySender = new Map<string, typeof queueItems>();
   for (const item of queueItems) {
+    if (!item.sender_account_id) continue;
     const group = bySender.get(item.sender_account_id) || [];
     group.push(item);
     bySender.set(item.sender_account_id, group);
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!account || account.status !== "active") continue;
-    const remaining = account.max_daily_sends - account.daily_sends_count;
+    const remaining = (account.max_daily_sends ?? 0) - (account.daily_sends_count ?? 0);
     if (remaining <= 0) continue;
 
     // --- Circuit Breaker: check bounce rate for this sender in last 24 hours ---
@@ -178,6 +179,9 @@ export async function POST(request: NextRequest) {
         .eq("id", item.id);
 
       // Check enrollment is still active
+      if (!item.enrollment_id) {
+        failed++; continue;
+      }
       const { data: enrollment } = await supabase
         .from("sequence_enrollments")
         .select("*, sequences(*)")
@@ -367,7 +371,7 @@ export async function POST(request: NextRequest) {
         to: item.to_email,
         subject: item.subject,
         htmlBody: item.body_html,
-        trackingId: item.tracking_id,
+        trackingId: item.tracking_id ?? undefined,
         replyToMessageId,
         replyToThreadId,
         includeSignature,

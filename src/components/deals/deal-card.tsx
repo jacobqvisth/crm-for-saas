@@ -11,7 +11,7 @@ export interface DealCardData {
   stage: string;
   company_name: string | null;
   expected_close_date: string | null;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 interface DealCardProps {
@@ -24,7 +24,7 @@ const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
 export function DealCard({ deal, index, onClick }: DealCardProps) {
-  const daysInStage = differenceInDays(new Date(), new Date(deal.updated_at));
+  const daysInStage = deal.updated_at ? differenceInDays(new Date(), new Date(deal.updated_at)) : 0;
 
   return (
     <Draggable draggableId={deal.id} index={index}>

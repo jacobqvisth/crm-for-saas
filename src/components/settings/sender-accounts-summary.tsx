@@ -92,12 +92,12 @@ function SenderRow({
   account: GmailAccount;
   onUpdate: () => void;
 }) {
-  const [maxSends, setMaxSends] = useState(account.max_daily_sends);
+  const [maxSends, setMaxSends] = useState(account.max_daily_sends ?? 50);
   const [saving, setSaving] = useState(false);
-  const status = STATUS_STYLES[account.status] || STATUS_STYLES.disconnected;
+  const status = STATUS_STYLES[account.status ?? 'disconnected'] || STATUS_STYLES.disconnected;
   const sendPercentage = Math.min(
     100,
-    Math.round((account.daily_sends_count / Math.max(1, account.max_daily_sends)) * 100)
+    Math.round(((account.daily_sends_count ?? 0) / Math.max(1, account.max_daily_sends ?? 1)) * 100)
   );
 
   async function handleSaveLimit() {

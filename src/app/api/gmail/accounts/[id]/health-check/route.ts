@@ -314,7 +314,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     checkDKIM(domain),
     checkDMARC(domain),
     checkMX(domain),
-    computeInternalStats(supabase, account.id, account.status, account.pause_reason),
+    computeInternalStats(supabase, account.id, account.status ?? 'disconnected', account.pause_reason),
     ...BLOCKLISTS.map((b) => checkBlocklist(domain, b)),
   ]);
 

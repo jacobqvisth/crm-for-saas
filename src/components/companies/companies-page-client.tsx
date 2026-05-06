@@ -249,7 +249,7 @@ export function CompaniesPageClient() {
                     <td className="px-4 py-3 text-slate-600">{company.industry || '—'}</td>
                     <td className="px-4 py-3 text-slate-600">{company.contacts_count}</td>
                     <td className="px-4 py-3 text-slate-600">{company.deals_count}</td>
-                    <td className="px-4 py-3 text-slate-500">{format(new Date(company.created_at), 'MMM d, yyyy')}</td>
+                    <td className="px-4 py-3 text-slate-500">{format(new Date(company.created_at ?? Date.now()), 'MMM d, yyyy')}</td>
                   </tr>
                 ))
               )}

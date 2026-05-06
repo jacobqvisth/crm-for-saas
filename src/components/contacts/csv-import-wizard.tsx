@@ -7,7 +7,7 @@ import Papa from 'papaparse';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { createClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
-import type { InsertTables } from '@/lib/database.types';
+import type { TablesInsert } from '@/lib/database.types';
 
 type CsvRow = Record<string, string>;
 
@@ -231,8 +231,8 @@ export function CsvImportWizard() {
           const existingEmailMap = new Map((existingContacts || []).map(c => [c.email.toLowerCase(), c.id]));
 
           // Build contact rows
-          const toInsert: InsertTables<'contacts'>[] = [];
-          const toUpdate: Array<{ id: string; data: Partial<InsertTables<'contacts'>> }> = [];
+          const toInsert: TablesInsert<'contacts'>[] = [];
+          const toUpdate: Array<{ id: string; data: Partial<TablesInsert<'contacts'>> }> = [];
 
           for (const row of validBatch) {
             const email = row[emailHeader].trim().toLowerCase();
@@ -260,7 +260,7 @@ export function CsvImportWizard() {
               last_name: fieldToHeader['last_name'] ? row[fieldToHeader['last_name']]?.trim() || null : null,
               phone: fieldToHeader['phone'] ? row[fieldToHeader['phone']]?.trim() || null : null,
               company_id: companyHeader && row[companyHeader]?.trim() ? companyIdMap[row[companyHeader].trim()] || null : null,
-              lead_status: resolvedLeadStatus as InsertTables<'contacts'>['lead_status'],
+              lead_status: resolvedLeadStatus as TablesInsert<'contacts'>['lead_status'],
               custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
             };
 

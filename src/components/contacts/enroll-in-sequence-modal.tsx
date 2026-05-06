@@ -11,7 +11,7 @@ import { SenderAccountSelector } from "@/components/gmail/sender-account-selecto
 interface Sequence {
   id: string;
   name: string;
-  status: string;
+  status: string | null;
 }
 
 interface EnrollInSequenceModalProps {

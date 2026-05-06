@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { notNull } from "@/lib/types/guards";
 
 export interface TemplateStatResult {
   templateId: string;
@@ -55,7 +56,7 @@ export async function GET() {
     return NextResponse.json([]);
   }
 
-  const trackingIds = queueItems.map((q) => q.tracking_id).filter(Boolean);
+  const trackingIds = queueItems.map((q) => q.tracking_id).filter(notNull);
 
   // Get all events for these tracking IDs
   const { data: events } = await supabase
@@ -83,6 +84,7 @@ export async function GET() {
   >();
 
   for (const q of queueItems) {
+    if (!q.step_id) continue;
     const templateId = stepTemplateMap.get(q.step_id);
     if (!templateId) continue;
 
@@ -92,7 +94,7 @@ export async function GET() {
     const stat = templateStats.get(templateId)!;
     stat.sent += 1;
 
-    const evTypes = eventMap.get(q.tracking_id);
+    const evTypes = q.tracking_id ? eventMap.get(q.tracking_id) : undefined;
     if (evTypes) {
       if (evTypes.has("open")) stat.opens += 1;
       if (evTypes.has("reply")) stat.replies += 1;

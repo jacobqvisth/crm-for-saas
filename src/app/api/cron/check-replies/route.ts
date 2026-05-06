@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { notNull } from "@/lib/types/guards";
 import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get sender account email addresses for filtering
-    const senderIds = [...new Set(sentEmails.map((e) => e.sender_account_id))];
+    const senderIds = [...new Set(sentEmails.map((e) => e.sender_account_id).filter(notNull))];
     const { data: accounts } = await supabase
       .from("gmail_accounts")
       .select("id, email_address, workspace_id")
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     for (const [, email] of threadMap) {
       checked++;
+      if (!email.sender_account_id) continue;
       const account = accountMap.get(email.sender_account_id);
       if (!account) continue;
 
@@ -323,7 +325,7 @@ export async function POST(request: NextRequest) {
     .gte("sent_at", since);
 
   if (activeSentEmails && activeSentEmails.length > 0) {
-    const uniqueSenderIds = [...new Set(activeSentEmails.map((e) => e.sender_account_id))];
+    const uniqueSenderIds = [...new Set(activeSentEmails.map((e) => e.sender_account_id).filter(notNull))];
 
     for (const senderAccountId of uniqueSenderIds) {
       try {
@@ -359,6 +361,7 @@ export async function POST(request: NextRequest) {
           );
 
           for (const sentEmail of senderEmails) {
+            if (!sentEmail.to_email || !sentEmail.tracking_id) continue;
             if (bodyText.toLowerCase().includes(sentEmail.to_email.toLowerCase())) {
               const { data: existingBounce } = await supabase
                 .from("email_events")

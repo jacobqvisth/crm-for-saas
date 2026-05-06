@@ -345,7 +345,7 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
     const stepIdx = currentStep ?? 0;
     const step = steps[stepIdx];
     if (!step) return "Completed";
-    const typeName = step.type.charAt(0).toUpperCase() + step.type.slice(1);
+    const typeName = (step.type ?? 'email').charAt(0).toUpperCase() + (step.type ?? 'email').slice(1);
     return `${stepIdx + 1} / ${total} · ${typeName}`;
   };
 

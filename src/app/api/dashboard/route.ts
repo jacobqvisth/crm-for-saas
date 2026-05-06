@@ -310,6 +310,7 @@ export async function GET(request: NextRequest) {
 
   for (const event of events) {
     if (event.event_type !== "open") continue;
+    if (!event.created_at) continue;
     const key = getGroupKey(event.created_at, shouldGroupByWeek);
     const existing = emailVolumeMap.get(key) ?? { sent: 0, opened: 0 };
     existing.opened++;
@@ -325,6 +326,7 @@ export async function GET(request: NextRequest) {
   const contactGrowthMap = new Map<string, number>();
   let cumulative = 0;
   for (const contact of allContacts) {
+    if (!contact.created_at) continue;
     const key = getGroupKey(contact.created_at, shouldGroupByWeek);
     cumulative++;
     contactGrowthMap.set(key, cumulative);

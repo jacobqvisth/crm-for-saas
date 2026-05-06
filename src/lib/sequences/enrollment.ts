@@ -40,7 +40,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence not found"] };
   }
 
-  if (!["active", "draft", "paused"].includes(sequence.status)) {
+  if (!["active", "draft", "paused"].includes(sequence.status ?? "")) {
     return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active, draft, or paused"] };
   }
 
@@ -200,7 +200,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
 
     // Schedule the first step if it's an email
     // For draft/paused sequences, queue as "pending" — emails won't send until sequence is activated
-    const emailStatus = (["draft", "paused"].includes(sequence.status) ? "pending" : "scheduled") as "scheduled" | "pending";
+    const emailStatus = (["draft", "paused"].includes(sequence.status ?? "") ? "pending" : "scheduled") as "scheduled" | "pending";
 
     if (firstStep && firstStep.type === "email" && enrollment) {
       const scheduledFor = getNextSendTime(settings);

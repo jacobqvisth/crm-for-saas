@@ -155,10 +155,10 @@ export function ContactsPageClient() {
       );
     }
     if (filters.lead_status) {
-      query = query.eq('lead_status', filters.lead_status as Contact['lead_status']);
+      query = query.eq('lead_status', filters.lead_status as NonNullable<Contact['lead_status']>);
     }
     if (filters.status) {
-      query = query.eq('status', filters.status as Contact['status']);
+      query = query.eq('status', filters.status as NonNullable<Contact['status']>);
     }
     if (filters.company_id) {
       query = query.eq('company_id', filters.company_id);
@@ -728,7 +728,7 @@ export function ContactsPageClient() {
                           : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <LeadStatusBadge status={contact.lead_status} />
+                        <LeadStatusBadge status={contact.lead_status ?? 'new'} />
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-500">
                         {contact.source
@@ -736,7 +736,7 @@ export function ContactsPageClient() {
                           : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-4 py-3 text-slate-500">
-                        {format(new Date(contact.created_at), 'MMM d, yyyy')}
+                        {format(new Date(contact.created_at ?? Date.now()), 'MMM d, yyyy')}
                       </td>
                     </tr>
                   ))

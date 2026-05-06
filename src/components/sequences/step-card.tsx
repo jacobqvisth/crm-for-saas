@@ -48,7 +48,7 @@ interface StepCardProps {
 export function StepCard({ step, totalSteps, stepNumber, sequenceName, isFirstEmailStep, onUpdate, onDelete, dragHandleProps }: StepCardProps) {
   const [expanded, setExpanded] = useState(true);
 
-  const config = STEP_CONFIG[step.type];
+  const config = STEP_CONFIG[(step.type ?? 'email') as keyof typeof STEP_CONFIG];
   const Icon = config.icon;
 
   const getSummary = () => {

@@ -228,7 +228,7 @@ export async function GET(
     display_name: a.display_name,
     daily_sends_count: a.daily_sends_count,
     max_daily_sends: a.max_daily_sends,
-    remaining_capacity: Math.max(0, a.max_daily_sends - a.daily_sends_count),
+    remaining_capacity: Math.max(0, (a.max_daily_sends ?? 0) - (a.daily_sends_count ?? 0)),
     status: a.status,
   }));
 

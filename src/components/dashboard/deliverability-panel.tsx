@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
+import { notNull } from "@/lib/types/guards";
 import {
   AreaChart,
   Area,
@@ -76,7 +77,7 @@ export function DeliverabilityPanel() {
           .gte("sent_at", sevenDaysAgo.toISOString());
 
         if (recentQueue && recentQueue.length > 0) {
-          const trackingIds = recentQueue.map((q) => q.tracking_id).filter(Boolean);
+          const trackingIds = recentQueue.map((q) => q.tracking_id).filter(notNull);
 
           const { data: bounceEvents } = await supabase
             .from("email_events")
@@ -89,12 +90,13 @@ export function DeliverabilityPanel() {
           // Aggregate by sender_account_id
           const statsMap = new Map<string, SenderStats>();
           for (const q of recentQueue) {
+            if (!q.sender_account_id) continue;
             if (!statsMap.has(q.sender_account_id)) {
               statsMap.set(q.sender_account_id, { accountId: q.sender_account_id, sent: 0, bounced: 0 });
             }
             const s = statsMap.get(q.sender_account_id)!;
             s.sent += 1;
-            if (bounceTrackingIds.has(q.tracking_id)) s.bounced += 1;
+            if (q.tracking_id && bounceTrackingIds.has(q.tracking_id)) s.bounced += 1;
           }
           setSenderStats(statsMap);
         }

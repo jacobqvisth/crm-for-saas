@@ -27,7 +27,7 @@ import {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import type { Tables } from "@/lib/database.types";
+import type { Tables, SequenceSettings } from "@/lib/database.types";
 
 type Sequence = Tables<"sequences">;
 type Step = Tables<"sequence_steps">;
@@ -161,7 +161,7 @@ export default function SequenceDetailPage() {
       senders = (gmailRows || []).map((g) => ({
         id: g.id,
         email: g.email_address,
-        status: g.status,
+        status: g.status ?? 'disconnected',
         enrollmentCount: senderCountMap.get(g.id) ?? 0,
       }));
     }
@@ -407,7 +407,7 @@ export default function SequenceDetailPage() {
                 // Pre-compute email steps sorted by step_order for threading logic
                 const emailSteps = steps.filter((s) => s.type === "email");
                 return steps.map((step, i) => {
-                const Icon = STEP_ICONS[step.type] || Mail;
+                const Icon = STEP_ICONS[(step.type ?? 'email') as keyof typeof STEP_ICONS] || Mail;
                 // Compute threading context for email steps
                 const thisEmailIdx = step.type === "email"
                   ? emailSteps.findIndex((s) => s.id === step.id)
@@ -484,7 +484,7 @@ export default function SequenceDetailPage() {
       )}
 
       {activeTab === "contacts" && (
-        <SequenceContactsTab sequenceId={sequenceId} steps={steps} settings={sequence.settings} />
+        <SequenceContactsTab sequenceId={sequenceId} steps={steps} settings={sequence.settings as SequenceSettings} />
       )}
       {activeTab === "analytics" && <SequenceAnalyticsTab sequenceId={sequenceId} />}
 
@@ -499,8 +499,8 @@ export default function SequenceDetailPage() {
         open={enrollOpen}
         onClose={() => setEnrollOpen(false)}
         sequenceId={sequenceId}
-        sequenceStatus={sequence?.status}
-        sequenceSettings={sequence?.settings}
+        sequenceStatus={sequence?.status ?? undefined}
+        sequenceSettings={sequence?.settings as SequenceSettings | undefined}
         onEnrolled={load}
         onOpenSettings={() => {
           setEnrollOpen(false);

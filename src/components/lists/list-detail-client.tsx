@@ -491,11 +491,11 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <LeadStatusBadge status={contact.lead_status} />
+                      <LeadStatusBadge status={contact.lead_status ?? 'new'} />
                     </td>
                     <td className="px-4 py-3 text-slate-500">
                       {isDynamic
-                        ? format(new Date(contact.created_at), 'MMM d, yyyy')
+                        ? format(new Date(contact.created_at ?? Date.now()), 'MMM d, yyyy')
                         : contact.added_at
                           ? format(new Date(contact.added_at), 'MMM d, yyyy')
                           : '—'

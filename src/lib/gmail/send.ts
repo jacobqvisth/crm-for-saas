@@ -135,7 +135,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
 
   // Check daily send limit
-  if (account.daily_sends_count >= account.max_daily_sends) {
+  if ((account.daily_sends_count ?? 0) >= (account.max_daily_sends ?? 0)) {
     await supabase
       .from("gmail_accounts")
       .update({ status: "rate_limited" })
@@ -221,7 +221,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     await supabase
       .from("gmail_accounts")
       .update({
-        daily_sends_count: account.daily_sends_count + 1,
+        daily_sends_count: (account.daily_sends_count ?? 0) + 1,
       })
       .eq("id", params.accountId);
 
@@ -258,7 +258,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         await supabase
           .from("gmail_accounts")
           .update({
-            daily_sends_count: account.daily_sends_count + 1,
+            daily_sends_count: (account.daily_sends_count ?? 0) + 1,
           })
           .eq("id", params.accountId);
 
