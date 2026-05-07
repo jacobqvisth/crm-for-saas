@@ -125,6 +125,8 @@ const company: Company = {
   latitude: null,
   longitude: null,
   geocoded_at: null,
+  skip_auto_followup: false,
+  do_not_contact: false,
 };
 
 // ---------------------------------------------------------------------------

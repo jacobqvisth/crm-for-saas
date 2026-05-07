@@ -4,15 +4,19 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, Calendar, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Calendar, Trash2, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import StopsReorderList, {
   type ReorderStop,
 } from "@/components/routes/stops-reorder-list";
+import MarkVisitedSheet, {
+  type MarkVisitedSheetState,
+} from "@/components/routes/mark-visited-sheet";
 import type {
   RouteMapStop,
   RouteMapOrigin,
 } from "@/components/routes/route-map";
+import { type VisitOutcome } from "@/lib/routes/visits-decision";
 
 // Lazy-load the map so the /routes list page doesn't pull Maps JS (~400 KB).
 const RouteMap = dynamic(() => import("@/components/routes/route-map"), {
@@ -52,8 +56,17 @@ type Stop = {
   longitude: number;
   leg_drive_seconds: number | null;
   leg_drive_meters: number | null;
+  visited_at: string | null;
+  visit_outcome: VisitOutcome | null;
+  visit_notes: string | null;
+  follow_up_required: boolean | null;
   discovered_shops: { name: string | null; address: string | null } | null;
   companies: { name: string | null; address: string | null } | null;
+};
+
+type FieldVisitsSettings = {
+  auto_followup_enabled: boolean;
+  sequence_by_outcome: Partial<Record<VisitOutcome, string>>;
 };
 
 const MODE_BADGE: Record<RouteDetail["mode"], string> = {
@@ -84,6 +97,9 @@ export default function RouteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [scheduledFor, setScheduledFor] = useState("");
   const [saving, setSaving] = useState(false);
+  const [fvSettings, setFvSettings] = useState<FieldVisitsSettings | null>(null);
+  const [sheetState, setSheetState] = useState<MarkVisitedSheetState | null>(null);
+  const [submittingVisit, setSubmittingVisit] = useState(false);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
 
@@ -107,6 +123,23 @@ export default function RouteDetailPage() {
   useEffect(() => {
     fetchRoute();
   }, [fetchRoute]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/field-visits");
+        if (!res.ok) return;
+        const data = (await res.json()) as FieldVisitsSettings;
+        if (!cancelled) setFvSettings(data);
+      } catch {
+        // non-fatal — banner just won't show
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSchedule() {
     if (!scheduledFor) {
@@ -189,9 +222,78 @@ export default function RouteDetailPage() {
         shop_address: s.shop_address,
         legDriveSeconds: s.leg_drive_seconds,
         isLapsed: s.company_id != null,
+        visitedAt: s.visited_at,
+        visitOutcome: s.visit_outcome,
       })),
     [stops],
   );
+
+  const visitedCount = stops.filter((s) => s.visited_at).length;
+  const followUpCount = stops.filter((s) => s.follow_up_required).length;
+  const remainingCount = stops.length - visitedCount;
+
+  const configuredOutcomes = useMemo(() => {
+    const set = new Set<VisitOutcome>();
+    if (fvSettings?.sequence_by_outcome) {
+      for (const [k, v] of Object.entries(fvSettings.sequence_by_outcome)) {
+        if (typeof v === "string" && v.length > 0) set.add(k as VisitOutcome);
+      }
+    }
+    return set;
+  }, [fvSettings]);
+
+  const autoEnrollOutcomes: VisitOutcome[] = ["interested", "no_answer"];
+  const missingSequenceOutcomes = autoEnrollOutcomes.filter((o) => !configuredOutcomes.has(o));
+
+  function openSheet(stopId: string) {
+    const stop = stops.find((s) => s.id === stopId);
+    if (!stop) return;
+    setSheetState({
+      stopId,
+      shopName: stop.shop_name,
+      initialOutcome: stop.visit_outcome ?? undefined,
+      initialNotes: stop.visit_notes ?? undefined,
+    });
+  }
+
+  async function handleSubmitVisit(input: {
+    outcome: VisitOutcome;
+    notes?: string;
+    enrollOverride?: boolean;
+  }) {
+    if (!sheetState) return;
+    setSubmittingVisit(true);
+    try {
+      const res = await fetch(`/api/routes/${id}/stops/${sheetState.stopId}/visit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        toast.error(text || "Failed to log visit");
+        return;
+      }
+      const data = (await res.json()) as {
+        enrollmentId?: string;
+        enrollmentSkipReason?: string;
+        promotedCompanyId?: string;
+      };
+      if (data.enrollmentId) {
+        toast.success("Visit logged · enrolled in follow-up");
+      } else if (data.enrollmentSkipReason === "no_contact") {
+        toast.success("Visit logged · no contact to enroll — add one first");
+      } else if (data.promotedCompanyId) {
+        toast.success("Visit logged · shop promoted to company");
+      } else {
+        toast.success("Visit logged");
+      }
+      setSheetState(null);
+      await fetchRoute();
+    } finally {
+      setSubmittingVisit(false);
+    }
+  }
 
   const mapStops: RouteMapStop[] = useMemo(
     () =>
@@ -282,7 +384,41 @@ export default function RouteDetailPage() {
         <div className="mt-4 text-xs text-slate-500">
           Origin: <span className="text-slate-700">{route.origin_address}</span>
         </div>
+
+        {stops.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
+            <span>
+              <span className="font-semibold text-slate-900">{visitedCount}</span> of{" "}
+              {stops.length} visited
+            </span>
+            <span>
+              <span className="font-semibold text-slate-900">{remainingCount}</span> remaining
+            </span>
+            <span>
+              <span className="font-semibold text-slate-900">{followUpCount}</span> follow-up
+              {followUpCount === 1 ? "" : "s"} queued
+            </span>
+          </div>
+        )}
       </div>
+
+      {fvSettings && missingSequenceOutcomes.length > 0 && fvSettings.auto_followup_enabled && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-amber-900">
+            <p className="font-medium">
+              No auto-enroll sequence configured for:{" "}
+              {missingSequenceOutcomes.map((o) => o.replace("_", " ")).join(", ")}.
+            </p>
+            <p className="mt-1">
+              Visits with these outcomes will be logged but no follow-up email will fire.{" "}
+              <Link href="/settings/field-visits" className="underline hover:text-amber-700">
+                Configure
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
@@ -338,6 +474,7 @@ export default function RouteDetailPage() {
             stops={reorderStops}
             saving={saving}
             onSave={(orderedIds) => handleReorder(orderedIds)}
+            onMarkVisited={openSheet}
           />
         </div>
       </div>
@@ -352,6 +489,15 @@ export default function RouteDetailPage() {
           Discard route
         </button>
       </div>
+
+      <MarkVisitedSheet
+        state={sheetState}
+        configuredOutcomes={configuredOutcomes}
+        workspaceAutoEnabled={fvSettings?.auto_followup_enabled !== false}
+        submitting={submittingVisit}
+        onClose={() => setSheetState(null)}
+        onSubmit={handleSubmitVisit}
+      />
     </div>
   );
 }
