@@ -22,6 +22,7 @@ import {
   CheckSquare,
   MapPin,
   LineChart,
+  Map as MapIcon,
 } from "lucide-react";
 
 const CEO_ALLOWED_EMAILS = (process.env.NEXT_PUBLIC_CEO_ALLOWED_EMAILS ?? "")
@@ -54,6 +55,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/prospector", label: "Prospector", icon: Search },
   { href: "/discovery", label: "Discovery", icon: MapPin },
+  { href: "/routes", label: "Field routes", icon: MapIcon },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/templates", label: "Templates", icon: FileText },

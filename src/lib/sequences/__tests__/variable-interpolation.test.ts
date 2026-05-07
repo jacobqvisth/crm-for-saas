@@ -122,6 +122,9 @@ const company: Company = {
   member_count: null,
   last_active_at: null,
   health_score: null,
+  latitude: null,
+  longitude: null,
+  geocoded_at: null,
 };
 
 // ---------------------------------------------------------------------------

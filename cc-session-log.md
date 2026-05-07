@@ -14,6 +14,75 @@ updated: 2026-04-22
 
 ---
 
+## Session: Field Routes — Phase 1 (backend + list UI)
+- **Date:** 2026-05-07
+- **PR:** TBD
+- **Branch:** `feature/field-routes-phase1`
+
+### What was built
+A field-rep route planner ("Field routes" in the sidebar). Generates 10 candidate one-day driving routes from clusters of cold prospects (`discovered_shops`) and lapsed customers (`companies` with no/canceled subscription). Each route gets a Google Maps deeplink Hans (or any field rep) can open on a phone or in CarPlay.
+
+**Schema (migration `20260507000000_field_routes.sql`, applied to prod via Management API):**
+- `companies` gained `latitude DOUBLE PRECISION`, `longitude DOUBLE PRECISION`, `geocoded_at TIMESTAMPTZ` + a partial index on `(latitude, longitude) WHERE latitude IS NOT NULL`.
+- `daily_routes` table — one row per generated route. Fields: composition (`mode` mixed/cold/lapsed, `mode_fallback_reason`, `cluster_label`), planning (`origin_address/lat/lng`, `scheduled_for`, `status`), precomputed totals (`stop_count`, `total_drive_seconds/meters`, `estimated_day_seconds`), `google_maps_deeplink`, raw `routes_api_response JSONB` for debugging, `generation_batch_id` so the 10 routes from one run group together.
+- `route_stops` table — denormalized stops per route (stable even if shop later moves/renames). One stop is either a `discovered_shop_id` or a `company_id` (CHECK enforces exactly one). Per-leg drive seconds/meters from the previous waypoint. Visit-state columns (`visited_at`, `visit_outcome`, `visit_notes`, `follow_up_required`) created now for stable schema even though Phase 3 will populate them.
+- RLS enabled on both tables, mirroring the `tasks` pattern (`workspace_id IN (SELECT get_user_workspace_ids())`).
+
+**Backend (`src/lib/routes/`):**
+- `geocode.ts` — Google Geocoding API wrapper with in-request cache + typed `MissingApiKeyError`.
+- `routes-api.ts` — Routes API v2 wrapper. Single `optimizeRoute({origin, waypoints, returnToOrigin})` function. `routingPreference: TRAFFIC_AWARE`, `optimizeWaypointOrder: true`, narrow field mask.
+- `cluster.ts` — k-means with k-means++ init, Haversine distance, ≤30 iterations, pure JS no dependencies.
+- `cluster-label.ts` — coarse Swedish-region labelling for cluster centroids ("Stockholm North", "Uppsala", "Mälardalen West", etc.).
+- `generate.ts` — main generator. Pulls cold + lapsed pools, Haversine-prefilters to 120 km from Stockholm city center, k-means clusters, ranks by lapsed-density to assign `lapsed`/`mixed`/`cold` modes (with fallback to mixed if a "lapsed" cluster has fewer than 6 lapsed shops — `mode_fallback_reason` recorded), sorts each cluster, calls Routes API, drops the farthest stop and retries if the productive day exceeds 7.5 h, persists via service-role client.
+
+**API (`src/app/api/routes/`):**
+- `POST /api/routes/generate` — auth + workspace-membership gated. Returns `{batchId, routesCreated, coldPoolSize, lapsedPoolSize, fallbacks, routes}`. Returns `503` with a clear message if `GOOGLE_MAPS_API_KEY` is missing — no fake-data fallback.
+- `GET /api/routes` — list (filterable by `status` / `batch`).
+- `GET /api/routes/[id]` — single route + ordered stops, joined with `discovered_shops` / `companies`.
+- `PATCH /api/routes/[id]` — `{scheduled_for?, status?}` for assigning a date or discarding.
+
+**UI:**
+- `/routes` (list) — Generate button, Candidate / Scheduled sections, mode badges (mixed/violet, cold/sky, lapsed/amber).
+- `/routes/[id]` (detail) — header with totals, "Open in Google Maps" CTA (the deeplink), "Schedule for date" picker, stops table in optimized order with per-leg drive time, "Discard route" footer.
+- Sidebar entry "Field routes" between Discovery and Inbox (using `lucide-react` `Map` icon).
+
+**Geocoding backfill script:** `scripts/backfill-companies-latlng.mjs` — reads `.env.local`, hits Supabase REST + Google Geocoding API, throttles to ~10/sec, idempotent (skips rows where `geocoded_at` is set, marks failures with `geocoded_at` so re-runs skip them too). **NOT YET RUN** — see deferred items below.
+
+**Tests:**
+- `src/lib/routes/cluster.test.ts` — `haversineKm` + `cluster` correctness with seeded RNG; verifies two distinct geographic groups separate cleanly.
+- `src/lib/routes/generate.test.ts` — `buildGoogleMapsDeeplink` encoding + integration of mode-assignment math against a mocked Routes API + Supabase.
+- `e2e/field-routes.spec.ts` — smoke (page loads, button visible) + a Generate end-to-end test that `test.skip`s when `GOOGLE_MAPS_API_KEY` isn't in env.
+
+**Build/deploy:**
+- `npx tsc --noEmit` clean (had to add `latitude/longitude/geocoded_at: null` to the `Company` stub in `src/lib/sequences/__tests__/variable-interpolation.test.ts` after the type regen).
+- `npm run lint` clean.
+- `npm run build` green — new routes show in the routes manifest as `/routes`, `/routes/[id]`, `/api/routes`, `/api/routes/[id]`, `/api/routes/generate`.
+- New unit tests: 8/8 passing. (Pre-existing `src/lib/ceo/...` test files fail to import in vitest — unrelated to this PR.)
+
+### Notable decisions
+- **Service-role client for `/api/routes/generate`.** The generator reads from `discovered_shops` (which lives outside per-user RLS in some workflows) and writes to `daily_routes` / `route_stops`. Auth + workspace-membership check happens in the route handler before delegating to the service client — same defense-in-depth pattern PR #120 used for the CEO dashboard absorption.
+- **Sidebar position: between Discovery and Inbox**, not the prompt's "between Sequences and Tasks". Justified by topic adjacency — Discovery and Field routes are the two map-driven views.
+- **Mode fallback sets `mode='mixed'`** (and records `mode_fallback_reason`) when a cluster designated for `lapsed` has fewer than 6 lapsed shops. The data model still distinguishes "intended lapsed but fell back" from "always mixed" via the reason column.
+- **Routes API cost guard via `MAX_STOPS_PER_ROUTE = 12`** — keeps each `optimizeRoute` call within the deeplink-safe range and below Routes API's per-call cap, and means the day-length retry loop drops at most ~8 stops before giving up below `MIN_STOPS_PER_ROUTE = 4`.
+- **Did not run the backfill or a verification generation in this session.** Jacob opted to ship code-only after seeing the cost estimate (~$47 for backfill, ~$0.05 for first generate). Both are stable and idempotent — re-runnable any time.
+
+### Required env vars (Jacob to add in Vercel)
+- `GOOGLE_MAPS_API_KEY` — single key with **Routes API** + **Geocoding API** + **Maps JavaScript API** enabled. Server-side only — DO NOT expose on `NEXT_PUBLIC_*`.
+- `ROUTE_DEFAULT_ORIGIN_ADDRESS=Markvägen 23, 162 71 Vällingby`
+- `ROUTE_DEFAULT_ORIGIN_LAT=59.3625` (verify by geocoding the address; this is the rough placeholder)
+- `ROUTE_DEFAULT_ORIGIN_LNG=17.8722`
+
+If `GOOGLE_MAPS_API_KEY` is missing at request time, `/api/routes/generate` returns `503 {error: "GOOGLE_MAPS_API_KEY not configured"}`.
+
+### Deferred items
+- **Geocoding backfill not yet run.** ~9,349 `companies` rows have `address IS NOT NULL AND latitude IS NULL`. Run `node scripts/backfill-companies-latlng.mjs` once `GOOGLE_MAPS_API_KEY` is set locally. Until that runs, the lapsed pool will be empty and every cluster will fall back to `cold` (or `mixed → cold` since lapsed pool < 6 everywhere).
+- **First end-to-end generation not yet verified against prod.** Click "Generate today's routes" on `/routes` once env vars are in Vercel and a deploy has shipped — should produce ≤10 candidate routes within ~30 s.
+- **Phase 2:** interactive Maps JS embed on the route detail page (replace the deeplink-only handoff with an in-app map).
+- **Phase 3:** "Mark visited" UI + visit-outcome capture + auto-enroll into a follow-up sequence on `interested`.
+- **Phase 4:** per-user origin overrides (Hans's home is hardcoded today), multi-rep scheduling, min revisit interval.
+
+
+
 ## Session: wl-app sync now reads from S3 directly
 - **Date:** 2026-05-07
 - **PR:** TBD

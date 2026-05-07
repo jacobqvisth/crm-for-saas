@@ -171,14 +171,17 @@ export type Database = {
           employee_count: number | null
           facebook_url: string | null
           founded_year: number | null
+          geocoded_at: string | null
           google_place_id: string | null
           health_score: number | null
           id: string
           industry: string | null
           instagram_url: string | null
           last_active_at: string | null
+          latitude: number | null
           lifecycle_stage: string | null
           linkedin_url: string | null
+          longitude: number | null
           member_count: number | null
           mrr_cents: number | null
           name: string
@@ -227,14 +230,17 @@ export type Database = {
           employee_count?: number | null
           facebook_url?: string | null
           founded_year?: number | null
+          geocoded_at?: string | null
           google_place_id?: string | null
           health_score?: number | null
           id?: string
           industry?: string | null
           instagram_url?: string | null
           last_active_at?: string | null
+          latitude?: number | null
           lifecycle_stage?: string | null
           linkedin_url?: string | null
+          longitude?: number | null
           member_count?: number | null
           mrr_cents?: number | null
           name: string
@@ -283,14 +289,17 @@ export type Database = {
           employee_count?: number | null
           facebook_url?: string | null
           founded_year?: number | null
+          geocoded_at?: string | null
           google_place_id?: string | null
           health_score?: number | null
           id?: string
           industry?: string | null
           instagram_url?: string | null
           last_active_at?: string | null
+          latitude?: number | null
           lifecycle_stage?: string | null
           linkedin_url?: string | null
+          longitude?: number | null
           member_count?: number | null
           mrr_cents?: number | null
           name?: string
@@ -565,6 +574,86 @@ export type Database = {
           },
           {
             foreignKeyName: "contacts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_routes: {
+        Row: {
+          cluster_label: string
+          created_at: string
+          estimated_day_seconds: number
+          generated_at: string
+          generated_by: string | null
+          generation_batch_id: string
+          google_maps_deeplink: string
+          id: string
+          mode: string
+          mode_fallback_reason: string | null
+          origin_address: string
+          origin_latitude: number
+          origin_longitude: number
+          routes_api_response: Json | null
+          scheduled_for: string | null
+          status: string
+          stop_count: number
+          total_drive_meters: number
+          total_drive_seconds: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          cluster_label: string
+          created_at?: string
+          estimated_day_seconds: number
+          generated_at?: string
+          generated_by?: string | null
+          generation_batch_id: string
+          google_maps_deeplink: string
+          id?: string
+          mode: string
+          mode_fallback_reason?: string | null
+          origin_address: string
+          origin_latitude: number
+          origin_longitude: number
+          routes_api_response?: Json | null
+          scheduled_for?: string | null
+          status?: string
+          stop_count: number
+          total_drive_meters: number
+          total_drive_seconds: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          cluster_label?: string
+          created_at?: string
+          estimated_day_seconds?: number
+          generated_at?: string
+          generated_by?: string | null
+          generation_batch_id?: string
+          google_maps_deeplink?: string
+          id?: string
+          mode?: string
+          mode_fallback_reason?: string | null
+          origin_address?: string
+          origin_latitude?: number
+          origin_longitude?: number
+          routes_api_response?: Json | null
+          scheduled_for?: string | null
+          status?: string
+          stop_count?: number
+          total_drive_meters?: number
+          total_drive_seconds?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_routes_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1826,6 +1915,92 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "prospector_search_cache_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_stops: {
+        Row: {
+          company_id: string | null
+          discovered_shop_id: string | null
+          follow_up_required: boolean | null
+          id: string
+          latitude: number
+          leg_drive_meters: number | null
+          leg_drive_seconds: number | null
+          longitude: number
+          route_id: string
+          shop_address: string
+          shop_name: string
+          stop_order: number
+          visit_notes: string | null
+          visit_outcome: string | null
+          visited_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          discovered_shop_id?: string | null
+          follow_up_required?: boolean | null
+          id?: string
+          latitude: number
+          leg_drive_meters?: number | null
+          leg_drive_seconds?: number | null
+          longitude: number
+          route_id: string
+          shop_address: string
+          shop_name: string
+          stop_order: number
+          visit_notes?: string | null
+          visit_outcome?: string | null
+          visited_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          discovered_shop_id?: string | null
+          follow_up_required?: boolean | null
+          id?: string
+          latitude?: number
+          leg_drive_meters?: number | null
+          leg_drive_seconds?: number | null
+          longitude?: number
+          route_id?: string
+          shop_address?: string
+          shop_name?: string
+          stop_order?: number
+          visit_notes?: string | null
+          visit_outcome?: string | null
+          visited_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_discovered_shop_id_fkey"
+            columns: ["discovered_shop_id"]
+            isOneToOne: false
+            referencedRelation: "discovered_shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "daily_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
