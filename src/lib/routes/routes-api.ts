@@ -50,29 +50,48 @@ async function callRoutesApi(body: Record<string, unknown>): Promise<ParsedRoute
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) throw new MissingApiKeyError();
 
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": FIELD_MASK,
-    },
-    body: JSON.stringify(body),
-  });
+  // Routes API occasionally returns 200 OK with an empty `{}` body for valid
+  // requests — confirmed reproducible 2026-05-07. One retry with backoff turns
+  // a transient failure into a successful generation. If both attempts fail
+  // we throw so the caller can decide (skip the cluster vs. abort the batch).
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": FIELD_MASK,
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`[routes-api] HTTP ${res.status}: ${text.slice(0, 500)}`);
-    throw new Error(`Routes API HTTP ${res.status}`);
-  }
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[routes-api] attempt ${attempt} HTTP ${res.status}: ${text.slice(0, 500)}`);
+      // 4xx isn't worth retrying (bad request / auth / quota); 5xx is.
+      if (res.status < 500 || attempt === 2) throw new Error(`Routes API HTTP ${res.status}`);
+      await sleep(400);
+      continue;
+    }
 
-  const data = (await res.json()) as RoutesApiResponse;
-  const route = data.routes?.[0];
-  if (!route) {
-    console.error(`[routes-api] no routes in response: ${JSON.stringify(data).slice(0, 300)}`);
-    throw new Error("Routes API returned no routes");
+    const data = (await res.json()) as RoutesApiResponse;
+    const route = data.routes?.[0];
+    if (!route) {
+      console.error(
+        `[routes-api] attempt ${attempt} empty response: ${JSON.stringify(data).slice(0, 300)}`,
+      );
+      if (attempt === 2) throw new Error("Routes API returned no routes (after retry)");
+      await sleep(400);
+      continue;
+    }
+    return { ...route, _rawResponse: data };
   }
-  return { ...route, _rawResponse: data };
+  // unreachable — every branch above either returns or throws
+  throw new Error("Routes API: unreachable");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildBody({
