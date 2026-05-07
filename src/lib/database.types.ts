@@ -167,6 +167,7 @@ export type Database = {
           custom_fields: Json | null
           customer_status: string | null
           description: string | null
+          do_not_contact: boolean
           domain: string | null
           employee_count: number | null
           facebook_url: string | null
@@ -195,6 +196,7 @@ export type Database = {
           rating: number | null
           revenue_range: string | null
           review_count: number | null
+          skip_auto_followup: boolean
           source: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -226,6 +228,7 @@ export type Database = {
           custom_fields?: Json | null
           customer_status?: string | null
           description?: string | null
+          do_not_contact?: boolean
           domain?: string | null
           employee_count?: number | null
           facebook_url?: string | null
@@ -254,6 +257,7 @@ export type Database = {
           rating?: number | null
           revenue_range?: string | null
           review_count?: number | null
+          skip_auto_followup?: boolean
           source?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -285,6 +289,7 @@ export type Database = {
           custom_fields?: Json | null
           customer_status?: string | null
           description?: string | null
+          do_not_contact?: boolean
           domain?: string | null
           employee_count?: number | null
           facebook_url?: string | null
@@ -313,6 +318,7 @@ export type Database = {
           rating?: number | null
           revenue_range?: string | null
           review_count?: number | null
+          skip_auto_followup?: boolean
           source?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null

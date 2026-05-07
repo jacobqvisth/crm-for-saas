@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
-  ExternalLink, Pencil, MapPin, Building2, Linkedin, Instagram, Facebook, Trash2, CreditCard, Copy,
+  ExternalLink, Pencil, MapPin, Building2, Linkedin, Instagram, Facebook, Trash2, CreditCard, Copy, ShieldOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
@@ -18,10 +18,11 @@ interface AboutPanelProps {
   onDelete: () => void;
   onUpdateTags: (tags: string[]) => void;
   onUpdateNotes: (notes: string | null) => void;
+  onUpdateFollowupFlags: (patch: { skip_auto_followup?: boolean; do_not_contact?: boolean }) => Promise<void>;
 }
 
 export function AboutPanel({
-  company, parentCompany, childCompanies, onEditDetails, onDelete, onUpdateTags, onUpdateNotes,
+  company, parentCompany, childCompanies, onEditDetails, onDelete, onUpdateTags, onUpdateNotes, onUpdateFollowupFlags,
 }: AboutPanelProps) {
   const tags = (company.tags as string[] | null) || [];
 
@@ -251,6 +252,26 @@ export function AboutPanel({
         />
       </div>
 
+      {/* Outreach controls */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <ShieldOff className="w-4 h-4 text-slate-500" />
+          <h3 className="text-sm font-semibold text-slate-900">Outreach controls</h3>
+        </div>
+        <ToggleRow
+          label="Skip auto follow-up"
+          helper="Field-route visits won't auto-enroll this company in a sequence."
+          value={company.skip_auto_followup ?? false}
+          onChange={(v) => onUpdateFollowupFlags({ skip_auto_followup: v })}
+        />
+        <ToggleRow
+          label="Do not contact"
+          helper="Set automatically on a 'not interested' visit. Suppresses sequences and outbound."
+          value={company.do_not_contact ?? false}
+          onChange={(v) => onUpdateFollowupFlags({ do_not_contact: v })}
+        />
+      </div>
+
       {/* Delete */}
       <button
         onClick={onDelete}
@@ -258,6 +279,45 @@ export function AboutPanel({
       >
         <Trash2 className="w-3.5 h-3.5" />
         Delete company
+      </button>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label, helper, value, onChange,
+}: {
+  label: string;
+  helper: string;
+  value: boolean;
+  onChange: (v: boolean) => Promise<void>;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-slate-900">{label}</p>
+        <p className="text-[11px] text-slate-500 mt-0.5">{helper}</p>
+      </div>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await onChange(!value);
+          } catch {
+            toast.error('Failed to update');
+          }
+        }}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${
+          value ? 'bg-indigo-600' : 'bg-slate-200'
+        }`}
+        aria-pressed={value}
+        aria-label={label}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+            value ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
       </button>
     </div>
   );

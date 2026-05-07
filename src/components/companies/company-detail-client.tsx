@@ -161,6 +161,22 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     setCompany((prev) => (prev ? { ...prev, tags } as Company : null));
   };
 
+  const updateFollowupFlags = async (
+    patch: { skip_auto_followup?: boolean; do_not_contact?: boolean },
+  ) => {
+    if (!company || !workspaceId) return;
+    const res = await fetch(`/api/companies/${company.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      throw new Error('Failed to update');
+    }
+    setCompany((prev) => (prev ? { ...prev, ...patch } as Company : null));
+    toast.success('Saved');
+  };
+
   const updateCustomFields = async (fields: Record<string, string>) => {
     if (!company || !workspaceId) return;
     const { error } = await supabase
@@ -229,6 +245,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             onDelete={() => setShowDeleteConfirm(true)}
             onUpdateTags={updateTags}
             onUpdateNotes={(notes) => updateField('notes', notes)}
+            onUpdateFollowupFlags={updateFollowupFlags}
           />
         </div>
 

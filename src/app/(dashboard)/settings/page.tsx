@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, Sparkles, ShieldCheck, Users, User as UserIcon } from 'lucide-react';
+import { GitBranch, Mail, MapPin, Sparkles, ShieldCheck, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -35,6 +35,12 @@ const settingsItems = [
     description: 'Manage suppression list, DNC imports, and GDPR compliance',
     href: '/settings/compliance',
     icon: ShieldCheck,
+  },
+  {
+    title: 'Field Visits',
+    description: 'Auto-enroll companies in a sequence after a field-route stop is logged',
+    href: '/settings/field-visits',
+    icon: MapPin,
   },
 ];
 
