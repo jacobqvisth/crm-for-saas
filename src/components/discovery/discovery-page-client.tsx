@@ -59,6 +59,9 @@ type Shop = {
   email_check_detail: string | null;
   email_status: string | null;
   email_verified_at: string | null;
+  do_not_route?: boolean;
+  do_not_route_reason?: string | null;
+  do_not_route_at?: string | null;
 };
 
 type Stats = {
@@ -1074,6 +1077,22 @@ export function DiscoveryPageClient() {
                           >
                             {shop.name}
                           </button>
+                          {shop.do_not_route && (
+                            <span
+                              className="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border bg-rose-50 text-rose-700 border-rose-200"
+                              title={
+                                shop.do_not_route_reason
+                                  ? `Do not route — ${shop.do_not_route_reason}${
+                                      shop.do_not_route_at
+                                        ? ` (${new Date(shop.do_not_route_at).toLocaleDateString()})`
+                                        : ""
+                                    }`
+                                  : "Do not route"
+                              }
+                            >
+                              do not route
+                            </span>
+                          )}
                           {expandedShop === shop.id && (
                             <ShopDetailPopover
                               shop={shop}

@@ -127,6 +127,10 @@ const company: Company = {
   geocoded_at: null,
   skip_auto_followup: false,
   do_not_contact: false,
+  do_not_route: false,
+  do_not_route_reason: null,
+  do_not_route_at: null,
+  min_revisit_interval_days: null,
 };
 
 // ---------------------------------------------------------------------------

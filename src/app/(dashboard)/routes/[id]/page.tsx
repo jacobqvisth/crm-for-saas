@@ -12,13 +12,18 @@ import StopsReorderList, {
 import MarkVisitedSheet, {
   type MarkVisitedSheetState,
 } from "@/components/routes/mark-visited-sheet";
+import RemoveStopModal, {
+  type RemoveReason,
+} from "@/components/routes/remove-stop-modal";
+import AddStopSheet, {
+  type AddStopSheetState,
+} from "@/components/routes/add-stop-sheet";
 import type {
   RouteMapStop,
   RouteMapOrigin,
 } from "@/components/routes/route-map";
 import { type VisitOutcome } from "@/lib/routes/visits-decision";
 
-// Lazy-load the map so the /routes list page doesn't pull Maps JS (~400 KB).
 const RouteMap = dynamic(() => import("@/components/routes/route-map"), {
   ssr: false,
   loading: () => (
@@ -43,6 +48,7 @@ type RouteDetail = {
   estimated_day_seconds: number;
   google_maps_deeplink: string;
   routes_api_response: unknown;
+  assigned_to: string | null;
 };
 
 type Stop = {
@@ -69,6 +75,17 @@ type FieldVisitsSettings = {
   sequence_by_outcome: Partial<Record<VisitOutcome, string>>;
 };
 
+type Member = {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+  is_current_user: boolean;
+};
+
+const MAX_STOPS = 12;
+const MIN_STOPS = 4;
+
 const MODE_BADGE: Record<RouteDetail["mode"], string> = {
   mixed: "bg-violet-100 text-violet-700 border-violet-200",
   cold: "bg-sky-100 text-sky-700 border-sky-200",
@@ -88,6 +105,14 @@ function extractPolyline(raw: unknown): string | null {
   return r.routes?.[0]?.polyline?.encodedPolyline ?? null;
 }
 
+function memberInitials(member: Member | null | undefined): string {
+  if (!member) return "—";
+  const name = member.full_name ?? member.email ?? "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function RouteDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -100,6 +125,13 @@ export default function RouteDetailPage() {
   const [fvSettings, setFvSettings] = useState<FieldVisitsSettings | null>(null);
   const [sheetState, setSheetState] = useState<MarkVisitedSheetState | null>(null);
   const [submittingVisit, setSubmittingVisit] = useState(false);
+
+  const [removeState, setRemoveState] = useState<{ stopId: string; shopName: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [addSheetOpen, setAddSheetOpen] = useState<AddStopSheetState | null>(null);
+  const [addingStop, setAddingStop] = useState(false);
+
+  const [members, setMembers] = useState<Member[]>([]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
 
@@ -133,7 +165,7 @@ export default function RouteDetailPage() {
         const data = (await res.json()) as FieldVisitsSettings;
         if (!cancelled) setFvSettings(data);
       } catch {
-        // non-fatal — banner just won't show
+        // non-fatal
       }
     })();
     return () => {
@@ -141,22 +173,48 @@ export default function RouteDetailPage() {
     };
   }, []);
 
-  async function handleSchedule() {
-    if (!scheduledFor) {
-      toast.error("Pick a date first");
-      return;
-    }
-    const res = await fetch(`/api/routes/${id}`, {
+  useEffect(() => {
+    fetch("/api/settings/team")
+      .then((r) => r.json())
+      .then((data: { members?: Member[] }) => setMembers(data.members ?? []))
+      .catch(() => {});
+  }, []);
+
+  const currentMember = useMemo(() => members.find((m) => m.is_current_user) ?? null, [members]);
+  const isAdmin = currentMember?.role === "admin";
+  const assignee = useMemo(
+    () => (route?.assigned_to ? members.find((m) => m.user_id === route.assigned_to) ?? null : null),
+    [route?.assigned_to, members],
+  );
+
+  async function patchSchedule(scheduled_for: string, force = false) {
+    const res = await fetch(`/api/routes/${id}${force ? "?force=true" : ""}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scheduled_for: scheduledFor, status: "scheduled" }),
+      body: JSON.stringify({ scheduled_for, status: "scheduled" }),
     });
+    if (res.status === 409 && !force) {
+      const body = (await res.json().catch(() => ({}))) as { reason?: string; detail?: string };
+      const ok = window.confirm(
+        `${body.detail ?? "That date is unavailable for the assignee."} Schedule anyway?`,
+      );
+      if (ok) return patchSchedule(scheduled_for, true);
+      return;
+    }
     if (!res.ok) {
       toast.error("Failed to schedule");
       return;
     }
     toast.success("Scheduled");
     fetchRoute();
+  }
+
+  async function handleSchedule() {
+    if (!scheduledFor) {
+      toast.error("Pick a date first");
+      return;
+    }
+    await patchSchedule(scheduledFor);
   }
 
   async function handleDiscard() {
@@ -171,6 +229,20 @@ export default function RouteDetailPage() {
     }
     toast.success("Discarded");
     router.push("/routes");
+  }
+
+  async function handleReassign(userId: string | null) {
+    const res = await fetch(`/api/routes/${id}/assign`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) {
+      toast.error("Failed to reassign");
+      return;
+    }
+    toast.success("Reassigned");
+    fetchRoute();
   }
 
   async function handleReorder(orderedIds: string[], force = false): Promise<void> {
@@ -195,9 +267,7 @@ export default function RouteDetailPage() {
         const ok = window.confirm(
           `This route is now ${dayHM}, longer than the 7.5h day window. Save anyway?`,
         );
-        if (ok) {
-          await handleReorder(orderedIds, true);
-        }
+        if (ok) await handleReorder(orderedIds, true);
         return;
       }
 
@@ -211,6 +281,74 @@ export default function RouteDetailPage() {
       await fetchRoute();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function submitRemove(reason: RemoveReason, notes: string | undefined) {
+    if (!removeState) return;
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/routes/${id}/stops/${removeState.stopId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, notes: notes || undefined }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        toast.error(text || "Failed to remove stop");
+        return;
+      }
+      toast.success("Stop removed");
+      setRemoveState(null);
+      await fetchRoute();
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  async function submitAdd(
+    payload: { discoveredShopId?: string; companyId?: string },
+    force = false,
+  ) {
+    setAddingStop(true);
+    try {
+      const res = await fetch(`/api/routes/${id}/stops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, force }),
+      });
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          estimated_day_seconds?: number;
+        };
+        if (body.error === "max_stops_reached") {
+          toast.error(`Route already has ${MAX_STOPS} stops.`);
+          return;
+        }
+        if (body.error === "exceeds_day_window") {
+          const dayHM = body.estimated_day_seconds
+            ? formatHM(body.estimated_day_seconds)
+            : "8h+";
+          const ok = window.confirm(
+            `Adding this stop pushes the route to ${dayHM}, over the 7.5h day window. Add anyway?`,
+          );
+          if (ok) return submitAdd(payload, true);
+          return;
+        }
+        toast.error(body.error ?? "Conflict");
+        return;
+      }
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        toast.error(text || "Failed to add stop");
+        return;
+      }
+      toast.success("Stop added");
+      setAddSheetOpen(null);
+      await fetchRoute();
+    } finally {
+      setAddingStop(false);
     }
   }
 
@@ -256,6 +394,12 @@ export default function RouteDetailPage() {
     });
   }
 
+  function openRemove(stopId: string) {
+    const stop = stops.find((s) => s.id === stopId);
+    if (!stop) return;
+    setRemoveState({ stopId, shopName: stop.shop_name });
+  }
+
   async function handleSubmitVisit(input: {
     outcome: VisitOutcome;
     notes?: string;
@@ -279,15 +423,11 @@ export default function RouteDetailPage() {
         enrollmentSkipReason?: string;
         promotedCompanyId?: string;
       };
-      if (data.enrollmentId) {
-        toast.success("Visit logged · enrolled in follow-up");
-      } else if (data.enrollmentSkipReason === "no_contact") {
+      if (data.enrollmentId) toast.success("Visit logged · enrolled in follow-up");
+      else if (data.enrollmentSkipReason === "no_contact")
         toast.success("Visit logged · no contact to enroll — add one first");
-      } else if (data.promotedCompanyId) {
-        toast.success("Visit logged · shop promoted to company");
-      } else {
-        toast.success("Visit logged");
-      }
+      else if (data.promotedCompanyId) toast.success("Visit logged · shop promoted to company");
+      else toast.success("Visit logged");
       setSheetState(null);
       await fetchRoute();
     } finally {
@@ -354,7 +494,6 @@ export default function RouteDetailPage() {
         Back to routes
       </Link>
 
-      {/* Header */}
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center gap-3 flex-wrap mb-3">
           <h1 className="text-xl font-semibold text-slate-900">{route.cluster_label}</h1>
@@ -371,6 +510,33 @@ export default function RouteDetailPage() {
               fallback: {route.mode_fallback_reason}
             </span>
           )}
+
+          <span
+            className="inline-flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded"
+            title={assignee ? assignee.full_name ?? assignee.email ?? "" : "Unassigned"}
+          >
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-[10px] font-semibold text-slate-700 border border-slate-200">
+              {memberInitials(assignee)}
+            </span>
+            {assignee ? assignee.full_name ?? assignee.email : "Unassigned"}
+          </span>
+
+          {isAdmin && members.length > 1 && (
+            <select
+              value={route.assigned_to ?? ""}
+              onChange={(e) => handleReassign(e.target.value || null)}
+              className="text-xs border border-slate-200 rounded px-2 py-0.5 text-slate-700 bg-white"
+              aria-label="Reassign route"
+            >
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.full_name ?? m.email ?? "?"}
+                </option>
+              ))}
+            </select>
+          )}
+
           <span className="text-xs text-slate-500 ml-auto">Status: {route.status}</span>
         </div>
 
@@ -420,7 +586,6 @@ export default function RouteDetailPage() {
         </div>
       )}
 
-      {/* Actions */}
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <a
@@ -451,7 +616,12 @@ export default function RouteDetailPage() {
         </div>
       </div>
 
-      {/* Map + Stops split (desktop ~60/40, mobile stacked) */}
+      {stops.length > 0 && stops.length < MIN_STOPS && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-4 text-xs text-amber-900">
+          Only {stops.length} stops left — consider adding more or discarding the route.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
         <div className="md:col-span-3">
           {apiKey && mapOrigin ? (
@@ -475,11 +645,13 @@ export default function RouteDetailPage() {
             saving={saving}
             onSave={(orderedIds) => handleReorder(orderedIds)}
             onMarkVisited={openSheet}
+            onRemove={openRemove}
+            onAddStop={() => setAddSheetOpen({ open: true })}
+            maxStops={MAX_STOPS}
           />
         </div>
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-end">
         <button
           onClick={handleDiscard}
@@ -497,6 +669,21 @@ export default function RouteDetailPage() {
         submitting={submittingVisit}
         onClose={() => setSheetState(null)}
         onSubmit={handleSubmitVisit}
+      />
+
+      <RemoveStopModal
+        state={removeState}
+        submitting={removing}
+        onClose={() => setRemoveState(null)}
+        onSubmit={submitRemove}
+      />
+
+      <AddStopSheet
+        state={addSheetOpen}
+        routeId={id}
+        submitting={addingStop}
+        onClose={() => setAddSheetOpen(null)}
+        onSubmit={(payload) => submitAdd(payload)}
       />
     </div>
   );

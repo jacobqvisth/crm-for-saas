@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const workspaceId = searchParams.get("workspaceId");
   const status = searchParams.get("status");
   const batch = searchParams.get("batch");
+  const scope = searchParams.get("scope") ?? "mine";
 
   if (!workspaceId) {
     return NextResponse.json({ error: "Missing workspaceId" }, { status: 400 });
@@ -29,13 +30,16 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("daily_routes")
     .select(
-      "id, generated_at, generation_batch_id, mode, mode_fallback_reason, cluster_label, scheduled_for, status, stop_count, total_drive_seconds, total_drive_meters, estimated_day_seconds, google_maps_deeplink",
+      "id, generated_at, generated_by, assigned_to, generation_batch_id, mode, mode_fallback_reason, cluster_label, scheduled_for, status, stop_count, total_drive_seconds, total_drive_meters, estimated_day_seconds, google_maps_deeplink",
     )
     .eq("workspace_id", workspaceId)
     .order("generated_at", { ascending: false });
 
   if (status) query = query.eq("status", status);
   if (batch) query = query.eq("generation_batch_id", batch);
+  if (scope === "mine") {
+    query = query.or(`assigned_to.eq.${user.id},assigned_to.is.null`);
+  }
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

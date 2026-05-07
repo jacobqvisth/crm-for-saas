@@ -129,6 +129,7 @@ function mockSupabase({
     let pageCalled = false;
     const obj = {
       select: () => obj,
+      eq: () => obj,
       is: () => obj,
       in: () => obj,
       not: () => obj,
@@ -136,6 +137,8 @@ function mockSupabase({
       limit: () => obj,
       order: () => obj,
       range: () => obj,
+      maybeSingle: async () => ({ data: null, error: null }),
+      single: async () => ({ data: null, error: null }),
       then: undefined as never,
     } as Record<string, unknown>;
     (obj as { then: (cb: (v: { data: unknown[]; error: null }) => void) => void }).then = (cb) => {
@@ -168,9 +171,14 @@ function mockSupabase({
         };
       }
       if (table === "route_stops") {
-        return {
-          insert: async () => ({ error: null }),
-        };
+        // Both: SELECT for recent visits (no rows in the test fixture) and INSERT for new stops.
+        const q = buildQuery([]);
+        (q as Record<string, unknown>).insert = async () => ({ error: null });
+        return q;
+      }
+      if (table === "workspaces") {
+        // No workspace settings in the test fixture → falls back to defaults.
+        return buildQuery([]);
       }
       throw new Error(`unexpected table ${table}`);
     },
