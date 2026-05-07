@@ -6,7 +6,7 @@ import {
   Droppable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { GripVertical, RotateCcw, Save, CheckCircle2, Pencil, Circle } from "lucide-react";
+import { GripVertical, RotateCcw, Save, CheckCircle2, Pencil, Circle, X, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { VisitOutcome } from "@/lib/routes/visits-decision";
 
@@ -25,6 +25,9 @@ type Props = {
   saving: boolean;
   onSave: (orderedIds: string[]) => void;
   onMarkVisited?: (stopId: string) => void;
+  onRemove?: (stopId: string) => void;
+  onAddStop?: () => void;
+  maxStops?: number;
 };
 
 const OUTCOME_PILL: Record<VisitOutcome, { label: string; cls: string }> = {
@@ -43,7 +46,15 @@ function formatHM(sec: number | null): string {
   return `${h}h ${m}m`;
 }
 
-export default function StopsReorderList({ stops, saving, onSave, onMarkVisited }: Props) {
+export default function StopsReorderList({
+  stops,
+  saving,
+  onSave,
+  onMarkVisited,
+  onRemove,
+  onAddStop,
+  maxStops = 12,
+}: Props) {
   const [order, setOrder] = useState<ReorderStop[]>(stops);
 
   useEffect(() => {
@@ -203,12 +214,40 @@ export default function StopsReorderList({ stops, saving, onSave, onMarkVisited 
                             )}
                           </button>
                         )}
+                        {onRemove && !isVisited && (
+                          <button
+                            onClick={() => onRemove(s.id)}
+                            className="flex items-center justify-center w-7 h-7 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded flex-shrink-0"
+                            aria-label="Remove stop"
+                            title="Remove stop"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </li>
                     )}
                   </Draggable>
                 );
               })}
               {droppableProvided.placeholder}
+              {onAddStop && (
+                order.length >= maxStops ? (
+                  <li className="flex items-center justify-center px-3 py-2.5 text-xs text-slate-400 bg-slate-50">
+                    Max stops reached ({maxStops})
+                  </li>
+                ) : (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={onAddStop}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs text-indigo-700 hover:bg-indigo-50 border-t border-slate-100"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add stop
+                    </button>
+                  </li>
+                )
+              )}
             </ul>
           )}
         </Droppable>

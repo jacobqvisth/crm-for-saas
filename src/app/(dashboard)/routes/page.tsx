@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Map, Loader2 } from "lucide-react";
+import { Map as MapIcon, Loader2, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 
 type RouteRow = {
   id: string;
   generated_at: string;
+  generated_by: string | null;
+  assigned_to: string | null;
   generation_batch_id: string;
   mode: "mixed" | "cold" | "lapsed";
   mode_fallback_reason: string | null;
@@ -21,6 +23,16 @@ type RouteRow = {
   estimated_day_seconds: number;
   google_maps_deeplink: string;
 };
+
+type Member = {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+  is_current_user: boolean;
+};
+
+type Scope = "mine" | "all";
 
 const MODE_BADGE: Record<RouteRow["mode"], string> = {
   mixed: "bg-violet-100 text-violet-700 border-violet-200",
@@ -35,17 +47,37 @@ function formatHM(totalSeconds: number): string {
   return `${h}h ${m}m`;
 }
 
+function initials(member: Member | undefined): string {
+  if (!member) return "—";
+  const name = member.full_name ?? member.email ?? "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function RoutesPage() {
   const { workspaceId } = useWorkspace();
   const [routes, setRoutes] = useState<RouteRow[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [scope, setScope] = useState<Scope>("mine");
+  const [generateFor, setGenerateFor] = useState<string | null>(null);
+
+  const currentUser = useMemo(() => members.find((m) => m.is_current_user) ?? null, [members]);
+  const isAdmin = currentUser?.role === "admin";
+  const memberById = useMemo(() => {
+    const map = new Map<string, Member>();
+    for (const m of members) map.set(m.user_id, m);
+    return map;
+  }, [members]);
 
   const fetchRoutes = useCallback(async () => {
     if (!workspaceId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/routes?workspaceId=${workspaceId}`);
+      const res = await fetch(`/api/routes?workspaceId=${workspaceId}&scope=${scope}`);
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as { routes: RouteRow[] };
       setRoutes(data.routes);
@@ -55,12 +87,21 @@ export default function RoutesPage() {
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, scope]);
 
   useEffect(() => {
     if (!workspaceId) return;
     fetchRoutes();
   }, [fetchRoutes, workspaceId]);
+
+  useEffect(() => {
+    fetch("/api/settings/team")
+      .then((r) => r.json())
+      .then((data: { members?: Member[] }) => setMembers(data.members ?? []))
+      .catch(() => {
+        // non-fatal
+      });
+  }, []);
 
   async function handleGenerate() {
     if (!workspaceId) {
@@ -69,17 +110,21 @@ export default function RoutesPage() {
     }
     setGenerating(true);
     try {
+      const body: Record<string, unknown> = { workspaceId };
+      if (generateFor && generateFor !== currentUser?.user_id) {
+        body.forUserId = generateFor;
+      }
       const res = await fetch("/api/routes/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId }),
+        body: JSON.stringify(body),
       });
-      const body = await res.json();
+      const result = await res.json();
       if (!res.ok) {
-        toast.error(body.error ?? "Generation failed");
+        toast.error(result.error ?? "Generation failed");
         return;
       }
-      toast.success(`Generated ${body.routesCreated} routes`);
+      toast.success(`Generated ${result.routesCreated} routes`);
       fetchRoutes();
     } catch (err) {
       console.error(err);
@@ -96,15 +141,53 @@ export default function RoutesPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-semibold text-slate-900">Field routes</h1>
+        <div className="flex items-center gap-2">
+          {isAdmin && members.length > 1 && (
+            <select
+              value={generateFor ?? currentUser?.user_id ?? ""}
+              onChange={(e) => setGenerateFor(e.target.value || null)}
+              className="text-xs border border-slate-200 rounded px-2 py-1.5 text-slate-700 bg-white"
+            >
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  Generate for: {m.full_name ?? m.email ?? "?"}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating || !workspaceId}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          >
+            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapIcon className="w-4 h-4" />}
+            {generating ? "Generating…" : "Generate today's routes"}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-6 text-xs">
         <button
-          onClick={handleGenerate}
-          disabled={generating || !workspaceId}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          onClick={() => setScope("mine")}
+          className={`px-3 py-1.5 rounded-lg border transition-colors ${
+            scope === "mine"
+              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}
         >
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Map className="w-4 h-4" />}
-          {generating ? "Generating…" : "Generate today's routes"}
+          Mine
+        </button>
+        <button
+          onClick={() => setScope("all")}
+          className={`px-3 py-1.5 rounded-lg border transition-colors ${
+            scope === "all"
+              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          All workspace routes
         </button>
       </div>
 
@@ -116,7 +199,7 @@ export default function RoutesPage() {
         </div>
       ) : routes.length === 0 ? (
         <div className="text-center py-12 text-slate-500 text-sm">
-          No routes yet. Click <span className="font-medium">Generate today&apos;s routes</span> to make some.
+          No routes here. Click <span className="font-medium">Generate today&apos;s routes</span> to make some.
         </div>
       ) : (
         <>
@@ -124,11 +207,13 @@ export default function RoutesPage() {
             title="Candidate routes"
             description="Newly generated. Pick one and assign it to a date."
             rows={candidates}
+            memberById={memberById}
           />
           <Section
             title="Scheduled routes"
             description="Already assigned to a day."
             rows={scheduled}
+            memberById={memberById}
           />
         </>
       )}
@@ -140,10 +225,12 @@ function Section({
   title,
   description,
   rows,
+  memberById,
 }: {
   title: string;
   description: string;
   rows: RouteRow[];
+  memberById: Map<string, Member>;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -151,34 +238,45 @@ function Section({
       <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{title}</h2>
       <p className="text-xs text-slate-500 mb-3">{description}</p>
       <div className="space-y-2">
-        {rows.map((r) => (
-          <Link
-            key={r.id}
-            href={`/routes/${r.id}`}
-            className="block bg-white border border-slate-200 rounded-lg px-4 py-3 hover:shadow-sm hover:border-indigo-200 transition-all"
-          >
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-medium text-slate-800">{r.cluster_label}</span>
-              <span
-                className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${MODE_BADGE[r.mode]}`}
-              >
-                {r.mode}
-              </span>
-              {r.mode_fallback_reason && (
-                <span className="text-[10px] text-amber-600" title={r.mode_fallback_reason}>
-                  fallback
+        {rows.map((r) => {
+          const assignee = r.assigned_to ? memberById.get(r.assigned_to) : undefined;
+          return (
+            <Link
+              key={r.id}
+              href={`/routes/${r.id}`}
+              className="block bg-white border border-slate-200 rounded-lg px-4 py-3 hover:shadow-sm hover:border-indigo-200 transition-all"
+            >
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-medium text-slate-800">{r.cluster_label}</span>
+                <span
+                  className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${MODE_BADGE[r.mode]}`}
+                >
+                  {r.mode}
                 </span>
-              )}
-              <span className="text-xs text-slate-500">{r.stop_count} stops</span>
-              <span className="text-xs text-slate-500">drive {formatHM(r.total_drive_seconds)}</span>
-              <span className="text-xs text-slate-500">day ≈ {formatHM(r.estimated_day_seconds)}</span>
-              {r.scheduled_for && (
-                <span className="text-xs text-indigo-600">→ {r.scheduled_for}</span>
-              )}
-              <span className="ml-auto text-xs text-slate-400">View →</span>
-            </div>
-          </Link>
-        ))}
+                {r.mode_fallback_reason && (
+                  <span className="text-[10px] text-amber-600" title={r.mode_fallback_reason}>
+                    fallback
+                  </span>
+                )}
+                <span
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-[10px] font-semibold text-slate-700 border border-slate-200"
+                  title={assignee ? assignee.full_name ?? assignee.email ?? "" : "Unassigned"}
+                >
+                  {initials(assignee)}
+                </span>
+                <span className="text-xs text-slate-500">{r.stop_count} stops</span>
+                <span className="text-xs text-slate-500">drive {formatHM(r.total_drive_seconds)}</span>
+                <span className="text-xs text-slate-500">day ≈ {formatHM(r.estimated_day_seconds)}</span>
+                {r.scheduled_for && (
+                  <span className="text-xs text-indigo-600">→ {r.scheduled_for}</span>
+                )}
+                <span className="ml-auto text-xs text-slate-400 inline-flex items-center gap-0.5">
+                  View <ChevronDown className="w-3 h-3 -rotate-90" />
+                </span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

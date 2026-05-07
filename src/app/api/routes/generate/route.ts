@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { generateDailyRoutes } from "@/lib/routes/generate";
 import { MissingApiKeyError } from "@/lib/routes/geocode";
+import { getUserOrigin } from "@/lib/routes/profile";
 
 export const maxDuration = 60;
 
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as {
     workspaceId?: string;
     originOverride?: { address: string; lat: number; lng: number };
+    forUserId?: string;
   };
 
   const workspaceId = body.workspaceId;
@@ -24,32 +26,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing workspaceId" }, { status: 400 });
   }
 
-  const { data: member } = await supabase
+  const { data: membership } = await supabase
     .from("workspace_members")
-    .select("id")
+    .select("role")
     .eq("workspace_id", workspaceId)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const origin =
-    body.originOverride ??
-    {
-      address: process.env.ROUTE_DEFAULT_ORIGIN_ADDRESS ?? "Markvägen 23, 162 71 Vällingby",
-      lat: Number(process.env.ROUTE_DEFAULT_ORIGIN_LAT ?? "59.3625"),
-      lng: Number(process.env.ROUTE_DEFAULT_ORIGIN_LNG ?? "17.8722"),
-    };
+  // forUserId is admin-only. If absent, the calling user is the assignee.
+  let assignedUserId = user.id;
+  if (body.forUserId && body.forUserId !== user.id) {
+    if (membership.role !== "admin") {
+      return NextResponse.json({ error: "Only admins can generate for another user" }, { status: 403 });
+    }
+    const { data: target } = await supabase
+      .from("workspace_members")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", body.forUserId)
+      .maybeSingle();
+    if (!target) {
+      return NextResponse.json({ error: "forUserId is not a workspace member" }, { status: 400 });
+    }
+    assignedUserId = body.forUserId;
+  }
 
-  if (!Number.isFinite(origin.lat) || !Number.isFinite(origin.lng)) {
+  // Resolve origin: explicit override → assignee's user_profiles → env defaults.
+  let origin: { address: string; lat: number; lng: number } | null = null;
+  if (body.originOverride) {
+    origin = body.originOverride;
+  } else {
+    const resolved = await getUserOrigin(assignedUserId, supabase);
+    if (resolved) origin = { address: resolved.address, lat: resolved.lat, lng: resolved.lng };
+  }
+
+  if (!origin || !Number.isFinite(origin.lat) || !Number.isFinite(origin.lng)) {
     return NextResponse.json(
-      { error: "ROUTE_DEFAULT_ORIGIN_LAT/LNG not configured and no override provided" },
+      { error: "No origin available — set one in /settings/profile or configure ROUTE_DEFAULT_ORIGIN_*" },
       { status: 503 },
     );
   }
 
-  // Use the service client for the heavy lift — RLS is enforced via the workspace membership
-  // check above, and the generator needs to read both pools (cold = discovered_shops which
-  // exists outside the user's RLS scope in some cases) and write daily_routes/route_stops.
   const service = createServiceClient();
 
   try {
@@ -57,6 +75,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       origin,
       generatedBy: user.id,
+      assignedTo: assignedUserId,
       supabase: service,
     });
     return NextResponse.json(summary);

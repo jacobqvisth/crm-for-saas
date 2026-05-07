@@ -270,6 +270,23 @@ export function AboutPanel({
           value={company.do_not_contact ?? false}
           onChange={(v) => onUpdateFollowupFlags({ do_not_contact: v })}
         />
+        {company.do_not_route && (
+          <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+            <ShieldOff className="w-3.5 h-3.5 text-rose-600 mt-0.5 flex-shrink-0" />
+            <div className="min-w-0 text-[11px] text-rose-900">
+              <p className="font-medium">Do not route</p>
+              <p className="mt-0.5 text-rose-700">
+                Field routes will skip this company.
+                {company.do_not_route_reason && (
+                  <> Reason: <span className="font-mono">{company.do_not_route_reason}</span>.</>
+                )}
+                {company.do_not_route_at && (
+                  <> Set {new Date(company.do_not_route_at).toLocaleDateString()}.</>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Delete */}

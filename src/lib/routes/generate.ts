@@ -3,7 +3,7 @@
 // optimizes via Routes API, builds Google Maps deeplink, persists routes + stops.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
 import { cluster, haversineKm, type Point } from "./cluster";
 import { labelForCentroid } from "./cluster-label";
 import { optimizeRoute, type LatLng } from "./routes-api";
@@ -12,8 +12,9 @@ const STOCKHOLM_CENTER = { lat: 59.3293, lng: 18.0686 };
 const RADIUS_KM = 120;
 const VISIT_MINUTES = 30;
 const PRODUCTIVE_DAY_SECONDS = 7.5 * 3600;
-const MIN_STOPS_PER_ROUTE = 4;
-const MAX_STOPS_PER_ROUTE = 12;
+export const MIN_STOPS_PER_ROUTE = 4;
+export const MAX_STOPS_PER_ROUTE = 12;
+export const DEFAULT_MIN_REVISIT_DAYS = 30;
 
 export type ModeMix = { mixed: number; cold: number; lapsed: number };
 export type Origin = { address: string; lat: number; lng: number };
@@ -22,6 +23,8 @@ export type GenerateInput = {
   workspaceId: string;
   origin: Origin;
   generatedBy?: string | null;
+  /** Whose routes these are. Defaults to generatedBy. */
+  assignedTo?: string | null;
   desiredCount?: number;
   modeMix?: ModeMix;
   supabase: SupabaseClient<Database>;
@@ -53,17 +56,21 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
     workspaceId,
     origin,
     generatedBy = null,
+    assignedTo = generatedBy,
     desiredCount = 10,
     modeMix = { mixed: 5, cold: 3, lapsed: 2 },
     supabase,
   } = input;
+
+  // Read workspace-level min revisit interval (overridden per-company below).
+  const workspaceDefaultRevisit = await fetchWorkspaceMinRevisit(supabase, workspaceId);
 
   // 1. Pull candidate pool — single query against `companies`. Cold vs lapsed
   //    is decided by whether the company ever activated (became a customer).
   //    `discovered_shops` rows are NOT eligible for field-route generation —
   //    they're un-vetted Apify scrapes; only shops the team has explicitly
   //    promoted to `companies` get visited.
-  const allCandidates = await fetchCompanyPool(supabase);
+  const allCandidates = await fetchCompanyPool(supabase, workspaceId, workspaceDefaultRevisit);
   const cold = allCandidates.filter((c) => c.kind === "cold");
   const lapsed = allCandidates.filter((c) => c.kind === "lapsed");
 
@@ -156,10 +163,20 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
     if (stops.length < MIN_STOPS_PER_ROUTE) continue; // don't generate a route this small
 
     // Optimize with Routes API; if too long, drop farthest waypoint and retry.
+    // If the API call itself fails (transient 5xx, empty response after retry),
+    // record a fallback and skip this cluster — don't abort the whole generation.
     let optimized: Awaited<ReturnType<typeof optimizeRoute>> | null = null;
+    let optimizeError: string | null = null;
     while (stops.length >= MIN_STOPS_PER_ROUTE) {
       const waypoints: LatLng[] = stops.map((s) => ({ lat: s.lat, lng: s.lng }));
-      const result = await optimizeRoute({ origin: { lat: origin.lat, lng: origin.lng }, waypoints, returnToOrigin: true });
+      let result: Awaited<ReturnType<typeof optimizeRoute>>;
+      try {
+        result = await optimizeRoute({ origin: { lat: origin.lat, lng: origin.lng }, waypoints, returnToOrigin: true });
+      } catch (e) {
+        optimizeError = e instanceof Error ? e.message : String(e);
+        console.error(`[generateDailyRoutes] Routes API failed for cluster '${clusterLabel}' (${stops.length} stops): ${optimizeError}`);
+        break;
+      }
       const dayLengthSec = result.totalSeconds + VISIT_MINUTES * 60 * stops.length;
       if (dayLengthSec <= PRODUCTIVE_DAY_SECONDS) {
         optimized = result;
@@ -178,6 +195,9 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
       stops = stops.filter((_, idx) => idx !== farthestIdx);
     }
 
+    if (optimizeError) {
+      summary.fallbacks.push({ clusterLabel, reason: `Routes API failed: ${optimizeError}` });
+    }
     if (!optimized) continue; // discard route entirely
 
     // Reorder stops by Google's optimization
@@ -196,6 +216,7 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
       .insert({
         workspace_id: workspaceId,
         generated_by: generatedBy,
+        assigned_to: assignedTo,
         generation_batch_id: batchId,
         mode,
         mode_fallback_reason: fallbackReason,
@@ -262,19 +283,38 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
 //     subscription_status NOT IN ('active','trialing','past_due')
 //     AND customer_status NOT IN ('active','trialing')
 //     (NULLs on either field count as eligible)
+// - do_not_route IS NOT TRUE
+// - last visit (route_stops.visited_at most-recent) outside the per-company or
+//   workspace-default min_revisit_interval_days window
 // - inside the Stockholm 120km radius (post-filter, in-memory)
 //
 // We page through 1000 rows at a time because Supabase REST default pageSize
 // is 1000 and the workspace has ~10k companies.
-async function fetchCompanyPool(supabase: SupabaseClient<Database>): Promise<Candidate[]> {
+async function fetchCompanyPool(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  workspaceDefaultRevisitDays: number,
+): Promise<Candidate[]> {
   const PAGE_SIZE = 1000;
-  const all: Candidate[] = [];
+  const rows: {
+    id: string;
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    activated_at: string | null;
+    minRevisit: number | null;
+  }[] = [];
   let offset = 0;
 
   while (true) {
     const { data, error } = await supabase
       .from("companies")
-      .select("id, name, address, latitude, longitude, subscription_status, customer_status, activated_at")
+      .select(
+        "id, name, address, latitude, longitude, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("do_not_route", false)
       .or("subscription_status.is.null,subscription_status.not.in.(active,trialing,past_due)")
       .or("customer_status.is.null,customer_status.not.in.(active,trialing)")
       .not("latitude", "is", null)
@@ -287,24 +327,97 @@ async function fetchCompanyPool(supabase: SupabaseClient<Database>): Promise<Can
 
     for (const r of data) {
       if (r.latitude == null || r.longitude == null || !r.address) continue;
-      const candidate: Candidate = {
-        kind: r.activated_at ? "lapsed" : "cold",
-        companyId: r.id,
+      if (haversineKm({ lat: r.latitude, lng: r.longitude }, STOCKHOLM_CENTER) > RADIUS_KM) continue;
+      rows.push({
+        id: r.id,
         name: r.name,
         address: r.address,
         lat: r.latitude,
         lng: r.longitude,
-      };
-      if (haversineKm(candidate, STOCKHOLM_CENTER) <= RADIUS_KM) {
-        all.push(candidate);
-      }
+        activated_at: r.activated_at,
+        minRevisit: r.min_revisit_interval_days ?? null,
+      });
     }
 
     if (data.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
   }
 
-  return all;
+  if (rows.length === 0) return [];
+
+  const recentVisits = await fetchMostRecentVisits(
+    supabase,
+    workspaceId,
+    rows.map((r) => r.id),
+  );
+  const now = Date.now();
+
+  const out: Candidate[] = [];
+  for (const r of rows) {
+    const intervalDays = r.minRevisit ?? workspaceDefaultRevisitDays;
+    const lastVisitedAt = recentVisits.get(r.id);
+    if (lastVisitedAt) {
+      const ageDays = (now - new Date(lastVisitedAt).getTime()) / 86_400_000;
+      if (ageDays < intervalDays) continue;
+    }
+    out.push({
+      kind: r.activated_at ? "lapsed" : "cold",
+      companyId: r.id,
+      name: r.name,
+      address: r.address,
+      lat: r.lat,
+      lng: r.lng,
+    });
+  }
+  return out;
+}
+
+async function fetchWorkspaceMinRevisit(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from("workspaces")
+    .select("settings")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  const settings = data?.settings;
+  if (settings && typeof settings === "object" && !Array.isArray(settings)) {
+    const fv = (settings as Record<string, Json>).field_visits;
+    if (fv && typeof fv === "object" && !Array.isArray(fv)) {
+      const v = (fv as Record<string, Json>).min_revisit_interval_days;
+      if (typeof v === "number" && v > 0) return v;
+    }
+  }
+  return DEFAULT_MIN_REVISIT_DAYS;
+}
+
+async function fetchMostRecentVisits(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  companyIds: string[],
+): Promise<Map<string, string>> {
+  const recent = new Map<string, string>();
+  if (companyIds.length === 0) return recent;
+  // Chunk to keep the .in() URL short (PostgREST URL limit can drop ~1000 UUIDs).
+  const CHUNK = 200;
+  for (let i = 0; i < companyIds.length; i += CHUNK) {
+    const slice = companyIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("route_stops")
+      .select("company_id, visited_at")
+      .eq("workspace_id", workspaceId)
+      .in("company_id", slice)
+      .not("visited_at", "is", null)
+      .order("visited_at", { ascending: false });
+    if (error) throw new Error(`recent visits query failed: ${error.message}`);
+    for (const row of data ?? []) {
+      if (!row.company_id || !row.visited_at) continue;
+      // Ordered DESC: first row per company wins.
+      if (!recent.has(row.company_id)) recent.set(row.company_id, row.visited_at);
+    }
+  }
+  return recent;
 }
 
 // ----- deeplink -----

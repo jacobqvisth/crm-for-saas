@@ -168,6 +168,9 @@ export type Database = {
           customer_status: string | null
           description: string | null
           do_not_contact: boolean
+          do_not_route: boolean
+          do_not_route_at: string | null
+          do_not_route_reason: string | null
           domain: string | null
           employee_count: number | null
           facebook_url: string | null
@@ -184,6 +187,7 @@ export type Database = {
           linkedin_url: string | null
           longitude: number | null
           member_count: number | null
+          min_revisit_interval_days: number | null
           mrr_cents: number | null
           name: string
           notes: string | null
@@ -229,6 +233,9 @@ export type Database = {
           customer_status?: string | null
           description?: string | null
           do_not_contact?: boolean
+          do_not_route?: boolean
+          do_not_route_at?: string | null
+          do_not_route_reason?: string | null
           domain?: string | null
           employee_count?: number | null
           facebook_url?: string | null
@@ -245,6 +252,7 @@ export type Database = {
           linkedin_url?: string | null
           longitude?: number | null
           member_count?: number | null
+          min_revisit_interval_days?: number | null
           mrr_cents?: number | null
           name: string
           notes?: string | null
@@ -290,6 +298,9 @@ export type Database = {
           customer_status?: string | null
           description?: string | null
           do_not_contact?: boolean
+          do_not_route?: boolean
+          do_not_route_at?: string | null
+          do_not_route_reason?: string | null
           domain?: string | null
           employee_count?: number | null
           facebook_url?: string | null
@@ -306,6 +317,7 @@ export type Database = {
           linkedin_url?: string | null
           longitude?: number | null
           member_count?: number | null
+          min_revisit_interval_days?: number | null
           mrr_cents?: number | null
           name?: string
           notes?: string | null
@@ -589,6 +601,7 @@ export type Database = {
       }
       daily_routes: {
         Row: {
+          assigned_to: string | null
           cluster_label: string
           created_at: string
           estimated_day_seconds: number
@@ -612,6 +625,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          assigned_to?: string | null
           cluster_label: string
           created_at?: string
           estimated_day_seconds: number
@@ -635,6 +649,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          assigned_to?: string | null
           cluster_label?: string
           created_at?: string
           estimated_day_seconds?: number
@@ -1296,6 +1311,9 @@ export type Database = {
           crm_company_id: string | null
           crm_contact_id: string | null
           description: string | null
+          do_not_route: boolean
+          do_not_route_at: string | null
+          do_not_route_reason: string | null
           domain: string | null
           email_check_detail: string | null
           email_status: string | null
@@ -1347,6 +1365,9 @@ export type Database = {
           crm_company_id?: string | null
           crm_contact_id?: string | null
           description?: string | null
+          do_not_route?: boolean
+          do_not_route_at?: string | null
+          do_not_route_reason?: string | null
           domain?: string | null
           email_check_detail?: string | null
           email_status?: string | null
@@ -1398,6 +1419,9 @@ export type Database = {
           crm_company_id?: string | null
           crm_contact_id?: string | null
           description?: string | null
+          do_not_route?: boolean
+          do_not_route_at?: string | null
+          do_not_route_reason?: string | null
           domain?: string | null
           email_check_detail?: string | null
           email_status?: string | null
@@ -2573,31 +2597,81 @@ export type Database = {
         Row: {
           created_at: string
           full_name: string | null
+          origin_address: string | null
+          origin_geocoded_at: string | null
+          origin_latitude: number | null
+          origin_longitude: number | null
           signature_html: string | null
           signature_updated_at: string | null
           title: string | null
           updated_at: string
           user_id: string
+          working_days: Json
         }
         Insert: {
           created_at?: string
           full_name?: string | null
+          origin_address?: string | null
+          origin_geocoded_at?: string | null
+          origin_latitude?: number | null
+          origin_longitude?: number | null
           signature_html?: string | null
           signature_updated_at?: string | null
           title?: string | null
           updated_at?: string
           user_id: string
+          working_days?: Json
         }
         Update: {
           created_at?: string
           full_name?: string | null
+          origin_address?: string | null
+          origin_geocoded_at?: string | null
+          origin_latitude?: number | null
+          origin_longitude?: number | null
           signature_html?: string | null
           signature_updated_at?: string | null
           title?: string | null
           updated_at?: string
           user_id?: string
+          working_days?: Json
         }
         Relationships: []
+      }
+      user_unavailable_dates: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          reason: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          reason?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_unavailable_dates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_ai_settings: {
         Row: {
