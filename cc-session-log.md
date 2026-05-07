@@ -14,6 +14,66 @@ updated: 2026-04-22
 
 ---
 
+## Session: Field Routes — Phase 2 (interactive map + drag-reorder)
+- **Date:** 2026-05-07
+- **PR:** #143
+- **Branch:** `feature/field-routes-phase2`
+- **Merge commit:** `d7167f2`
+
+### What was built
+The static stops table on `/routes/[id]` is now an embedded Google Map + a drag-to-reorder list. Hans (or any field rep) can move stops around in the office, save, and the route's totals + leg drives + Google Maps deeplink update via a fresh Routes API call.
+
+**UI components (new):**
+- `src/components/routes/route-map.tsx` — `@vis.gl/react-google-maps` (`^1.8.3`). Origin pin labeled "S" (indigo-600), numbered stop pins coloured by source — sky-600 for cold prospects (`discovered_shop_id`), amber-600 for lapsed customers (`company_id`). Pin shape is an inline SVG data URL so we don't need a Map ID configured for AdvancedMarker. Click a pin → InfoWindow with shop name, address, mode tag, leg drive time. Polyline overlay reads `routes_api_response.routes[0].polyline.encodedPolyline` if present, else falls back to straight lines (origin → stop[0] → … → origin) and logs a warning. Auto-fit bounds includes origin + every stop. Aspect ratio: `aspect-square` mobile, `aspect-[16/9]` md+.
+- `src/components/routes/stops-reorder-list.tsx` — drag-reorder using `@hello-pangea/dnd` (already a project dep, used by deals board + pipelines settings; the prompt said reuse if present). Sticky header with Save / Cancel. Save button is disabled until something moves; saving disables both. Each row: drag handle, #, shop name + cold/lapsed pill, address, leg drive time.
+
+**`/routes/[id]/page.tsx` (rewritten):**
+- 60/40 split (`md:grid-cols-5` with map = `col-span-3`, list = `col-span-2`); stacked on mobile.
+- Map is `next/dynamic({ssr: false})` so the `/routes` list page doesn't pull the ~400 KB Maps JS bundle.
+- Save flow: POST `/api/routes/[id]/reorder` with `{stopIds: [...]}`. On 409 (`exceeds_day_window`) shows `window.confirm("This route is now Xh Ym, longer than the 7.5h day window. Save anyway?")` and re-POSTs with `?force=true`. On 200, shows toast and refetches.
+- Existing header / actions / Schedule / Discard preserved; `max-w-5xl` widened to `max-w-6xl` for the split.
+- New `loading.tsx` skeleton matches the new layout.
+
+**Backend (new):**
+- `POST /api/routes/[id]/reorder` — `src/app/api/routes/[id]/reorder/route.ts`. Auth + workspace-membership gate (mirrors Phase 1's `[id]/route.ts`). Zod-validates `stopIds: uuid[]`, asserts the ID set matches existing stops 1:1 (no dupes, no extras, no missing). Builds ordered LatLng waypoints in the user-specified order, calls `recomputeFixedOrder`, returns 502 if Routes API fails (no DB writes). Day-window check returns 409 with `estimated_day_seconds` unless `?force=true`. On success, calls `reorder_route_stops` plpgsql function for atomic DB writes.
+- `recomputeFixedOrder` in `routes-api.ts` — same shape as `optimizeRoute` but `optimizeWaypointOrder: false`. Field mask now includes `routes.polyline.encodedPolyline` for both — so going forward, reorders AND fresh generates ship polylines.
+- Day-window logic extracted to `src/lib/routes/day-window.ts` so the boundary check (`exceedsDayWindow`) is unit-testable.
+
+**DB (new function, applied to prod):**
+- `supabase/migrations/20260507010000_reorder_route_stops_fn.sql` — `reorder_route_stops(p_route_id, p_workspace_id, p_stop_orders, p_total_drive_seconds, p_total_drive_meters, p_estimated_day_seconds, p_google_maps_deeplink, p_routes_api_response)`. `SECURITY DEFINER` with `search_path = public, pg_temp`. Two-pass UPDATE: first bumps every stop's `stop_order` to negative offset (`-1 - stop_order`) so the `UNIQUE(route_id, stop_order)` constraint can't catch us mid-reassignment, then applies the new orders + leg drives, then updates the parent `daily_routes` totals. Whole thing is one Postgres transaction (function = implicit tx), so a failure rolls back everything cleanly. Applied via Management API (`POST /v1/projects/wdgiwuhehqpkhpvdzzzl/database/query`, returned 201).
+
+**Tests:**
+- `src/lib/routes/day-window.test.ts` (new) — boundary asserts: `7.5h × 3600` exact passes, +1s rejects; comfortable day passes; very long day rejects. **Pure-function testing of the rejection logic the prompt called out.**
+- `src/lib/routes/routes-api.test.ts` (new) — mocks `globalThis.fetch`, asserts `recomputeFixedOrder` sends `optimizeWaypointOrder: false` in the request body, parses `polyline.encodedPolyline` and per-leg duration/distance correctly, throws on non-2xx.
+- `e2e/field-routes-phase2.spec.ts` (new) — `test.skip(!NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY, ...)`. Asserts a `div[role="application"]` (Maps JS render target) appears on `/routes/[id]`, and the reorder API rejects empty `stopIds` and non-existent stop IDs with 4xx.
+
+**Build/deploy:**
+- `npx tsc --noEmit`, `npm run lint`, `npx vitest run src/lib/routes` (17/17 pass), `npm run test:e2e:smoke` (8/8 pass) all green.
+- `npm run build` clean.
+- Vercel preview deploy on the PR branch failed at static prerender of `/login` because Preview scope is missing `NEXT_PUBLIC_SUPABASE_*` (pre-existing gap, also failed on PR #141). Production deploy on main triggered after merge.
+- PR squash-merged via `gh pr merge 143 --squash`.
+
+### Vercel env config (Preview scope)
+- Production + Development scopes already had all five: `GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY`, `ROUTE_DEFAULT_ORIGIN_ADDRESS/LAT/LNG`. Preview only had `GOOGLE_MAPS_API_KEY`.
+- Added the four missing vars to Preview scope **scoped to branch `feature/field-routes-phase2`** because the CLI all-preview-branches form is broken — `vercel env add NAME preview --value … --yes` returns `git_branch_required` regardless. Per-branch form (`vercel env add NAME preview <branch> --value … --yes`) works once the branch exists on the remote. Worth filing a CLI bug; the dashboard tick-box still works without issue.
+- The branch-scoped env vars are still on Vercel even after the merge — they're harmless for the now-merged branch and only cost a row in the Vercel UI.
+
+### Notable decisions
+- **`@hello-pangea/dnd` over `@dnd-kit`** — the prompt suggested `@dnd-kit` but said "reuse the existing DnD library if one is in use." Hello-pangea is what deals + pipelines already use; pulling in a second DnD lib would have added bundle weight and a second mental model. The keyboard / a11y story is good with hello-pangea.
+- **Legacy `<Marker>` over `<AdvancedMarker>`** — AdvancedMarker requires a Map ID in Google Cloud Console (Maps Customization). Using inline-SVG data URLs on legacy Markers gets us numbered, coloured pins with no GCP setup required. Tradeoff: legacy Markers are deprecated in Google's roadmap; if/when they break we can migrate to AdvancedMarker + `<Pin>` and configure a Map ID.
+- **Two-pass UPDATE in plpgsql, not bulk upsert** — the `UNIQUE(route_id, stop_order)` constraint on `route_stops` makes a single bulk UPDATE that swaps orders impossible. Two-pass (negative offset → final order) inside one transaction is the cleanest fix and keeps the constraint as a real safeguard rather than dropping it. Alternative would have been declaring the constraint DEFERRABLE — that change has wider implications and isn't justified for one code path.
+- **Polyline field-mask added to `optimizeRoute` too**, not just the new `recomputeFixedOrder`. Otherwise newly-generated routes would still lack polyline data and Phase 2's map would always be on the straight-line fallback for them. Now both fresh generates and reorders ship polyline data; pre-existing rows continue to fall back to straight lines (visible warning in the browser console — by design).
+- **Day-window check at `>` not `>=`** — exactly 7.5h is the cap, not the rejection point. Boundary test enforces this.
+- **Cast through `unknown` for the `reorder_route_stops` RPC call** rather than regenerate `database.types.ts`. Type regen would require redoing the manual-export header preserved by PR #128's procedure for one new function. Documented the cast in a comment.
+
+### Required for new sessions / follow-ups
+- **Phase 3:** Mark-visited UI + visit-outcome capture + auto-enroll into a follow-up sequence on `interested`. Schema columns (`visited_at`, `visit_outcome`, `visit_notes`, `follow_up_required`) are already there from Phase 1.
+- **Phase 4:** Per-user origin overrides (Hans's home is hardcoded today), multi-rep scheduling, min revisit interval.
+- **Phase 1 deferred items still open:** geocoding backfill (`scripts/backfill-companies-latlng.mjs`) hasn't been run; first prod-route generation hasn't been verified end-to-end. Both blocked on Jacob running locally.
+- **Vercel CLI bug to file:** `vercel env add NAME preview --value VALUE --yes` (omitting `<gitbranch>`) returns `git_branch_required` error. Per the CLI's own help text, omitting the branch arg should "add to all Preview branches"; instead it bails. Repro happens on `Vercel CLI 50.37.0`. Workaround: pass `<gitbranch>` explicitly. Or use the dashboard.
+
+---
+
 ## Session: Field Routes — Phase 1 (backend + list UI)
 - **Date:** 2026-05-07
 - **PR:** #141
