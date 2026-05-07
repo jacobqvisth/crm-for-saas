@@ -16,8 +16,9 @@ updated: 2026-04-22
 
 ## Session: Field Routes — Phase 1 (backend + list UI)
 - **Date:** 2026-05-07
-- **PR:** TBD
+- **PR:** #141
 - **Branch:** `feature/field-routes-phase1`
+- **Merge commit:** `63eb927`
 
 ### What was built
 A field-rep route planner ("Field routes" in the sidebar). Generates 10 candidate one-day driving routes from clusters of cold prospects (`discovered_shops`) and lapsed customers (`companies` with no/canceled subscription). Each route gets a Google Maps deeplink Hans (or any field rep) can open on a phone or in CarPlay.
