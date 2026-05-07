@@ -54,18 +54,21 @@ describe("generateDailyRoutes — mode-assignment math", () => {
     // - cluster A (around 59.33,18.07): 6 lapsed → density 1.0 → lapsed
     // - cluster B (around 59.40,17.95): 3 lapsed + 3 cold → density 0.5 → mixed
     // - cluster C (around 59.20,18.20): 6 cold → density 0.0 → cold
-    // (expanded to 10 desired routes; only 3 will materialize because we have 3 spatial groups)
+    //
+    // After the pool-source fix, both pools come from the `companies` table —
+    // cold = activated_at IS NULL, lapsed = activated_at IS NOT NULL.
 
-    const lapsed = [
-      ...mkPoints("la", 6, 59.33, 18.07),
-      ...mkPoints("lb", 3, 59.4, 17.95),
-    ];
-    const cold = [
-      ...mkPoints("cb", 3, 59.4, 17.95),
-      ...mkPoints("cc", 6, 59.2, 18.2),
+    // Order matches the original test (cold first, then lapsed) so the
+    // k-means++ init picks the same centroids as before — clustering
+    // depends on insertion order with deterministic seeding.
+    const companies = [
+      ...mkPoints("cb", 3, 59.4, 17.95, null),          // cold in cluster B
+      ...mkPoints("cc", 6, 59.2, 18.2, null),           // cold in cluster C
+      ...mkPoints("la", 6, 59.33, 18.07, "2026-01-01"), // lapsed in cluster A
+      ...mkPoints("lb", 3, 59.4, 17.95, "2026-01-01"),  // lapsed in cluster B
     ];
 
-    const supabase = mockSupabase({ cold, lapsed });
+    const supabase = mockSupabase({ companies });
 
     // Dynamic import after mock is in place
     const { generateDailyRoutes } = await import("./generate");
@@ -90,26 +93,40 @@ describe("generateDailyRoutes — mode-assignment math", () => {
 
 // ----- helpers -----
 
-function mkPoints(prefix: string, n: number, baseLat: number, baseLng: number) {
+function mkPoints(prefix: string, n: number, baseLat: number, baseLng: number, activatedAt: string | null) {
   return Array.from({ length: n }, (_, i) => ({
     id: `${prefix}-${i}`,
     name: `${prefix}-${i}`,
     address: `${prefix} ${i}, Stockholm`,
     latitude: baseLat + (i % 3) * 0.001,
     longitude: baseLng + Math.floor(i / 3) * 0.001,
+    activated_at: activatedAt,
+    customer_status: null,
+    subscription_status: null,
   }));
 }
 
 function mockSupabase({
-  cold,
-  lapsed,
+  companies,
 }: {
-  cold: { id: string; name: string; address: string; latitude: number; longitude: number }[];
-  lapsed: { id: string; name: string; address: string; latitude: number; longitude: number }[];
+  companies: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    activated_at: string | null;
+    customer_status: string | null;
+    subscription_status: string | null;
+  }[];
 }) {
-  // We model just the chained ".from(table).select(...).is/in/not/or/limit"
-  // and ".from(table).insert(...).select().single()" surfaces the generator uses.
+  // We model just the chained surfaces the generator uses:
+  //   .from(table).select(...).or(...).or(...).not(...).not(...).order(...).range(...)
+  //   .from(table).insert(...).select().single()
+  // The pool fetcher now paginates with .range(); we return all rows on the
+  // first call and an empty array on subsequent calls so the loop terminates.
   function buildQuery(rows: unknown[]) {
+    let pageCalled = false;
     const obj = {
       select: () => obj,
       is: () => obj,
@@ -117,11 +134,15 @@ function mockSupabase({
       not: () => obj,
       or: () => obj,
       limit: () => obj,
+      order: () => obj,
+      range: () => obj,
       then: undefined as never,
     } as Record<string, unknown>;
-    // Make the query thenable so `await query` resolves with `{ data, error }`
-    (obj as { then: (cb: (v: { data: unknown[]; error: null }) => void) => void }).then = (cb) =>
-      cb({ data: rows, error: null });
+    (obj as { then: (cb: (v: { data: unknown[]; error: null }) => void) => void }).then = (cb) => {
+      const data = pageCalled ? [] : rows;
+      pageCalled = true;
+      cb({ data, error: null });
+    };
     return obj;
   }
 
@@ -129,8 +150,7 @@ function mockSupabase({
 
   return {
     from(table: string) {
-      if (table === "discovered_shops") return buildQuery(cold);
-      if (table === "companies") return buildQuery(lapsed);
+      if (table === "companies") return buildQuery(companies);
       if (table === "daily_routes") {
         return {
           insert: () => ({
