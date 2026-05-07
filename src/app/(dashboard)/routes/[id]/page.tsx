@@ -1,10 +1,26 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, Calendar, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
+import StopsReorderList, {
+  type ReorderStop,
+} from "@/components/routes/stops-reorder-list";
+import type {
+  RouteMapStop,
+  RouteMapOrigin,
+} from "@/components/routes/route-map";
+
+// Lazy-load the map so the /routes list page doesn't pull Maps JS (~400 KB).
+const RouteMap = dynamic(() => import("@/components/routes/route-map"), {
+  ssr: false,
+  loading: () => (
+    <div className="aspect-square md:aspect-[16/9] w-full rounded-lg border border-slate-200 bg-slate-100 animate-pulse" />
+  ),
+});
 
 type RouteDetail = {
   id: string;
@@ -13,6 +29,8 @@ type RouteDetail = {
   mode: "mixed" | "cold" | "lapsed";
   mode_fallback_reason: string | null;
   origin_address: string;
+  origin_latitude: number;
+  origin_longitude: number;
   scheduled_for: string | null;
   status: string;
   stop_count: number;
@@ -20,6 +38,7 @@ type RouteDetail = {
   total_drive_meters: number;
   estimated_day_seconds: number;
   google_maps_deeplink: string;
+  routes_api_response: unknown;
 };
 
 type Stop = {
@@ -50,9 +69,10 @@ function formatHM(totalSeconds: number): string {
   return `${h}h ${m}m`;
 }
 
-function formatKm(meters: number | null): string | null {
-  if (meters == null) return null;
-  return `${(meters / 1000).toFixed(1)} km`;
+function extractPolyline(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as { routes?: { polyline?: { encodedPolyline?: string } }[] };
+  return r.routes?.[0]?.polyline?.encodedPolyline ?? null;
 }
 
 export default function RouteDetailPage() {
@@ -63,6 +83,9 @@ export default function RouteDetailPage() {
   const [stops, setStops] = useState<Stop[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduledFor, setScheduledFor] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
 
   const fetchRoute = useCallback(async () => {
     setLoading(true);
@@ -117,9 +140,90 @@ export default function RouteDetailPage() {
     router.push("/routes");
   }
 
+  async function handleReorder(orderedIds: string[], force = false): Promise<void> {
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/routes/${id}/reorder${force ? "?force=true" : ""}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stopIds: orderedIds }),
+        },
+      );
+
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as {
+          estimated_day_seconds?: number;
+        };
+        const dayHM = body.estimated_day_seconds
+          ? formatHM(body.estimated_day_seconds)
+          : "8h+";
+        const ok = window.confirm(
+          `This route is now ${dayHM}, longer than the 7.5h day window. Save anyway?`,
+        );
+        if (ok) {
+          await handleReorder(orderedIds, true);
+        }
+        return;
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        toast.error(text || "Failed to save new order");
+        return;
+      }
+
+      toast.success("Order saved");
+      await fetchRoute();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const reorderStops: ReorderStop[] = useMemo(
+    () =>
+      stops.map((s) => ({
+        id: s.id,
+        shop_name: s.shop_name,
+        shop_address: s.shop_address,
+        legDriveSeconds: s.leg_drive_seconds,
+        isLapsed: s.company_id != null,
+      })),
+    [stops],
+  );
+
+  const mapStops: RouteMapStop[] = useMemo(
+    () =>
+      stops.map((s) => ({
+        id: s.id,
+        lat: s.latitude,
+        lng: s.longitude,
+        shop_name: s.shop_name,
+        shop_address: s.shop_address,
+        legDriveSeconds: s.leg_drive_seconds,
+        isLapsed: s.company_id != null,
+      })),
+    [stops],
+  );
+
+  const mapOrigin: RouteMapOrigin | null = useMemo(() => {
+    if (!route) return null;
+    return {
+      address: route.origin_address,
+      lat: route.origin_latitude,
+      lng: route.origin_longitude,
+    };
+  }, [route]);
+
+  const encodedPolyline = useMemo(
+    () => (route ? extractPolyline(route.routes_api_response) : null),
+    [route],
+  );
+
   if (loading) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-6 max-w-6xl mx-auto">
         <div className="space-y-2">
           <div className="h-8 bg-slate-100 animate-pulse rounded w-1/3" />
           <div className="h-32 bg-slate-100 animate-pulse rounded" />
@@ -131,7 +235,7 @@ export default function RouteDetailPage() {
 
   if (!route) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-6 max-w-6xl mx-auto">
         <p className="text-slate-500">Route not found.</p>
         <Link href="/routes" className="text-indigo-600 text-sm">← Back to routes</Link>
       </div>
@@ -139,7 +243,7 @@ export default function RouteDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <Link
         href="/routes"
         className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"
@@ -211,58 +315,31 @@ export default function RouteDetailPage() {
         </div>
       </div>
 
-      {/* Stops */}
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
-            <tr>
-              <th className="px-4 py-2 text-left w-10">#</th>
-              <th className="px-4 py-2 text-left">Shop</th>
-              <th className="px-4 py-2 text-left">Address</th>
-              <th className="px-4 py-2 text-right">Leg drive</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {stops.map((s) => {
-              const linkedHref = s.company_id
-                ? `/companies/${s.company_id}`
-                : s.discovered_shop_id
-                ? `/discovery?focus=${s.discovered_shop_id}`
-                : null;
-              return (
-                <tr key={s.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 text-slate-500">{s.stop_order + 1}</td>
-                  <td className="px-4 py-2 text-slate-800">
-                    {linkedHref ? (
-                      <Link href={linkedHref} className="text-indigo-600 hover:underline">
-                        {s.shop_name}
-                      </Link>
-                    ) : (
-                      s.shop_name
-                    )}
-                    {s.company_id && (
-                      <span className="ml-2 text-[10px] uppercase text-amber-600">lapsed</span>
-                    )}
-                    {s.discovered_shop_id && (
-                      <span className="ml-2 text-[10px] uppercase text-sky-600">cold</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-slate-500">{s.shop_address}</td>
-                  <td className="px-4 py-2 text-right text-slate-500">
-                    {s.leg_drive_seconds != null ? (
-                      <>
-                        {formatHM(s.leg_drive_seconds)}
-                        <span className="ml-1 text-slate-400">({formatKm(s.leg_drive_meters)})</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Map + Stops split (desktop ~60/40, mobile stacked) */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+        <div className="md:col-span-3">
+          {apiKey && mapOrigin ? (
+            <RouteMap
+              apiKey={apiKey}
+              origin={mapOrigin}
+              stops={mapStops}
+              encodedPolyline={encodedPolyline}
+            />
+          ) : (
+            <div className="aspect-square md:aspect-[16/9] w-full rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500 px-4 text-center">
+              {apiKey
+                ? "Loading map…"
+                : "Map disabled — NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY not set in this environment."}
+            </div>
+          )}
+        </div>
+        <div className="md:col-span-2">
+          <StopsReorderList
+            stops={reorderStops}
+            saving={saving}
+            onSave={(orderedIds) => handleReorder(orderedIds)}
+          />
+        </div>
       </div>
 
       {/* Footer */}
