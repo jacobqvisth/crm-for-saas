@@ -1,39 +1,33 @@
-// Import existing Wrenchlane app customers (workshops + their users) into the CRM.
+// Sync existing Wrenchlane app customers (workshops + their users) into the CRM.
 //
-// Source: /tmp/wl-users.csv (333 rows = 333 user-accounts across 255 workshops)
+// Source: S3 bucket `codeoc-dashboard-prod` (eu-north-1), specifically:
+//   - `latest/user_stats.json.gz`   → users + workshops (one row per user)
+//   - `latest/diagnostics.json.gz`  → per-user diagnostic counts (aggregated here)
+// Both are gzipped JSON arrays. Same source the wl-dashboard reads from.
+//
+// AWS credentials: default credential chain (env or ~/.aws/credentials).
+// The IAM user `codeoc-dashboard-readonly` has GetObject on these keys.
 //
 // What this loads:
-//   companies     ← one row per workshop (255 unique workshop_id)
-//   contacts      ← one row per user (333 unique wl_user_id, linked to company)
-//   subscriptions ← one row per workshop_stripe_subscription_id (~138 unique)
+//   companies     ← one row per workshop (wl_workshop_id is the canonical key)
+//   contacts      ← one row per user (wl_user_id = AWS Cognito sub)
+//   subscriptions ← one row per workshop_stripe_subscription_id
 //
-// IDs:
-//   companies.wl_workshop_id  = csv.workshop_id     (canonical workshop UUID)
-//   contacts.wl_user_id       = csv.internal_user_id (AWS Cognito sub)
-//
-// Lifecycle mapping (workshop_subscription_status → companies.lifecycle_stage):
+// Lifecycle mapping (workshop subscription_status → companies.lifecycle_stage):
 //   trialing                          → trial
 //   active                            → paying
 //   paused | inactive | past_due      → churned
-//   '' (blank) AND diagnostics_total>0→ trial   (using product without sub state)
-//   '' (blank) AND diagnostics_total=0→ lead    (signed up, never used)
-//
-// Acquisition source:
-//   workshop_created_by_agent set → 'sales'
-//   else                         → 'unknown'
-//
-// Cross-link (Phase F): after import, mark any discovered_shops row whose
-// primary_email matches a customer contact's email as crm_company_id, so the
-// /discovery promote queue hides existing customers.
+//   '' (blank) AND diagnostics_total>0→ trial
+//   '' (blank) AND diagnostics_total=0→ lead
 //
 // Idempotent — safe to re-run. Uses upsert on (wl_workshop_id) and (wl_user_id).
 
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'fs'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { gunzipSync } from 'node:zlib'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import dotenv from 'dotenv'
-import Papa from 'papaparse'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '../.env.local') })
@@ -47,13 +41,85 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
 
 const WORKSPACE_ID = 'd946ea1f-74b4-492e-ae6a-d50f59ff04f0' // wrenchlane.com workspace
-const CSV_PATH = '/tmp/wl-users.csv'
+const DATA_BUCKET = process.env.DATA_BUCKET ?? 'codeoc-dashboard-prod'
+const AWS_REGION = process.env.AWS_REGION ?? 'eu-north-1'
 
-// ---------------- 1. Load CSV ----------------
-const csv = readFileSync(CSV_PATH, 'utf-8')
-const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true })
-if (parsed.errors.length) console.warn(`CSV warnings: ${parsed.errors.length}`)
-const rows = parsed.data
+// ---------------- 1. Fetch + parse from S3 ----------------
+async function fetchJsonGz(client, bucket, key) {
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+  const buf = Buffer.from(await res.Body.transformToByteArray())
+  return JSON.parse(gunzipSync(buf).toString('utf8'))
+}
+
+const s3 = new S3Client({ region: AWS_REGION })
+console.log(`Fetching s3://${DATA_BUCKET}/latest/user_stats.json.gz ...`)
+const userStats = await fetchJsonGz(s3, DATA_BUCKET, 'latest/user_stats.json.gz')
+console.log(`Fetching s3://${DATA_BUCKET}/latest/diagnostics.json.gz ...`)
+const diagnostics = await fetchJsonGz(s3, DATA_BUCKET, 'latest/diagnostics.json.gz')
+console.log(`Fetched: ${userStats.length} users, ${diagnostics.length} diagnostic records`)
+
+// Aggregate per-user diagnostic counts
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+const now = Date.now()
+const diagAgg = new Map() // user_id → { total, first_at, last_at, last_30d }
+for (const d of diagnostics) {
+  const uid = d.user_id
+  if (!uid) continue
+  const at = d.created_at ? new Date(d.created_at).getTime() : null
+  const cur = diagAgg.get(uid) ?? { total: 0, first_at: null, last_at: null, last_30d: 0 }
+  cur.total += 1
+  if (at) {
+    if (!cur.first_at || at < cur.first_at) cur.first_at = at
+    if (!cur.last_at || at > cur.last_at) cur.last_at = at
+    if (now - at <= THIRTY_DAYS_MS) cur.last_30d += 1
+  }
+  diagAgg.set(uid, cur)
+}
+
+// Project the JSON shape into the (workshop+user denormalized) row shape the
+// existing helpers below expect. The S3 JSON has only one `subscription_status`,
+// `country`, `language`, etc. per user — those are the workshop's fields, since
+// users belong to a single workshop. So `user_*` and `workshop_*` map to the
+// same source field.
+const rows = userStats.map((r) => {
+  const da = diagAgg.get(r.user_id)
+  const isoMs = (ms) => (ms ? new Date(ms).toISOString() : null)
+  return {
+    internal_user_id:               r.user_id,
+    name:                           r.name,
+    email:                          r.email,
+    phone:                          r.phone,
+    username:                       r.username,
+    user_role:                      r.user_role,
+    user_created_at:                r.user_created_at,
+    last_login:                     r.last_login,
+    last_active:                    r.last_active,
+    login_count:                    r.login_count,
+    credits_remaining:              r.credits_remaining,
+    user_plan_type:                 r.plan_type,
+    user_subscription_status:       r.subscription_status,
+    user_stripe_customer_id:        r.stripe_customer_id,
+    user_stripe_subscription_id:    r.stripe_subscription_id,
+    diagnostics_total:              da?.total ?? 0,
+    diagnostics_first_at:           isoMs(da?.first_at),
+    diagnostics_last_at:            isoMs(da?.last_at),
+    diagnostics_last_30d:           da?.last_30d ?? 0,
+    workshop_id:                    r.workshop_id,
+    workshop_name:                  r.company_name,
+    workshop_country:               r.country,
+    workshop_language:              r.language,
+    workshop_created_at:            r.workshop_created_at,
+    workshop_plan_type:             r.plan_type,
+    workshop_subscription_status:   r.subscription_status,
+    workshop_payment_status:        r.payment_status,
+    workshop_stripe_customer_id:    r.stripe_customer_id,
+    workshop_stripe_subscription_id: r.stripe_subscription_id,
+    workshop_trial_end:             r.trial_end,
+    workshop_activated_at:          null, // not in S3 user_stats
+    workshop_created_by_agent:      r.created_by_agent,
+    workshop_member_count:          null, // falls back to users.length below
+  }
+})
 console.log(`Loaded ${rows.length} rows`)
 
 // ---------------- 2. Helpers ----------------
@@ -236,14 +302,33 @@ function contactRecord(row) {
   }
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const contactRecords = rows
+const validRows = rows
   .filter(r => NULL(r.internal_user_id) && NULL(r.email) && UUID_RE.test(NULL(r.internal_user_id) || ''))
-  .map(contactRecord)
 const skippedNonUuid = rows.filter(r => NULL(r.internal_user_id) && !UUID_RE.test(NULL(r.internal_user_id) || ''))
 if (skippedNonUuid.length) {
   console.log(`Skipping ${skippedNonUuid.length} rows with non-UUID internal_user_id (likely test accounts):`)
   for (const r of skippedNonUuid) console.log(`  ${r.internal_user_id} (${r.email || '<no email>'})`)
 }
+
+// Dedupe by wl_user_id — Postgres can't ON CONFLICT DO UPDATE the same row twice
+// in one batch, and the S3 user_stats dump has 4 user_ids appearing in two
+// workshops. Keep the row with the most-recent last_active to preserve activity.
+const dedupedRows = (() => {
+  const byId = new Map()
+  for (const r of validRows) {
+    const id = NULL(r.internal_user_id)
+    const cur = byId.get(id)
+    if (!cur) { byId.set(id, r); continue }
+    const a = NULL(r.last_active) || ''
+    const b = NULL(cur.last_active) || ''
+    if (a > b) byId.set(id, r)
+  }
+  return [...byId.values()]
+})()
+const dedupedRemoved = validRows.length - dedupedRows.length
+if (dedupedRemoved) console.log(`Deduped ${dedupedRemoved} duplicate wl_user_id rows (kept most-recent last_active)`)
+
+const contactRecords = dedupedRows.map(contactRecord)
 console.log(`\nContact records to upsert: ${contactRecords.length}`)
 
 // ---------------- 8. Upsert contacts ----------------
@@ -281,7 +366,7 @@ for (const [wid, w] of workshopMap) {
     plan:                   NULL(w.meta.workshop_plan_type),
     status:                 NULL(w.meta.workshop_subscription_status),
     trial_end:              ISO(w.meta.workshop_trial_end),
-    metadata:               { source: 'wl-users-csv-2026-04-21' },
+    metadata:               { source: 's3://codeoc-dashboard-prod/latest/user_stats.json.gz' },
     // mrr_cents, current_period_*, etc. left null — backfill from Stripe API later
   })
 }

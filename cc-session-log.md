@@ -14,6 +14,86 @@ updated: 2026-04-22
 
 ---
 
+## Session: wl-app sync now reads from S3 directly
+- **Date:** 2026-05-07
+- **PR:** TBD
+- **Branch:** `feature/wl-app-sync-from-s3`
+
+### What was wrong
+The wl-app sync (`scripts/import-wl-users.mjs`) read from a static `/tmp/wl-users.csv` last refreshed 2 days earlier. The CRM's view of who's a current customer vs churned was drifting from the actual app state — workshops the app had since reactivated were still marked `lifecycle_stage='churned'`.
+
+### Fix
+Refactored the sync to fetch directly from the same S3 bucket the wl-dashboard reads:
+- **`s3://codeoc-dashboard-prod/latest/user_stats.json.gz`** — users + workshop fields (one row per user)
+- **`s3://codeoc-dashboard-prod/latest/diagnostics.json.gz`** — diagnostic records, aggregated per user_id into `diagnostics_total / first_at / last_at / last_30d`
+
+AWS credentials come from the default credential chain (`~/.aws/credentials`, IAM user `codeoc-dashboard-readonly` with `GetObject` on those keys). `DATA_BUCKET` and `AWS_REGION` are env-overridable but default to the prod bucket and `eu-north-1`.
+
+The S3 JSON is flatter than the CSV (e.g. `subscription_status` is a single field, not split into user/workshop). The script now projects the JSON into the CSV-style row shape the existing `lifecycleStage()`/`customerStatus()`/`companyRecord()`/`contactRecord()` helpers already understood, so the lifecycle mapping logic stays unchanged.
+
+Also fixed an `ON CONFLICT DO UPDATE command cannot affect row a second time` error — 4 user_ids appear in two workshops in the S3 dump, so the upsert batch occasionally contained two rows for the same wl_user_id. Dedupes by wl_user_id now, keeping the most-recent-`last_active` row.
+
+### Run result vs. previous (2-day-stale) DB state
+- companies (wl-app): 269 (was 255 — 14 new workshops since the CSV)
+- contacts (wl-app):  333 (was 316)
+- companies lifecycle_stage: paying=152 / trial=93 / churned=12 / lead=12 (was paying=37 / trial=99 / churned=56 / lead=63)
+- contacts lead_status: customer=321 / churned=12 (was customer=259 / churned=57)
+- SE specifically: customer=189 (was 174) / churned=1 (was 7)
+
+The ~44 net "un-churned" workshops are real — the JSON shows them as `active`/`trialing` now. The remaining 12 churned in DB are residual `inactive`/`past_due` from 23 workshops not in the current JSON dump (likely truly dropped from the app).
+
+### Notable decisions
+- **Kept the 23 not-in-JSON workshops at their previous state** rather than auto-deleting them. The JSON dump may exclude some workshops for technical reasons unrelated to whether they're really gone; deletion on absence is irreversible.
+- **`diagnostics_total` now actually populated** on contacts, with `last_30d` recomputed at sync time. Previously the field passed through from CSV but the CSV didn't have it — the field was always 0.
+- **Subscription metadata source** changed from `wl-users-csv-2026-04-21` to the S3 key. Helps trace future weirdness back to the actual ingest path.
+
+
+## Session: company detail page redesign (PR #139)
+- **Date:** 2026-05-06
+- **PR:** #139
+- **Branch:** `feature/company-detail-redesign`
+
+### What changed
+- Replaced the 1205-line `company-detail-client.tsx` monolith with a structured layout: identity hero · KPI signals strip · discovery provenance pill · two-column body (compact About panel | tabs).
+- Hero: Google-favicon logo + name (inline-edit) + domain link + phone (inline-edit) + lifecycle/customer-status/category/industry badges + quick actions (Add Contact / Add Deal / Log activity / overflow → Delete). "Back to Companies" relocated inside the hero.
+- Signals strip: data-driven KPI row — only renders cards with values. Surfaces rating, MRR (or ARR), health score, last active, trial-ends, diagnostics-30d, contacts count.
+- Discovery provenance: dedicated cyan-tinted strip when a `discovered_shops` row links to the company. Maps button + shop_type/email_status badges + closed-state warnings + scrape timestamp.
+- About panel (left rail, 280 px): renders only populated firmographic fields (no more 25 em-dashes). One "Edit" button opens a SlideOver drawer for the full form. Customer + Account + Location + Hierarchy + Social + Tags/Notes + Delete are separate cards that render only when applicable.
+- Edit drawer: single batched-save form with sections (Identity, About, Location, Social, Hierarchy, read-only Google Maps, Custom fields). Replaces ~600 lines of inline-per-field click-to-edit markup with one Save button → one Supabase update → one toast.
+- Tabs container: 5 panels in one file (`tabs.tsx`). **Default tab is now Activity** (was Contacts).
+
+### File split
+- `company-detail-client.tsx` — orchestrator (data fetching + state + layout, ~250 lines)
+- `detail/types.ts` — shared types + INDUSTRIES/CATEGORIES constants
+- `detail/hero.tsx` · `detail/signals.tsx` · `detail/discovery-strip.tsx` · `detail/about-panel.tsx` · `detail/edit-drawer.tsx` · `detail/tabs.tsx`
+
+Net diff: 8 files changed, +1513 / −1072. The monolith shrank to a thin orchestrator; the rest is new focused components.
+
+### Build/deploy
+- `npm run build` green (had to prepend `/opt/homebrew/bin` to PATH locally — Codex.app Node breaks `@next/swc-darwin-arm64` native binding; documented in user memory)
+- `npm run lint` clean (fixed two `Date.now()`-in-render purity errors carried over from old code by handling null `created_at` explicitly; suppressed `<img>` warning on the Google favicon — `next/image` here would require remotePatterns config for an unoptimized 64×64 external)
+- `npx tsc --noEmit` clean
+- Squash-merged via `gh pr merge 139 --squash` (GitHub returned a 504 mid-merge but the merge persisted — verified `state=MERGED`).
+- Vercel auto-deployed `crm-for-saas.vercel.app` — confirmed live with fresh `x-vercel-id`.
+
+### Notable decisions
+- **Kept client-side data fetching** instead of moving to Server Components. Every `(dashboard)/*/page.tsx` in this codebase uses the `Suspense → client wrapper → useWorkspace()` pattern; converting just one page would be inconsistent and would have required deriving `workspaceId` server-side from the auth cookie. The redesign value is in layout + edit UX, both of which work fine with the existing pattern.
+- **Single drawer with batched save** instead of preserving per-field PATCHes. UX win (one save, one toast, one round-trip), and shrinks the orchestrator state — no more `editField` / `editValue` strings shared across 15 inline fields.
+- **Inline edit kept narrow.** Hero: name + phone only. About panel: tags + notes only. Everything else moves into the drawer. The original "click any field to edit it" pattern was never used at scale because most fields are empty.
+- **Google favicon as logo source** (`https://www.google.com/s2/favicons?domain=...&sz=64`). No backend change, falls back to a slate first-letter avatar if domain is null or the request fails. Could swap to Clearbit later if we want higher-res logos.
+- **Default tab = Activity** is a behavioural change Jacob signed off on. Activity is the highest-traffic tab on existing customer companies; Contacts only matters when triaging new prospects (and there's a "+ Contact" button in the hero anyway).
+- **Discovery strip is its own visual zone**, not a sidebar section. The `discovered_shops` row is provenance, not a CRM-editable field — separating it visually makes that clear.
+
+### Mystery: duplicate-fields screenshot
+Jacob's screenshot showed Website / Industry / Category / Description / Employee Count / Annual Revenue / Revenue Range rendered **twice** in the sidebar. I grepped every label in source — each appears exactly once on `main`. Open PR #36 (`claude/loving-perlman` email warmup) doesn't touch the file. Can't reproduce locally and the screenshot doesn't match the source. Either a stale browser/Vercel cache, or a render-time artifact I couldn't see. **Either way, the redesign replaces the entire panel — symptom dies regardless.** Worth a re-screenshot after deploy to confirm.
+
+### Follow-ups
+- Phase-2 polish on the Edit drawer: form-level validation (e.g. URL fields should reject obvious garbage), Stripe-ID copy buttons in the read-only Google Maps section.
+- "Add Contact" / "Add Deal" / "Log activity" buttons currently just switch to the right tab. Wiring them to actually open creation flows is a separate task.
+- Consider extracting a `LifecycleBadge` from the inline coloring in hero.tsx into `components/ui/badge.tsx` once it's used in a third place.
+
+---
+
 ## Session: contacts page cleanup + churned lead_status from workshop state
 - **Date:** 2026-05-06
 - **PR:** TBD
