@@ -1,9 +1,9 @@
-// Map a cluster centroid to a Swedish municipality / district label.
-// Finer-grained than cardinal "Stockholm North/South" labels so 10 generated
-// clusters don't end up with 3 identical names. Each entry's coordinate is
-// the approximate town center; we pick the closest entry to the centroid.
-// Phase 5 replaces this with a stop-aware label derived from the actual
-// cities the route visits.
+// Route name builders.
+//
+// Phase 5 prefers a stop-aware label (`labelForStops`) — the actual cities the
+// route visits make a more useful name than any centroid-derived guess. The
+// older centroid mapping (`labelForCentroid`) is kept around as the fallback
+// when city data is missing on the chosen stops.
 
 const REGIONS: { name: string; lat: number; lng: number }[] = [
   // Stockholm — west / northwest
@@ -53,6 +53,10 @@ const REGIONS: { name: string; lat: number; lng: number }[] = [
 
 import { haversineKm } from "./cluster";
 
+const SEPARATOR = " · ";
+const SINGLE_DOMINANT_THRESHOLD = 0.7;
+const MULTI_DOMINANT_THRESHOLD = 0.8;
+
 export function labelForCentroid(lat: number, lng: number): string {
   let bestName = "Stockholm region";
   let bestD = Infinity;
@@ -68,4 +72,77 @@ export function labelForCentroid(lat: number, lng: number): string {
   // 80 km away would be misleading.
   if (bestD > 25) return "Stockholm region";
   return bestName;
+}
+
+export type LabelStop = {
+  city: string | null;
+  lat: number;
+  lng: number;
+};
+
+/**
+ * Stop-aware route name. Tallies city across the final stops and picks a
+ * dominant city / pair / triple, falling back to the centroid label when city
+ * data is missing on most stops.
+ */
+export function labelForStops(
+  stops: LabelStop[],
+  fallbackLat: number,
+  fallbackLng: number,
+): string {
+  if (stops.length === 0) return labelForCentroid(fallbackLat, fallbackLng);
+
+  // Tally non-blank cities (case-insensitive, trimmed).
+  const counts = new Map<string, { count: number; display: string }>();
+  let totalWithCity = 0;
+  for (const s of stops) {
+    if (!s.city) continue;
+    const trimmed = s.city.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { count: 1, display: trimmed });
+    totalWithCity++;
+  }
+
+  if (totalWithCity === 0) return labelForCentroid(fallbackLat, fallbackLng);
+  // If most stops are missing a city, the tally isn't representative —
+  // fall back to centroid mapping.
+  if (totalWithCity < stops.length / 2) {
+    return labelForCentroid(fallbackLat, fallbackLng);
+  }
+
+  const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
+  const total = stops.length;
+
+  // 1 city ≥ 70% share → just that city.
+  if (sorted[0].count / total >= SINGLE_DOMINANT_THRESHOLD) {
+    return sorted[0].display;
+  }
+
+  // 2 cities together ≥ 80% → join them.
+  if (sorted.length >= 2 && (sorted[0].count + sorted[1].count) / total >= MULTI_DOMINANT_THRESHOLD) {
+    return `${sorted[0].display}${SEPARATOR}${sorted[1].display}`;
+  }
+
+  // 3 cities together ≥ 80% → join all three.
+  if (
+    sorted.length >= 3 &&
+    (sorted[0].count + sorted[1].count + sorted[2].count) / total >= MULTI_DOMINANT_THRESHOLD
+  ) {
+    return `${sorted[0].display}${SEPARATOR}${sorted[1].display}${SEPARATOR}${sorted[2].display}`;
+  }
+
+  // Very mixed — top 2 + ellipsis.
+  if (sorted.length >= 2) {
+    return `${sorted[0].display}${SEPARATOR}${sorted[1].display} ...`;
+  }
+  return `${sorted[0].display} ...`;
+}
+
+/** Append the per-route mode tag in parens, but only for single-mode routes. */
+export function decorateLabelWithMode(label: string, mode: "mixed" | "cold" | "lapsed"): string {
+  if (mode === "mixed") return label;
+  return `${label} (${mode})`;
 }

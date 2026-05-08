@@ -1,11 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { generateDailyRoutes } from "@/lib/routes/generate";
+import { generateRoute, type RegionKey } from "@/lib/routes/generate";
 import { MissingApiKeyError } from "@/lib/routes/geocode";
 import { getUserOrigin } from "@/lib/routes/profile";
 
 export const maxDuration = 60;
+
+const VALID_REGIONS: RegionKey[] = [
+  "auto",
+  "stockholm-north",
+  "stockholm-south",
+  "stockholm-east",
+  "stockholm-west",
+  "uppsala",
+  "sodertalje",
+  "malardalen-west",
+  "norrtalje-area",
+];
+
+function isRegionKey(v: unknown): v is RegionKey {
+  return typeof v === "string" && (VALID_REGIONS as string[]).includes(v);
+}
+
+function isIsoDate(v: unknown): v is string {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -17,14 +37,19 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as {
     workspaceId?: string;
-    originOverride?: { address: string; lat: number; lng: number };
+    region?: string;
+    forDate?: string;
     forUserId?: string;
+    originOverride?: { address: string; lat: number; lng: number };
   };
 
   const workspaceId = body.workspaceId;
   if (!workspaceId) {
     return NextResponse.json({ error: "Missing workspaceId" }, { status: 400 });
   }
+
+  const region: RegionKey = isRegionKey(body.region) ? body.region : "auto";
+  const forDate = isIsoDate(body.forDate) ? body.forDate : null;
 
   const { data: membership } = await supabase
     .from("workspace_members")
@@ -34,7 +59,6 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // forUserId is admin-only. If absent, the calling user is the assignee.
   let assignedUserId = user.id;
   if (body.forUserId && body.forUserId !== user.id) {
     if (membership.role !== "admin") {
@@ -52,7 +76,6 @@ export async function POST(request: NextRequest) {
     assignedUserId = body.forUserId;
   }
 
-  // Resolve origin: explicit override → assignee's user_profiles → env defaults.
   let origin: { address: string; lat: number; lng: number } | null = null;
   if (body.originOverride) {
     origin = body.originOverride;
@@ -71,14 +94,37 @@ export async function POST(request: NextRequest) {
   const service = createServiceClient();
 
   try {
-    const summary = await generateDailyRoutes({
+    const result = await generateRoute({
       workspaceId,
       origin,
       generatedBy: user.id,
       assignedTo: assignedUserId,
+      region,
+      forDate,
       supabase: service,
     });
-    return NextResponse.json(summary);
+
+    if (!result.ok) {
+      const status =
+        result.error === "unavailable_date"
+          ? 409
+          : result.error === "routes_api_failed" || result.error === "persist_failed"
+            ? 500
+            : 400;
+      return NextResponse.json(
+        {
+          error: result.error,
+          reason: result.reason,
+          diagnostics: result.diagnostics,
+        },
+        { status },
+      );
+    }
+
+    return NextResponse.json({
+      route: result.route,
+      diagnostics: result.diagnostics,
+    });
   } catch (err) {
     if (err instanceof MissingApiKeyError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
