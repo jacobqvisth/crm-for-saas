@@ -14,6 +14,62 @@ updated: 2026-04-22
 
 ---
 
+## Session: Tag the Lemlist CSV cohort + add Tags filter
+- **Date:** 2026-05-08
+- **PR:** #157
+- **Branch:** `feature/lemlist-cohort-tagging`
+- **Merge commit:** `2a22a51` (squash-merged 2026-05-08 10:15 UTC)
+
+### Problem
+
+Hans had already sequenced ~1k Swedish workshops via Lemlist (3 emails apiece) before this CRM owned outreach. The Lemlist CSV import in March only tagged the **shop** layer (`discovered_shops.source='lemlist'`, 803 SE rows). Once those shops got promoted to companies via the discovery flow, the resulting **765 contacts** and **758 companies** had no Lemlist signal at all — they looked indistinguishable from any other discovered prospect, so anyone enrolling them in a fresh CRM sequence would silently double-send.
+
+The contacts page Source filter dropdown was visibly only showing `Discovery` even though `'lemlist'` was already declared in `ALL_SOURCES` — because no row actually had `source='lemlist'` for the dropdown's distinct-values fetch to find.
+
+### What was built
+
+**1. Data backfill** — `supabase/migrations/20260508000000_backfill_lemlist_cohort.sql`. Joins `discovered_shops` (`source='lemlist'`) → `companies` → `contacts` and:
+- Sets `contacts.source='lemlist'` (so the existing Source multi-select surfaces Lemlist).
+- Appends `'lemlist-csv'` to `contacts.tags` and `companies.tags` (no-op if already present — idempotent).
+- Copies surviving Lemlist provenance into `contacts.custom_fields.lemlist`: campaigns, owner, addedToLemlist, firstContactedDate, lastContactedDate, lastRepliedDate, isActiveInCampaigns, leadStatus. `jsonb_strip_nulls` drops empty fields.
+
+Applied via psql before merge:
+| | count |
+|---|---:|
+| contacts source=lemlist | 765 |
+| contacts tagged lemlist-csv | 765 |
+| contacts with custom_fields.lemlist | 765 |
+| companies tagged lemlist-csv | 758 |
+
+**2. Tags filter UI** — added a new MultiSelect to `/contacts`:
+- `LocalFilters.tags: string[]` + `DEFAULT_FILTERS` entry.
+- Paginated effect that fetches every distinct tag in the workspace and dedupes client-side (~10 round-trips for the 10k-contact workspace). `<MultiSelect allLabel="tags">` next to Has-account.
+- Wired into both the client list query (`.overlaps('tags', ...)`) and the server resolver `resolveContactIdsByFilters` so select-all-matching stays consistent.
+- `ContactFilters.tags` accepts `string | string[]` (PR #156 multi-select pattern). `.overlaps()` for OR-semantics.
+
+### Notable decisions
+
+- **Did NOT keep `contacts.source='discovery'`** for the cohort. Strict provenance would say the contact rows came from the discovery flow, not from a Lemlist CSV (Lemlist created the *shop*, not the contact). But Jacob's UX intuition matched the cohort to Lemlist directly, and the Source filter is the most natural surface — so we set `source='lemlist'`. The "discovered_shops created the row" lineage still lives in `discovered_shops.crm_company_id` if anyone needs to reconstruct it.
+- **Did NOT touch `companies.source`.** It's nullable and inconsistently used today (only 269 rows have it, all `wl-app`). Tags are the cleaner company-level signal.
+- **Did NOT add an enrollment-time guardrail** (refuse to enroll `lemlist-csv`-tagged contacts). That's the obvious next step — but tags + filter ship the visibility today; the guardrail can be its own PR with a confirm-override.
+- **Tag fetching is paginated client-side** rather than via an RPC. With 10k contacts, ~10 round-trips on first load is acceptable, and avoids adding a SECURITY DEFINER `distinct_contact_tags(workspace)` migration just for the dropdown.
+
+### Build / verify
+
+- `npm run build` green
+- `npm run lint` green
+- `npx tsc --noEmit` green
+- Prod deploy 200 (307 auth redirect on unauthenticated probe — expected)
+
+### Follow-ups
+
+- **Enrollment guardrail** — block (or warn-and-confirm) sequence enrollment for contacts tagged `lemlist-csv` so even if a user forgets to filter, double-sends are caught.
+- **Apply the same tagging to NO/PL when those scrapes import** — the gitignored `scripts/lemlist-no-pl-history.json` (926 rows) is still waiting. When it lands, repeat the migration with the appropriate source filter.
+- **Surface `custom_fields.lemlist` on the contact detail page** — campaigns/owner/dates are useful on the contact card ("Imported from Lemlist 2026-03-20, campaign Meko_Autoexperten_BDS_SE, opened email").
+- **Companies page Tags filter** — the contacts page now has it; the companies page doesn't yet. Same pattern would apply.
+
+---
+
 ## Session: Field Routes — Phase 4 (per-rep origins, PTO calendar, revisit interval, multi-rep)
 - **Date:** 2026-05-07
 - **PR:** #150
