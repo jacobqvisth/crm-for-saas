@@ -34,6 +34,29 @@ type Member = {
 
 type Scope = "mine" | "all";
 
+type Region =
+  | "auto"
+  | "stockholm-north"
+  | "stockholm-south"
+  | "stockholm-east"
+  | "stockholm-west"
+  | "uppsala"
+  | "sodertalje"
+  | "malardalen-west"
+  | "norrtalje-area";
+
+const REGION_LABELS: Record<Region, string> = {
+  auto: "Auto (smart pick)",
+  "stockholm-north": "Stockholm North",
+  "stockholm-south": "Stockholm South",
+  "stockholm-east": "Stockholm East",
+  "stockholm-west": "Stockholm West",
+  uppsala: "Uppsala",
+  sodertalje: "Södertälje",
+  "malardalen-west": "Mälardalen West",
+  "norrtalje-area": "Norrtälje area",
+};
+
 const MODE_BADGE: Record<RouteRow["mode"], string> = {
   mixed: "bg-violet-100 text-violet-700 border-violet-200",
   cold: "bg-sky-100 text-sky-700 border-sky-200",
@@ -64,6 +87,8 @@ export default function RoutesPage() {
   const [generating, setGenerating] = useState(false);
   const [scope, setScope] = useState<Scope>("mine");
   const [generateFor, setGenerateFor] = useState<string | null>(null);
+  const [region, setRegion] = useState<Region>("auto");
+  const [forDate, setForDate] = useState<string>("");
 
   const currentUser = useMemo(() => members.find((m) => m.is_current_user) ?? null, [members]);
   const isAdmin = currentUser?.role === "admin";
@@ -110,10 +135,11 @@ export default function RoutesPage() {
     }
     setGenerating(true);
     try {
-      const body: Record<string, unknown> = { workspaceId };
+      const body: Record<string, unknown> = { workspaceId, region };
       if (generateFor && generateFor !== currentUser?.user_id) {
         body.forUserId = generateFor;
       }
+      if (forDate) body.forDate = forDate;
       const res = await fetch("/api/routes/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,10 +147,10 @@ export default function RoutesPage() {
       });
       const result = await res.json();
       if (!res.ok) {
-        toast.error(result.error ?? "Generation failed");
+        toast.error(result.reason ?? result.error ?? "Generation failed");
         return;
       }
-      toast.success(`Generated ${result.routesCreated} routes`);
+      toast.success(`Generated route: ${result.route.clusterLabel}`);
       fetchRoutes();
     } catch (err) {
       console.error(err);
@@ -141,14 +167,15 @@ export default function RoutesPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold text-slate-900">Field routes</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && members.length > 1 && (
             <select
               value={generateFor ?? currentUser?.user_id ?? ""}
               onChange={(e) => setGenerateFor(e.target.value || null)}
               className="text-xs border border-slate-200 rounded px-2 py-1.5 text-slate-700 bg-white"
+              aria-label="Generate for"
             >
               {members.map((m) => (
                 <option key={m.user_id} value={m.user_id}>
@@ -157,13 +184,38 @@ export default function RoutesPage() {
               ))}
             </select>
           )}
+          <label className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+            Where?
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value as Region)}
+              className="text-xs border border-slate-200 rounded px-2 py-1.5 text-slate-700 bg-white"
+              aria-label="Region"
+            >
+              {(Object.keys(REGION_LABELS) as Region[]).map((key) => (
+                <option key={key} value={key}>
+                  {REGION_LABELS[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+            For when?
+            <input
+              type="date"
+              value={forDate}
+              onChange={(e) => setForDate(e.target.value)}
+              className="text-xs border border-slate-200 rounded px-2 py-1.5 text-slate-700 bg-white"
+              aria-label="Schedule for date"
+            />
+          </label>
           <button
             onClick={handleGenerate}
             disabled={generating || !workspaceId}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapIcon className="w-4 h-4" />}
-            {generating ? "Generating…" : "Generate today's routes"}
+            {generating ? "Generating…" : "Generate route"}
           </button>
         </div>
       </div>
@@ -199,7 +251,7 @@ export default function RoutesPage() {
         </div>
       ) : routes.length === 0 ? (
         <div className="text-center py-12 text-slate-500 text-sm">
-          No routes here. Click <span className="font-medium">Generate today&apos;s routes</span> to make some.
+          No routes here. Click <span className="font-medium">Generate route</span> to make one.
         </div>
       ) : (
         <>
