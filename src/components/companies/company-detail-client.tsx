@@ -320,6 +320,8 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
           <CompanyTabs
             activeTab={activeTab}
             onChangeTab={setActiveTab}
+            company={company}
+            outreachStatus={outreachStatus}
             contacts={contacts}
             deals={deals}
             activities={activities}

@@ -18,7 +18,7 @@ export type DealRow = {
 
 export type CompanyRef = { id: string; name: string };
 
-export type TabId = 'activity' | 'contacts' | 'deals' | 'subscriptions' | 'usage';
+export type TabId = 'activity' | 'contacts' | 'deals' | 'statuses' | 'subscriptions' | 'usage';
 
 export const INDUSTRIES = [
   'Technology', 'Healthcare', 'Finance', 'Education', 'Manufacturing',

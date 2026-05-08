@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Activity as ActivityIcon } from 'lucide-react';
 import { LeadStatusBadge, DealStageBadge } from '@/components/ui/badge';
+import { StatusesTab } from './statuses-tab';
+import type { OutreachStatus } from './status';
 import type {
-  Activity, Contact, DealRow, Subscription, UsageEvent, TabId,
+  Activity, Company, Contact, DealRow, Subscription, UsageEvent, TabId,
 } from './types';
 
 type TabSpec = { id: TabId; label: string; count?: number; show: boolean };
@@ -13,6 +15,8 @@ type TabSpec = { id: TabId; label: string; count?: number; show: boolean };
 interface TabsProps {
   activeTab: TabId;
   onChangeTab: (id: TabId) => void;
+  company: Company;
+  outreachStatus: OutreachStatus;
   contacts: Contact[];
   deals: DealRow[];
   activities: Activity[];
@@ -21,13 +25,14 @@ interface TabsProps {
 }
 
 export function CompanyTabs({
-  activeTab, onChangeTab,
+  activeTab, onChangeTab, company, outreachStatus,
   contacts, deals, activities, subscriptions, usageEvents,
 }: TabsProps) {
   const tabs: TabSpec[] = [
     { id: 'activity',      label: 'Activity',      count: activities.length || undefined,    show: true },
     { id: 'contacts',      label: 'Contacts',      count: contacts.length,                   show: true },
     { id: 'deals',         label: 'Deals',         count: deals.length,                      show: true },
+    { id: 'statuses',      label: 'Statuses',      show: true },
     { id: 'subscriptions', label: 'Subscriptions', count: subscriptions.length,              show: subscriptions.length > 0 },
     { id: 'usage',         label: 'App usage',     count: usageEvents.length,                show: usageEvents.length > 0 },
   ];
@@ -54,6 +59,7 @@ export function CompanyTabs({
         {activeTab === 'activity' && <ActivityTab activities={activities} />}
         {activeTab === 'contacts' && <ContactsTab contacts={contacts} />}
         {activeTab === 'deals' && <DealsTab deals={deals} />}
+        {activeTab === 'statuses' && <StatusesTab company={company} outreachStatus={outreachStatus} />}
         {activeTab === 'subscriptions' && <SubscriptionsTab subscriptions={subscriptions} />}
         {activeTab === 'usage' && <UsageTab usageEvents={usageEvents} contacts={contacts} />}
       </div>
