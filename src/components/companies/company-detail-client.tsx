@@ -15,6 +15,10 @@ import { DiscoveryStrip } from './detail/discovery-strip';
 import { AboutPanel } from './detail/about-panel';
 import { EditDrawer } from './detail/edit-drawer';
 import { CompanyTabs } from './detail/tabs';
+import { AddContactModal } from './detail/add-contact-modal';
+import { AddDealModal } from './detail/add-deal-modal';
+import { LogActivityModal } from './detail/log-activity-modal';
+import { deriveOutreachStatus } from './detail/status';
 import type {
   Company, Contact, Activity, Subscription, UsageEvent, DiscoveredShop,
   DealRow, CompanyRef, TabId,
@@ -38,6 +42,9 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [addDealOpen, setAddDealOpen] = useState(false);
+  const [logActivityOpen, setLogActivityOpen] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -204,9 +211,63 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     router.push('/companies');
   };
 
-  const goToContactsTab = () => setActiveTab('contacts');
-  const goToDealsTab = () => setActiveTab('deals');
-  const goToActivityTab = () => setActiveTab('activity');
+  const refetchContacts = async () => {
+    if (!workspaceId) return [] as Contact[];
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    const next = data ?? [];
+    setContacts(next);
+    return next;
+  };
+
+  const refetchDeals = async () => {
+    if (!workspaceId) return;
+    const { data } = await supabase
+      .from('deals')
+      .select('id, name, amount, stage, owner_id, expected_close_date')
+      .eq('workspace_id', workspaceId)
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    if (data) setDeals(data);
+  };
+
+  const refetchActivities = async (latestContacts?: Contact[]) => {
+    if (!workspaceId) return;
+    const cs = latestContacts ?? contacts;
+    const contactIds = cs.map((c) => c.id);
+    let q = supabase
+      .from('activities')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    q = contactIds.length > 0
+      ? q.or(`company_id.eq.${companyId},contact_id.in.(${contactIds.join(',')})`)
+      : q.eq('company_id', companyId);
+    const { data } = await q;
+    if (data) setActivities(data);
+  };
+
+  const handleContactCreated = async () => {
+    const next = await refetchContacts();
+    await refetchActivities(next);
+    setActiveTab('contacts');
+  };
+
+  const handleDealCreated = async () => {
+    await refetchDeals();
+    await refetchActivities();
+    setActiveTab('deals');
+  };
+
+  const handleActivityLogged = async () => {
+    await refetchActivities();
+    setActiveTab('activity');
+  };
 
   if (loading) {
     return (
@@ -219,15 +280,21 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
   if (!company) return null;
 
   const parentCompany = allCompanies.find((c) => c.id === company.parent_company_id);
+  const outreachStatus = deriveOutreachStatus(contacts);
+  const contactOptions = contacts.map((c) => ({
+    id: c.id,
+    label: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email,
+  }));
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <CompanyHero
         company={company}
+        outreachStatus={outreachStatus}
         onUpdate={updateField}
-        onAddContact={goToContactsTab}
-        onAddDeal={goToDealsTab}
-        onLogActivity={goToActivityTab}
+        onAddContact={() => setAddContactOpen(true)}
+        onAddDeal={() => setAddDealOpen(true)}
+        onLogActivity={() => setLogActivityOpen(true)}
         onDelete={() => setShowDeleteConfirm(true)}
       />
 
@@ -271,6 +338,36 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
         onSave={updatePatch}
         onSaveCustomFields={updateCustomFields}
       />
+
+      {workspaceId && (
+        <>
+          <AddContactModal
+            open={addContactOpen}
+            onClose={() => setAddContactOpen(false)}
+            companyId={company.id}
+            companyName={company.name}
+            workspaceId={workspaceId}
+            onCreated={handleContactCreated}
+          />
+          <AddDealModal
+            open={addDealOpen}
+            onClose={() => setAddDealOpen(false)}
+            companyId={company.id}
+            companyName={company.name}
+            workspaceId={workspaceId}
+            onCreated={handleDealCreated}
+          />
+          <LogActivityModal
+            open={logActivityOpen}
+            onClose={() => setLogActivityOpen(false)}
+            companyId={company.id}
+            companyName={company.name}
+            contactOptions={contactOptions}
+            workspaceId={workspaceId}
+            onLogged={handleActivityLogged}
+          />
+        </>
+      )}
 
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Company">
         <p className="text-sm text-slate-600 mb-4">

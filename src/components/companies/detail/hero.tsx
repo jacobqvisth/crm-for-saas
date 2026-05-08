@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Plus, MoreHorizontal, ExternalLink, Pencil, Trash2,
+  ArrowLeft, Plus, MoreHorizontal, ExternalLink, Pencil, Trash2, Building2,
 } from 'lucide-react';
 import type { Company } from './types';
+import { OUTREACH_LABEL, OUTREACH_COLOR, type OutreachStatus } from './status';
 
 interface HeroProps {
   company: Company;
+  outreachStatus: OutreachStatus;
   onUpdate: (field: keyof Company, value: string | null) => void;
   onAddContact: () => void;
   onAddDeal: () => void;
@@ -17,7 +19,7 @@ interface HeroProps {
 }
 
 export function CompanyHero({
-  company, onUpdate, onAddContact, onAddDeal, onLogActivity, onDelete,
+  company, outreachStatus, onUpdate, onAddContact, onAddDeal, onLogActivity, onDelete,
 }: HeroProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const faviconUrl = company.domain
@@ -81,7 +83,7 @@ export function CompanyHero({
               />
             )}
           </div>
-          <Badges company={company} />
+          <Badges company={company} outreachStatus={outreachStatus} />
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -135,9 +137,27 @@ export function CompanyHero({
   );
 }
 
-function Badges({ company }: { company: Company }) {
-  const badges: Array<{ key: string; label: string; cls: string }> = [];
+function Badges({ company, outreachStatus }: { company: Company; outreachStatus: OutreachStatus }) {
+  type Badge = { key: string; label: React.ReactNode; cls: string; capitalize?: boolean };
+  const badges: Badge[] = [];
 
+  // Account presence — App user (has wl_workshop_id) vs Prospect (no account yet)
+  if (company.wl_workshop_id) {
+    badges.push({
+      key: 'account',
+      label: (
+        <span className="inline-flex items-center gap-1">
+          <Building2 className="w-3 h-3" />
+          App user
+        </span>
+      ),
+      cls: 'bg-violet-100 text-violet-700',
+    });
+  } else {
+    badges.push({ key: 'account', label: 'Prospect', cls: 'bg-slate-100 text-slate-600' });
+  }
+
+  // Lifecycle (commercial state)
   if (company.lifecycle_stage) {
     const stage = company.lifecycle_stage;
     const cls =
@@ -146,25 +166,40 @@ function Badges({ company }: { company: Company }) {
       stage === 'churned'      ? 'bg-red-100 text-red-700' :
       stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :
                                  'bg-slate-100 text-slate-700';
-    badges.push({ key: 'lifecycle', label: stage, cls });
+    badges.push({ key: 'lifecycle', label: stage, cls, capitalize: true });
   }
+
+  // Customer status (operational, only if distinct from lifecycle)
   if (company.customer_status && company.customer_status !== company.lifecycle_stage) {
-    badges.push({ key: 'cstatus', label: company.customer_status, cls: 'bg-slate-100 text-slate-700' });
+    badges.push({
+      key: 'cstatus',
+      label: company.customer_status,
+      cls: 'bg-slate-100 text-slate-700',
+      capitalize: true,
+    });
   }
+
+  // Outreach (derived from contact lead_status)
+  badges.push({
+    key: 'outreach',
+    label: OUTREACH_LABEL[outreachStatus],
+    cls: OUTREACH_COLOR[outreachStatus],
+  });
+
+  // Category / industry (descriptive, last)
   if (company.category) {
-    badges.push({ key: 'cat', label: company.category, cls: 'bg-cyan-100 text-cyan-700' });
+    badges.push({ key: 'cat', label: company.category, cls: 'bg-cyan-100 text-cyan-700', capitalize: true });
   }
   if (company.industry) {
     badges.push({ key: 'ind', label: company.industry, cls: 'bg-indigo-100 text-indigo-700' });
   }
 
-  if (badges.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
       {badges.map((b) => (
         <span
           key={b.key}
-          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${b.cls}`}
+          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${b.capitalize ? 'capitalize' : ''} ${b.cls}`}
         >
           {b.label}
         </span>

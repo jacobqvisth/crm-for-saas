@@ -11,11 +11,16 @@ interface AddDealFormProps {
   pipelineId: string;
   stages: PipelineStage[];
   defaultStage?: string;
+  defaultCompanyId?: string;
+  hideCompanyPicker?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export function AddDealForm({ pipelineId, stages, defaultStage, onSuccess, onCancel }: AddDealFormProps) {
+export function AddDealForm({
+  pipelineId, stages, defaultStage, defaultCompanyId, hideCompanyPicker,
+  onSuccess, onCancel,
+}: AddDealFormProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
 
@@ -24,7 +29,7 @@ export function AddDealForm({ pipelineId, stages, defaultStage, onSuccess, onCan
     amount: '',
     stage: defaultStage || stages[0]?.name || '',
     expected_close_date: '',
-    company_id: '',
+    company_id: defaultCompanyId || '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -165,6 +170,7 @@ export function AddDealForm({ pipelineId, stages, defaultStage, onSuccess, onCan
         </select>
       </div>
 
+      {!hideCompanyPicker && (
       <div ref={companyRef} className="relative">
         <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
         <div className="relative">
@@ -212,6 +218,7 @@ export function AddDealForm({ pipelineId, stages, defaultStage, onSuccess, onCan
           </div>
         )}
       </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Expected Close Date</label>
