@@ -2379,3 +2379,75 @@ Section nav, drilldown links, and `revalidatePath` calls still pointed at `/dash
 - **`core_app` sync bug** — dedupe user_ids/workshop_ids in JS before the bulk upsert call (`src/lib/ceo/sync/sources/core-app.ts`). 6 of 7 sources are unaffected; data won't drift fast (twice-daily schedule + each user's stats get rewritten on next sync anyway).
 - **2-week verification window** then retire: archive `jacobqvisth/wl-dashboard` GitHub repo, delete the `wl-dashboard` Vercel project, delete the `ivjlbknopdvadawjqpxl` Supabase project (~$25/mo savings).
 - **Phase-2 Tailwind rewrite** of CEO content components — replace 100+ bespoke class names from `ceo-legacy.css` with Tailwind/CRM patterns, file by file.
+
+## 2026-05-08 — Field Routes Phase 5: smart single-route generation + quality scoring (PR #152)
+
+- **PR:** #152 (squash `6c50a92`)
+- **Branch:** `feature/field-routes-phase5`
+- **Saved prompt:** `_prompts/cc-prompt-field-routes-phase5.md` in the planning vault
+
+### What was built
+
+Replaces the Phase 1 "generate 10 routes per click → user picks one" flow with "generate the single best route per click". Backend scores candidate clusters on five signals, picks one, scores stops within it, and produces a stop-aware label like `Solna · Sundbyberg` instead of a centroid guess.
+
+**New library code (all under `src/lib/routes/`):**
+- `cluster-rank.ts` — pure 5-signal cluster scorer.
+- `stop-score.ts` — pure 6-signal per-stop scorer.
+- `engagement.ts` — fetches `lastEmailedAt` (90-day window) + `hasRecentPositiveEngagement` (30-day open/click/reply) per company. `.in()` chunked at 200 (PR #99 pattern).
+- `cluster-label.ts` — adds `labelForStops` (city tally, 70% / 80% share rules, ellipsis fallback) + `decorateLabelWithMode`. Centroid mapping (`labelForCentroid`, the 38-town list from PR #149) kept as fallback when city data is missing on most stops.
+
+**Refactor:**
+- `generate.ts` — adds `generateRoute` (single-route orchestrator). Legacy `generateDailyRoutes` left untouched so the existing batch test keeps working.
+- `/api/routes/generate` — new request body (`region`, `forDate`), new response shape (`{ route, diagnostics }`). Status codes: 400 `no_eligible_cluster`, 409 `unavailable_date`, 500 `routes_api_failed` / `persist_failed`.
+- `/routes` page — singular "Generate route" button + Where? dropdown (Auto + 8 region keys) + For when? date picker. Bulk flow removed.
+
+### Cluster-rank weights chosen (final)
+
+| Signal | Weight | Rationale |
+|---|---:|---|
+| Lapsed density | 5 | Pre-prompt was 30. Dropped because no companies have `activated_at` set yet (signal is flat zero across the workspace). Bump back up when activation data lands. |
+| Avg freshness | 30 | Was 25. Picked up the redistribution. |
+| Quality density | 30 | Was 20. Uses NULL-rating half-credit at the cluster layer (`(count_4plus + 0.5 × count_null) / total`) — `companies.rating` is mostly null today, so a strict ≥4 % count would crush this signal. |
+| Compactness | 20 | Was 15. |
+| Outreach restraint | 15 | Was 10. 90-day cap; default 90 if no email history. |
+
+### Engagement-recency window
+Hard-coded 30-day window for the open/click/reply check (`ENGAGEMENT_LOOKBACK_DAYS` in `src/lib/routes/engagement.ts:14`). Outreach-restraint window is separately configured at 90 days (`OUTREACH_LOOKBACK_DAYS:13`).
+
+### Route mode derivation
+Computed on FINAL stops after Routes API + day-window trim (not on the candidate pool):
+- `mode = 'lapsed'` if ≥80% of final stops have `activated_at IS NOT NULL`
+- `mode = 'cold'` if ≥80% of final stops have `activated_at IS NULL`
+- `mode = 'mixed'` otherwise
+
+Single-mode routes get a `(lapsed)` or `(cold)` suffix on the label; mixed-mode routes don't.
+
+### `forDate` semantics
+- Empty → skips Phase 4 PTO + working-day check. `min_revisit_interval_days` always applies (date-independent).
+- Provided → all Phase 4 checks active before generation. PATCH `/api/routes/[id]` schedule guard from Phase 4 still re-runs PTO/working-day if Hans picks a date later, so empty `forDate` defers the calendar check rather than bypassing it.
+
+### Build / lint / tsc
+- `npm run build` green
+- `npm run lint` green (eslint src/)
+- `npx tsc --noEmit` green
+- New unit suites: 15/15 passing (cluster-rank · stop-score · cluster-label)
+- Existing `generate.test.ts` is **flaky on `main`** (~50% pass rate when run repeatedly) due to k-means++ `Math.random` init — pre-existing, not introduced by this PR. Worth a follow-up to seed the RNG or rewrite the test against deterministic input.
+
+### Deploy verification
+- Prod URL: https://crm-for-saas.vercel.app — returns 307 (auth redirect, expected)
+- `/api/routes/generate` POST without auth → 401 `Unauthorized` ✅
+
+### First-run diagnostics
+Not captured in this session — Hans hasn't run the new generator against the real workspace yet. Next session should grab one run's `diagnostics` payload (`consideredClusters`, `chosenClusterScore`, `cityCoverage`, `fellBackToCentroidLabel`) and add to the log so we have a baseline.
+
+### Notable decisions
+- **Legacy `generateDailyRoutes` left in place** instead of renamed to `generateRouteBatch`. The endpoint switches to `generateRoute`, but keeping the old export avoids touching the existing `generate.test.ts` test file (already flaky for unrelated reasons).
+- **Region centers hard-coded** in `src/lib/routes/generate.ts:REGION_CENTERS`. 8 regions × 25 km radius. If Jacob wants to add a region (say "Gotland"), it's a one-line change in that map.
+- **The labeling is two-stage**: `labelForStops` does the city tally; `labelForCentroid` is invoked from inside `labelForStops` when most stops have NULL `city`. So the 38-town list still earns its keep, but only as a graceful fallback for legacy data.
+- **`scripts/diagnose-min-interval-column.mjs`** noticed during pre-flight as an untracked file — it's investigating `gmail_accounts.min_send_interval_seconds` (an email-sending column), unrelated to Phase 4's `companies.min_revisit_interval_days`. Not deleted, not committed; left for whichever session that script belonged to.
+
+### Follow-ups
+- **Bump lapsed-density weight back up** when activation data starts populating. The 5/100 weight is intentionally light, not principled — the signal works fine, the *data* doesn't yet exist.
+- **Seed k-means++ RNG** — fixes the flake in `generate.test.ts` and would also make Phase 5's "Auto picks a cluster" reproducible across consecutive clicks (a soft win for predictability).
+- **Stop-quality on the Add Stop tab** (Phase 6 candidate per the prompt's out-of-scope list) — the Phase 4 add tab is geography-only; folding the Phase 5 stop-score in there would let Hans hand-tune routes with the same ranking signals.
+- **Schedule-aware "auto-schedule"** (Phase 6 candidate) — once a route is generated for `forDate=null`, Phase 6 could optionally pick the next available working day for the assignee instead of leaving `scheduled_for` null.
