@@ -71,10 +71,12 @@ export function WorkshopListContent({
   items,
   query,
   status,
+  showInternal,
 }: {
   items: WorkshopListItem[];
   query: string;
   status: string;
+  showInternal: boolean;
 }) {
   const live = items.filter(
     (item) => item.status === "active" || item.status === "trialing",
@@ -152,10 +154,19 @@ export function WorkshopListContent({
             <option value="inactive">Inactive</option>
             <option value="unknown">Unknown</option>
           </select>
+          <label className="filter-toggle">
+            <input
+              type="checkbox"
+              name="showInternal"
+              value="1"
+              defaultChecked={showInternal}
+            />
+            <span>Show internal</span>
+          </label>
           <button className="button button-primary" type="submit">
             Apply
           </button>
-          {(query || status !== "all") && (
+          {(query || status !== "all" || showInternal) && (
             <Link className="button" href="/ceo/workshops">
               Clear
             </Link>
@@ -198,9 +209,19 @@ export function WorkshopListContent({
                 <tr key={item.workshopId}>
                   <td>
                     <div className="table-primary">
-                      <Link href={`/ceo/workshops/${item.workshopId}`}>
-                        <strong>{item.name}</strong>
-                      </Link>
+                      <span className="table-primary-name">
+                        <Link href={`/ceo/workshops/${item.workshopId}`}>
+                          <strong>{item.name}</strong>
+                        </Link>
+                        {item.isInternal ? (
+                          <span
+                            className="internal-pill"
+                            title="Internal-test workshop — excluded from production metrics"
+                          >
+                            Internal
+                          </span>
+                        ) : null}
+                      </span>
                       <span>
                         {[
                           item.country ?? "No country",
@@ -263,7 +284,25 @@ function MemberList({ members }: { members: WorkshopMember[] }) {
         return (
           <div className="bar-row" key={member.internalUserId}>
             <div className="bar-row-copy">
-              <strong>{primaryLabel}</strong>
+              <span className="table-primary-name">
+                <strong>{primaryLabel}</strong>
+                {member.isInternal ? (
+                  <span
+                    className="internal-pill"
+                    title="Internal-test user — excluded from production metrics"
+                  >
+                    Internal
+                  </span>
+                ) : null}
+                {member.isInternalExempt ? (
+                  <span
+                    className="internal-pill exempt"
+                    title="Exempt from the internal-workshop blanket exclusion — counted in production metrics"
+                  >
+                    Exempt
+                  </span>
+                ) : null}
+              </span>
               <span>{subLabel}</span>
             </div>
             <div className="bar-row-main text-value">
@@ -293,7 +332,17 @@ export function WorkshopDetailContent({
               Back to workshops
             </Link>
             <p className="eyebrow">Workshop Detail</p>
-            <h2>{workshop.name}</h2>
+            <h2 className="table-primary-name">
+              <span>{workshop.name}</span>
+              {workshop.isInternal ? (
+                <span
+                  className="internal-pill"
+                  title="Internal-test workshop — excluded from production metrics"
+                >
+                  Internal
+                </span>
+              ) : null}
+            </h2>
             <p className="hero-text">
               {workshop.country ?? "No country yet"} ·{" "}
               {workshop.emailDomains.join(", ") || "No email domain"} ·{" "}

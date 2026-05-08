@@ -1,4 +1,7 @@
-import { isInternalTestUserOrWorkshop } from "@/config/ceo/internal-test-users";
+import {
+  isInternalTestUserOrWorkshopWith,
+  loadInternalTestSets,
+} from "@/lib/ceo/internal-test/loader";
 import {
   type AppUsageGranularity,
   bucketKey,
@@ -190,11 +193,22 @@ export async function getNewUsersData(
   // Activated, and Avg-days-to-activate all flow from these arrays. iOS /
   // Android / Web columns come from store + GA4 aggregates with no user
   // identity, so they're left alone.
+  const internalTestSets = await loadInternalTestSets();
   const allUsers = allUsersRaw.filter(
-    (u) => !isInternalTestUserOrWorkshop(u.internal_user_id, u.workshop_id),
+    (u) =>
+      !isInternalTestUserOrWorkshopWith(
+        internalTestSets,
+        u.internal_user_id,
+        u.workshop_id,
+      ),
   );
   const allDiagnostics = allDiagnosticsRaw.filter(
-    (d) => !isInternalTestUserOrWorkshop(d.internal_user_id, d.workshop_id),
+    (d) =>
+      !isInternalTestUserOrWorkshopWith(
+        internalTestSets,
+        d.internal_user_id,
+        d.workshop_id,
+      ),
   );
 
   const coverage = {

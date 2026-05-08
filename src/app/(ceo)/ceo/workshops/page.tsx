@@ -10,6 +10,7 @@ type WorkshopsPageProps = {
     range?: string | string[];
     q?: string | string[];
     status?: string | string[];
+    showInternal?: string | string[];
   }>;
 };
 
@@ -35,6 +36,11 @@ function matchesStatus(status: string | null, filter: string) {
   return (status ?? "unknown") === filter;
 }
 
+function asBool(value: string | string[] | undefined) {
+  const next = asString(value).trim().toLowerCase();
+  return next === "1" || next === "true" || next === "on";
+}
+
 export default async function WorkshopsDashboardPage({
   searchParams,
 }: WorkshopsPageProps) {
@@ -43,9 +49,10 @@ export default async function WorkshopsDashboardPage({
   const rawQuery = asString(params.q).trim();
   const query = rawQuery.toLowerCase();
   const status = asString(params.status) || "all";
+  const showInternal = asBool(params.showInternal);
   const [data, workshops] = await Promise.all([
     getDashboardData(range),
-    getWorkshopDrilldownList(),
+    getWorkshopDrilldownList({ includeInternal: showInternal }),
   ]);
 
   const filtered = workshops.filter((item) => {
@@ -67,7 +74,12 @@ export default async function WorkshopsDashboardPage({
 
   return (
     <DashboardShell data={data} section="workshops">
-      <WorkshopListContent items={filtered} query={rawQuery} status={status} />
+      <WorkshopListContent
+        items={filtered}
+        query={rawQuery}
+        status={status}
+        showInternal={showInternal}
+      />
     </DashboardShell>
   );
 }

@@ -15,6 +15,10 @@ import {
   getCoreAppLastSyncedAt,
 } from "@/lib/ceo/data/sync-freshness";
 import {
+  listInternalTestUsers,
+  listInternalTestWorkshops,
+} from "@/lib/ceo/internal-test/loader";
+import {
   normalizeDashboardTimeRangeKey,
   resolveDashboardTimeRange,
 } from "@/lib/ceo/time-ranges";
@@ -30,10 +34,18 @@ export default async function AppUsagePage({
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
   const platform = normalizeAppUsagePlatform(params.platform);
   const resolvedRange = resolveDashboardTimeRange(rangeKey);
-  const [data, usage, lastSyncedAt] = await Promise.all([
+  const [
+    data,
+    usage,
+    lastSyncedAt,
+    internalTestUsers,
+    internalTestWorkshops,
+  ] = await Promise.all([
     getDashboardData(params.range),
     getAppUsageData(resolvedRange, platform),
     getCoreAppLastSyncedAt(),
+    listInternalTestUsers(),
+    listInternalTestWorkshops(),
   ]);
 
   return (
@@ -52,7 +64,11 @@ export default async function AppUsagePage({
         </>
       }
     >
-      <AppUsageContent usage={usage} />
+      <AppUsageContent
+        usage={usage}
+        internalTestUsers={internalTestUsers}
+        internalTestWorkshops={internalTestWorkshops}
+      />
     </DashboardShell>
   );
 }

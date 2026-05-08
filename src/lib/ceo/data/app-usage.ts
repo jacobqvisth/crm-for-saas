@@ -1,5 +1,8 @@
 import { google } from "googleapis";
-import { isInternalTestUserOrWorkshop } from "@/config/ceo/internal-test-users";
+import {
+  isInternalTestUserOrWorkshopWith,
+  loadInternalTestSets,
+} from "@/lib/ceo/internal-test/loader";
 import { addUtcDays, toIsoDate } from "@/lib/ceo/dates";
 import { getEnv, hasSupabaseConfig } from "@/lib/ceo/env";
 import { createGoogleAuth } from "@/lib/ceo/sync/google-auth";
@@ -320,8 +323,15 @@ async function getDiagnosisCountsByBucket(
     return counts;
   }
 
+  const internalTestSets = await loadInternalTestSets();
   for (const row of (data ?? []) as DiagnosticRow[]) {
-    if (isInternalTestUserOrWorkshop(row.internal_user_id, row.workshop_id)) {
+    if (
+      isInternalTestUserOrWorkshopWith(
+        internalTestSets,
+        row.internal_user_id,
+        row.workshop_id,
+      )
+    ) {
       continue;
     }
     if (!row.created_at) continue;
