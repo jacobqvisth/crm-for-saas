@@ -14,6 +14,172 @@ updated: 2026-04-22
 
 ---
 
+## Session: Contacts page — customizable columns (PR #162)
+- **Date:** 2026-05-08
+- **PR:** #162
+- **Branch:** `feature/contacts-customizable-columns`
+
+### What changed
+A "Columns" button in the contacts header opens a SlideOver where the user toggles which columns are visible and drags the visible ones to reorder. Layout persists per workspace in localStorage (`crm-contacts-columns:<workspaceId>`).
+
+17 columns total. Default-on (7): Name · Email · Phone · Company · Country · Lead status · Created. Default-off (10): Title · Contact status · Email status · Source · Lifecycle · Customer status · App user · Tags · Last contacted · Updated.
+
+The 4 company-side columns (Lifecycle · Customer status · App user · existing Company name) come from extending the existing contacts→companies join projection — `companies(name, lifecycle_stage, customer_status, wl_workshop_id)` instead of just `companies(name)`. One-shot select extension; columns hidden = field unread.
+
+### File split
+- `src/components/contacts/column-config.ts` — column universe (`COLUMNS`, `DEFAULT_COLUMN_IDS`, `COLUMN_BY_ID`), localStorage helpers (`loadColumnIds`, `saveColumnIds`).
+- `src/components/contacts/column-customizer.tsx` — SlideOver with `@hello-pangea/dnd` drag-reorder of visible cols + click-to-show on hidden.
+- `contacts-page-client.tsx` — added `columnIds` state, dynamic `<thead>` (loops the visible ids; sortable cols still use `SortableTh`), dynamic `<tbody>` cells via `renderCell(id, contact)` switch, `colSpan` follows visible count, plus the "Columns" trigger button in the page header.
+
+### Build/deploy
+`npm run build` · `npm run lint` · `npx tsc --noEmit` all green. Squash-merged via `gh pr merge 162 --squash`. Vercel auto-deployed; fresh `x-vercel-id` confirmed.
+
+### Notable decisions
+- **Persistence is localStorage, not a DB row.** Per-user-per-browser is sufficient for v1; promote to a `user_preferences` table only when multi-device drift becomes annoying. Falls back to defaults on parse failure or absent value, so a corrupt cache can never brick the page.
+- **Extended select projection unconditionally** — the alternative (dynamically grow the projection only when the company-derived columns are visible) saves a few bytes but makes `fetchContacts` deps churn on column-config changes. The extra columns are tiny.
+- **Sortable headers loop the visible columns**, falling back to plain `<th>` for non-sortable joined / derived cells (Lifecycle, Customer status, App user, Tags, Title, Contact status, Email status, Source — all currently `sortable: false`). Wiring sort for the joined company columns is the next bite if Hans asks.
+
+### Follow-ups
+- Per-column width drag-resize.
+- Frozen first column on horizontal scroll once tables get wide.
+- Server-side persistence (per-user DB row) — defer.
+
+---
+
+## Session: Contacts page — drop language filter + sortable headers (PR #161)
+- **Date:** 2026-05-08
+- **PR:** #161
+- **Branch:** `feature/contacts-sortable-columns`
+
+### What changed
+Two unrelated tweaks bundled because they touched the same area:
+
+1. **Removed the Language multi-select.** Not used in practice — contact language is implied by country for the markets we target. Dropped `LANGUAGE_OPTIONS`, `filters.language`, the server-side `language` field on `ContactFilters`, and its clauses in `resolveContactIdsByFilters`.
+
+2. **Clickable sortable column headers.** Click any header to sort. Same column → toggles asc/desc. Different column → switch with a sensible default (`asc` for text, `desc` for `created_at`). Hover affordance shows a faint chevron on inactive columns; active column shows the solid direction icon. `aria-sort` lives on the `<th>` (not the `<button>`) so screen readers report column state correctly.
+
+Sort key → query mapping:
+- `name` → `last_name` primary + `first_name` secondary (surname-first)
+- `email` → `email`
+- `phone` → `phone`, nulls last
+- `company` → `companies.name` via `foreignTable: 'companies'`
+- `country` → `country`, nulls last
+- `lead_status` → `lead_status`
+- `created_at` → `created_at` (default desc)
+
+### Build/deploy
+Build / lint / tsc green. Squash-merged via `gh pr merge 161 --squash`. Vercel auto-deployed.
+
+### Notable decisions
+- **Surname-primary on the Name sort.** Most CRM users sort by last name. First-name secondary to keep it stable when surnames match.
+- **Sort state is local to the page**, not URL-bound — matches the existing filter pattern. URL persistence is a separate ask if it ever becomes useful.
+
+### Mid-session glitch
+Two sessions ran in parallel against the same working tree. My commit landed on local main twice instead of the feature branch (the parallel session checked out their own branch in between). Each time, recovered by `git update-ref` to relocate my commit to the correct feature branch and reset `main` to `origin/main` — non-destructive, no work lost. Worth flagging that running parallel CC sessions in the same repo working tree is dicey; one-checkout-per-session would have avoided the dance.
+
+---
+
+## Session: Contacts page — multi-select filters + new status filters (PR #156)
+- **Date:** 2026-05-08
+- **PR:** #156
+- **Branch:** `feature/contacts-multi-select-filters`
+
+### What changed
+Every dropdown on the contacts page is now multi-select, and four new status filters are exposed (the ones surfaced by the company-detail Statuses tab from PR #155).
+
+**Multi-select everywhere:**
+- Lead status pill row: was single-select with an "All" pill the only way to clear. Now multi-toggle. New pills: Engaged, Unqualified (matching the schema enum).
+- Country, Email status, Source, Contact status: `<select>` → MultiSelect popover.
+
+**Four new filters (not previously exposed):**
+- Language (sv / no / da / fi / et / lv / lt / en) — *removed in PR #161, not used in practice*
+- Lifecycle stage — joined via `companies.lifecycle_stage`
+- Customer status — joined via `companies.customer_status`
+- Has app account — `yes` / `no`, joined via `companies.wl_workshop_id`
+
+The three company-joined filters use a `!inner` join only when active, so contacts without a company aren't silently dropped from unrelated queries.
+
+### File split
+- `src/components/ui/multi-select.tsx` — new UI primitive: popover with checkboxes, search input when ≥6 options, click-outside to close, clear button on the trigger when populated.
+- `src/lib/contacts-filter.ts` — `ContactFilters` extended; `resolveContactIdsByFilters` accepts both `string[]` (new) and `string` (legacy) on every multi-select field. Bulk-action API routes need no change — they pass through.
+- `contacts-page-client.tsx` — `LocalFilters` shifted to arrays, `currentFilters` mapping rebuilt, `fetchContacts` query rewired with `.in()` calls and the optional `companies!inner` projection.
+
+### Build/deploy
+Build / lint / tsc green. Squash-merged + Vercel auto-deployed.
+
+### Notable decisions
+- **Legacy single-string acceptance on the server-side resolver** keeps any in-flight bulk-action requests from old client builds working through the deploy. Cheap insurance.
+- **`!inner` join only when company-side filters are active** — using it unconditionally would silently drop contacts without a company from every list view.
+
+---
+
+## Session: Company detail — Statuses tab (PR #155)
+- **Date:** 2026-05-06
+- **PR:** #155
+- **Branch:** `feature/company-statuses-tab`
+
+### What changed
+A new "Statuses" tab between Deals and Subscriptions on the company detail page. Six concept cards, one per status field tracked on a company. Each card lists every canonical value as a pill — the one(s) currently set on the record keep their hero-color (paying = emerald, churned = red, customer = emerald, etc.); the rest go slate-grey with a thin border so they read as "possible but not set."
+
+Concepts shown:
+- Has app account (`companies.wl_workshop_id`) — yes / no
+- Lifecycle stage — `lead` / `mql` / `sql` / `trial` / `paying` / `churned` / `reactivation`
+- Customer status (operational) — `trialing` / `active` / `paused` / `inactive` / `churned`
+- Payment status (Stripe) — `paid` / `past_due` / `unpaid` / `failed` / `incomplete`
+- Subscription status (Stripe) — `active` / `trialing` / `past_due` / `canceled` / etc.
+- Outreach status (derived from `contacts.lead_status`, aggregated)
+
+### File split
+- `src/components/companies/detail/statuses-tab.tsx` — pure presentation component, takes `company` + `outreachStatus` props.
+- `detail/types.ts` — added `'statuses'` to the `TabId` enum.
+- `detail/tabs.tsx` — new tab in the bar, dispatches to `<StatusesTab />`.
+- `company-detail-client.tsx` — passes `company` + `outreachStatus` to `<CompanyTabs />`.
+
+### Build/deploy
+Build / lint / tsc green. Squash-merged + Vercel deployed.
+
+### Notable decisions
+- **Pill colors mirror the hero badges.** A user can match the active pill in the Statuses tab to the corresponding badge in the hero — same color = same concept = same value.
+- **Stripe-side fields surface unknown values as a "(custom)" amber pill.** Stripe webhook strings can drift from any canonical list; better to render them than drop them silently. Visible drift is the point of the tab.
+
+---
+
+## Session: Company detail — quick actions + status badges (PR #154)
+- **Date:** 2026-05-06
+- **PR:** #154
+- **Branch:** `feature/company-detail-quick-actions`
+
+### What changed
+The hero buttons added in PR #139 only switched tabs — they were stubs. Wired all three to real flows and added status badges that answer "have an account / paying / contacted":
+
+- **Add Contact** → SlideOver mini-form (first/last/email/phone/title/lead_status), `company_id` locked. Inserts into `contacts`, writes a `contact_created` activity, refreshes the contacts list, switches to Contacts tab.
+- **Add Deal** → SlideOver wraps the existing `AddDealForm`. Fetches the workspace's first pipeline on open, prefills `company_id`, hides the picker. Refreshes deals on save and switches to Deals tab.
+- **Log activity** → Modal with a 4-button type selector (Note / Call / Meeting / Email logged), subject + body, optional contact-link dropdown. Writes to `activities` and switches to Activity tab.
+- **Hero badges** — replaced the old "lifecycle / customer / category / industry" set with: **App user** (violet, when `wl_workshop_id` is set) vs **Prospect** · **Lifecycle stage** · **Customer status** (when distinct) · **Outreach** (derived) · Category · Industry.
+- **Outreach status** is the derived signal. Aggregates per-contact `lead_status` into one priority-ranked label: customer > churned > qualified > engaged > contacted > unqualified > not_contacted.
+
+### File split
+- `detail/add-contact-modal.tsx` · `detail/add-deal-modal.tsx` · `detail/log-activity-modal.tsx` — three new modal components scoped to the company-detail flow.
+- `detail/status.ts` — `deriveOutreachStatus()` + `OUTREACH_LABEL` / `OUTREACH_COLOR` maps. Pure logic, no React.
+- `detail/hero.tsx` — `Badges` rewritten to take an `outreachStatus` prop and render the new set.
+- `company-detail-client.tsx` — added `addContactOpen` / `addDealOpen` / `logActivityOpen` state, narrow refetch helpers (`refetchContacts`, `refetchDeals`, `refetchActivities`) so the modals can refresh just what they touched without re-running the full page-load.
+- `deals/add-deal-form.tsx` — gained optional `defaultCompanyId` + `hideCompanyPicker` props so the form is reusable from the company-detail context. No change at the existing call site.
+
+### Build/deploy
+Build / lint / tsc green. Squash-merged + Vercel deployed.
+
+### Notable decisions
+- **Per-modal narrow refetch instead of one big page reload.** Adding a `refreshKey` dep on the existing `load()` useEffect would have flickered the whole page (`setLoading(true)` early in `load`). Wrote three small helpers that update only the affected slice + activities, since activity rows reference contacts/deals.
+- **Outreach is priority-aggregated, not max-progression.** "Churned" outranks "Qualified" because it's the more important state to surface — the company has someone who explicitly walked away. "Customer" still wins overall.
+- **`AddDealForm` extended in place rather than forked.** Two optional props is cheaper than maintaining two near-identical forms.
+- **Activity `body` column** — `contact-detail-client.tsx` writes notes/calls into a `description` field that doesn't exist on `activities` (the column is `body`). Pre-existing bug, not fixed in this PR. Flagged as a follow-up. New code in this PR uses `body` correctly.
+
+### Follow-ups
+- Fix the `description` → `body` bug on contact-detail-client note/call adds.
+- "Add Deal" assumes one pipeline per workspace (uses `.limit(1)` on first-by-`created_at`). If multi-pipeline workspaces become real, surface a pipeline picker.
+
+---
+
 ## Session: Enrollment guardrail for already-sequenced contacts
 - **Date:** 2026-05-08
 - **PR:** #159
