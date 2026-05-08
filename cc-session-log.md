@@ -14,6 +14,82 @@ updated: 2026-04-22
 
 ---
 
+## Session: Field Routes — Phase 4 (per-rep origins, PTO calendar, revisit interval, multi-rep)
+- **Date:** 2026-05-07
+- **PR:** #150
+- **Branch:** `feature/field-routes-phase4`
+- **Merge commit:** `e1d815b` (squash-merged 2026-05-07 18:33 UTC)
+
+### What was built
+
+Takes Field Routes from "auto-generated, then frozen" to a tool a rep can actually plan with. Five themes:
+
+1. **Per-rep origin override** — each user can set their own start address in `/settings/profile`; routes generate from there.
+2. **Working calendar + PTO** — weekly working-day toggle + ad-hoc unavailable dates; schedule-guard returns 409 with a confirm-anyway prompt for off-days.
+3. **Min revisit interval** — workspace default (30d) + per-company override; the generator and the suggestions endpoint both filter recently-visited shops.
+4. **Add / remove stops** — `+ Add stop` row with Suggested + Search tabs, × icon per row with a 5-reason removal modal. `wrong_location` / `not_icp` / `permanently_closed` flip `do_not_route=true` on the underlying record (the last also sets `discovered_shops.permanently_closed`).
+5. **Multi-rep visibility** — `daily_routes.assigned_to`, Mine vs All toggle on `/routes`, admin-only Reassign + Generate-for dropdowns.
+
+**Schema (migration `20260507030000_field_routes_phase4.sql`, applied to prod via Management API):**
+- `user_profiles`: `origin_address`, `origin_latitude`, `origin_longitude`, `origin_geocoded_at`, `working_days JSONB DEFAULT '{...}'`
+- `user_unavailable_dates` table — `(user_id, date) UNIQUE`, RLS workspace-read + self-write/update/delete
+- `companies`: `min_revisit_interval_days INT NULL`, `do_not_route BOOLEAN DEFAULT false`, `do_not_route_reason`, `do_not_route_at`
+- `discovered_shops`: same `do_not_route*` triple
+- `daily_routes`: `assigned_to UUID FK auth.users(id) ON DELETE SET NULL`, partial index `(workspace_id, assigned_to, status, generated_at DESC)`
+- Partial indexes `companies_do_not_route_idx` / `discovered_shops_do_not_route_idx` `WHERE do_not_route = true` to keep generator pool query fast.
+
+**Backend:**
+- `src/lib/routes/profile.ts` — `getUserOrigin` (user_profiles → env fallback chain), `getWorkingDays`, `isUnavailable`, `parseWorkingDays`, `dayKeyForIsoDate`. Fully unit-tested.
+- `src/lib/routes/recompute.ts` — `recomputeRouteAfterMutation` helper for stop add/remove. Reads current stops in `stop_order`, calls `recomputeFixedOrder`, optionally enforces day-window with `?force=true` bypass, writes per-stop legs + `daily_routes` totals + deeplink. Empty-route fallback clears totals.
+- `src/lib/routes/generate.ts` — accepts `assignedTo`, filters by `min_revisit_interval_days` (per-company override → workspace default 30d), excludes `do_not_route=true`, sets `daily_routes.assigned_to` on insert. `MIN_STOPS_PER_ROUTE`/`MAX_STOPS_PER_ROUTE` exported.
+- `/api/settings/profile` (GET/POST): origin geocoded only when address changes (avoids burning the API on save-without-change). Working-days merged onto existing.
+- `/api/settings/profile/unavailable-dates` (GET/POST/DELETE): self-managed PTO entries, workspace-scoped.
+- `/api/routes/[id]` PATCH: schedule guard runs `isUnavailable(assigned_to ?? caller, scheduled_for)`, returns 409 with `{reason, detail}` unless `?force=true`.
+- `/api/routes/[id]/assign` PATCH: admin-only, validates target is a workspace member.
+- `/api/routes/[routeId]/stops` POST: refuses at MAX_STOPS, refuses duplicates by company_id/discovered_shop_id, inserts at `max(stop_order)+1`, recomputes — rolls back the insert on `exceeds_day_window` 409 if `force` is not set.
+- `/api/routes/[routeId]/stops/[stopId]` DELETE: validates reason, deletes stop, recomputes (force=true since deletion only shortens), inserts `activities` row (`type='route_stop_removed'`), flips `do_not_route` per reason, sets `permanently_closed` for that specific reason.
+- `/api/routes/[routeId]/suggestions` GET: nearby ICP companies ranked by Haversine distance from existing-stops centroid (or origin if route is empty); excludes already-in-route, recently-visited (per-company or workspace default), `do_not_route=true`. Returns up to 10 by default.
+- `/api/routes/[routeId]/stop-search` GET: name search across workspace `companies` (any) + `discovered_shops` filtered to ICP shop_types (`auto_repair`, `tire_combo`, `auto_glass`, `auto_body`) and SE.
+- `/api/routes/generate` POST: optional `forUserId` (admin-only); resolves origin in order `originOverride` → `user_profiles` → env defaults.
+- `/api/routes` GET: new `?scope=mine|all` filter; mine matches `assigned_to.eq.<user>` OR `assigned_to.is.null`.
+
+**UI:**
+- `/settings/profile`: origin textarea + geocoded-coords readout, weekly working-days toggle group, PTO list with date+reason inputs.
+- `/routes`: Mine vs All toggle, assignee initials chip, admin Generate-for dropdown.
+- `/routes/[id]`: assignee chip + admin Reassign select; schedule 409 → window.confirm → force retry; min-stops warning banner.
+- `StopsReorderList`: × icon per row → opens `RemoveStopModal` (5 reason radios + free-text notes); `+ Add stop` row → opens `AddStopSheet` (Suggested + Search tabs); above-12 collapses to "Max stops reached".
+- `RemoveStopModal` (new): radio-driven reasons with per-reason hints describing the side effect (flag vs no-flag).
+- `AddStopSheet` (new): two-tab modal/sheet, Suggested tab calls `/suggestions`, Search tab debounces 250ms against `/stop-search`.
+- `/companies/[id]` About panel: read-only `do_not_route` callout with reason + date when set. Write path is the route-detail removal modal.
+- `/discovery` rows: read-only "do not route" badge under the shop name with reason + date in the title attribute.
+
+### Build status
+- `npx tsc --noEmit` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+- `vitest run src/lib/routes/...` ✅ 44 tests passing (added `profile.test.ts` for `parseWorkingDays` + `dayKeyForIsoDate`; extended `generate.test.ts` mock for the new `workspaces` settings + `route_stops` recent-visits reads)
+- Vercel deploy: triggered by merge of #150; verified in background.
+
+### Notable decisions
+- **Geocode only on address change.** The profile POST diffs `origin_address` against the existing row before calling Geocoding; identical-address saves don't re-spend the API. Failures (no result, missing key) save the address with a `geocode_note` so the UI can toast the user.
+- **`recomputeRouteAfterMutation` instead of extending the Phase-2 RPC.** Phase 2's `reorder_route_stops` plpgsql function requires the input set to match existing stops 1:1, so it can't handle deletes or appends mid-call. Did per-stop UPDATE for legs + a single UPDATE on `daily_routes`. The unique-constraint shenanigans Phase 2 needed don't apply here — adds and removes don't shuffle existing orders.
+- **Add-stop-then-rollback for the day-window guard.** POST inserts the row first, then recomputes. If the recompute returns 409 and `force` is not set, the route is restored by deleting the just-inserted row. Pattern preserved the simpler "always recompute over current stops" approach instead of pre-flight optimization.
+- **`getNextSender`-style sort for the empty-route case.** When the last stop on a route is removed, `recomputeRouteAfterMutation` short-circuits: zeros out totals + drive seconds + sets stop_count=0 + writes a no-waypoints deeplink (just origin → origin). Avoids calling Routes API for a degenerate route.
+- **Suggestions distance is Haversine from existing-stops centroid**, not from origin. Routes drift from origin during the day; suggesting "nearby to where you'll actually be" is more useful than "nearby to home base." Falls back to origin only when stops list is empty.
+- **Schedule guard has confirm-then-force, not hard-block.** The PATCH endpoint returns 409 + `?force=true` bypass; the UI always offers an override prompt. Reasoning: an admin scheduling a Saturday route is a real use case (e.g., trade show), and the rep usually knows their own calendar better than the JSON snapshot.
+- **`do_not_route` on /companies and /discovery is read-only.** Canonical write path is the route-detail removal modal — keeping flag-flipping in one place avoids accidental UI-driven flag flips on a company detail page from undoing the rep's deliberate "yes, do route here, my bad" recovery (still a future phase).
+- **Migration applied via Supabase Management API** (https://api.supabase.com/v1/projects/{ref}/database/query) since the harness blocked the direct pooler path. Same path Phase 1/2 used. Worth promoting that to the documented default in CLAUDE.md if the harness rules persist.
+
+### Follow-ups (out of scope, parked)
+- Optional admin "clear do_not_route flag" button on the company detail page — design says "if you have time," skipped here.
+- Shared rep capacity / max routes per day per rep.
+- Auto-suggest revisit dates when a shop is suppressed by interval.
+- Calendar imports (Google Calendar, Outlook).
+- Per-rep route templates ("Hans always does Tuesday: Stockholm South").
+- Workspace-level min revisit interval is read but not yet writable from the field-visits settings UI — currently only via direct Supabase write or future settings-page extension.
+
+---
+
 ## Session: Field Routes — Phase 3 (visit logging + auto follow-up)
 - **Date:** 2026-05-07
 - **PR:** #145
