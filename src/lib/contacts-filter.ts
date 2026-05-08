@@ -13,7 +13,6 @@ export type ContactFilters = {
   status?: string | string[];
   email_status?: string | string[];
   source?: string | string[];
-  language?: string | string[];
   country_code?: string | string[];
   /** Filter by company.lifecycle_stage via inner join. */
   lifecycle_stage?: string | string[];
@@ -101,10 +100,6 @@ export async function resolveContactIdsByFilters(
   const source = toArray(filters.source);
   if (source.length === 1) query = query.eq('source', source[0]);
   else if (source.length > 1) query = query.in('source', source);
-
-  const language = toArray(filters.language);
-  if (language.length === 1) query = query.eq('language', language[0]);
-  else if (language.length > 1) query = query.in('language', language);
 
   if (lifecycle.length === 1) query = query.eq('companies.lifecycle_stage', lifecycle[0]);
   else if (lifecycle.length > 1) query = query.in('companies.lifecycle_stage', lifecycle);

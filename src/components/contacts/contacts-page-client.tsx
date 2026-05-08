@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Search, Plus, Upload, ChevronLeft, ChevronRight,
+  Search, Plus, Upload, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Trash2, ListPlus, ShieldCheck, CheckCircle, XCircle, Phone,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -79,17 +79,6 @@ const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
   { value: 'churned',  label: 'Churned' },
 ];
 
-const LANGUAGE_OPTIONS: MultiSelectOption[] = [
-  { value: 'sv', label: 'Swedish',   prefix: '🇸🇪' },
-  { value: 'no', label: 'Norwegian', prefix: '🇳🇴' },
-  { value: 'da', label: 'Danish',    prefix: '🇩🇰' },
-  { value: 'fi', label: 'Finnish',   prefix: '🇫🇮' },
-  { value: 'et', label: 'Estonian',  prefix: '🇪🇪' },
-  { value: 'lv', label: 'Latvian',   prefix: '🇱🇻' },
-  { value: 'lt', label: 'Lithuanian',prefix: '🇱🇹' },
-  { value: 'en', label: 'English',   prefix: '🇬🇧' },
-];
-
 const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
   { value: 'yes', label: 'App user' },
   { value: 'no',  label: 'Prospect (no account)' },
@@ -102,7 +91,6 @@ type LocalFilters = {
   country_code: string[];
   email_status: string[];
   source: string[];
-  language: string[];
   lifecycle_stage: string[];
   customer_status: string[];
   has_account: string[];
@@ -117,13 +105,18 @@ const DEFAULT_FILTERS: LocalFilters = {
   country_code: [],
   email_status: [],
   source: [],
-  language: [],
   lifecycle_stage: [],
   customer_status: [],
   has_account: [],
   has_phone: false,
   tags: [],
 };
+
+// ── Sortable columns ─────────────────────────────────────────────────────────
+type SortKey = 'name' | 'email' | 'phone' | 'company' | 'country' | 'lead_status' | 'created_at';
+type SortDir = 'asc' | 'desc';
+const DEFAULT_SORT: { key: SortKey; dir: SortDir } = { key: 'created_at', dir: 'desc' };
+const TEXT_DEFAULT_DIR: SortDir = 'asc';
 
 export function ContactsPageClient() {
   const router = useRouter();
@@ -147,7 +140,15 @@ export function ContactsPageClient() {
 
   // All filter state is local — no URL params for filters
   const [filters, setFilters] = useState<LocalFilters>(DEFAULT_FILTERS);
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
+
+  const handleSortClick = (key: SortKey) => {
+    setSort((prev) => {
+      if (prev.key === key) return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+      return { key, dir: key === 'created_at' ? 'desc' : TEXT_DEFAULT_DIR };
+    });
+  };
 
   // Debounced search
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -190,7 +191,6 @@ export function ContactsPageClient() {
     country_code:    filters.country_code.length    ? filters.country_code    : undefined,
     email_status:    filters.email_status.length    ? filters.email_status    : undefined,
     source:          filters.source.length          ? filters.source          : undefined,
-    language:        filters.language.length        ? filters.language        : undefined,
     lifecycle_stage: filters.lifecycle_stage.length ? filters.lifecycle_stage : undefined,
     customer_status: filters.customer_status.length ? filters.customer_status : undefined,
     has_account: hasAccountValue,
@@ -252,9 +252,6 @@ export function ContactsPageClient() {
     if (filters.source.length === 1) query = query.eq('source', filters.source[0]);
     else if (filters.source.length > 1) query = query.in('source', filters.source);
 
-    if (filters.language.length === 1) query = query.eq('language', filters.language[0]);
-    else if (filters.language.length > 1) query = query.in('language', filters.language);
-
     if (filters.lifecycle_stage.length === 1) query = query.eq('companies.lifecycle_stage', filters.lifecycle_stage[0]);
     else if (filters.lifecycle_stage.length > 1) query = query.in('companies.lifecycle_stage', filters.lifecycle_stage);
 
@@ -266,7 +263,36 @@ export function ContactsPageClient() {
 
     if (filters.tags.length > 0) query = query.overlaps('tags', filters.tags);
 
-    query = query.order('created_at', { ascending: false });
+    // Sort. For "name" we sort by last_name primary + first_name secondary
+    // (most CRM users sort by surname). For "company" we sort the joined
+    // companies table — requires the embedded foreignTable hint.
+    const ascending = sort.dir === 'asc';
+    switch (sort.key) {
+      case 'name':
+        query = query
+          .order('last_name',  { ascending, nullsFirst: false })
+          .order('first_name', { ascending, nullsFirst: false });
+        break;
+      case 'email':
+        query = query.order('email', { ascending, nullsFirst: false });
+        break;
+      case 'phone':
+        query = query.order('phone', { ascending, nullsFirst: false });
+        break;
+      case 'company':
+        query = query.order('name', { ascending, foreignTable: 'companies', nullsFirst: false });
+        break;
+      case 'country':
+        query = query.order('country', { ascending, nullsFirst: false });
+        break;
+      case 'lead_status':
+        query = query.order('lead_status', { ascending });
+        break;
+      case 'created_at':
+      default:
+        query = query.order('created_at', { ascending });
+        break;
+    }
 
     const { data, count, error } = await query;
     if (error) {
@@ -288,9 +314,9 @@ export function ContactsPageClient() {
   }, [
     workspaceId, page, debouncedSearch,
     filters.lead_status, filters.status, filters.country_code, filters.email_status,
-    filters.has_phone, filters.source, filters.language,
+    filters.has_phone, filters.source,
     filters.lifecycle_stage, filters.customer_status, filters.has_account,
-    filters.tags,
+    filters.tags, sort,
   ]);
 
   useEffect(() => {
@@ -410,7 +436,7 @@ export function ContactsPageClient() {
     filters.search !== '' ||
     filters.lead_status.length > 0 || filters.status.length > 0 ||
     filters.country_code.length > 0 || filters.email_status.length > 0 ||
-    filters.source.length > 0 || filters.language.length > 0 ||
+    filters.source.length > 0 ||
     filters.lifecycle_stage.length > 0 || filters.customer_status.length > 0 ||
     filters.has_account.length > 0 || filters.has_phone !== false ||
     filters.tags.length > 0;
@@ -622,12 +648,6 @@ export function ContactsPageClient() {
               allLabel="contact statuses"
             />
             <MultiSelect
-              values={filters.language}
-              onChange={v => setFilters(f => ({ ...f, language: v }))}
-              options={LANGUAGE_OPTIONS}
-              allLabel="languages"
-            />
-            <MultiSelect
               values={filters.lifecycle_stage}
               onChange={v => setFilters(f => ({ ...f, lifecycle_stage: v }))}
               options={LIFECYCLE_OPTIONS}
@@ -701,13 +721,13 @@ export function ContactsPageClient() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Phone</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Country</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Lead Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Created</th>
+                  <SortableTh sortKey="name"        label="Name"        sort={sort} onClick={handleSortClick} />
+                  <SortableTh sortKey="email"       label="Email"       sort={sort} onClick={handleSortClick} />
+                  <SortableTh sortKey="phone"       label="Phone"       sort={sort} onClick={handleSortClick} />
+                  <SortableTh sortKey="company"     label="Company"     sort={sort} onClick={handleSortClick} />
+                  <SortableTh sortKey="country"     label="Country"     sort={sort} onClick={handleSortClick} />
+                  <SortableTh sortKey="lead_status" label="Lead Status" sort={sort} onClick={handleSortClick} />
+                  <SortableTh sortKey="created_at"  label="Created"     sort={sort} onClick={handleSortClick} />
                 </tr>
               </thead>
               <tbody>
@@ -1131,5 +1151,40 @@ function AddContactForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// ── Sortable column header ────────────────────────────────────────────────────
+
+function SortableTh({
+  sortKey, label, sort, onClick,
+}: {
+  sortKey: SortKey;
+  label: string;
+  sort: { key: SortKey; dir: SortDir };
+  onClick: (key: SortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  const Icon = active ? (sort.dir === 'asc' ? ChevronUp : ChevronDown) : null;
+  return (
+    <th
+      className="text-left px-4 py-3 font-medium text-slate-600"
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={`group inline-flex items-center gap-1 hover:text-slate-900 ${
+          active ? 'text-slate-900' : 'text-slate-600'
+        }`}
+      >
+        {label}
+        {Icon ? (
+          <Icon className="w-3.5 h-3.5" />
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-40 transition-opacity" />
+        )}
+      </button>
+    </th>
   );
 }
