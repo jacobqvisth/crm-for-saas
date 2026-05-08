@@ -25,6 +25,7 @@ export function EnrollListModal({ open, onClose, listId, isDynamic, filters, con
   const [sequences, setSequences] = useState<Tables<'sequences'>[]>([]);
   const [selectedSequence, setSelectedSequence] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+  const [allowAlreadySequenced, setAllowAlreadySequenced] = useState(false);
 
   useEffect(() => {
     if (!workspaceId || !open) return;
@@ -75,6 +76,7 @@ export function EnrollListModal({ open, onClose, listId, isDynamic, filters, con
           sequenceId: selectedSequence,
           contactIds,
           workspaceId,
+          allowAlreadySequenced,
         }),
       });
 
@@ -83,8 +85,12 @@ export function EnrollListModal({ open, onClose, listId, isDynamic, filters, con
       if (!res.ok) {
         toast.error(result.error || 'Enrollment failed');
       } else {
+        const priorNote = result.skippedAlreadySequenced > 0
+          ? ` (${result.skippedAlreadySequenced} already contacted via prior tool — tick the override to include)`
+          : '';
         toast.success(
-          `Enrolled ${result.enrolled} contacts${result.skipped > 0 ? `, skipped ${result.skipped}` : ''}`
+          `Enrolled ${result.enrolled} contacts${result.skipped > 0 ? `, skipped ${result.skipped}` : ''}${priorNote}`,
+          { duration: result.skippedAlreadySequenced > 0 ? 8000 : 4000 }
         );
         onClose();
       }
@@ -121,6 +127,21 @@ export function EnrollListModal({ open, onClose, listId, isDynamic, filters, con
         {sequences.length === 0 && (
           <p className="text-sm text-slate-500">No sequences available. Create a sequence first.</p>
         )}
+
+        <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={allowAlreadySequenced}
+            onChange={(e) => setAllowAlreadySequenced(e.target.checked)}
+            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span>
+            Include contacts already contacted via prior tools (e.g. <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">lemlist-csv</code> tag)
+            <span className="block text-xs text-slate-500 mt-0.5">
+              Off by default. The Lemlist CSV cohort (~765 SE shops) is excluded unless you tick this.
+            </span>
+          </span>
+        </label>
 
         <div className="flex justify-end gap-2 pt-2">
           <button

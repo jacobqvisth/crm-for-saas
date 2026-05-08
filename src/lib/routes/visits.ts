@@ -218,6 +218,10 @@ export async function logVisit(params: LogVisitParams): Promise<LogVisitResult> 
     sequenceId: decision.sequenceId,
     contactIds: [primaryContactId],
     workspaceId,
+    // Field-routes followups are deliberate post-visit re-engagement —
+    // bypass the "already contacted via Lemlist" guard so Hans can build
+    // on the prior touch instead of being blocked by it.
+    allowAlreadySequenced: true,
   });
 
   if (enrollResult.enrolled === 0) {

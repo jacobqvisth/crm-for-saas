@@ -56,6 +56,7 @@ export function EnrollContactsModal({
   const [senderAccountId, setSenderAccountId] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [allowAlreadySequenced, setAllowAlreadySequenced] = useState(false);
 
   // Search contacts
   const searchContacts = useCallback(async () => {
@@ -147,6 +148,7 @@ export function EnrollContactsModal({
         contactIds,
         workspaceId,
         senderAccountId,
+        allowAlreadySequenced,
       }),
     });
 
@@ -159,7 +161,13 @@ export function EnrollContactsModal({
         toast.error(result.error || "Enrollment failed");
       }
     } else {
-      toast.success(`Enrolled ${result.enrolled} contacts${result.skipped > 0 ? `, skipped ${result.skipped}` : ""}`);
+      const priorNote = result.skippedAlreadySequenced > 0
+        ? ` (${result.skippedAlreadySequenced} already contacted via prior tool — tick the override to include)`
+        : "";
+      toast.success(
+        `Enrolled ${result.enrolled} contacts${result.skipped > 0 ? `, skipped ${result.skipped}` : ""}${priorNote}`,
+        { duration: result.skippedAlreadySequenced > 0 ? 8000 : 4000 }
+      );
       if (result.reasons && result.reasons.length > 0) {
         console.log("Enrollment skip reasons:", result.reasons);
       }
@@ -177,6 +185,7 @@ export function EnrollContactsModal({
     setSelectedList(null);
     setSenderAccountId(null);
     setTab("search");
+    setAllowAlreadySequenced(false);
   };
 
   return (
@@ -337,6 +346,21 @@ export function EnrollContactsModal({
             )}
           </div>
         )}
+
+        <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={allowAlreadySequenced}
+            onChange={(e) => setAllowAlreadySequenced(e.target.checked)}
+            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span>
+            Include contacts already contacted via prior tools (e.g. <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">lemlist-csv</code> tag)
+            <span className="block text-xs text-slate-500 mt-0.5">
+              Off by default. The Lemlist CSV cohort is excluded unless you tick this.
+            </span>
+          </span>
+        </label>
 
         <div className="flex justify-end gap-2 pt-2">
           <button

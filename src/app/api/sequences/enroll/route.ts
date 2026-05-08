@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { sequenceId, contactIds, workspaceId, senderAccountId } = body;
+  const { sequenceId, contactIds, workspaceId, senderAccountId, allowAlreadySequenced } = body;
 
   if (!sequenceId || !contactIds || !workspaceId) {
     return NextResponse.json(
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     contactIds,
     workspaceId,
     senderAccountId,
+    allowAlreadySequenced: Boolean(allowAlreadySequenced),
   });
 
   return NextResponse.json(result);

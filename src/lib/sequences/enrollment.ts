@@ -10,23 +10,35 @@ type ContactWithCompany = Tables<"contacts"> & {
 
 type EmailTemplate = Pick<Tables<"email_templates">, "id" | "subject" | "body_html">;
 
+/**
+ * Contacts carrying any of these tags have already been sequenced via a prior
+ * outreach tool (e.g. Lemlist) — enrolling them again would double-send.
+ * The `allowAlreadySequenced` param overrides this check (used by Field Routes
+ * after a visit, where Hans deliberately re-engages).
+ */
+export const ALREADY_SEQUENCED_TAGS = ["lemlist-csv"] as const;
+
 interface EnrollParams {
   sequenceId: string;
   contactIds: string[];
   workspaceId: string;
   senderAccountId?: string;
+  /** Bypass the ALREADY_SEQUENCED_TAGS guard. Default false. */
+  allowAlreadySequenced?: boolean;
 }
 
 interface EnrollResult {
   enrolled: number;
   skipped: number;
   reasons: string[];
+  /** Subset of `skipped` that hit the ALREADY_SEQUENCED_TAGS guard. */
+  skippedAlreadySequenced: number;
 }
 
 export async function enrollContacts(params: EnrollParams): Promise<EnrollResult> {
-  const { sequenceId, contactIds, workspaceId, senderAccountId } = params;
+  const { sequenceId, contactIds, workspaceId, senderAccountId, allowAlreadySequenced = false } = params;
   const supabase = await createClient();
-  const result: EnrollResult = { enrolled: 0, skipped: 0, reasons: [] };
+  const result: EnrollResult = { enrolled: 0, skipped: 0, reasons: [], skippedAlreadySequenced: 0 };
 
   // Get the sequence
   const { data: sequence, error: seqError } = await supabase
@@ -37,11 +49,11 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     .single();
 
   if (seqError || !sequence) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence not found"] };
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence not found"], skippedAlreadySequenced: 0 };
   }
 
   if (!["active", "draft", "paused"].includes(sequence.status ?? "")) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active, draft, or paused"] };
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active, draft, or paused"], skippedAlreadySequenced: 0 };
   }
 
   // Get unsubscribed emails for this workspace
@@ -80,13 +92,13 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       .in("id", chunk)
       .eq("workspace_id", workspaceId);
     if (error) {
-      return { enrolled: 0, skipped: contactIds.length, reasons: [`Failed to load contacts: ${error.message}`] };
+      return { enrolled: 0, skipped: contactIds.length, reasons: [`Failed to load contacts: ${error.message}`], skippedAlreadySequenced: 0 };
     }
     if (data) contacts.push(...(data as unknown as ContactWithCompany[]));
   }
 
   if (contacts.length === 0) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["No contacts found"] };
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["No contacts found"], skippedAlreadySequenced: 0 };
   }
 
   const settings = sequence.settings as SequenceSettings;
@@ -152,6 +164,20 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       result.skipped++;
       result.reasons.push(`${contact.email}: Contact status is ${contact.status}`);
       continue;
+    }
+
+    // Skip contacts who were already sequenced via a prior outreach tool
+    // (e.g. lemlist-csv backfill). Bypass with allowAlreadySequenced=true.
+    if (!allowAlreadySequenced && contact.tags) {
+      const priorTag = contact.tags.find((t) =>
+        (ALREADY_SEQUENCED_TAGS as readonly string[]).includes(t)
+      );
+      if (priorTag) {
+        result.skipped++;
+        result.skippedAlreadySequenced++;
+        result.reasons.push(`${contact.email}: Already contacted via prior tool (tag: ${priorTag})`);
+        continue;
+      }
     }
 
     // Determine sender. Use the pre-fetched pool (round-robin in JS), falling
