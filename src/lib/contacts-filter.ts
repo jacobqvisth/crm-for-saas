@@ -27,6 +27,8 @@ export type ContactFilters = {
   has_account?: 'yes' | 'no';
   has_phone?: boolean;
   company_id?: string;
+  /** Match contacts whose `tags` array overlaps any of these (OR semantics). */
+  tags?: string | string[];
 };
 
 function toArray(v: string | string[] | undefined): string[] {
@@ -112,6 +114,9 @@ export async function resolveContactIdsByFilters(
 
   if (hasAccount === 'yes') query = query.not('companies.wl_workshop_id', 'is', null);
   else if (hasAccount === 'no') query = query.is('companies.wl_workshop_id', null);
+
+  const tags = toArray(filters.tags);
+  if (tags.length > 0) query = query.overlaps('tags', tags);
 
   const { data, error } = await query;
   if (error || !data) return [];

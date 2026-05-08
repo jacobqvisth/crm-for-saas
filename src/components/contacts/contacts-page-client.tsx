@@ -107,6 +107,7 @@ type LocalFilters = {
   customer_status: string[];
   has_account: string[];
   has_phone: boolean;
+  tags: string[];
 };
 
 const DEFAULT_FILTERS: LocalFilters = {
@@ -121,6 +122,7 @@ const DEFAULT_FILTERS: LocalFilters = {
   customer_status: [],
   has_account: [],
   has_phone: false,
+  tags: [],
 };
 
 export function ContactsPageClient() {
@@ -135,6 +137,7 @@ export function ContactsPageClient() {
   const [lists, setLists] = useState<Tables<'contact_lists'>[]>([]);
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
   const [sources, setSources] = useState<string[]>([]);
+  const [tagOptions, setTagOptions] = useState<string[]>([]);
 
   // Header stats (workspace-level, not filtered)
   const [statsTotal, setStatsTotal] = useState(0);
@@ -192,6 +195,7 @@ export function ContactsPageClient() {
     customer_status: filters.customer_status.length ? filters.customer_status : undefined,
     has_account: hasAccountValue,
     has_phone: filters.has_phone || undefined,
+    tags:            filters.tags.length            ? filters.tags            : undefined,
   };
 
   // Fetch contacts
@@ -260,6 +264,8 @@ export function ContactsPageClient() {
     if (hasAccountValue === 'yes') query = query.not('companies.wl_workshop_id', 'is', null);
     else if (hasAccountValue === 'no') query = query.is('companies.wl_workshop_id', null);
 
+    if (filters.tags.length > 0) query = query.overlaps('tags', filters.tags);
+
     query = query.order('created_at', { ascending: false });
 
     const { data, count, error } = await query;
@@ -284,6 +290,7 @@ export function ContactsPageClient() {
     filters.lead_status, filters.status, filters.country_code, filters.email_status,
     filters.has_phone, filters.source, filters.language,
     filters.lifecycle_stage, filters.customer_status, filters.has_account,
+    filters.tags,
   ]);
 
   useEffect(() => {
@@ -359,6 +366,35 @@ export function ContactsPageClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
+  // Fetch distinct tags across the workspace's contacts. PostgREST caps
+  // each request at 1000 rows, so paginate the `tags` projection until
+  // exhausted, dedupe in JS. ~10 round-trips for 10k contacts on first load.
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    async function fetchTags() {
+      const seen = new Set<string>();
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('tags')
+          .eq('workspace_id', workspaceId!)
+          .not('tags', 'is', null)
+          .range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        for (const row of data) {
+          for (const t of row.tags ?? []) if (t) seen.add(t);
+        }
+        if (data.length < PAGE) break;
+      }
+      if (!cancelled) setTagOptions([...seen].sort((a, b) => a.localeCompare(b)));
+    }
+    fetchTags();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
   // Fetch lists for bulk action
   useEffect(() => {
     if (!workspaceId) return;
@@ -376,7 +412,8 @@ export function ContactsPageClient() {
     filters.country_code.length > 0 || filters.email_status.length > 0 ||
     filters.source.length > 0 || filters.language.length > 0 ||
     filters.lifecycle_stage.length > 0 || filters.customer_status.length > 0 ||
-    filters.has_account.length > 0 || filters.has_phone !== false;
+    filters.has_account.length > 0 || filters.has_phone !== false ||
+    filters.tags.length > 0;
 
   const toggleSelect = (id: string) => {
     setSelectAllMatching(false);
@@ -607,6 +644,12 @@ export function ContactsPageClient() {
               onChange={v => setFilters(f => ({ ...f, has_account: v.slice(-1) }))}
               options={HAS_ACCOUNT_OPTIONS}
               allLabel="account types"
+            />
+            <MultiSelect
+              values={filters.tags}
+              onChange={v => setFilters(f => ({ ...f, tags: v }))}
+              options={tagOptions.map(t => ({ value: t, label: t }))}
+              allLabel="tags"
             />
 
             {/* Has Phone */}
