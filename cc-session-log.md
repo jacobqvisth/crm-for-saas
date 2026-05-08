@@ -14,6 +14,64 @@ updated: 2026-04-22
 
 ---
 
+## Session: CEO dashboard — manage internal-test exclusions from /ceo/settings (PR #164)
+- **Date:** 2026-05-08
+- **PR:** #164
+- **Branch:** `feature/internal-test-users-db`
+
+### What changed
+The internal-test exclusion list (14 users · 8 workshops · 6 emails · 4 usernames) used to live as static const arrays in `src/config/ceo/internal-test-users.ts`. Edits required a code change + redeploy. Moved into the database with a manage UI on `/ceo/settings`, and added Internal pills + a Show internal toggle on the workshop views so flagged entities are visible (not just silently filtered).
+
+### Schema (already applied to prod via psql)
+`supabase/migrations/20260508010000_internal_test_users_db.sql`
+- `dashboard_users` adds: `is_internal_test`, `is_internal_test_exempt`, `internal_test_note`, `internal_test_set_at`, `internal_test_set_by`
+- `dashboard_workshops` adds: `is_internal_test`, `internal_test_note`, `internal_test_set_at`, `internal_test_set_by`
+- New `dashboard_internal_test_patterns(kind, value, note)` with unique index on `(kind, lower(value))` for the email/username fallback patterns
+- Backfilled from the prior static config — verified post-migration: 14 / 3 / 8 / 6 / 4
+
+### Runtime architecture
+`src/lib/ceo/internal-test/loader.ts` is the new source of truth.
+- `loadInternalTestSets()` is wrapped in React `cache()` so every render pays a single Supabase round-trip
+- The data layer (`new-users.ts`, `workshops.ts`, `app-usage.ts`) and the core_app sync (`buildDiagnosticsMetrics`, `buildDiagnosticChatMetrics`) load the sets at the entry point and pass them down to pure per-row filters — keeping row-level checks synchronous
+- Public helpers expose a `*With` suffix (`isInternalTestUserOrWorkshopWith(sets, ...)`) to make the dependency on preloaded sets explicit
+- `searchDashboardUsers(q)` / `searchDashboardWorkshops(q)` for the settings UI run an ILIKE across name/id/note/customer_io_id
+- `listInternalTestPatterns()` for the Patterns tab
+
+The static `src/config/ceo/internal-test-users.ts` is deleted. No backwards-compat shim.
+
+### UI
+- `/ceo/workshops` list — `Internal` pill on flagged workshops (yellow), `Show internal` checkbox in filter bar threads `?showInternal=1` through `getWorkshopDrilldownList({ includeInternal: true })`
+- `/ceo/workshops/[id]` — pill in header, plus per-member `Internal` (yellow) and `Exempt` (green) pills
+- `/ceo/settings` — two top-level tabs (Playbook / Internal-test exclusions). Internal tab has sub-tabs Users / Workshops / Patterns, search bar, mark-internal/mark-exempt toggle buttons per row, and "add by ID" forms for flagging users/workshops not yet synced
+- `/ceo/app-usage` exclusion panel is now DB-driven and links to `/ceo/settings` instead of pointing at the deleted source file
+
+### Server actions
+`src/app/(ceo)/ceo/settings/actions.ts` — `setUserInternalAction`, `setUserExemptAction`, `setWorkshopInternalAction`, `addPatternAction`, `removePatternAction`. Each action uses Zod schemas, upserts via the service-role client, and calls `revalidatePath()` for `/ceo/{settings,workshops,new-users,app-usage}` so flag flips propagate immediately.
+
+### Build / lint / tsc
+- `npm run build` green
+- `npm run lint` green
+- `npx tsc --noEmit` green
+- `npm run test:e2e:smoke` blocked on the pre-existing `/api/routes/[id]` vs `/api/routes/[routeId]` slug-name conflict from PR #150 — unrelated to this change
+
+### Deploy verification
+- Vercel `x-vercel-id: arn1::zkcjg-1778245779641-c39b45848859`
+- `/ceo/settings`, `/ceo/workshops`, `/ceo/app-usage` all return 307 (auth redirect, expected)
+
+### Notable decisions
+- **No backwards-compat shim** for the deleted static file. Helper signatures changed (`isInternalTestUserOrWorkshop` → `isInternalTestUserOrWorkshopWith(sets, ...)`) so all 5 consumers got migrated in one pass; reverting would require re-introducing the const data
+- **`getWorkshopDetail()` always includes internal** — a workshop detail page should show the requested workshop regardless of its flag. The `Show internal` toggle only governs the *list*
+- **Patterns are stored lowercased** to match the unique index on `(kind, lower(value))` and the loader's case-insensitive lookup. The add form lowercases on insert
+- **The `Add by ID` form upserts** so a flagged user/workshop doesn't have to exist in `dashboard_users` / `dashboard_workshops` yet (e.g. flagging an internal user before user_stats sync runs)
+- **Migration-only orphan file** `scripts/diagnose-min-interval-column.mjs` left untracked (carried over from a prior session — unrelated)
+
+### Follow-ups
+- The `internal_test_set_by` column exists but isn't populated — the (ceo) layout doesn't currently expose the actor email to server actions. Add when the auth context is wired up
+- E2E coverage for the new toggle + manage UI flows
+- Consider auto-triggering a `core_app` sync after a flag flip (today's only refreshes the read-side; the metric snapshots persisted in `dashboard_metric_snapshots` still reflect the pre-flip count until the next sync run)
+
+---
+
 ## Session: Contacts page — customizable columns (PR #162)
 - **Date:** 2026-05-08
 - **PR:** #162
