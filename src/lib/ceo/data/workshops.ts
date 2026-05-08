@@ -1,7 +1,8 @@
 import {
-  isInternalTestUserOrWorkshop,
-  isInternalTestWorkshopId,
-} from "@/config/ceo/internal-test-users";
+  isInternalTestUserOrWorkshopWith,
+  isInternalTestWorkshopIdWith,
+  loadInternalTestSets,
+} from "@/lib/ceo/internal-test/loader";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { TABLES } from "@/lib/ceo/tables";
 import type {
@@ -44,11 +45,14 @@ export type WorkshopMember = {
   lastSeenAt: string | null;
   customerIoId: string | null;
   subscriptionStatus: string | null;
+  isInternal: boolean;
+  isInternalExempt: boolean;
 };
 
 export type WorkshopListItem = {
   workshopId: string;
   name: string;
+  isInternal: boolean;
   country: string | null;
   language: string | null;
   createdByAgent: boolean | null;
@@ -185,7 +189,10 @@ function workshopName(workshop: WarehouseWorkshop, members: WorkshopMember[]) {
   );
 }
 
-function mapMember(user: WarehouseUser): WorkshopMember {
+function mapMember(
+  user: WarehouseUser,
+  sets: import("@/lib/ceo/internal-test/loader").InternalTestSets,
+): WorkshopMember {
   return {
     internalUserId: user.internal_user_id,
     name: user.name,
@@ -198,6 +205,8 @@ function mapMember(user: WarehouseUser): WorkshopMember {
     lastSeenAt: user.last_seen_at,
     customerIoId: user.customer_io_id,
     subscriptionStatus: asString(user.metadata?.subscription_status),
+    isInternal: sets.userIds.has(user.internal_user_id),
+    isInternalExempt: sets.exemptUserIds.has(user.internal_user_id),
   };
 }
 
@@ -207,6 +216,7 @@ function buildWorkshopList(
   subscriptions: WarehouseSubscription[],
   diagnostics: DiagnosticRecord[],
   chats: DiagnosticChatRecord[],
+  sets: import("@/lib/ceo/internal-test/loader").InternalTestSets,
 ) {
   const usersByWorkshop = new Map<string, WorkshopMember[]>();
   const subscriptionsByWorkshop = new Map<string, WarehouseSubscription[]>();
@@ -216,7 +226,7 @@ function buildWorkshopList(
   for (const user of users) {
     if (!user.workshop_id) continue;
     const current = usersByWorkshop.get(user.workshop_id) ?? [];
-    current.push(mapMember(user));
+    current.push(mapMember(user, sets));
     usersByWorkshop.set(user.workshop_id, current);
   }
 
@@ -263,6 +273,7 @@ function buildWorkshopList(
       return {
         workshopId: workshop.workshop_id,
         name: workshopName(workshop, members),
+        isInternal: sets.workshopIds.has(workshop.workshop_id),
         country: workshop.country,
         language: workshop.language,
         createdByAgent: workshop.created_by_agent,
@@ -347,7 +358,9 @@ function buildWorkshopList(
     });
 }
 
-async function fetchWarehouseTables() {
+async function fetchWarehouseTables(options: { includeInternal?: boolean } = {}) {
+  const includeInternal = Boolean(options.includeInternal);
+  const sets = await loadInternalTestSets();
   const supabase = createSupabaseServiceClient();
   if (!supabase) {
     return {
@@ -356,6 +369,7 @@ async function fetchWarehouseTables() {
       subscriptions: [] as WarehouseSubscription[],
       diagnostics: [] as DiagnosticRecord[],
       chats: [] as DiagnosticChatRecord[],
+      sets,
     };
   }
 
@@ -398,43 +412,62 @@ async function fetchWarehouseTables() {
     throw new Error("Workshop drilldown read failed");
   }
 
+  const allWorkshops = (workshopsResult.data ?? []) as unknown as WarehouseWorkshop[];
+  const allDiagnostics = (diagnosticsResult.data ?? []) as DiagnosticRecord[];
+
   return {
-    workshops: (
-      (workshopsResult.data ?? []) as unknown as WarehouseWorkshop[]
-    ).filter((workshop) => !isInternalTestWorkshopId(workshop.workshop_id)),
+    workshops: includeInternal
+      ? allWorkshops
+      : allWorkshops.filter(
+          (workshop) => !isInternalTestWorkshopIdWith(sets, workshop.workshop_id),
+        ),
     users: (usersResult.data ?? []) as WarehouseUser[],
     subscriptions: (subscriptionsResult.data ?? []) as WarehouseSubscription[],
-    diagnostics: ((diagnosticsResult.data ?? []) as DiagnosticRecord[]).filter(
-      (diagnostic) =>
-        !isInternalTestUserOrWorkshop(
-          diagnostic.internal_user_id,
-          diagnostic.workshop_id,
+    diagnostics: includeInternal
+      ? allDiagnostics
+      : allDiagnostics.filter(
+          (diagnostic) =>
+            !isInternalTestUserOrWorkshopWith(
+              sets,
+              diagnostic.internal_user_id,
+              diagnostic.workshop_id,
+            ),
         ),
-    ),
     chats: (chatsResult.data ?? []) as DiagnosticChatRecord[],
+    sets,
   };
 }
 
-export async function getWorkshopDrilldownList() {
-  const tables = await fetchWarehouseTables();
+export async function getWorkshopDrilldownList(
+  options: { includeInternal?: boolean } = {},
+) {
+  const tables = await fetchWarehouseTables(options);
   return buildWorkshopList(
     tables.workshops,
     tables.users,
     tables.subscriptions,
     tables.diagnostics,
     tables.chats,
+    tables.sets,
   );
 }
 
-export async function getWorkshopDetail(workshopId: string) {
-  const tables = await fetchWarehouseTables();
+export async function getWorkshopDetail(
+  workshopId: string,
+  options: { includeInternal?: boolean } = {},
+) {
+  // Workshop detail always shows the requested workshop, internal or not — the
+  // toggle only governs whether internal workshops show up in the *list*.
+  const tables = await fetchWarehouseTables({ includeInternal: true });
   const workshopList = buildWorkshopList(
     tables.workshops,
     tables.users,
     tables.subscriptions,
     tables.diagnostics,
     tables.chats,
+    tables.sets,
   );
+  void options;
   const workshop = workshopList.find((item) => item.workshopId === workshopId);
 
   if (!workshop) {
@@ -443,7 +476,7 @@ export async function getWorkshopDetail(workshopId: string) {
 
   const members = tables.users
     .filter((user) => user.workshop_id === workshopId)
-    .map(mapMember)
+    .map((user) => mapMember(user, tables.sets))
     .sort(
       (left, right) =>
         compareIsoDesc(left.lastSeenAt, right.lastSeenAt) ||

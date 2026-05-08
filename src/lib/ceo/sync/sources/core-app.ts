@@ -6,7 +6,11 @@ import {
   type GetObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 import Stripe from "stripe";
-import { isInternalTestUserOrWorkshop } from "@/config/ceo/internal-test-users";
+import {
+  isInternalTestUserOrWorkshopWith,
+  loadInternalTestSets,
+  type InternalTestSets,
+} from "@/lib/ceo/internal-test/loader";
 import { addUtcDays, startOfUtcDay } from "@/lib/ceo/dates";
 import { getEnv } from "@/lib/ceo/env";
 import { requireSourceEnv } from "../errors";
@@ -1436,13 +1440,15 @@ function buildUserStatsMetrics(
 function buildDiagnosticsMetrics(
   rows: DiagnosticRecord[],
   workshopIdByUserId: Map<string, string>,
+  internalTestSets: InternalTestSets,
 ): MetricPoint[] {
   const metrics: MetricPoint[] = [];
 
   for (const row of rows) {
     const internalUserId = asString(row.user_id);
     if (
-      isInternalTestUserOrWorkshop(
+      isInternalTestUserOrWorkshopWith(
+        internalTestSets,
         row.user_id,
         internalUserId ? workshopIdByUserId.get(internalUserId) : undefined,
       )
@@ -1492,13 +1498,15 @@ function buildDiagnosticsMetrics(
 function buildDiagnosticChatMetrics(
   rows: DiagnosticChatRecord[],
   workshopIdByUserId: Map<string, string>,
+  internalTestSets: InternalTestSets,
 ): MetricPoint[] {
   const metrics: MetricPoint[] = [];
 
   for (const row of rows) {
     const internalUserId = asString(row.user_id);
     if (
-      isInternalTestUserOrWorkshop(
+      isInternalTestUserOrWorkshopWith(
+        internalTestSets,
         row.user_id,
         internalUserId ? workshopIdByUserId.get(internalUserId) : undefined,
       )
@@ -1720,10 +1728,12 @@ export const coreAppConnector: SourceConnector = {
       downloadCoreAppJson<CostAnalysisPayload>(client, CORE_APP_FILES.cost_analysis),
     ]);
 
-    const [customerIoEnrichment, stripeEnrichment] = await Promise.all([
-      buildCustomerIoEnrichment(userStatsFile.body),
-      buildStripeEnrichment(userStatsFile.body),
-    ]);
+    const [customerIoEnrichment, stripeEnrichment, internalTestSets] =
+      await Promise.all([
+        buildCustomerIoEnrichment(userStatsFile.body),
+        buildStripeEnrichment(userStatsFile.body),
+        loadInternalTestSets(),
+      ]);
     const workshopIdByUserId = buildWorkshopIdByUserId(userStatsFile.body);
     const users = buildUserRows(
       userStatsFile.body,
@@ -1751,8 +1761,16 @@ export const coreAppConnector: SourceConnector = {
 
     const metrics = aggregateMetricPoints([
       ...buildUserStatsMetrics(userStatsFile.body, userStatsFile.lastModified),
-      ...buildDiagnosticsMetrics(diagnosticsFile.body, workshopIdByUserId),
-      ...buildDiagnosticChatMetrics(diagnosticChatsFile.body, workshopIdByUserId),
+      ...buildDiagnosticsMetrics(
+        diagnosticsFile.body,
+        workshopIdByUserId,
+        internalTestSets,
+      ),
+      ...buildDiagnosticChatMetrics(
+        diagnosticChatsFile.body,
+        workshopIdByUserId,
+        internalTestSets,
+      ),
       ...buildMotorUsageMetrics(motorUsageFile.body),
       ...buildCostMetrics(costAnalysisFile.body, costAnalysisFile.lastModified),
     ]);

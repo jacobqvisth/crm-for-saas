@@ -1887,3 +1887,155 @@ a {
   font-size: 0.82rem;
   background: var(--surface-soft);
 }
+
+/* Internal-test exclusions: badge + filter toggle ------------------------- */
+
+.internal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.internal-pill.exempt {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.table-primary-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-form {
+  flex-wrap: wrap;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.filter-toggle input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+  accent-color: var(--accent);
+}
+
+/* Settings page — internal-test management ------------------------------- */
+
+.settings-tab-bar {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 4px;
+  gap: 4px;
+}
+
+.settings-tab-bar a {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.settings-tab-bar a.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.settings-tab-bar a:hover:not(.active) {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.settings-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.settings-inline-form {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.settings-add-form {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.settings-add-form input,
+.settings-add-form select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 0 12px;
+}
+
+.settings-add-form .button {
+  height: 36px;
+}
+
+.button.button-danger {
+  background: #fef3f2;
+  color: #b42318;
+  border: 1px solid #fecdca;
+}
+
+.button.button-danger:hover {
+  background: #fee4e2;
+}
+
+.button.button-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.button.button-ghost:hover {
+  background: var(--surface-soft);
+}
+
+.settings-empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px;
+  font-size: 0.9rem;
+}
+
+.settings-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-style: italic;
+}

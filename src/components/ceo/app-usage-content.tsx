@@ -7,10 +7,10 @@ import {
 } from "@/lib/ceo/data/app-usage";
 import type { CSSProperties } from "react";
 import { InfoHint, type SourceInfo } from "./source-info";
-import {
-  INTERNAL_TEST_USERS,
-  INTERNAL_TEST_WORKSHOPS,
-} from "@/config/ceo/internal-test-users";
+import type {
+  InternalTestUserRecord,
+  InternalTestWorkshopRecord,
+} from "@/lib/ceo/internal-test/loader";
 import {
   DEFAULT_TIME_RANGE_KEY,
   type DashboardTimeRangeKey,
@@ -18,6 +18,8 @@ import {
 
 type AppUsageContentProps = {
   usage: AppUsageData;
+  internalTestUsers: InternalTestUserRecord[];
+  internalTestWorkshops: InternalTestWorkshopRecord[];
 };
 
 function buildPlatformHref(
@@ -191,7 +193,11 @@ function AppUsageDiagram({ rows }: { rows: AppUsageData["rows"] }) {
   );
 }
 
-export function AppUsageContent({ usage }: AppUsageContentProps) {
+export function AppUsageContent({
+  usage,
+  internalTestUsers,
+  internalTestWorkshops,
+}: AppUsageContentProps) {
   const granularity = usage.granularity;
   const noun = granularityNoun(granularity);
   const columnHeader = granularityColumnHeader(granularity);
@@ -342,8 +348,8 @@ export function AppUsageContent({ usage }: AppUsageContentProps) {
             <h2>What&apos;s filtered out of these numbers</h2>
           </div>
           <span className="badge">
-            {INTERNAL_TEST_WORKSHOPS.length} workshops ·{" "}
-            {INTERNAL_TEST_USERS.length} users
+            {internalTestWorkshops.length} workshops ·{" "}
+            {internalTestUsers.length} users
           </span>
         </div>
         <p className="panel-description">
@@ -351,8 +357,8 @@ export function AppUsageContent({ usage }: AppUsageContentProps) {
           all users belonging to internal/test workshops, so the numbers reflect
           real-customer activity. GA4 unique-user, session, and page-view
           metrics cannot exclude internal testers yet because the product app
-          does not send AWS user_id to GA4. Source of truth:{" "}
-          <code>src/config/internal-test-users.ts</code>.
+          does not send AWS user_id to GA4. Manage the list at{" "}
+          <a href="/ceo/settings">/ceo/settings</a>.
         </p>
         <details className="exclusion-details">
           <summary>Show excluded workshops and users</summary>
@@ -360,10 +366,15 @@ export function AppUsageContent({ usage }: AppUsageContentProps) {
             <div className="exclusion-column">
               <h3>Workshops</h3>
               <ul className="exclusion-list">
-                {INTERNAL_TEST_WORKSHOPS.map((workshop) => (
-                  <li key={workshop.id}>
-                    <strong>{workshop.name}</strong>
-                    <code>{workshop.id}</code>
+                {internalTestWorkshops.map((workshop) => (
+                  <li key={workshop.workshopId}>
+                    <strong>{workshop.name ?? workshop.workshopId}</strong>
+                    {workshop.internalTestNote ? (
+                      <span className="exclusion-meta">
+                        {workshop.internalTestNote}
+                      </span>
+                    ) : null}
+                    <code>{workshop.workshopId}</code>
                   </li>
                 ))}
               </ul>
@@ -371,15 +382,16 @@ export function AppUsageContent({ usage }: AppUsageContentProps) {
             <div className="exclusion-column">
               <h3>Users</h3>
               <ul className="exclusion-list">
-                {INTERNAL_TEST_USERS.map((user) => (
-                  <li key={user.id}>
-                    <strong>{user.label}</strong>
-                    {user.workshop ? (
-                      <span className="exclusion-meta">{user.workshop}</span>
-                    ) : null}
-                    <code>{user.id}</code>
-                  </li>
-                ))}
+                {internalTestUsers
+                  .filter((user) => user.isInternalTest)
+                  .map((user) => (
+                    <li key={user.internalUserId}>
+                      <strong>
+                        {user.internalTestNote ?? user.internalUserId}
+                      </strong>
+                      <code>{user.internalUserId}</code>
+                    </li>
+                  ))}
               </ul>
             </div>
           </div>
