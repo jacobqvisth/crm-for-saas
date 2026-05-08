@@ -14,6 +14,7 @@ import { countryFlag, SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/
 import { LeadStatusBadge } from '@/components/ui/badge';
 import { SlideOver } from '@/components/ui/slide-over';
 import { Modal } from '@/components/ui/modal';
+import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select';
 import toast from 'react-hot-toast';
 import type { Tables } from '@/lib/database.types';
 import type { ContactFilters } from '@/lib/contacts-filter';
@@ -25,45 +26,102 @@ const PAGE_SIZE = 50;
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 
 const LEAD_STATUS_TABS = [
-  { label: 'All', value: '' },
-  { label: 'New', value: 'new' },
-  { label: 'Contacted', value: 'contacted' },
-  { label: 'Qualified', value: 'qualified' },
-  { label: 'Customer', value: 'customer' },
-  { label: 'Churned', value: 'churned' },
+  { label: 'New',          value: 'new' },
+  { label: 'Contacted',    value: 'contacted' },
+  { label: 'Engaged',      value: 'engaged' },
+  { label: 'Qualified',    value: 'qualified' },
+  { label: 'Customer',     value: 'customer' },
+  { label: 'Unqualified',  value: 'unqualified' },
+  { label: 'Churned',      value: 'churned' },
 ];
 
-const ALL_SOURCES = ['discovery', 'csv', 'manual', 'prospeo'] as const;
+const ALL_SOURCES = ['discovery', 'csv', 'manual', 'prospeo', 'wl-app', 'lemlist'] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
   discovery: 'Discovery',
   csv: 'CSV Import',
   manual: 'Manual',
   prospeo: 'Prospeo',
+  'wl-app': 'WL App',
+  lemlist: 'Lemlist',
 };
+
+const EMAIL_STATUS_OPTIONS: MultiSelectOption[] = [
+  { value: 'valid',      label: 'Valid',        prefix: '✅' },
+  { value: 'risky',      label: 'Risky',        prefix: '⚠️' },
+  { value: 'catch_all',  label: 'Catch-all',    prefix: '📬' },
+  { value: 'invalid',    label: 'Invalid',      prefix: '❌' },
+  { value: 'unverified', label: 'Not verified', prefix: '—' },
+];
+
+const CONTACT_STATUS_OPTIONS: MultiSelectOption[] = [
+  { value: 'active',       label: 'Active' },
+  { value: 'bounced',      label: 'Bounced' },
+  { value: 'unsubscribed', label: 'Unsubscribed' },
+  { value: 'archived',     label: 'Archived' },
+];
+
+const LIFECYCLE_OPTIONS: MultiSelectOption[] = [
+  { value: 'lead',         label: 'Lead' },
+  { value: 'mql',          label: 'MQL' },
+  { value: 'sql',          label: 'SQL' },
+  { value: 'trial',        label: 'Trial' },
+  { value: 'paying',       label: 'Paying' },
+  { value: 'churned',      label: 'Churned' },
+  { value: 'reactivation', label: 'Reactivation' },
+];
+
+const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
+  { value: 'trialing', label: 'Trialing' },
+  { value: 'active',   label: 'Active' },
+  { value: 'paused',   label: 'Paused' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'churned',  label: 'Churned' },
+];
+
+const LANGUAGE_OPTIONS: MultiSelectOption[] = [
+  { value: 'sv', label: 'Swedish',   prefix: '🇸🇪' },
+  { value: 'no', label: 'Norwegian', prefix: '🇳🇴' },
+  { value: 'da', label: 'Danish',    prefix: '🇩🇰' },
+  { value: 'fi', label: 'Finnish',   prefix: '🇫🇮' },
+  { value: 'et', label: 'Estonian',  prefix: '🇪🇪' },
+  { value: 'lv', label: 'Latvian',   prefix: '🇱🇻' },
+  { value: 'lt', label: 'Lithuanian',prefix: '🇱🇹' },
+  { value: 'en', label: 'English',   prefix: '🇬🇧' },
+];
+
+const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
+  { value: 'yes', label: 'App user' },
+  { value: 'no',  label: 'Prospect (no account)' },
+];
 
 type LocalFilters = {
   search: string;
-  lead_status: string;
-  status: string;
-  country_code: string;
-  email_status: string;
+  lead_status: string[];
+  status: string[];
+  country_code: string[];
+  email_status: string[];
+  source: string[];
+  language: string[];
+  lifecycle_stage: string[];
+  customer_status: string[];
+  has_account: string[];
   has_phone: boolean;
-  source: string;
 };
 
 const DEFAULT_FILTERS: LocalFilters = {
   search: '',
-  lead_status: '',
-  status: '',
-  country_code: '',
-  email_status: '',
+  lead_status: [],
+  status: [],
+  country_code: [],
+  email_status: [],
+  source: [],
+  language: [],
+  lifecycle_stage: [],
+  customer_status: [],
+  has_account: [],
   has_phone: false,
-  source: '',
 };
-
-const DROPDOWN_CLASS =
-  'border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500';
 
 export function ContactsPageClient() {
   const router = useRouter();
@@ -117,15 +175,23 @@ export function ContactsPageClient() {
   const [verifying, setVerifying] = useState(false);
   const [bulkLeadStatus, setBulkLeadStatus] = useState('');
 
-  // Build filter object for API calls
+  // Build filter object for API calls (server-side resolver accepts string[]).
+  const hasAccountValue: ContactFilters['has_account'] =
+    filters.has_account.length === 1 && (filters.has_account[0] === 'yes' || filters.has_account[0] === 'no')
+      ? filters.has_account[0]
+      : undefined;
   const currentFilters: ContactFilters = {
     search: filters.search || undefined,
-    lead_status: filters.lead_status || undefined,
-    status: filters.status || undefined,
-    country_code: filters.country_code || undefined,
-    email_status: filters.email_status || undefined,
+    lead_status:     filters.lead_status.length     ? filters.lead_status     : undefined,
+    status:          filters.status.length          ? filters.status          : undefined,
+    country_code:    filters.country_code.length    ? filters.country_code    : undefined,
+    email_status:    filters.email_status.length    ? filters.email_status    : undefined,
+    source:          filters.source.length          ? filters.source          : undefined,
+    language:        filters.language.length        ? filters.language        : undefined,
+    lifecycle_stage: filters.lifecycle_stage.length ? filters.lifecycle_stage : undefined,
+    customer_status: filters.customer_status.length ? filters.customer_status : undefined,
+    has_account: hasAccountValue,
     has_phone: filters.has_phone || undefined,
-    source: filters.source || undefined,
   };
 
   // Fetch contacts
@@ -136,9 +202,16 @@ export function ContactsPageClient() {
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
+    const needsCompanyJoin =
+      filters.lifecycle_stage.length > 0 ||
+      filters.customer_status.length > 0 ||
+      filters.has_account.length > 0;
+
+    const selectExpr = needsCompanyJoin ? '*, companies!inner(name)' : '*, companies(name)';
+
     let query = supabase
       .from('contacts')
-      .select('*, companies(name)', { count: 'exact' })
+      .select(selectExpr, { count: 'exact' })
       .eq('workspace_id', workspaceId)
       .range(from, to);
 
@@ -147,26 +220,45 @@ export function ContactsPageClient() {
         `first_name.ilike.%${debouncedSearch}%,last_name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%`
       );
     }
-    if (filters.lead_status) {
-      query = query.eq('lead_status', filters.lead_status as NonNullable<Contact['lead_status']>);
+
+    if (filters.lead_status.length === 1) query = query.eq('lead_status', filters.lead_status[0]);
+    else if (filters.lead_status.length > 1) query = query.in('lead_status', filters.lead_status);
+
+    if (filters.status.length === 1) query = query.eq('status', filters.status[0]);
+    else if (filters.status.length > 1) query = query.in('status', filters.status);
+
+    if (filters.country_code.length === 1) query = query.eq('country_code', filters.country_code[0]);
+    else if (filters.country_code.length > 1) query = query.in('country_code', filters.country_code);
+
+    if (filters.email_status.length > 0) {
+      const includesUnverified = filters.email_status.includes('unverified');
+      const concrete = filters.email_status.filter((s) => s !== 'unverified');
+      const orParts: string[] = [];
+      if (concrete.length === 1) orParts.push(`email_status.eq.${concrete[0]}`);
+      if (concrete.length > 1) orParts.push(`email_status.in.(${concrete.join(',')})`);
+      if (includesUnverified) {
+        orParts.push('email_status.is.null');
+        orParts.push('email_status.eq.unknown');
+      }
+      if (orParts.length > 0) query = query.or(orParts.join(','));
     }
-    if (filters.status) {
-      query = query.eq('status', filters.status as NonNullable<Contact['status']>);
-    }
-    if (filters.country_code) {
-      query = query.eq('country_code', filters.country_code);
-    }
-    if (filters.email_status === 'unverified') {
-      query = query.or('email_status.is.null,email_status.eq.unknown');
-    } else if (filters.email_status) {
-      query = query.eq('email_status', filters.email_status);
-    }
-    if (filters.has_phone) {
-      query = query.not('phone', 'is', null).neq('phone', '');
-    }
-    if (filters.source) {
-      query = query.eq('source', filters.source);
-    }
+
+    if (filters.has_phone) query = query.not('phone', 'is', null).neq('phone', '');
+
+    if (filters.source.length === 1) query = query.eq('source', filters.source[0]);
+    else if (filters.source.length > 1) query = query.in('source', filters.source);
+
+    if (filters.language.length === 1) query = query.eq('language', filters.language[0]);
+    else if (filters.language.length > 1) query = query.in('language', filters.language);
+
+    if (filters.lifecycle_stage.length === 1) query = query.eq('companies.lifecycle_stage', filters.lifecycle_stage[0]);
+    else if (filters.lifecycle_stage.length > 1) query = query.in('companies.lifecycle_stage', filters.lifecycle_stage);
+
+    if (filters.customer_status.length === 1) query = query.eq('companies.customer_status', filters.customer_status[0]);
+    else if (filters.customer_status.length > 1) query = query.in('companies.customer_status', filters.customer_status);
+
+    if (hasAccountValue === 'yes') query = query.not('companies.wl_workshop_id', 'is', null);
+    else if (hasAccountValue === 'no') query = query.is('companies.wl_workshop_id', null);
 
     query = query.order('created_at', { ascending: false });
 
@@ -187,7 +279,12 @@ export function ContactsPageClient() {
     setSelectedIds(new Set());
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, page, debouncedSearch, filters.lead_status, filters.status, filters.country_code, filters.email_status, filters.has_phone, filters.source]);
+  }, [
+    workspaceId, page, debouncedSearch,
+    filters.lead_status, filters.status, filters.country_code, filters.email_status,
+    filters.has_phone, filters.source, filters.language,
+    filters.lifecycle_stage, filters.customer_status, filters.has_account,
+  ]);
 
   useEffect(() => {
     fetchContacts();
@@ -274,9 +371,12 @@ export function ContactsPageClient() {
   const allSelected = contacts.length > 0 && selectedIds.size === contacts.length;
   const effectiveCount = selectAllMatching ? totalCount : selectedIds.size;
   const hasActiveFilters =
-    filters.search !== '' || filters.lead_status !== '' || filters.status !== '' ||
-    filters.country_code !== '' || filters.email_status !== '' ||
-    filters.has_phone !== false || filters.source !== '';
+    filters.search !== '' ||
+    filters.lead_status.length > 0 || filters.status.length > 0 ||
+    filters.country_code.length > 0 || filters.email_status.length > 0 ||
+    filters.source.length > 0 || filters.language.length > 0 ||
+    filters.lifecycle_stage.length > 0 || filters.customer_status.length > 0 ||
+    filters.has_account.length > 0 || filters.has_phone !== false;
 
   const toggleSelect = (id: string) => {
     setSelectAllMatching(false);
@@ -415,80 +515,102 @@ export function ContactsPageClient() {
       <div className="flex-1 p-6 space-y-5">
         {/* Filter card */}
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-          {/* Row 1: Lead Status pill tabs */}
-          <div className="flex flex-wrap gap-1">
-            {LEAD_STATUS_TABS.map(tab => (
-              <button
-                key={tab.value}
-                onClick={() => setFilters(f => ({ ...f, lead_status: tab.value }))}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  filters.lead_status === tab.value
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          {/* Row 1: Lead Status pill tabs (multi-toggle) */}
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-xs uppercase tracking-wide text-slate-500 mr-1.5">Lead status:</span>
+            <button
+              onClick={() => setFilters(f => ({ ...f, lead_status: [] }))}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                filters.lead_status.length === 0
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              All
+            </button>
+            {LEAD_STATUS_TABS.map(tab => {
+              const active = filters.lead_status.includes(tab.value);
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setFilters(f => ({
+                    ...f,
+                    lead_status: active
+                      ? f.lead_status.filter(v => v !== tab.value)
+                      : [...f.lead_status, tab.value],
+                  }))}
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Row 2: Dropdowns + toggles */}
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Country */}
-            <select
-              value={filters.country_code}
-              onChange={e => setFilters(f => ({ ...f, country_code: e.target.value }))}
-              className={DROPDOWN_CLASS}
-            >
-              <option value="">All countries</option>
-              {countries.map(c => (
-                <option key={c.code} value={c.code}>
-                  {countryFlag(c.code)} {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
-
-            {/* Email Status */}
-            <select
-              value={filters.email_status}
-              onChange={e => setFilters(f => ({ ...f, email_status: e.target.value }))}
-              className={DROPDOWN_CLASS}
-            >
-              <option value="">All email statuses</option>
-              <option value="valid">✅ Valid</option>
-              <option value="risky">⚠️ Risky</option>
-              <option value="catch_all">📬 Catch-all</option>
-              <option value="invalid">❌ Invalid</option>
-              <option value="unverified">— Not verified</option>
-            </select>
-
-            {/* Source */}
-            <select
-              value={filters.source}
-              onChange={e => setFilters(f => ({ ...f, source: e.target.value }))}
-              className={DROPDOWN_CLASS}
-            >
-              <option value="">All sources</option>
-              {sources.map(s => (
-                <option key={s} value={s}>{SOURCE_LABELS[s] ?? s}</option>
-              ))}
-            </select>
-
-            {/* Contact Status */}
-            <select
-              value={filters.status}
-              onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-              className={DROPDOWN_CLASS}
-            >
-              <option value="">All statuses</option>
-              <option value="active">Active</option>
-              <option value="bounced">Bounced</option>
-              <option value="unsubscribed">Unsubscribed</option>
-              <option value="archived">Archived</option>
-            </select>
+          {/* Row 2: Multi-select dropdowns */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <MultiSelect
+              values={filters.country_code}
+              onChange={v => setFilters(f => ({ ...f, country_code: v }))}
+              options={countries.map(c => ({
+                value: c.code,
+                label: `${c.name} (${c.code})`,
+                prefix: countryFlag(c.code),
+              }))}
+              allLabel="countries"
+            />
+            <MultiSelect
+              values={filters.email_status}
+              onChange={v => setFilters(f => ({ ...f, email_status: v }))}
+              options={EMAIL_STATUS_OPTIONS}
+              allLabel="email statuses"
+            />
+            <MultiSelect
+              values={filters.source}
+              onChange={v => setFilters(f => ({ ...f, source: v }))}
+              options={(sources.length > 0 ? sources : [...ALL_SOURCES]).map(s => ({
+                value: s,
+                label: SOURCE_LABELS[s] ?? s,
+              }))}
+              allLabel="sources"
+            />
+            <MultiSelect
+              values={filters.status}
+              onChange={v => setFilters(f => ({ ...f, status: v }))}
+              options={CONTACT_STATUS_OPTIONS}
+              allLabel="contact statuses"
+            />
+            <MultiSelect
+              values={filters.language}
+              onChange={v => setFilters(f => ({ ...f, language: v }))}
+              options={LANGUAGE_OPTIONS}
+              allLabel="languages"
+            />
+            <MultiSelect
+              values={filters.lifecycle_stage}
+              onChange={v => setFilters(f => ({ ...f, lifecycle_stage: v }))}
+              options={LIFECYCLE_OPTIONS}
+              allLabel="lifecycle stages"
+            />
+            <MultiSelect
+              values={filters.customer_status}
+              onChange={v => setFilters(f => ({ ...f, customer_status: v }))}
+              options={CUSTOMER_STATUS_OPTIONS}
+              allLabel="customer statuses"
+            />
+            <MultiSelect
+              values={filters.has_account}
+              onChange={v => setFilters(f => ({ ...f, has_account: v.slice(-1) }))}
+              options={HAS_ACCOUNT_OPTIONS}
+              allLabel="account types"
+            />
 
             {/* Has Phone */}
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none ml-2">
               <input
                 type="checkbox"
                 checked={filters.has_phone}
