@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Search, Plus, Upload, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Trash2, ListPlus, ShieldCheck, CheckCircle, XCircle, Phone,
+  Trash2, ListPlus, ShieldCheck, CheckCircle, XCircle, Phone, Columns3, Building2,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { countryFlag, SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/countries';
@@ -18,8 +18,17 @@ import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-selec
 import toast from 'react-hot-toast';
 import type { Tables } from '@/lib/database.types';
 import type { ContactFilters } from '@/lib/contacts-filter';
+import {
+  COLUMNS, COLUMN_BY_ID, DEFAULT_COLUMN_IDS, loadColumnIds, saveColumnIds, type ColumnId,
+} from './column-config';
+import { ColumnCustomizer } from './column-customizer';
 
-type Contact = Tables<'contacts'> & { company_name?: string | null };
+type Contact = Tables<'contacts'> & {
+  company_name?: string | null;
+  company_lifecycle_stage?: string | null;
+  company_customer_status?: string | null;
+  company_wl_workshop_id?: string | null;
+};
 
 const PAGE_SIZE = 50;
 
@@ -143,6 +152,17 @@ export function ContactsPageClient() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
 
+  // Column visibility + order — persisted to localStorage per workspace
+  const [columnIds, setColumnIds] = useState<ColumnId[]>(DEFAULT_COLUMN_IDS);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  useEffect(() => {
+    if (workspaceId) setColumnIds(loadColumnIds(workspaceId));
+  }, [workspaceId]);
+  const handleColumnsChange = (next: ColumnId[]) => {
+    setColumnIds(next);
+    saveColumnIds(workspaceId ?? null, next);
+  };
+
   const handleSortClick = (key: SortKey) => {
     setSort((prev) => {
       if (prev.key === key) return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
@@ -211,7 +231,9 @@ export function ContactsPageClient() {
       filters.customer_status.length > 0 ||
       filters.has_account.length > 0;
 
-    const selectExpr = needsCompanyJoin ? '*, companies!inner(name)' : '*, companies(name)';
+    const selectExpr = needsCompanyJoin
+      ? '*, companies!inner(name, lifecycle_stage, customer_status, wl_workshop_id)'
+      : '*, companies(name, lifecycle_stage, customer_status, wl_workshop_id)';
 
     let query = supabase
       .from('contacts')
@@ -301,10 +323,21 @@ export function ContactsPageClient() {
       return;
     }
 
-    const mapped = (data || []).map((c: Record<string, unknown>) => ({
-      ...c,
-      company_name: (c.companies as { name: string } | null)?.name ?? null,
-    })) as Contact[];
+    const mapped = (data || []).map((c: Record<string, unknown>) => {
+      const co = c.companies as {
+        name: string | null;
+        lifecycle_stage: string | null;
+        customer_status: string | null;
+        wl_workshop_id: string | null;
+      } | null;
+      return {
+        ...c,
+        company_name:               co?.name ?? null,
+        company_lifecycle_stage:    co?.lifecycle_stage ?? null,
+        company_customer_status:    co?.customer_status ?? null,
+        company_wl_workshop_id:     co?.wl_workshop_id ?? null,
+      };
+    }) as Contact[];
 
     setContacts(mapped);
     setTotalCount(count || 0);
@@ -556,6 +589,15 @@ export function ContactsPageClient() {
               </div>
             )}
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setColumnsOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+                aria-label="Customize columns"
+                title="Customize columns"
+              >
+                <Columns3 className="w-4 h-4" />
+                Columns
+              </button>
               <Link
                 href="/contacts/import"
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
@@ -721,20 +763,33 @@ export function ContactsPageClient() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <SortableTh sortKey="name"        label="Name"        sort={sort} onClick={handleSortClick} />
-                  <SortableTh sortKey="email"       label="Email"       sort={sort} onClick={handleSortClick} />
-                  <SortableTh sortKey="phone"       label="Phone"       sort={sort} onClick={handleSortClick} />
-                  <SortableTh sortKey="company"     label="Company"     sort={sort} onClick={handleSortClick} />
-                  <SortableTh sortKey="country"     label="Country"     sort={sort} onClick={handleSortClick} />
-                  <SortableTh sortKey="lead_status" label="Lead Status" sort={sort} onClick={handleSortClick} />
-                  <SortableTh sortKey="created_at"  label="Created"     sort={sort} onClick={handleSortClick} />
+                  {columnIds.map((id) => {
+                    const col = COLUMN_BY_ID[id];
+                    if (!col) return null;
+                    if (col.sortable) {
+                      return (
+                        <SortableTh
+                          key={id}
+                          sortKey={id as SortKey}
+                          label={col.label}
+                          sort={sort}
+                          onClick={handleSortClick}
+                        />
+                      );
+                    }
+                    return (
+                      <th key={id} className="text-left px-4 py-3 font-medium text-slate-600">
+                        {col.label}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {/* Select-all-matching banner */}
                 {!loading && allSelected && !selectAllMatching && totalCount > contacts.length && (
                   <tr>
-                    <td colSpan={8} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
+                    <td colSpan={columnIds.length + 1} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
                       All {contacts.length} contacts on this page are selected.{' '}
                       <button
                         onClick={() => setSelectAllMatching(true)}
@@ -747,7 +802,7 @@ export function ContactsPageClient() {
                 )}
                 {!loading && selectAllMatching && (
                   <tr>
-                    <td colSpan={8} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
+                    <td colSpan={columnIds.length + 1} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
                       All {totalCount.toLocaleString()} contacts matching current filters are selected.{' '}
                       <button
                         onClick={() => { setSelectAllMatching(false); setSelectedIds(new Set()); }}
@@ -763,20 +818,14 @@ export function ContactsPageClient() {
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-b border-slate-100 animate-pulse">
                       <td className="px-4 py-3"><div className="h-4 w-4 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-32 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-40 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-28 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-5 w-16 bg-slate-200 rounded-full" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 bg-slate-200 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-200 rounded" /></td>
+                      {columnIds.map((id) => (
+                        <td key={id} className="px-4 py-3"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
+                      ))}
                     </tr>
                   ))
                 ) : contacts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center">
+                    <td colSpan={columnIds.length + 1} className="px-4 py-16 text-center">
                       <p className="text-slate-500 font-medium">No contacts found</p>
                       <p className="text-slate-400 text-sm mt-1">
                         {hasActiveFilters ? 'Try adjusting your filters' : 'Add your first contact or import from CSV'}
@@ -803,61 +852,11 @@ export function ContactsPageClient() {
                           className="rounded border-slate-300"
                         />
                       </td>
-                      <td className="px-4 py-3">
-                        <Link href={`/contacts/${contact.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
-                          {[contact.first_name, contact.last_name].filter(Boolean).join(' ') || '—'}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <div className="flex items-center gap-1.5">
-                          {contact.email_status === 'invalid' ? (
-                            <XCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
-                          ) : contact.email_status === 'valid' ? (
-                            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
-                          ) : contact.email_status === 'risky' ? (
-                            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
-                          ) : contact.email_status === 'catch_all' ? (
-                            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
-                          ) : null}
-                          {contact.email ? (
-                            <a href={`mailto:${contact.email}`} className="hover:text-indigo-600 hover:underline">
-                              {contact.email}
-                            </a>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {contact.phone ? (
-                          <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-indigo-600 hover:underline">
-                            <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="truncate max-w-[130px]">{contact.phone}</span>
-                          </a>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {contact.company_id && contact.company_name ? (
-                          <Link href={`/companies/${contact.company_id}`} className="text-indigo-600 hover:text-indigo-700">
-                            {contact.company_name}
-                          </Link>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {contact.country_code
-                          ? `${countryFlag(contact.country_code)} ${contact.country ?? contact.country_code}`
-                          : <span className="text-slate-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <LeadStatusBadge status={contact.lead_status ?? 'new'} />
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {format(new Date(contact.created_at ?? Date.now()), 'MMM d, yyyy')}
-                      </td>
+                      {columnIds.map((id) => (
+                        <td key={id} className="px-4 py-3">
+                          {renderCell(id, contact)}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}
@@ -932,6 +931,13 @@ export function ContactsPageClient() {
           </button>
         </div>
       )}
+
+      <ColumnCustomizer
+        open={columnsOpen}
+        onClose={() => setColumnsOpen(false)}
+        visibleIds={columnIds}
+        onChange={handleColumnsChange}
+      />
 
       {/* Add Contact Slide-Over */}
       <SlideOver open={showAddContact} onClose={() => setShowAddContact(false)} title="Add Contact">
@@ -1152,6 +1158,139 @@ function AddContactForm({
       </div>
     </form>
   );
+}
+
+// ── Cell renderer ─────────────────────────────────────────────────────────────
+
+function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
+  switch (id) {
+    case 'name':
+      return (
+        <Link href={`/contacts/${contact.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
+          {[contact.first_name, contact.last_name].filter(Boolean).join(' ') || '—'}
+        </Link>
+      );
+    case 'email':
+      return (
+        <div className="flex items-center gap-1.5 text-slate-600">
+          {contact.email_status === 'invalid' ? (
+            <XCircle className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+          ) : contact.email_status === 'valid' ? (
+            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+          ) : contact.email_status === 'risky' ? (
+            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+          ) : contact.email_status === 'catch_all' ? (
+            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+          ) : null}
+          {contact.email ? (
+            <a href={`mailto:${contact.email}`} className="hover:text-indigo-600 hover:underline">
+              {contact.email}
+            </a>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </div>
+      );
+    case 'phone':
+      return contact.phone ? (
+        <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-indigo-600 hover:underline">
+          <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate max-w-[130px]">{contact.phone}</span>
+        </a>
+      ) : (
+        <span className="text-slate-400">—</span>
+      );
+    case 'title':
+      return contact.title ? (
+        <span className="text-slate-700">{contact.title}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'company':
+      return contact.company_id && contact.company_name ? (
+        <Link href={`/companies/${contact.company_id}`} className="text-indigo-600 hover:text-indigo-700">
+          {contact.company_name}
+        </Link>
+      ) : (
+        <span className="text-slate-400">—</span>
+      );
+    case 'country':
+      return contact.country_code ? (
+        <span className="text-sm text-slate-600">
+          {countryFlag(contact.country_code)} {contact.country ?? contact.country_code}
+        </span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'lead_status':
+      return <LeadStatusBadge status={contact.lead_status ?? 'new'} />;
+    case 'status':
+      return contact.status ? (
+        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
+          contact.status === 'active'       ? 'bg-emerald-100 text-emerald-700' :
+          contact.status === 'bounced'      ? 'bg-red-100 text-red-700' :
+          contact.status === 'unsubscribed' ? 'bg-slate-100 text-slate-700' :
+                                              'bg-slate-100 text-slate-500'
+        }`}>{contact.status}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'email_status':
+      return contact.email_status ? (
+        <span className="text-xs text-slate-600 capitalize">{contact.email_status.replace(/_/g, ' ')}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'source':
+      return contact.source ? (
+        <span className="text-xs text-slate-600">{contact.source}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'lifecycle':
+      return contact.company_lifecycle_stage ? (
+        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
+          contact.company_lifecycle_stage === 'paying'       ? 'bg-emerald-100 text-emerald-700' :
+          contact.company_lifecycle_stage === 'trial'        ? 'bg-amber-100 text-amber-700' :
+          contact.company_lifecycle_stage === 'churned'      ? 'bg-red-100 text-red-700' :
+          contact.company_lifecycle_stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :
+                                                               'bg-slate-100 text-slate-700'
+        }`}>{contact.company_lifecycle_stage}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'customer_status':
+      return contact.company_customer_status ? (
+        <span className="text-xs text-slate-700 capitalize">{contact.company_customer_status}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'has_account':
+      return contact.company_wl_workshop_id ? (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-violet-100 text-violet-700">
+          <Building2 className="w-3 h-3" />
+          App user
+        </span>
+      ) : <span className="text-xs text-slate-400">prospect</span>;
+    case 'tags': {
+      const tags = (contact.tags as string[] | null) || [];
+      if (tags.length === 0) return <span className="text-slate-400">—</span>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {tags.slice(0, 3).map((t, i) => (
+            <span key={i} className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 text-slate-700">
+              {t}
+            </span>
+          ))}
+          {tags.length > 3 && <span className="text-[10px] text-slate-400">+{tags.length - 3}</span>}
+        </div>
+      );
+    }
+    case 'last_contacted_at':
+      return contact.last_contacted_at ? (
+        <span className="text-xs text-slate-500" title={contact.last_contacted_at}>
+          {formatDistanceToNow(new Date(contact.last_contacted_at), { addSuffix: true })}
+        </span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'created_at':
+      return contact.created_at ? (
+        <span className="text-slate-500">{format(new Date(contact.created_at), 'MMM d, yyyy')}</span>
+      ) : <span className="text-slate-400">—</span>;
+    case 'updated_at':
+      return contact.updated_at ? (
+        <span className="text-xs text-slate-500" title={contact.updated_at}>
+          {formatDistanceToNow(new Date(contact.updated_at), { addSuffix: true })}
+        </span>
+      ) : <span className="text-slate-400">—</span>;
+    default:
+      return null;
+  }
 }
 
 // ── Sortable column header ────────────────────────────────────────────────────
