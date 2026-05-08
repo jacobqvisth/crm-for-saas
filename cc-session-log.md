@@ -14,6 +14,48 @@ updated: 2026-04-22
 
 ---
 
+## Session: Enrollment guardrail for already-sequenced contacts
+- **Date:** 2026-05-08
+- **PR:** #159
+- **Branch:** `feature/enrollment-guard-already-sequenced`
+- **Builds on:** #157 (Lemlist CSV cohort tagging)
+
+### What was built
+
+`enrollContacts()` now skips any contact whose `tags` array overlaps `ALREADY_SEQUENCED_TAGS` (currently `['lemlist-csv']`). The guard is bypassable via a new `allowAlreadySequenced` param. Result shape gains a typed `skippedAlreadySequenced: number` so callers don't have to parse `reasons[]` to render "X excluded".
+
+**Bypass policy:**
+
+| Surface | Default |
+|---|---|
+| `/api/sequences/enroll` | block (override accepted via request body) |
+| **Add Contacts to Sequence** modal | block; checkbox to include |
+| **Enroll List** modal | block; checkbox to include |
+| **Field Routes — `logVisit`** | bypass (post-visit followup is deliberate re-engagement) |
+| Single-contact "Enroll in sequence" modal | block, no toggle yet (follow-up) |
+| Launch Campaign modal | block, no toggle yet (follow-up) |
+
+### Notable decisions
+
+- **Field Routes bypasses the guard.** When Hans visits a Lemlist-cohort shop and the outcome triggers auto-followup, that's deliberate re-engagement — not the double-send the guard exists to prevent. Without the bypass, the auto-followup would silently no-op for the most-likely-to-need-it cohort.
+- **Bypass is per-call, not per-contact.** I considered "remove the tag from the contact to permanently allow enrollment" as the override mechanism, but a transient flag is more flexible — Hans can enroll the cohort once for a follow-up campaign without losing the historical signal. The tag stays.
+- **Two modals updated, two skipped.** Bulk enrollment paths (Add Contacts, Enroll List) are where the cohort would actually be touched; single-contact and launch-campaign modals are lower-volume and can get the same toggle in a follow-up.
+- **Tag list is hardcoded for now.** `ALREADY_SEQUENCED_TAGS = ['lemlist-csv']`. A workspace-level setting would be cleaner long-term but overkill for a single tag.
+
+### Build / verify
+
+- `npx tsc --noEmit` green
+- `npm run build` green
+- Backfill from PR #157 (765 contacts tagged `lemlist-csv`) is still in prod, so the guard immediately protects them.
+
+### Follow-ups
+
+- **Add the toggle to the single-contact "Enroll in sequence" and launch-campaign modals** — they currently default-block but offer no UI override.
+- **Consider a workspace-level tag setting** so a future workspace can use a different cohort name (`mailshake-2024`, etc.) without code change.
+- **Telemetry: log how often the override fires** — useful signal for whether the default is correct.
+
+---
+
 ## Session: Tag the Lemlist CSV cohort + add Tags filter
 - **Date:** 2026-05-08
 - **PR:** #157
