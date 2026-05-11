@@ -97,6 +97,7 @@ export async function PATCH(
   const body = (await request.json().catch(() => ({}))) as {
     scheduled_for?: string | null;
     status?: "scheduled" | "discarded" | "in_progress" | "completed" | "candidate";
+    cluster_label?: string;
   };
 
   // Schedule guard — block dates that fall on the assignee's non-working day or a PTO entry,
@@ -121,6 +122,16 @@ export async function PATCH(
   const update: Record<string, unknown> = {};
   if (body.scheduled_for !== undefined) update.scheduled_for = body.scheduled_for;
   if (body.status !== undefined) update.status = body.status;
+  if (body.cluster_label !== undefined) {
+    const trimmed = body.cluster_label.trim();
+    if (trimmed.length === 0 || trimmed.length > 200) {
+      return NextResponse.json(
+        { error: "cluster_label must be 1–200 characters" },
+        { status: 400 },
+      );
+    }
+    update.cluster_label = trimmed;
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });

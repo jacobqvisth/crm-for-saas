@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, Calendar, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ExternalLink, Calendar, Trash2, AlertTriangle, Pencil, Check, X as XIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import StopsReorderList, {
   type ReorderStop,
@@ -136,6 +136,10 @@ export default function RouteDetailPage() {
   const [addSheetOpen, setAddSheetOpen] = useState<AddStopSheetState | null>(null);
   const [addingStop, setAddingStop] = useState(false);
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
   const [members, setMembers] = useState<Member[]>([]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
@@ -220,6 +224,43 @@ export default function RouteDetailPage() {
       return;
     }
     await patchSchedule(scheduledFor);
+  }
+
+  function startRename() {
+    if (!route) return;
+    setNameDraft(cleanLabel(route.cluster_label));
+    setEditingName(true);
+  }
+
+  async function saveRename() {
+    if (!route) return;
+    const next = nameDraft.trim();
+    if (next.length === 0) {
+      toast.error("Name can't be empty");
+      return;
+    }
+    if (next === cleanLabel(route.cluster_label)) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      const res = await fetch(`/api/routes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cluster_label: next }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        toast.error(text || "Failed to rename");
+        return;
+      }
+      setRoute((r) => (r ? { ...r, cluster_label: next } : r));
+      setEditingName(false);
+      toast.success("Renamed");
+    } finally {
+      setSavingName(false);
+    }
   }
 
   async function handleDiscard() {
@@ -506,7 +547,59 @@ export default function RouteDetailPage() {
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center gap-3 flex-wrap mb-3">
-          <h1 className="text-xl font-semibold text-slate-900">{cleanLabel(route.cluster_label)}</h1>
+          {editingName ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveRename();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingName(false);
+                  }
+                }}
+                autoFocus
+                disabled={savingName}
+                maxLength={200}
+                className="text-xl font-semibold text-slate-900 border-b-2 border-indigo-400 focus:outline-none focus:border-indigo-600 bg-transparent px-1 -mx-1 min-w-[220px]"
+                aria-label="Route name"
+              />
+              <button
+                type="button"
+                onClick={saveRename}
+                disabled={savingName}
+                className="p-1 text-emerald-600 hover:bg-emerald-50 rounded disabled:opacity-50"
+                aria-label="Save name"
+                title="Save"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingName(false)}
+                disabled={savingName}
+                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded disabled:opacity-50"
+                aria-label="Cancel rename"
+                title="Cancel"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={startRename}
+              className="group inline-flex items-center gap-1.5 text-xl font-semibold text-slate-900 hover:text-indigo-700 -mx-1 px-1 rounded hover:bg-slate-50"
+              title="Rename route"
+            >
+              {cleanLabel(route.cluster_label)}
+              <Pencil className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
           <span
             className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${MODE_BADGE[route.mode]}`}
           >

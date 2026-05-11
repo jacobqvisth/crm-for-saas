@@ -34,14 +34,14 @@ const PAGE_SIZE = 50;
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 
-const LEAD_STATUS_TABS = [
-  { label: 'New',          value: 'new' },
-  { label: 'Contacted',    value: 'contacted' },
-  { label: 'Engaged',      value: 'engaged' },
-  { label: 'Qualified',    value: 'qualified' },
-  { label: 'Customer',     value: 'customer' },
-  { label: 'Unqualified',  value: 'unqualified' },
-  { label: 'Churned',      value: 'churned' },
+const LEAD_STATUS_OPTIONS: MultiSelectOption[] = [
+  { value: 'new',          label: 'New' },
+  { value: 'contacted',    label: 'Contacted' },
+  { value: 'engaged',      label: 'Engaged' },
+  { value: 'qualified',    label: 'Qualified' },
+  { value: 'customer',     label: 'Customer' },
+  { value: 'unqualified',  label: 'Unqualified' },
+  { value: 'churned',      label: 'Churned' },
 ];
 
 const ALL_SOURCES = ['discovery', 'csv', 'manual', 'prospeo', 'wl-app', 'lemlist'] as const;
@@ -620,44 +620,14 @@ export function ContactsPageClient() {
       <div className="flex-1 p-6 space-y-5">
         {/* Filter card */}
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-          {/* Row 1: Lead Status pill tabs (multi-toggle) */}
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="text-xs uppercase tracking-wide text-slate-500 mr-1.5">Lead status:</span>
-            <button
-              onClick={() => setFilters(f => ({ ...f, lead_status: [] }))}
-              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                filters.lead_status.length === 0
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              All
-            </button>
-            {LEAD_STATUS_TABS.map(tab => {
-              const active = filters.lead_status.includes(tab.value);
-              return (
-                <button
-                  key={tab.value}
-                  onClick={() => setFilters(f => ({
-                    ...f,
-                    lead_status: active
-                      ? f.lead_status.filter(v => v !== tab.value)
-                      : [...f.lead_status, tab.value],
-                  }))}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                    active
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Row 2: Multi-select dropdowns */}
+          {/* Multi-select filter dropdowns */}
           <div className="flex flex-wrap gap-2 items-center">
+            <MultiSelect
+              values={filters.lead_status}
+              onChange={v => setFilters(f => ({ ...f, lead_status: v }))}
+              options={LEAD_STATUS_OPTIONS}
+              allLabel="lead statuses"
+            />
             <MultiSelect
               values={filters.country_code}
               onChange={v => setFilters(f => ({ ...f, country_code: v }))}
