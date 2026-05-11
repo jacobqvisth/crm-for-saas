@@ -14,6 +14,42 @@ updated: 2026-04-22
 
 ---
 
+## Session: UX bundle — rename route, hide Prospector, lead-status dropdown + contact taxonomy audit (PR #172)
+- **Date:** 2026-05-11
+- **PR:** #172 (squash `508ca29`)
+- **Branch:** `feature/rename-route-prospector-leadstatus`
+
+### What changed
+Three small UX changes from Jacob plus a one-off research deliverable.
+
+1. **Inline route rename.** PATCH `/api/routes/[id]` accepts `cluster_label` (trimmed, 1–200 chars). Route detail header is click-to-edit: title turns into an input, Enter saves, Escape cancels. Optimistic local update.
+2. **Prospector relocated.** Removed `/prospector` from the sidebar nav (Search icon import dropped too). Added an "Other tools" footer section at the bottom of `/settings` with a card linking to it. The page itself is untouched.
+3. **Lead-status filter is a dropdown.** Replaced the standalone pill-tab row on `/contacts` with a MultiSelect joined to the other filters. `LEAD_STATUS_TABS` → `LEAD_STATUS_OPTIONS` (MultiSelectOption shape). One uniform filter row.
+4. **Contact taxonomy audit** delivered to Jacob in-thread (not committed). Mapped every enum field on `contacts` + the joined `companies` fields visible from `/contacts`, with code-side writer/reader call sites *and* prod row counts pulled via service-role supabase-js. Findings: several enum values are documented but never written (`status.archived`, `lead_status.engaged`, `lead_status.unqualified`, `email_status.unverified`, `companies.lifecycle_stage.reactivation`, `companies.customer_status.paused`/`.churned`), `seniority` is 100% null, and the Prospector add-contacts endpoint writes `source: "prospector"` while the `/contacts` filter dropdown lists `"prospeo"` — those don't match.
+
+### Files changed (code)
+- `src/app/api/routes/[id]/route.ts` — PATCH accepts `cluster_label`
+- `src/app/(dashboard)/routes/[id]/page.tsx` — `editingName` / `nameDraft` state, save/cancel handlers, inline-edit input in header
+- `src/components/sidebar.tsx` — removed `/prospector` nav item + Search icon import
+- `src/app/(dashboard)/settings/page.tsx` — new "Other tools" section with Prospector link card
+- `src/components/contacts/contacts-page-client.tsx` — pill row gone, `LEAD_STATUS_OPTIONS` MultiSelect added at the head of the filter row
+
+### Build / lint / tsc / tests
+- `npm run lint` clean
+- `npx tsc --noEmit` clean
+- `npm run build` green (PATH=/opt/homebrew/bin per the Node-bindings memory)
+
+### Parallel-session note
+Session started while another CC session was mid-flight in the same checkout (the Hans manual-outreach import + `last_visited_at` work, eventually shipped as PR #170 + #171). First attempt at these edits got silently reverted by the parallel session. Stood down, waited for the other PRs to merge, then restarted from a fresh branch off the new main. No overlap on touched files between the two sessions.
+
+### Follow-ups for Jacob to decide
+- **Source value mismatch.** Prospector writes `source: "prospector"`; filter dropdown expects `"prospeo"`. If Prospector contacts ever get added, they'll be invisible via the source filter. Pick one canonical value and rename either the writer or the option.
+- **Dead enum values.** Decide whether to strip the never-written values from the UI option lists (`status.archived`, `lead_status.engaged`, `lead_status.unqualified`, `email_status.unverified`, `companies.lifecycle_stage.reactivation`, `companies.customer_status.paused|churned`) — or keep them as forward-looking placeholders.
+- **`contacts.seniority` is 100% null in prod (10,554 rows).** The field exists, the detail page lets you type into it, no automation writes it. Either drop the column or wire some source for it (Prospector enrichment?).
+- **`tags` is free-form** — no enforcement, no UI for editing other than CSV import + Discovery promote (which always writes `["owner"]`). If we want tag governance we'd need a tag picker.
+
+---
+
 ## Session: Import Hans's manual outreach + wire `last_visited_at` into Field Routes (PR #170)
 - **Date:** 2026-05-11
 - **PR:** #170 (squash `5047ba1`)
