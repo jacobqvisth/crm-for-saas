@@ -318,6 +318,7 @@ async function fetchCompanyPool(
     lng: number;
     activated_at: string | null;
     minRevisit: number | null;
+    lastVisitedAt: string | null;
   }[] = [];
   let offset = 0;
 
@@ -325,7 +326,7 @@ async function fetchCompanyPool(
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id, name, address, latitude, longitude, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days",
+        "id, name, address, latitude, longitude, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days, last_visited_at",
       )
       .eq("workspace_id", workspaceId)
       .eq("do_not_route", false)
@@ -350,6 +351,7 @@ async function fetchCompanyPool(
         lng: r.longitude,
         activated_at: r.activated_at,
         minRevisit: r.min_revisit_interval_days ?? null,
+        lastVisitedAt: r.last_visited_at ?? null,
       });
     }
 
@@ -359,10 +361,14 @@ async function fetchCompanyPool(
 
   if (rows.length === 0) return [];
 
+  const directVisits = new Map<string, string | null>(
+    rows.map((r) => [r.id, r.lastVisitedAt]),
+  );
   const recentVisits = await fetchMostRecentVisits(
     supabase,
     workspaceId,
     rows.map((r) => r.id),
+    directVisits,
   );
   const now = Date.now();
 
@@ -410,6 +416,7 @@ async function fetchMostRecentVisits(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
   companyIds: string[],
+  directVisits?: Map<string, string | null>,
 ): Promise<Map<string, string>> {
   const recent = new Map<string, string>();
   if (companyIds.length === 0) return recent;
@@ -429,6 +436,18 @@ async function fetchMostRecentVisits(
       if (!row.company_id || !row.visited_at) continue;
       // Ordered DESC: first row per company wins.
       if (!recent.has(row.company_id)) recent.set(row.company_id, row.visited_at);
+    }
+  }
+  // Fold in companies.last_visited_at — captures visits that happened outside
+  // Field Routes (manual drop-bys, pre-CRM outreach). Take the max so a more
+  // recent route_stops visit still wins.
+  if (directVisits) {
+    for (const [id, ts] of directVisits) {
+      if (!ts) continue;
+      const existing = recent.get(id);
+      if (!existing || new Date(ts).getTime() > new Date(existing).getTime()) {
+        recent.set(id, ts);
+      }
     }
   }
   return recent;
@@ -953,6 +972,7 @@ async function fetchEnrichedPool(
     rating: number | null;
     activatedAt: string | null;
     minRevisit: number | null;
+    lastVisitedAt: string | null;
   };
   const rows: Row[] = [];
   let offset = 0;
@@ -961,7 +981,7 @@ async function fetchEnrichedPool(
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id, name, address, latitude, longitude, city, rating, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days",
+        "id, name, address, latitude, longitude, city, rating, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days, last_visited_at",
       )
       .eq("workspace_id", workspaceId)
       .eq("do_not_route", false)
@@ -988,6 +1008,7 @@ async function fetchEnrichedPool(
         rating: r.rating == null ? null : Number(r.rating),
         activatedAt: r.activated_at,
         minRevisit: r.min_revisit_interval_days ?? null,
+        lastVisitedAt: r.last_visited_at ?? null,
       });
     }
 
@@ -998,7 +1019,10 @@ async function fetchEnrichedPool(
   if (rows.length === 0) return [];
 
   const ids = rows.map((r) => r.id);
-  const recentVisits = await fetchMostRecentVisits(supabase, workspaceId, ids);
+  const directVisits = new Map<string, string | null>(
+    rows.map((r) => [r.id, r.lastVisitedAt]),
+  );
+  const recentVisits = await fetchMostRecentVisits(supabase, workspaceId, ids, directVisits);
   const sendable = await fetchSendableContactCompanies(supabase, workspaceId, ids);
   const now = Date.now();
 

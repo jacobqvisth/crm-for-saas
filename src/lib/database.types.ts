@@ -182,6 +182,7 @@ export type Database = {
           industry: string | null
           instagram_url: string | null
           last_active_at: string | null
+          last_visited_at: string | null
           latitude: number | null
           lifecycle_stage: string | null
           linkedin_url: string | null
@@ -247,6 +248,7 @@ export type Database = {
           industry?: string | null
           instagram_url?: string | null
           last_active_at?: string | null
+          last_visited_at?: string | null
           latitude?: number | null
           lifecycle_stage?: string | null
           linkedin_url?: string | null
@@ -312,6 +314,7 @@ export type Database = {
           industry?: string | null
           instagram_url?: string | null
           last_active_at?: string | null
+          last_visited_at?: string | null
           latitude?: number | null
           lifecycle_stage?: string | null
           linkedin_url?: string | null
@@ -465,6 +468,7 @@ export type Database = {
           last_contacted_at: string | null
           last_login_at: string | null
           last_name: string | null
+          last_visited_at: string | null
           lead_status: string | null
           linkedin_url: string | null
           login_count: number | null
@@ -514,6 +518,7 @@ export type Database = {
           last_contacted_at?: string | null
           last_login_at?: string | null
           last_name?: string | null
+          last_visited_at?: string | null
           lead_status?: string | null
           linkedin_url?: string | null
           login_count?: number | null
@@ -563,6 +568,7 @@ export type Database = {
           last_contacted_at?: string | null
           last_login_at?: string | null
           last_name?: string | null
+          last_visited_at?: string | null
           lead_status?: string | null
           linkedin_url?: string | null
           login_count?: number | null
