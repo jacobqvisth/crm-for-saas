@@ -14,6 +14,63 @@ updated: 2026-04-22
 
 ---
 
+## Session: Field Routes — pre-generation filter dropdown + drop `(cold)` label suffix (PR #168)
+- **Date:** 2026-05-11
+- **PR:** #168 (squash `<see git log>`)
+- **Branch:** `feature/route-filters-and-label-cleanup`
+
+### What changed
+Jacob spotted that route labels read "Södertälje (cold)" with a `COLD` pill right next to it — redundant. Also asked for a multi-select filter to prune the candidate pool before generation.
+
+**Filter dropdown** (the bigger half):
+- New "Filter out" button on `/routes` next to Where? / For when?. Popover with checkboxes, click-outside closes, count badge on the trigger.
+- Four filter keys (all whitelisted server-side):
+  - `exclude_already_emailed` — drop companies whose any contact has `email_queue.sent_at IS NOT NULL`
+  - `exclude_never_emailed` — include-only filter: keep only emailed companies (the inverse)
+  - `exclude_replied` — drop companies whose any contact has `contacts.last_contacted_at IS NOT NULL`
+  - `exclude_has_account` — drop companies with `wl_workshop_id IS NOT NULL` (already onboarded as app workshops)
+- `generateRoute()` accepts `filters: CandidateFilterKey[]`. New `applyCandidateFilters` runs after `fetchEnrichedPool` — pre-fetches the relevant exclude/include company-id sets (chunked `.in()` at 200 per PR #99 pattern) and prunes the pool before clustering.
+- Stacking opposing filters (already_emailed + never_emailed) collapses pool to empty by design; the user owns that choice.
+
+**Label cleanup**:
+- Dropped `decorateLabelWithMode` from `generate.ts` (only caller). `cluster_label` now stored as plain stop-aware label.
+- Deleted the function from `cluster-label.ts` + its test cases (only caller was generate).
+- Both `/routes` index and `/routes/[id]` strip any trailing ` (cold)`/`(lapsed)`/`(mixed)` suffix via `cleanLabel()` at render time so legacy rows show clean without a DB mutation. (Auto-mode classifier blocked the prod UPDATE — fair, since the DB rows are append-only by default and a display strip has zero blast radius.)
+
+### Files changed
+- `src/lib/routes/generate.ts` — `CandidateFilterKey` type + 4 fetchers + `applyCandidateFilters`; removed `decorateLabelWithMode` import/call
+- `src/lib/routes/cluster-label.ts` — deleted `decorateLabelWithMode`
+- `src/lib/routes/cluster-label.test.ts` — removed the 3 stale `decorateLabelWithMode` cases
+- `src/app/api/routes/generate/route.ts` — accepts `filters: unknown` in body, validates via `parseFilters` against `CANDIDATE_FILTER_KEYS`, forwards
+- `src/app/(dashboard)/routes/page.tsx` — `FILTER_OPTIONS`, dropdown UI with click-outside close, count badge, POST body includes `filters`, `cleanLabel()` on render
+- `src/app/(dashboard)/routes/[id]/page.tsx` — `cleanLabel()` on the detail header
+
+### Migration
+None. DB rows still carry the old ` (cold)` suffix for routes generated before this PR — the UI strips it. New routes save clean. If we ever want to actually mutate the rows: `UPDATE daily_routes SET cluster_label = regexp_replace(cluster_label, ' \((cold|lapsed|mixed)\)$', '')` — currently blocked by auto-mode classifier.
+
+### Build / lint / tsc / tests
+- `npx tsc --noEmit` clean
+- `npm run lint` clean
+- `npm run build` green
+- `npx vitest run src/lib/routes/` — 9 files, 56 tests passing (down from 59 because 3 stale `decorateLabelWithMode` cases were removed)
+
+### Deploy verification
+- `https://crm-for-saas.vercel.app` — Vercel auto-deploys on push to main.
+- Jacob to visually verify: clean labels on `/routes`, filter dropdown opens, generation with one or more filters selected still succeeds (or returns `no_eligible_cluster` with a clear reason).
+
+### Notable decisions
+- **Display-time strip, not DB backfill.** Pure display concern; new routes already save clean; reversible.
+- **Include-only filter compose path** for `exclude_never_emailed`. Treated as an intersection: if both `already_emailed` and `never_emailed` are selected, the pool collapses to empty rather than silently picking one. Predictable.
+- **No "paying customers" filter exposed** — `fetchEnrichedPool` already excludes them by default via the subscription_status / customer_status WHERE clauses. Adding a redundant toggle would be confusing.
+- **Suffix strip lives in two places** (index and detail). Could be hoisted to a shared util in `src/lib/routes/`, but two callers is the bar where I'd usually inline.
+
+### Follow-ups
+- Once Hans has run generation with filters a few times, capture diagnostics to see which filters change the pool size most.
+- Consider exposing the filter selection on each generated route (so a viewer knows it was filtered by "exclude_already_emailed" etc.) — currently filters aren't persisted with the route.
+- Pre-existing untracked `scripts/diagnose-min-interval-column.mjs` is still in the worktree — unchanged this session.
+
+---
+
 ## Session: Field Routes — list under map, per-stop email status, 10-stop cap, auto-replace on remove (PR #166)
 - **Date:** 2026-05-11
 - **PR:** #166 (squash `3f9d2ec`)
