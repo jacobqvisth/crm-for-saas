@@ -14,6 +14,53 @@ updated: 2026-04-22
 
 ---
 
+## Session: Field Routes — list under map, per-stop email status, 10-stop cap, auto-replace on remove (PR #166)
+- **Date:** 2026-05-11
+- **PR:** #166 (squash `3f9d2ec`)
+- **Branch:** `feature/route-planner-revamp`
+
+### What changed
+Route detail page revamp driven by Jacob's field-rep feedback. Five things:
+
+1. **Layout** — switched from a 5-col grid (map left, narrow list sidebar right) to a vertical stack: full-width map on top, full-width stop list below. Each row now has horizontal room for richer info instead of cramped truncation.
+2. **Per-stop email status** — `GET /api/routes/[id]` now resolves `last_emailed_at` for each stop by walking `company_id → contacts → email_queue.sent_at`, taking the MAX across all contacts at the company. Chunked `.in()` at 200 per PR #99 pattern. Helper lives at `src/lib/routes/email-status.ts`. UI renders an emerald `Emailed Xd ago` pill or a muted `Never emailed` pill (date-fns `formatDistanceToNow`). discovered_shop-only stops always show "Never emailed" since they have no contacts yet.
+3. **Company profile link** — each row with `company_id` gets a "Profile ↗" link to `/companies/{id}` opening in a new tab. discovered_shop-only rows skip the link.
+4. **10-stop hard cap (was 12)** — Jacob noted Google Maps web Directions URL only accepts start + 10 waypoints. `MAX_STOPS_PER_ROUTE` drops from 12 → 10 in `src/lib/routes/generate.ts`. `MAX_STOPS` in the page drops to match. The deeplink builder now defensively slices to `MAX_GOOGLE_MAPS_WAYPOINTS = 10` so any pre-existing 11–12-stop routes still produce a usable URL.
+5. **Auto-replace on remove** — when the user removes a stop from a route that was at the 10-stop cap, the existing Add-Stop sheet auto-opens (toast switches to "Stop removed — pick a replacement"). The Add-Stop sheet already had a Suggested tab keyed off centroid distance, so no new endpoint needed for v1. If route was below cap, behavior is unchanged.
+
+### Files changed
+- `src/lib/routes/email-status.ts` (new) — `fetchLastEmailedByCompany()` helper
+- `src/lib/routes/generate.ts` — `MAX_STOPS_PER_ROUTE` 12→10, added `MAX_GOOGLE_MAPS_WAYPOINTS = 10`, deeplink slice
+- `src/app/api/routes/[id]/route.ts` — call the helper, decorate stops with `last_emailed_at`
+- `src/app/(dashboard)/routes/[id]/page.tsx` — layout swap (vertical stack), `MAX_STOPS` 12→10, container width `max-w-6xl` → `max-w-7xl`, `Stop` type + `ReorderStop` mapping gain `last_emailed_at`/`companyId`/`discoveredShopId`, `submitRemove` auto-opens AddStop sheet when `stops.length >= MAX_STOPS` pre-removal
+- `src/components/routes/stops-reorder-list.tsx` — `ReorderStop` type extended, row layout widened (`px-4 py-3` instead of `px-3 py-2.5`), added Emailed/Never-emailed pill (md+ only) and Profile link, default `maxStops` 12→10
+
+### Migration
+None.
+
+### Build / lint / tsc / tests
+- `npm run lint` — clean
+- `npx tsc --noEmit` — clean (after clearing stale `.next/`)
+- `npm run build` — green (had to prepend `/opt/homebrew/bin` to PATH; Codex.app Node breaks Turbopack native bindings, see memory `reference_node-codex-vs-brew.md`)
+- `npx vitest run src/lib/routes/` — 9 files, 59 tests, all passing (including the previously-flaky `generate.test.ts`)
+
+### Deploy verification
+- `curl -I https://crm-for-saas.vercel.app` → 307 (auth redirect, expected)
+- Visual smoke not done — Jacob to verify the layout, emailed pill, and replace-on-remove flow against a real route on prod.
+
+### Notable decisions
+- **Email status is per-company, not per-contact.** A company can have many contacts; rolling up to MAX(`sent_at`) across all of them gives "has this workshop been emailed" semantics, which is what Jacob asked for.
+- **Used `email_queue.sent_at`, not `contacts.last_contacted_at`.** The latter is only updated by the reply-check cron (so it would mean "has replied"), not the send pipeline. `email_queue.sent_at` is the true "we sent something" signal.
+- **Legacy routes with >10 stops keep rendering**, but their Maps deeplink truncates to the first 10 waypoints. No auto-trim of stored rows — Hans can hit remove if he wants. Since Field Routes Phase 1 only shipped 2026-05-07, the pool of >10-stop routes is small or empty.
+- **Replace-on-remove uses existing nearby-suggestions endpoint** (centroid distance only). Could be upgraded later to use the Phase 5 stop-score for richer ranking, but Jacob's wording ("fits in the route") doesn't demand it for v1.
+
+### Follow-ups
+- Visual QA on prod once Jacob opens a route detail page.
+- If Hans finds the centroid-only suggestion ranking too coarse, port the Phase 5 stop-score into `/api/routes/[routeId]/suggestions` so ranking factors in freshness, quality, and outreach restraint, not just distance.
+- Pre-existing untracked `scripts/diagnose-min-interval-column.mjs` still sits in the worktree from an earlier session — left alone here.
+
+---
+
 ## Session: CEO dashboard — manage internal-test exclusions from /ceo/settings (PR #164)
 - **Date:** 2026-05-08
 - **PR:** #164
