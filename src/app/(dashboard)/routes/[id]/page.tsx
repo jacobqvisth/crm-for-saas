@@ -66,6 +66,7 @@ type Stop = {
   visit_outcome: VisitOutcome | null;
   visit_notes: string | null;
   follow_up_required: boolean | null;
+  last_emailed_at: string | null;
   discovered_shops: { name: string | null; address: string | null } | null;
   companies: { name: string | null; address: string | null } | null;
 };
@@ -83,7 +84,7 @@ type Member = {
   is_current_user: boolean;
 };
 
-const MAX_STOPS = 12;
+const MAX_STOPS = 10;
 const MIN_STOPS = 4;
 
 const MODE_BADGE: Record<RouteDetail["mode"], string> = {
@@ -287,6 +288,7 @@ export default function RouteDetailPage() {
   async function submitRemove(reason: RemoveReason, notes: string | undefined) {
     if (!removeState) return;
     setRemoving(true);
+    const wasAtCap = stops.length >= MAX_STOPS;
     try {
       const res = await fetch(`/api/routes/${id}/stops/${removeState.stopId}`, {
         method: "DELETE",
@@ -298,9 +300,10 @@ export default function RouteDetailPage() {
         toast.error(text || "Failed to remove stop");
         return;
       }
-      toast.success("Stop removed");
+      toast.success(wasAtCap ? "Stop removed — pick a replacement" : "Stop removed");
       setRemoveState(null);
       await fetchRoute();
+      if (wasAtCap) setAddSheetOpen({ open: true });
     } finally {
       setRemoving(false);
     }
@@ -362,6 +365,9 @@ export default function RouteDetailPage() {
         isLapsed: s.company_id != null,
         visitedAt: s.visited_at,
         visitOutcome: s.visit_outcome,
+        companyId: s.company_id,
+        discoveredShopId: s.discovered_shop_id,
+        lastEmailedAt: s.last_emailed_at,
       })),
     [stops],
   );
@@ -465,7 +471,7 @@ export default function RouteDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto">
         <div className="space-y-2">
           <div className="h-8 bg-slate-100 animate-pulse rounded w-1/3" />
           <div className="h-32 bg-slate-100 animate-pulse rounded" />
@@ -477,7 +483,7 @@ export default function RouteDetailPage() {
 
   if (!route) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto">
         <p className="text-slate-500">Route not found.</p>
         <Link href="/routes" className="text-indigo-600 text-sm">← Back to routes</Link>
       </div>
@@ -485,7 +491,7 @@ export default function RouteDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <Link
         href="/routes"
         className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"
@@ -622,34 +628,33 @@ export default function RouteDetailPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-        <div className="md:col-span-3">
-          {apiKey && mapOrigin ? (
-            <RouteMap
-              apiKey={apiKey}
-              origin={mapOrigin}
-              stops={mapStops}
-              encodedPolyline={encodedPolyline}
-            />
-          ) : (
-            <div className="aspect-square md:aspect-[16/9] w-full rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500 px-4 text-center">
-              {apiKey
-                ? "Loading map…"
-                : "Map disabled — NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY not set in this environment."}
-            </div>
-          )}
-        </div>
-        <div className="md:col-span-2">
-          <StopsReorderList
-            stops={reorderStops}
-            saving={saving}
-            onSave={(orderedIds) => handleReorder(orderedIds)}
-            onMarkVisited={openSheet}
-            onRemove={openRemove}
-            onAddStop={() => setAddSheetOpen({ open: true })}
-            maxStops={MAX_STOPS}
+      <div className="mb-4">
+        {apiKey && mapOrigin ? (
+          <RouteMap
+            apiKey={apiKey}
+            origin={mapOrigin}
+            stops={mapStops}
+            encodedPolyline={encodedPolyline}
           />
-        </div>
+        ) : (
+          <div className="aspect-[16/9] w-full rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500 px-4 text-center">
+            {apiKey
+              ? "Loading map…"
+              : "Map disabled — NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY not set in this environment."}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <StopsReorderList
+          stops={reorderStops}
+          saving={saving}
+          onSave={(orderedIds) => handleReorder(orderedIds)}
+          onMarkVisited={openSheet}
+          onRemove={openRemove}
+          onAddStop={() => setAddSheetOpen({ open: true })}
+          maxStops={MAX_STOPS}
+        />
       </div>
 
       <div className="flex items-center justify-end">

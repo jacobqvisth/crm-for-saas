@@ -24,8 +24,11 @@ const RADIUS_KM = 120;
 const VISIT_MINUTES = 30;
 const PRODUCTIVE_DAY_SECONDS = 7.5 * 3600;
 export const MIN_STOPS_PER_ROUTE = 4;
-export const MAX_STOPS_PER_ROUTE = 12;
+export const MAX_STOPS_PER_ROUTE = 10;
 export const DEFAULT_MIN_REVISIT_DAYS = 30;
+
+// Google Maps web Directions URL truncates beyond this; we mirror the cap.
+export const MAX_GOOGLE_MAPS_WAYPOINTS = 10;
 
 export type ModeMix = { mixed: number; cold: number; lapsed: number };
 export type Origin = { address: string; lat: number; lng: number };
@@ -441,14 +444,18 @@ export function buildGoogleMapsDeeplink({
   waypoints: { lat: number; lng: number }[];
 }): string {
   // https://developers.google.com/maps/documentation/urls/get-started#directions-action
+  // Google's web URL silently drops waypoints beyond ~10. Trim defensively so
+  // legacy routes (pre-PR-N) and any future regression still produce a working
+  // URL — the on-screen list shows the full set of stops.
+  const safeWaypoints = waypoints.slice(0, MAX_GOOGLE_MAPS_WAYPOINTS);
   const params = new URLSearchParams({
     api: "1",
     origin,
     destination: origin,
     travelmode: "driving",
   });
-  if (waypoints.length > 0) {
-    params.set("waypoints", waypoints.map((w) => `${w.lat},${w.lng}`).join("|"));
+  if (safeWaypoints.length > 0) {
+    params.set("waypoints", safeWaypoints.map((w) => `${w.lat},${w.lng}`).join("|"));
   }
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }

@@ -6,8 +6,22 @@ import {
   Droppable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { GripVertical, RotateCcw, Save, CheckCircle2, Pencil, Circle, X, Plus } from "lucide-react";
+import {
+  GripVertical,
+  RotateCcw,
+  Save,
+  CheckCircle2,
+  Pencil,
+  Circle,
+  X,
+  Plus,
+  ExternalLink,
+  Mail,
+  MailX,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 import type { VisitOutcome } from "@/lib/routes/visits-decision";
 
 export type ReorderStop = {
@@ -18,6 +32,9 @@ export type ReorderStop = {
   isLapsed: boolean;
   visitedAt?: string | null;
   visitOutcome?: VisitOutcome | null;
+  companyId?: string | null;
+  discoveredShopId?: string | null;
+  lastEmailedAt?: string | null;
 };
 
 type Props = {
@@ -53,7 +70,7 @@ export default function StopsReorderList({
   onMarkVisited,
   onRemove,
   onAddStop,
-  maxStops = 12,
+  maxStops = 10,
 }: Props) {
   const [order, setOrder] = useState<ReorderStop[]>(stops);
 
@@ -117,13 +134,17 @@ export default function StopsReorderList({
               {order.map((s, idx) => {
                 const isVisited = !!s.visitedAt;
                 const outcome = s.visitOutcome;
+                const emailed = !!s.lastEmailedAt;
+                const emailedRelative = s.lastEmailedAt
+                  ? formatDistanceToNow(new Date(s.lastEmailedAt), { addSuffix: true })
+                  : null;
                 return (
                   <Draggable key={s.id} draggableId={s.id} index={idx}>
                     {(draggableProvided, snapshot) => (
                       <li
                         ref={draggableProvided.innerRef}
                         {...draggableProvided.draggableProps}
-                        className={`flex items-center gap-3 px-3 py-2.5 text-sm ${
+                        className={`flex items-center gap-3 px-4 py-3 text-sm ${
                           snapshot.isDragging
                             ? "bg-indigo-50 shadow-md"
                             : isVisited
@@ -148,7 +169,7 @@ export default function StopsReorderList({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span
-                              className={`truncate ${
+                              className={`font-medium truncate ${
                                 isVisited ? "text-slate-500" : "text-slate-800"
                               }`}
                             >
@@ -170,9 +191,22 @@ export default function StopsReorderList({
                                 {OUTCOME_PILL[outcome].label}
                               </span>
                             )}
+                            {s.companyId && (
+                              <Link
+                                href={`/companies/${s.companyId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-0.5 text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline"
+                                title="Open company profile"
+                                aria-label="Open company profile"
+                              >
+                                Profile
+                                <ExternalLink className="w-3 h-3" />
+                              </Link>
+                            )}
                           </div>
                           <div
-                            className={`text-xs truncate ${
+                            className={`text-xs truncate mt-0.5 ${
                               isVisited ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
@@ -187,6 +221,30 @@ export default function StopsReorderList({
                             )}
                           </div>
                         </div>
+                        <span
+                          className={`hidden md:inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${
+                            emailed
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-slate-50 text-slate-500 border-slate-200"
+                          }`}
+                          title={
+                            emailed
+                              ? `Last emailed ${new Date(s.lastEmailedAt as string).toLocaleString()}`
+                              : "No emails sent yet"
+                          }
+                        >
+                          {emailed ? (
+                            <>
+                              <Mail className="w-3 h-3" />
+                              Emailed {emailedRelative}
+                            </>
+                          ) : (
+                            <>
+                              <MailX className="w-3 h-3" />
+                              Never emailed
+                            </>
+                          )}
+                        </span>
                         <span className="text-xs text-slate-500 tabular-nums whitespace-nowrap flex-shrink-0 hidden sm:inline">
                           {formatHM(s.legDriveSeconds)}
                         </span>
