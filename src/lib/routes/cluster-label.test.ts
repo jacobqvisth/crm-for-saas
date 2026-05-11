@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decorateLabelWithMode, labelForStops, type LabelStop } from "./cluster-label";
+import { labelForStops, type LabelStop } from "./cluster-label";
 
 function s(city: string | null, lat = 59.33, lng = 18.07): LabelStop {
   return { city, lat, lng };
@@ -71,14 +71,3 @@ describe("labelForStops", () => {
   });
 });
 
-describe("decorateLabelWithMode", () => {
-  it("appends (lapsed) for single-mode lapsed routes", () => {
-    expect(decorateLabelWithMode("Solna", "lapsed")).toBe("Solna (lapsed)");
-  });
-  it("appends (cold) for single-mode cold routes", () => {
-    expect(decorateLabelWithMode("Uppsala", "cold")).toBe("Uppsala (cold)");
-  });
-  it("does NOT decorate mixed-mode routes", () => {
-    expect(decorateLabelWithMode("Solna · Sundbyberg", "mixed")).toBe("Solna · Sundbyberg");
-  });
-});

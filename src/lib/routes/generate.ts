@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
 import { cluster, haversineKm, type Point } from "./cluster";
-import { decorateLabelWithMode, labelForCentroid, labelForStops, type LabelStop } from "./cluster-label";
+import { labelForCentroid, labelForStops, type LabelStop } from "./cluster-label";
 import {
   rankClusters,
   type ClusterStop,
@@ -489,6 +489,24 @@ const REGION_CENTERS: Record<Exclude<RegionKey, "auto">, { lat: number; lng: num
 const REGION_RADIUS_KM = 25;
 const KMEANS_K = 10;
 
+/** Optional pre-generation filters that prune the candidate company pool. */
+export type CandidateFilterKey =
+  /** Drop companies whose contacts already received a sent email. */
+  | "exclude_already_emailed"
+  /** Drop companies whose contacts have NOT yet received a sent email. */
+  | "exclude_never_emailed"
+  /** Drop companies whose contacts have replied (contacts.last_contacted_at set). */
+  | "exclude_replied"
+  /** Drop companies that are already onboarded as Wrenchlane app workshops. */
+  | "exclude_has_account";
+
+export const CANDIDATE_FILTER_KEYS: CandidateFilterKey[] = [
+  "exclude_already_emailed",
+  "exclude_never_emailed",
+  "exclude_replied",
+  "exclude_has_account",
+];
+
 export type GenerateRouteInput = {
   workspaceId: string;
   origin: Origin;
@@ -498,6 +516,8 @@ export type GenerateRouteInput = {
   region?: RegionKey;
   /** ISO YYYY-MM-DD. When set, applies Phase 4's PTO + working-day check on assignedTo. */
   forDate?: string | null;
+  /** Optional candidate-pool filters from the UI dropdown. */
+  filters?: CandidateFilterKey[];
   supabase: SupabaseClient<Database>;
 };
 
@@ -562,6 +582,7 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
     assignedTo = generatedBy,
     region = "auto",
     forDate = null,
+    filters = [],
     supabase,
   } = input;
 
@@ -581,7 +602,12 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
 
   // 2. Pull pool with all the signals we'll need downstream.
   const workspaceDefaultRevisit = await fetchWorkspaceMinRevisit(supabase, workspaceId);
-  const pool = await fetchEnrichedPool(supabase, workspaceId, workspaceDefaultRevisit);
+  const pool = await applyCandidateFilters(
+    await fetchEnrichedPool(supabase, workspaceId, workspaceDefaultRevisit),
+    supabase,
+    workspaceId,
+    filters,
+  );
   if (pool.length === 0) {
     return {
       ok: false,
@@ -787,9 +813,8 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
     lng: c.lng,
   }));
   const cityCoverage = labelStops.filter((s) => s.city && s.city.trim().length > 0).length;
-  const baseLabel = labelForStops(labelStops, centroid.lat, centroid.lng);
+  const finalLabel = labelForStops(labelStops, centroid.lat, centroid.lng);
   const fellBackToCentroidLabel = cityCoverage < labelStops.length / 2 || cityCoverage === 0;
-  const finalLabel = decorateLabelWithMode(baseLabel, mode);
 
   // 13. Persist route + stops. Best-effort transaction (insert route, then
   //     stops; rollback the route if stops insert fails to avoid orphans).
@@ -1023,4 +1048,152 @@ async function fetchSendableContactCompanies(
     }
   }
   return result;
+}
+
+/**
+ * Apply user-selected candidate filters to the enriched pool. Each filter
+ * either expands an exclude-set or restricts the pool via an include-only
+ * set. Filters compose: stacking opposing filters (e.g. already-emailed +
+ * never-emailed) collapses the pool to empty, which is the user's choice.
+ */
+async function applyCandidateFilters(
+  pool: EnrichedCandidate[],
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  filters: CandidateFilterKey[],
+): Promise<EnrichedCandidate[]> {
+  if (filters.length === 0 || pool.length === 0) return pool;
+
+  const ids = pool.map((p) => p.companyId);
+
+  const exclude = new Set<string>();
+  let includeOnly: Set<string> | null = null;
+
+  const needsEmailedSet = filters.some(
+    (f) => f === "exclude_already_emailed" || f === "exclude_never_emailed",
+  );
+  const emailedCompanyIds = needsEmailedSet
+    ? await fetchCompaniesWithSentEmail(supabase, workspaceId, ids)
+    : null;
+
+  if (filters.includes("exclude_already_emailed") && emailedCompanyIds) {
+    for (const id of emailedCompanyIds) exclude.add(id);
+  }
+  if (filters.includes("exclude_never_emailed") && emailedCompanyIds) {
+    includeOnly = includeOnly ?? new Set(ids);
+    const next = new Set<string>();
+    for (const id of includeOnly) {
+      if (emailedCompanyIds.has(id)) next.add(id);
+    }
+    includeOnly = next;
+  }
+
+  if (filters.includes("exclude_replied")) {
+    for (const id of await fetchCompaniesWithRepliedContact(supabase, workspaceId, ids)) {
+      exclude.add(id);
+    }
+  }
+
+  if (filters.includes("exclude_has_account")) {
+    for (const id of await fetchCompaniesWithWlAccount(supabase, workspaceId, ids)) {
+      exclude.add(id);
+    }
+  }
+
+  return pool.filter(
+    (c) => !exclude.has(c.companyId) && (!includeOnly || includeOnly.has(c.companyId)),
+  );
+}
+
+async function fetchCompaniesWithSentEmail(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  companyIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (companyIds.length === 0) return out;
+  const CHUNK = 200;
+
+  // Map company_id → contact_ids in scope.
+  const contactToCompany = new Map<string, string>();
+  for (let i = 0; i < companyIds.length; i += CHUNK) {
+    const slice = companyIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("id, company_id")
+      .eq("workspace_id", workspaceId)
+      .in("company_id", slice);
+    if (error) throw new Error(`contacts (sent-email scan) failed: ${error.message}`);
+    for (const row of data ?? []) {
+      if (row.company_id) contactToCompany.set(row.id, row.company_id);
+    }
+  }
+  if (contactToCompany.size === 0) return out;
+
+  const contactIds = Array.from(contactToCompany.keys());
+  for (let i = 0; i < contactIds.length; i += CHUNK) {
+    const slice = contactIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("email_queue")
+      .select("contact_id, sent_at")
+      .eq("workspace_id", workspaceId)
+      .in("contact_id", slice)
+      .not("sent_at", "is", null)
+      .limit(slice.length);
+    if (error) throw new Error(`email_queue (sent-email scan) failed: ${error.message}`);
+    for (const row of data ?? []) {
+      if (!row.contact_id) continue;
+      const companyId = contactToCompany.get(row.contact_id);
+      if (companyId) out.add(companyId);
+    }
+  }
+  return out;
+}
+
+async function fetchCompaniesWithRepliedContact(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  companyIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (companyIds.length === 0) return out;
+  const CHUNK = 200;
+  for (let i = 0; i < companyIds.length; i += CHUNK) {
+    const slice = companyIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("company_id")
+      .eq("workspace_id", workspaceId)
+      .in("company_id", slice)
+      .not("last_contacted_at", "is", null);
+    if (error) throw new Error(`contacts (replied scan) failed: ${error.message}`);
+    for (const row of data ?? []) {
+      if (row.company_id) out.add(row.company_id);
+    }
+  }
+  return out;
+}
+
+async function fetchCompaniesWithWlAccount(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  companyIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (companyIds.length === 0) return out;
+  const CHUNK = 200;
+  for (let i = 0; i < companyIds.length; i += CHUNK) {
+    const slice = companyIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .in("id", slice)
+      .not("wl_workshop_id", "is", null);
+    if (error) throw new Error(`companies (wl-account scan) failed: ${error.message}`);
+    for (const row of data ?? []) {
+      out.add(row.id);
+    }
+  }
+  return out;
 }

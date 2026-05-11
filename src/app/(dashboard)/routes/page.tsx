@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { Map as MapIcon, Loader2, ChevronDown } from "lucide-react";
+import { Map as MapIcon, Loader2, ChevronDown, Filter } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 
@@ -63,6 +63,42 @@ const MODE_BADGE: Record<RouteRow["mode"], string> = {
   lapsed: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
+type FilterKey =
+  | "exclude_already_emailed"
+  | "exclude_never_emailed"
+  | "exclude_replied"
+  | "exclude_has_account";
+
+const FILTER_OPTIONS: { key: FilterKey; label: string; hint: string }[] = [
+  {
+    key: "exclude_already_emailed",
+    label: "Already received an email",
+    hint: "Skip shops we have already sent any email to.",
+  },
+  {
+    key: "exclude_never_emailed",
+    label: "Never been emailed",
+    hint: "Only include shops we have already emailed.",
+  },
+  {
+    key: "exclude_replied",
+    label: "Has replied to an email",
+    hint: "Skip shops where any contact has replied.",
+  },
+  {
+    key: "exclude_has_account",
+    label: "Has a Wrenchlane account",
+    hint: "Skip shops that are already onboarded as app workshops.",
+  },
+];
+
+function cleanLabel(label: string): string {
+  // Legacy routes have " (cold)" / " (lapsed)" / " (mixed)" appended to
+  // cluster_label — redundant with the mode pill. Strip at render time;
+  // new routes are saved without the suffix.
+  return label.replace(/\s*\((cold|lapsed|mixed)\)\s*$/, "");
+}
+
 function formatHM(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.round((totalSeconds % 3600) / 60);
@@ -89,6 +125,29 @@ export default function RoutesPage() {
   const [generateFor, setGenerateFor] = useState<string | null>(null);
   const [region, setRegion] = useState<Region>("auto");
   const [forDate, setForDate] = useState<string>("");
+  const [filters, setFilters] = useState<Set<FilterKey>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [filterOpen]);
+
+  function toggleFilter(key: FilterKey) {
+    setFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   const currentUser = useMemo(() => members.find((m) => m.is_current_user) ?? null, [members]);
   const isAdmin = currentUser?.role === "admin";
@@ -140,6 +199,7 @@ export default function RoutesPage() {
         body.forUserId = generateFor;
       }
       if (forDate) body.forDate = forDate;
+      if (filters.size > 0) body.filters = Array.from(filters);
       const res = await fetch("/api/routes/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -209,6 +269,73 @@ export default function RoutesPage() {
               aria-label="Schedule for date"
             />
           </label>
+          <div className="relative" ref={filterRef}>
+            <button
+              type="button"
+              onClick={() => setFilterOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 text-xs border rounded px-2 py-1.5 ${
+                filters.size > 0
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              aria-haspopup="true"
+              aria-expanded={filterOpen}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filter out
+              {filters.size > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-semibold">
+                  {filters.size}
+                </span>
+              )}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {filterOpen && (
+              <div className="absolute right-0 mt-1 w-72 z-20 bg-white border border-slate-200 rounded-lg shadow-lg p-2 text-left">
+                <p className="px-2 pt-1 pb-2 text-[11px] uppercase tracking-wide text-slate-400">
+                  Exclude shops that…
+                </p>
+                <ul className="space-y-0.5">
+                  {FILTER_OPTIONS.map((opt) => {
+                    const checked = filters.has(opt.key);
+                    return (
+                      <li key={opt.key}>
+                        <label
+                          className={`flex items-start gap-2 px-2 py-2 rounded cursor-pointer ${
+                            checked ? "bg-indigo-50" : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleFilter(opt.key)}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-300"
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-medium text-slate-800">
+                              {opt.label}
+                            </span>
+                            <span className="block text-[11px] text-slate-500">{opt.hint}</span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {filters.size > 0 && (
+                  <div className="flex justify-end px-1 pt-2 pb-1 border-t border-slate-100 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setFilters(new Set())}
+                      className="text-[11px] text-slate-500 hover:text-slate-700"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <button
             onClick={handleGenerate}
             disabled={generating || !workspaceId}
@@ -299,7 +426,7 @@ function Section({
               className="block bg-white border border-slate-200 rounded-lg px-4 py-3 hover:shadow-sm hover:border-indigo-200 transition-all"
             >
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-medium text-slate-800">{r.cluster_label}</span>
+                <span className="font-medium text-slate-800">{cleanLabel(r.cluster_label)}</span>
                 <span
                   className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${MODE_BADGE[r.mode]}`}
                 >
