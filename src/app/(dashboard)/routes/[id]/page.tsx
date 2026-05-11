@@ -93,6 +93,10 @@ const MODE_BADGE: Record<RouteDetail["mode"], string> = {
   lapsed: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
+function cleanLabel(label: string): string {
+  return label.replace(/\s*\((cold|lapsed|mixed)\)\s*$/, "");
+}
+
 function formatHM(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.round((totalSeconds % 3600) / 60);
@@ -502,7 +506,7 @@ export default function RouteDetailPage() {
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center gap-3 flex-wrap mb-3">
-          <h1 className="text-xl font-semibold text-slate-900">{route.cluster_label}</h1>
+          <h1 className="text-xl font-semibold text-slate-900">{cleanLabel(route.cluster_label)}</h1>
           <span
             className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${MODE_BADGE[route.mode]}`}
           >

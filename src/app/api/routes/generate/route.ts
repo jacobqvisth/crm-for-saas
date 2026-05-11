@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { generateRoute, type RegionKey } from "@/lib/routes/generate";
+import {
+  generateRoute,
+  CANDIDATE_FILTER_KEYS,
+  type CandidateFilterKey,
+  type RegionKey,
+} from "@/lib/routes/generate";
 import { MissingApiKeyError } from "@/lib/routes/geocode";
 import { getUserOrigin } from "@/lib/routes/profile";
 
@@ -27,6 +32,16 @@ function isIsoDate(v: unknown): v is string {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
 
+function parseFilters(raw: unknown): CandidateFilterKey[] {
+  if (!Array.isArray(raw)) return [];
+  const allowed = new Set<string>(CANDIDATE_FILTER_KEYS);
+  const out: CandidateFilterKey[] = [];
+  for (const v of raw) {
+    if (typeof v === "string" && allowed.has(v)) out.push(v as CandidateFilterKey);
+  }
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
@@ -40,6 +55,7 @@ export async function POST(request: NextRequest) {
     region?: string;
     forDate?: string;
     forUserId?: string;
+    filters?: unknown;
     originOverride?: { address: string; lat: number; lng: number };
   };
 
@@ -50,6 +66,7 @@ export async function POST(request: NextRequest) {
 
   const region: RegionKey = isRegionKey(body.region) ? body.region : "auto";
   const forDate = isIsoDate(body.forDate) ? body.forDate : null;
+  const filters = parseFilters(body.filters);
 
   const { data: membership } = await supabase
     .from("workspace_members")
@@ -101,6 +118,7 @@ export async function POST(request: NextRequest) {
       assignedTo: assignedUserId,
       region,
       forDate,
+      filters,
       supabase: service,
     });
 

@@ -140,9 +140,3 @@ export function labelForStops(
   }
   return `${sorted[0].display} ...`;
 }
-
-/** Append the per-route mode tag in parens, but only for single-mode routes. */
-export function decorateLabelWithMode(label: string, mode: "mixed" | "cold" | "lapsed"): string {
-  if (mode === "mixed") return label;
-  return `${label} (${mode})`;
-}
