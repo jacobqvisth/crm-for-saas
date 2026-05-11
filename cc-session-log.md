@@ -14,6 +14,51 @@ updated: 2026-04-22
 
 ---
 
+## Session: Import Hans's manual outreach + wire `last_visited_at` into Field Routes (PR #170)
+- **Date:** 2026-05-11
+- **PR:** #170 (squash `5047ba1`)
+- **Branch:** `feature/import-hans-manual-outreach`
+- **Source data:** `_inbox/wrenchlane_verkstadsmail_2025-2026.xlsx` (Hans's Gmail outreach ledger, 82 threads, 2025-03 → 2025-11)
+
+### What was built
+
+**Migration** `20260511000000_last_visited_at.sql` — adds `companies.last_visited_at` and `contacts.last_visited_at` (timestamptz, nullable). Indexed on companies (workspace_id, last_visited_at DESC). Applied directly to prod via psql.
+
+**Field Routes Phase 5 wiring** (`src/lib/routes/generate.ts`) — `fetchMostRecentVisits` now accepts an optional `directVisits` map and folds `companies.last_visited_at` in with `route_stops.visited_at`, taking MAX. Both candidate-pool queries select `last_visited_at` and pass it through. Signature-compatible; 56/56 route tests green.
+
+**Import script** `scripts/import-hans-outreach.mjs` — reads `scripts/data/hans-manual-outreach.json`, classifies rows (cold / mid_stage / late_stage / customer), upserts companies (domain → name fallback → INSERT with unique-violation retry that nulls the domain), contacts (by email), and one `activities` row per thread. Tags `manual-outreach-2025` cohort-wide + `hot-replied-2025` on the 7 replied threads. `--dry-run` (default) / `--apply`. Idempotent on re-run.
+
+### Production landed
+
+- **79 contacts** + **79 companies** + **81 activity notes** tagged `manual-outreach-2025`
+- **7 hot-replied** contacts tagged `hot-replied-2025`
+- **2 customers** flagged (`info@pbz.se` — Arash, PBZ AB Uppsala; `avvologjanin@gmail.com` — Anton, Mekonomen Södermalm) → `lead_status=customer`, `customer_status=active`, `lifecycle_stage=paying`
+
+### Notable decisions
+
+- **`lead_status` constraint reality vs CLAUDE.md.** The DB check accepts only `new | contacted | qualified | customer | churned`. CLAUDE.md documents `engaged`/`unqualified` but those are NOT in the constraint. Mid-stage and late-stage replied threads both map to `qualified`; funnel detail carried by `lifecycle_stage` (mql vs sql) and the `hot-replied-2025` tag.
+- **Domain collision in chains** (Speedy Bilservice has 25 branch rows sharing one domain). Approach: first row to claim the domain wins via INSERT; subsequent rows that 23505 on insert retry with `domain=NULL` so the branch lands as its own company record. UPDATE path never overwrites an existing domain.
+- **Activity notes, not `contacts.notes` overwrite.** One `activities` row per thread (type=note, metadata.source=`hans-manual-outreach-2025`, metadata.thread_date) preserves Hans's free-text summaries without trampling existing CRM annotations.
+
+### Follow-ups
+
+- **Pre-existing duplicate contacts in CRM** — `huddingesyd@mekonomenbilverkstad.se` and `tyreso@mecabilservice.se` each have two rows in `contacts` with the same email and workspace. Both got tagged by this import; the script's `fetchExistingContacts` Map collapses on email so the second copy's tags arrive on the SECOND-fetched contact, not whichever the rest of the system considers canonical. Worth a generic dedupe pass.
+- **Sheet 3 ("Körningar med Magnus")** intentionally skipped — it's route-level data (date + area + Maps URL + workshop count) with no individual workshop names, so per-workshop `last_visited_at` can't be derived from it. Sheet 1's `Datum` is the visit-date proxy and IS workshop-specific.
+- **`scripts/diagnose-min-interval-column.mjs`** still untracked in working tree (left over from a prior session — flagged in PR #152 notes already). Not this session's to claim.
+
+### Parallel-session note
+
+Mid-session a `git stash pop` surfaced 5 modified files (sidebar.tsx, contacts-page-client.tsx, routes/[id]/page.tsx, settings/page.tsx, api/routes/[id]/route.ts) from another CC session on branch `feature/route-rename-sidebar-leadstatus`. Those edits removed `/prospector` from the sidebar but left a dangling `LEAD_STATUS_TABS` ref that breaks the build. Stashed locally under `parallel-session-wip-not-mine (rescued by import-hans-outreach session 2026-05-11)` for that session to recover.
+
+### Build status
+
+- `npm run build` green (Webpack — Codex.app Node + Turbopack native-bindings issue is pre-existing on this machine)
+- `npm run lint` clean
+- `npx tsc --noEmit` clean
+- Vercel auto-deploy: 307 on `/` post-merge (expected auth redirect)
+
+---
+
 ## Session: Field Routes — pre-generation filter dropdown + drop `(cold)` label suffix (PR #168)
 - **Date:** 2026-05-11
 - **PR:** #168 (squash `<see git log>`)
