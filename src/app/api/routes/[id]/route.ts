@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isUnavailable } from "@/lib/routes/profile";
+import { fetchLastEmailedByCompany } from "@/lib/routes/email-status";
 
 async function authorize(supabase: Awaited<ReturnType<typeof createClient>>, routeId: string) {
   const {
@@ -57,7 +58,27 @@ export async function GET(
     return NextResponse.json({ error: stopsErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ route, stops: stops ?? [] });
+  const companyIds = (stops ?? [])
+    .map((s) => s.company_id)
+    .filter((v): v is string => !!v);
+  let lastEmailedByCompany = new Map<string, string>();
+  if (companyIds.length > 0) {
+    try {
+      lastEmailedByCompany = await fetchLastEmailedByCompany(
+        supabase,
+        route.workspace_id,
+        companyIds,
+      );
+    } catch (err) {
+      console.error("[GET /api/routes/[id]] last-emailed lookup failed", err);
+    }
+  }
+  const decoratedStops = (stops ?? []).map((s) => ({
+    ...s,
+    last_emailed_at: s.company_id ? lastEmailedByCompany.get(s.company_id) ?? null : null,
+  }));
+
+  return NextResponse.json({ route, stops: decoratedStops });
 }
 
 export async function PATCH(
