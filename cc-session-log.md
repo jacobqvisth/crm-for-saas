@@ -14,6 +14,39 @@ updated: 2026-04-22
 
 ---
 
+## Session: Dedupe writeRawRows + writeFunnelPoints — finishes the PR #176 dedup pass (PR #181)
+- **Date:** 2026-05-12
+- **PR:** [#181](https://github.com/jacobqvisth/crm-for-saas/pull/181)
+- **Branch:** `fix/ceo-sync-rawrows-funnel-dedup`
+
+### What was wrong
+PR #176 deduped `writeUsers`, `writeWorkshops`, `writeSubscriptions`, and the per-diag/chat/motor/cost writers, but missed `writeRawRows` and `writeFunnelPoints` — both have **composite** conflict keys. The 10:25 UTC `ceo-sync-core-app-twice-daily` run today still failed with `ON CONFLICT DO UPDATE command cannot affect row a second time`, so `dashboard_users.last_seen_at` was frozen at 2026-05-03 across all 343 rows.
+
+Trigger that surfaced this: a `@wrenchlane.com` operator couldn't find a fresh WL-app signup (`gladjen.tvatt.verkstad@gmail.com`) in `/contacts`. Investigation showed the user wasn't in `dashboard_users` either — i.e. the upstream sync was stuck.
+
+### Root cause
+`buildRawRows("user_stats", body, lastModified, row => user_stats:<user_id>)` keys every raw row by `(source_key, external_id=user_stats:<user_id>, period_start=lastModified)`. If S3 ships the same user_id twice (the exact pattern #176 was fixing on the user/workshop side), `writeRawRows` blows up **before** the deduped `writeUsers` runs.
+
+`writeFunnelPoints` has the same shape risk for any connector that emits funnel rows.
+
+### Fix
+Replaced both `rows.map(...)` payload builders with `Map<conflictKey, row>` builders — the same last-value-wins pattern `writeMetricPoints` already uses. No behavior change for clean inputs; collisions resolve to the last row, which matches the post-conflict state Postgres would have ended up in across separate upserts.
+
+### Verification (post-deploy, via prod curl)
+- `POST /api/ceo-sync/core_app` returned `{ status: "success", rowsRead: 1749, rowsWritten: 4176 }`.
+- `MAX(dashboard_users.last_seen_at)` advanced from **2026-05-03T21:26 UTC** to **2026-05-12T10:08 UTC**.
+- Counts: 343 → 363 dashboard_users (+20), 285 → 295 dashboard_workshops (+10).
+- `POST /api/cron/discover-new-wl-users` returned `{ status: "ok", newCompanies: 0, newContacts: 0, mergedContacts: 0, skippedInternalTest: 0, errors: 0 }` — the new cron is healthy; the only reason it found nothing is that the upstream S3 file `latest/user_stats.json.gz` LastModified is **2026-05-12T10:15:41 UTC**, before the operator's signup. Next core_app sync after the next S3 refresh will pick it up.
+
+### Build / lint / tsc
+- `npx tsc --noEmit` clean
+- `npm run lint` clean
+- `npm run build` green
+
+### Follow-ups
+- **CEO sync health alarm.** Five consecutive failed runs (May 4 → May 12) only surfaced because someone manually tried to find a user. `dashboard_sync_runs.status='failed'` should fire an alert (Slack/email) — silent failures of a twice-daily cron is a footgun. Worth wiring up.
+- **S3 export cadence.** Today's `last_modified=10:15:41 UTC` and the CRM cron at 10:25 UTC suggest the WL-app S3 export runs once daily ~10:15 UTC. The 02:25 UTC CRM cron is therefore reprocessing the same file from the previous day — wasted work, harmless. Could drop the 02:25 firing or move it to ~10:30 UTC.
+
 ## Session: Daily cron to discover new WL-app signups (PR #179)
 - **Date:** 2026-05-12
 - **PR:** [#179](https://github.com/jacobqvisth/crm-for-saas/pull/179)
