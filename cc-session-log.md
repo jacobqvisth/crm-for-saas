@@ -14,6 +14,68 @@ updated: 2026-04-22
 
 ---
 
+## Session: CIO fallback + sync-health alerting + Vercel-cron migration (2026-05-12, PRs #183 / #185 / #186 / #187 / #188 / #189)
+- **Date:** 2026-05-12
+- **Triggered by:** Jacob couldn't find a brand-new signup (`gladjen.tvatt.verkstad@gmail.com`) in `/contacts` even though he'd signed up to the WL app earlier that day.
+- **PRs:** #183, #185, #186, #187, #188, #189 (plus #181/#184 logged separately above).
+
+### What was wrong
+The signup was real (verified via Customer.io: `cio_id=a4860c00840b850b`, signed up at 2026-05-12T10:41:53 UTC). But the discoverer only reads from the S3 export `latest/user_stats.json.gz`, which refreshes twice daily at 02:00 + 10:00 UTC (Stockholm 04:00 + 12:00). The user signed up *after* the 10:15 UTC export, so he wouldn't land in CRM until tomorrow's 10:25 UTC `core_app` sync → 10:30 UTC discoverer cycle.
+
+Underneath that, three latent issues surfaced:
+1. **#181 root cause** — `core_app` sync had been silently failing every run from 2026-05-04 → 2026-05-12. PR #176's dedup pass missed `writeRawRows` + `writeFunnelPoints` (composite conflict keys). Fixed pre-session.
+2. **Detection gap** — 8-day silent outage was only noticed when an operator manually tried to find an email. No alerting.
+3. **Architectural gap** — even with a healthy S3 sync, the 2x/day cadence means up-to-12h lag between WL-app signup and CRM appearance.
+
+### What shipped
+
+**Real-time fallback (PR #183 → #186 → #187 → #188):**
+- New `fetchCioNewWlUsers()` in `src/lib/wl-sync/discover-new.ts` queries CIO's "All Users" segment (id=1, dynamic) for any `wl_user_id` not already in the current S3 snapshot, then attribute-fetches each candidate via `/v1/customers/{cio_id}/attributes`. Folds CIO rows into the same workshops Map that S3 feeds. S3 wins on duplicates (carries `workshop_created_at` CIO doesn't).
+- Reuses `CUSTOMER_IO_APP_API_KEY` + `CUSTOMER_IO_REGION` env vars already set for the `customer_io` ceo-sync source.
+- **CIO API gotcha #1 (#186 fix):** App API `GET /v1/customers` does NOT support listing without an email filter — returns `400 bad request`. Use segment membership instead (`GET /v1/segments/{id}/membership` is paginable via `next` cursor; doesn't require an email).
+- **Regression I introduced (#187 fix):** When adding a dedup-on-user_id guard in #183, I moved `w.users.push(r)` into the `else if` branch, which meant brand-new workshops (first time seen in this run) never got their user pushed. Result: a successful CIO-fallback run created 10 companies with 0 contacts. Always-push (deduped) is the fix.
+- **CIO-only test workshops (#188):** The existing `dashboard_workshops.is_internal_test` gate only fires for workshops in S3. CIO-only signups bypass it. Added a word-boundary regex `/\b(test|wrenchlane)\b/i` on `company_name` to catch obvious internal/test workshops at CIO ingestion. Surfaces in new diagnostic field `cioFilteredAsTest`.
+- **New diagnostic fields on `DiscoverResult`:** `s3RowsValid`, `cioRowsFetched`, `cioOnlyWorkshops`, `cioFilteredAsTest`. Makes operational logs self-explanatory.
+
+**Sync-health alerting (PR #185):**
+- New module `src/lib/ceo/sync/health-check.ts` with `checkSyncHealth()` and `notifySyncHealth()` pure functions.
+- New cron route `src/app/api/cron/check-sync-health/route.ts` at `0 8 * * *` UTC.
+- Two checks: (a) any failed `dashboard_sync_runs` in the last 26h, (b) any tracked source whose most recent success is older than its freshness budget (core_app: 18h, daily sources: 30h, hourly: 3h).
+- Posts to `SLACK_ALERT_WEBHOOK_URL` if set, otherwise `console.error` (surfaces in Vercel logs). No env-var setup required to ship.
+
+**Cron-cost cleanup (PR #189, supersedes #184):**
+PR #184 originally throttled 4 CEO syncs (ga4 / google_ads / search_console / app_store_connect) by editing the pg_cron schedule via `supabase/ceo-cron-throttle.sql`. Pasting the substituted SQL into Studio worked but the SQL carries the literal SYNC_SECRET in the cron command string (same anti-pattern as the original PR #120 setup). #189 supersedes it: moves the 4 to Vercel cron entries in `vercel.json` (06:00 / 06:05 / 06:10 / 06:15 UTC). Vercel auto-injects `Authorization: Bearer $CRON_SECRET`, no literal token in any SQL string.
+- Required adding a `GET` handler to `src/app/api/ceo-sync/[source]/route.ts` (Vercel cron fires GET by default; old pg_cron fired POST via `net.http_post`).
+- 4 pg_cron jobs unscheduled via the Supabase MCP after #189 deployed.
+- Remaining in pg_cron: `ceo-sync-core-app-twice-daily`, `ceo-sync-stripe-hourly`, `ceo-sync-customer-io-hourly` (real-time-ish, kept on existing schedules).
+
+### Verification (live, post-deploy)
+
+- Pre-cleanup discoverer run: `cioRowsFetched: 23, cioOnlyWorkshops: 21, cioFilteredAsTest: 4` (Wrenchlane AB + 3 obvious test workshops correctly filtered).
+- After cleanup of 26 orphan companies (10 from #183 regression + 16 pre-existing from 2026-05-05 cohort): discoverer rebuilt 21 companies with 6 contacts attached — gladjen included.
+- **Final gladjen contact:**
+  - `id: eef9e2a6-0d65-4dc1-80f0-ef3bc1c3bba2`
+  - `email: gladjen.tvatt.verkstad@gmail.com`
+  - `wl_user_id: 90fc79cc-a061-70df-28a6-401b42ed786d`
+  - `company_id: 7b8ea448-fbcf-4e27-99ac-d9dd548ba4ed` ("Glädjens biltvätt o bilverkstad AB")
+  - `source: wl-app`, `lead_status: customer`, `language: sv`, `country_code: SE`, `app_role: admin`, `is_primary: true`, `tags: ['owner']`
+- Final pg_cron state (3 jobs remain): core_app twice-daily, stripe hourly, customer_io hourly.
+
+### Notable decisions
+- **CIO as supplement, not replacement.** S3 still gives a complete workshop snapshot (with `workshop_created_at` CIO doesn't carry). Keeping S3 as primary preserves the propagator's expectations. CIO covers the lag window between sign-up and the next S3 export.
+- **Segment-membership pagination, not customer enumeration.** App API doesn't allow `GET /v1/customers` without an email filter. The "All Users" segment is dynamic + paginable + cheap to walk.
+- **Vercel cron over pg_cron for the throttle.** Single cron surface, source-of-truth lives in git (`vercel.json`), no literal Bearer tokens in pg_cron command strings, no Studio paste for secret rotation.
+- **Sync-health alert ships without external setup.** Defaults to console.error → Vercel logs. Slack push is an opt-in env-var addition.
+
+### Open follow-ups (not addressed in this session)
+- **Chain-vs-branch data architecture.** 15 of the 21 rebuilt wl-app companies sit orphan because their would-be users' emails are already linked to Hans's manually-imported chain-level companies (e.g. 5 Mekonomen branches share one "Mekonomen Södermalm" company). The discoverer creates a parallel per-branch company, the email-merge guard skips the user, the new company stays orphan. Two paths to decide: (a) propagator sets `wl_workshop_id` on Hans's existing chain-level company and the discoverer skips the per-branch INSERT, or (b) Hans's chain-level companies get split per branch. Either way it's a data-model decision, not a bug.
+- **`SLACK_ALERT_WEBHOOK_URL` env var.** Add via `vercel env add` if you want Slack push instead of Vercel-log-only alerts.
+
+### Build / lint / tsc (every PR in this session)
+- `npm run lint` clean
+- `npx tsc --noEmit` clean
+- `npm run build` green
+
 ## Session: Dedupe writeRawRows + writeFunnelPoints — finishes the PR #176 dedup pass (PR #181)
 - **Date:** 2026-05-12
 - **PR:** [#181](https://github.com/jacobqvisth/crm-for-saas/pull/181)
