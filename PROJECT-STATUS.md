@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-05-05 (workshop CRM schema + import existing customers from app #115; **Sweden full-country Apify scrape — 9,856 unique workshops, 51% email, 524 cities, 5,669 MX-valid emails**)
+Last updated: 2026-05-12 (Field Routes UX bundle + Prospector removed + enum dropdowns pruned + AWS core_app sync dedup fix + dashboard_* → CRM propagation. See `cc-session-log.md` for the run of PRs #166 / #168 / #170 / #172 / #174 / #176.)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
