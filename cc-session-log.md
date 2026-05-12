@@ -14,6 +14,51 @@ updated: 2026-04-22
 
 ---
 
+## Session: Remove Prospector + prune dead enum values + AWS sync audit (PR #174)
+- **Date:** 2026-05-12
+- **PR:** #174 (squash `<see git log>`)
+- **Branch:** `feature/prospector-removal-enum-cleanup`
+
+### What changed (code)
+Jacob: *"we will not use the prospector anymore. fix all the rest as u seem best."*
+
+- **Prospector removed entirely** — `src/app/(dashboard)/prospector/page.tsx`, all 6 routes under `src/app/api/prospector/` (add-contacts, search, check-in-crm, saved-searches GET/POST/[id], ai-filter), plus `src/app/(dashboard)/settings/ai-filter/page.tsx` (existed only to score Prospector results). Drops the "AI Lead Filter" settings card and the temporary "Other tools" footer link added in PR #172. `prospeo` removed from `ALL_SOURCES` / `SOURCE_LABELS` in the contacts page filter.
+- **Dead enum values pruned from UI option lists** (each one had zero rows in prod after a service-role count over 10,554 contacts + companies):
+  - `contacts.status.archived` — removed from contact-detail dropdown, contacts filter, `STATUS_OPTIONS` in `src/lib/lists/filter-query.ts`
+  - `contacts.lead_status.engaged`, `.unqualified` — removed from contacts filter (contact-detail already omitted them)
+  - `contacts.email_status.unverified` — swapped to `.unknown` (368 rows in prod vs 0)
+  - `companies.lifecycle_stage.reactivation`, `companies.customer_status.paused`, `.churned` — removed
+- **Seniority editable field removed from contact-detail page.** 0/10,554 rows have a value, no automation writes it. Column left in schema (no migration).
+- **Source-tagging:** `/contacts` Add Contact insert → `source: 'manual'`, `/companies/[id]` add-contact modal → `source: 'manual'`, CSV importer → `source: 'csv'`. Closes the long-standing gap where these paths wrote `source: null`.
+
+### Files changed
+- Deleted: `src/app/(dashboard)/prospector/page.tsx`, `src/app/(dashboard)/settings/ai-filter/page.tsx`, 6 files under `src/app/api/prospector/`
+- Modified: `src/app/(dashboard)/settings/page.tsx`, `src/components/contacts/contacts-page-client.tsx`, `src/components/contacts/contact-detail-client.tsx`, `src/components/contacts/csv-import-wizard.tsx`, `src/components/companies/detail/add-contact-modal.tsx`, `src/lib/lists/filter-query.ts`
+
+### AWS sync audit (investigation, no code change)
+Jacob asked whether the AWS sync is on and what data it provides. Pulled `dashboard_sync_runs` over the last 60 days for the `core_app` source.
+
+- **It IS scheduled** — pg_cron job `ceo-sync-core-app-twice-daily` fires at 02:25 and 10:25 UTC every day, hitting `https://crm-for-saas.vercel.app/api/ceo-sync/core_app` with `Authorization: Bearer SYNC_SECRET`.
+- **It IS currently failing** — 13/28 runs in the last 60 days have failed; the last 13 consecutive runs (since ~2026-05-04) all error with `ON CONFLICT DO UPDATE command cannot affect row a second time`. This is the duplicate-user-id bug noted in the post-PR-#120 follow-ups in memory `project_wl-dashboard`.
+- **The fix is small** — `src/lib/ceo/sync/sources/core-app.ts:1142` returns `mappedRows.filter(...)` without deduping by `internal_user_id`. Adding a `Map<id, row>` reduction before the return would close it. Same pattern needed in `buildWorkshopRows` (line 1145+) for the workshop upsert.
+- **What it provides when healthy** — pulls `user_stats.json.gz` from the S3 `DATA_BUCKET`:
+  - **users** (→ `dashboard_users`): internal_user_id, workshop_id, email_hash, customer_io_id, ga_client_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, plus metadata (login_count, plan_type, subscription_status, stripe enrichment, etc.)
+  - **workshops** (→ `dashboard_workshops`): workshop_id, name, owner_internal_user_id, country, plan_key, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, stripe IDs
+  - **diagnostics, motor usage, diagnostic-chats, cost entries, raw metrics** (→ matching `dashboard_*` tables)
+  - Stripe subscriptions are independently fetched and reconciled
+- **What it does NOT do** — there is no writer anywhere in the CRM repo for `contacts.wl_user_id`, `contacts.app_role`, `companies.wl_workshop_id`, or any of the other Wrenchlane-app fields on contacts/companies. Those were filled by the one-off backfill at the time of the wl-dashboard absorption (PR #120, 2026-05-06). They are frozen until someone wires `dashboard_users` → `contacts.wl_user_id` (and similarly for workshops). The sync only feeds CEO-dashboard reads.
+
+### Follow-ups Jacob should decide on
+- **Fix the core_app dedup bug** — one-day work, restores S3 sync. Worth doing soon since `dashboard_diagnostics`/`dashboard_users` are 9 days stale.
+- **Wire `dashboard_*` → `contacts`/`companies`** if we want the WL-app status fields to stay fresh (`wl_user_id`, `app_role`, `user_plan_type`, `customer_status`, `wl_workshop_id`, etc.). Otherwise the 333 contacts with `wl_user_id` will drift.
+
+### Build / lint / tsc / tests
+- `npm run lint` clean
+- `npx tsc --noEmit` clean (after `rm -rf .next/` to clear stale validator types from the deleted routes)
+- `npm run build` green; route table no longer lists `/prospector` or `/settings/ai-filter`
+
+---
+
 ## Session: UX bundle — rename route, hide Prospector, lead-status dropdown + contact taxonomy audit (PR #172)
 - **Date:** 2026-05-11
 - **PR:** #172 (squash `508ca29`)
