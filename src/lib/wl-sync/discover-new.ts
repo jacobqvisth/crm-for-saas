@@ -86,57 +86,89 @@ function getCustomerIoBaseUrl(): string {
     : "https://api.customer.io/v1";
 }
 
-// Fetch up to MAX_PAGES * 100 most recently created customers from Customer.io
-// that have the `workshop_id` attribute set. The default page order is
-// most-recent first per CIO docs. 500 customers is enough headroom to absorb
-// even a busy 24h signup window.
-async function fetchRecentCioWlUsers(): Promise<UserStatRow[]> {
-  const apiKey = process.env.CUSTOMER_IO_APP_API_KEY;
-  if (!apiKey) return [];
+type CioSegmentMember = { id: string; cio_id: string; email: string };
+type CioSegmentMembershipResponse = {
+  segment_id?: number;
+  identifiers?: CioSegmentMember[];
+  next?: string | null;
+};
 
-  const MAX_PAGES = 5;
-  const LIMIT = 100;
-  const collected: UserStatRow[] = [];
-
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = new URL(`${getCustomerIoBaseUrl()}/customers`);
-    url.searchParams.set("page", String(page));
-    url.searchParams.set("limit", String(LIMIT));
-    url.searchParams.set("sort", "_created_in_customerio_at:desc");
-
+// Paginate the "All Users" segment (id=1, dynamic, always up-to-date) and
+// return the cio_id + external_id + email for every member. The App API does
+// NOT support listing customers without an email filter, but segment
+// membership IS enumerable — so this is the supported path.
+async function listCioSegmentMembers(apiKey: string, segmentId = 1): Promise<CioSegmentMember[]> {
+  const collected: CioSegmentMember[] = [];
+  let next: string | null = null;
+  const MAX_PAGES = 50; // 50 × ~100 = ~5000 members, safety cap
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const url = new URL(`${getCustomerIoBaseUrl()}/segments/${segmentId}/membership`);
+    url.searchParams.set("limit", "100");
+    if (next) url.searchParams.set("start", next);
     const res = await fetch(url, {
       headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" },
     });
     if (!res.ok) {
-      console.error(`[discover-new] CIO list failed page=${page} status=${res.status}`);
+      console.error(`[discover-new] CIO segment membership failed status=${res.status}`);
       break;
     }
-    const body = (await res.json()) as { customers?: CioCustomer[]; meta?: { pagination?: { total?: number } } };
-    const customers = body.customers ?? [];
-    if (customers.length === 0) break;
-
-    for (const c of customers) {
-      const a = c.attributes ?? {};
-      if (!a.workshop_id || !a.email || !a.id) continue;
-      if (!UUID_RE.test(a.id)) continue;
-      collected.push({
-        user_id: a.id,
-        username: null,
-        email: a.email,
-        name: a.name ?? null,
-        phone: a.phone ?? null,
-        user_role: a.user_role ?? null,
-        workshop_id: a.workshop_id,
-        company_name: a.company_name ?? null,
-        country: a.country ?? null,
-        language: a.language ?? null,
-        subscription_status: a.subscription_status ?? null,
-        workshop_created_at: null,
-      });
+    const body = (await res.json()) as CioSegmentMembershipResponse;
+    for (const m of body.identifiers ?? []) {
+      if (m.id && m.cio_id && m.email) collected.push(m);
     }
-    if (customers.length < LIMIT) break;
+    if (!body.next) break;
+    next = body.next;
   }
   return collected;
+}
+
+// Fetch full attributes for one CIO customer by cio_id.
+async function fetchCioCustomer(apiKey: string, cioId: string): Promise<CioCustomer | null> {
+  const url = `${getCustomerIoBaseUrl()}/customers/${encodeURIComponent(cioId)}/attributes`;
+  const res = await fetch(url, {
+    headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { customer?: CioCustomer } | CioCustomer;
+  // Endpoint shape: some accounts get { customer: { attributes: {...} } }, others { attributes: {...} }.
+  if ("customer" in body && body.customer) return body.customer;
+  return body as CioCustomer;
+}
+
+// Fetch CIO data for WL signups not already represented in `s3UserIds`.
+// Enumerates segment 1 ("All Users") membership, filters to external_ids
+// that look like UUIDs and aren't already in S3, then attribute-fetches
+// each candidate. Typical run: ~5-10 segment pages + 0-3 attribute fetches.
+async function fetchCioNewWlUsers(s3UserIds: Set<string>): Promise<UserStatRow[]> {
+  const apiKey = process.env.CUSTOMER_IO_APP_API_KEY;
+  if (!apiKey) return [];
+
+  const members = await listCioSegmentMembers(apiKey);
+  const candidates = members.filter((m) => UUID_RE.test(m.id) && !s3UserIds.has(m.id));
+
+  const rows: UserStatRow[] = [];
+  for (const m of candidates) {
+    const c = await fetchCioCustomer(apiKey, m.cio_id);
+    const a = c?.attributes ?? {};
+    if (!a.workshop_id || !a.email) continue;
+    const externalId = a.id ?? m.id;
+    if (!UUID_RE.test(externalId)) continue;
+    rows.push({
+      user_id: externalId,
+      username: null,
+      email: a.email,
+      name: a.name ?? null,
+      phone: a.phone ?? null,
+      user_role: a.user_role ?? null,
+      workshop_id: a.workshop_id,
+      company_name: a.company_name ?? null,
+      country: a.country ?? null,
+      language: a.language ?? null,
+      subscription_status: a.subscription_status ?? null,
+      workshop_created_at: null,
+    });
+  }
+  return rows;
 }
 
 function normalizeAppRole(role: string | null): string | null {
@@ -165,19 +197,16 @@ export async function discoverNewWlUsers(
     cioOnlyWorkshops: 0,
   };
 
-  // 1. Pull the latest snapshot from S3 AND from Customer.io. S3 refreshes
-  //    only twice a day (02:00 + 10:00 UTC); CIO is real-time. Fold them
-  //    together so a signup that landed after the most recent S3 export still
-  //    shows up in the next discoverer run instead of waiting ~24h.
-  const [s3Rows, cioRows] = await Promise.all([
-    fetchUserStats(),
-    fetchRecentCioWlUsers(),
-  ]);
+  // 1. Pull the latest S3 snapshot first — it carries 343+ users in one
+  //    file, fast. Then ask CIO for any signups that aren't already in that
+  //    snapshot (most cron runs: 0-3 candidates). S3 refreshes only twice a
+  //    day (02:00 + 10:00 UTC); CIO is real-time, so this folds in any
+  //    signup that landed after the most recent S3 export.
+  const s3Rows = await fetchUserStats();
+  const s3UserIds = new Set(s3Rows.map((r) => r.user_id).filter((id): id is string => !!id));
+  const cioRows = await fetchCioNewWlUsers(s3UserIds);
 
   // 2. Filter to rows we can act on (UUID user_id + email + workshop_id).
-  //    Same UUID gate the script applies to skip test accounts. CIO rows are
-  //    pre-filtered to this shape in fetchRecentCioWlUsers, but apply the
-  //    gate uniformly here so the two sources go through identical validation.
   const s3WorkshopIds = new Set(s3Rows.map((r) => r.workshop_id).filter((id): id is string => !!id));
   const allRows = [...s3Rows, ...cioRows];
   const validRows = allRows.filter(
