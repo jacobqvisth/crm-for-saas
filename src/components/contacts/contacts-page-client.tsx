@@ -35,57 +35,50 @@ const PAGE_SIZE = 50;
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 
 const LEAD_STATUS_OPTIONS: MultiSelectOption[] = [
-  { value: 'new',          label: 'New' },
-  { value: 'contacted',    label: 'Contacted' },
-  { value: 'engaged',      label: 'Engaged' },
-  { value: 'qualified',    label: 'Qualified' },
-  { value: 'customer',     label: 'Customer' },
-  { value: 'unqualified',  label: 'Unqualified' },
-  { value: 'churned',      label: 'Churned' },
+  { value: 'new',       label: 'New' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'customer',  label: 'Customer' },
+  { value: 'churned',   label: 'Churned' },
 ];
 
-const ALL_SOURCES = ['discovery', 'csv', 'manual', 'prospeo', 'wl-app', 'lemlist'] as const;
+const ALL_SOURCES = ['discovery', 'csv', 'manual', 'wl-app', 'lemlist'] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
   discovery: 'Discovery',
   csv: 'CSV Import',
   manual: 'Manual',
-  prospeo: 'Prospeo',
   'wl-app': 'WL App',
   lemlist: 'Lemlist',
 };
 
 const EMAIL_STATUS_OPTIONS: MultiSelectOption[] = [
-  { value: 'valid',      label: 'Valid',        prefix: '✅' },
-  { value: 'risky',      label: 'Risky',        prefix: '⚠️' },
-  { value: 'catch_all',  label: 'Catch-all',    prefix: '📬' },
-  { value: 'invalid',    label: 'Invalid',      prefix: '❌' },
-  { value: 'unverified', label: 'Not verified', prefix: '—' },
+  { value: 'valid',     label: 'Valid',     prefix: '✅' },
+  { value: 'risky',     label: 'Risky',     prefix: '⚠️' },
+  { value: 'catch_all', label: 'Catch-all', prefix: '📬' },
+  { value: 'invalid',   label: 'Invalid',   prefix: '❌' },
+  { value: 'unknown',   label: 'Unknown',   prefix: '—' },
 ];
 
 const CONTACT_STATUS_OPTIONS: MultiSelectOption[] = [
   { value: 'active',       label: 'Active' },
   { value: 'bounced',      label: 'Bounced' },
   { value: 'unsubscribed', label: 'Unsubscribed' },
-  { value: 'archived',     label: 'Archived' },
 ];
 
 const LIFECYCLE_OPTIONS: MultiSelectOption[] = [
-  { value: 'lead',         label: 'Lead' },
-  { value: 'mql',          label: 'MQL' },
-  { value: 'sql',          label: 'SQL' },
-  { value: 'trial',        label: 'Trial' },
-  { value: 'paying',       label: 'Paying' },
-  { value: 'churned',      label: 'Churned' },
-  { value: 'reactivation', label: 'Reactivation' },
+  { value: 'lead',    label: 'Lead' },
+  { value: 'mql',     label: 'MQL' },
+  { value: 'sql',     label: 'SQL' },
+  { value: 'trial',   label: 'Trial' },
+  { value: 'paying',  label: 'Paying' },
+  { value: 'churned', label: 'Churned' },
 ];
 
 const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
   { value: 'trialing', label: 'Trialing' },
   { value: 'active',   label: 'Active' },
-  { value: 'paused',   label: 'Paused' },
   { value: 'inactive', label: 'Inactive' },
-  { value: 'churned',  label: 'Churned' },
 ];
 
 const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
@@ -1028,6 +1021,7 @@ function AddContactForm({
         phone: form.phone.trim() || null,
         company_id: form.company_id || null,
         lead_status: form.lead_status,
+        source: 'manual',
       })
       .select('id')
       .single();

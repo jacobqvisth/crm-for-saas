@@ -24,7 +24,7 @@ type Activity = Tables<'activities'>;
 type Company = Tables<'companies'>;
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
-const CONTACT_STATUSES = ['active', 'bounced', 'unsubscribed', 'archived'] as const;
+const CONTACT_STATUSES = ['active', 'bounced', 'unsubscribed'] as const;
 const LANGUAGES = [
   { code: 'et', label: 'Estonian' },
   { code: 'sv', label: 'Swedish' },
@@ -447,16 +447,6 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 editValue={editValue}
                 onEditValueChange={setEditValue}
                 onSave={() => updateField('title', editValue || null)}
-                onCancel={() => setEditField(null)}
-              />
-              <EditableField
-                label="Seniority"
-                value={contact.seniority || ''}
-                isEditing={editField === 'seniority'}
-                onEdit={() => { setEditField('seniority'); setEditValue(contact.seniority || ''); }}
-                editValue={editValue}
-                onEditValueChange={setEditValue}
-                onSave={() => updateField('seniority', editValue || null)}
                 onCancel={() => setEditField(null)}
               />
 

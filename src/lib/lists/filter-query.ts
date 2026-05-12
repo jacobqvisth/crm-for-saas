@@ -100,7 +100,7 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
   ],
 };
 
-export const STATUS_OPTIONS = ['active', 'bounced', 'unsubscribed', 'archived'] as const;
+export const STATUS_OPTIONS = ['active', 'bounced', 'unsubscribed'] as const;
 export const LEAD_STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 
 function daysAgo(days: number): string {
