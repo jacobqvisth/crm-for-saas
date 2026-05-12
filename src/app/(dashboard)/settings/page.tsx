@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, MapPin, Sparkles, ShieldCheck, Users, User as UserIcon, Search, ArrowUpRight } from 'lucide-react';
+import { GitBranch, Mail, MapPin, ShieldCheck, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -23,12 +23,6 @@ const settingsItems = [
     description: 'Connect your Gmail account for sending sequences',
     href: '/settings/email',
     icon: Mail,
-  },
-  {
-    title: 'AI Lead Filter',
-    description: 'Score Prospector results against your ICP before adding them to your CRM',
-    href: '/settings/ai-filter',
-    icon: Sparkles,
   },
   {
     title: 'Compliance & DNC',
@@ -103,26 +97,6 @@ export default function SettingsPage() {
             );
           })}
         </div>
-      </section>
-
-      {/* Other tools — secondary surfaces that don't earn a slot in the main sidebar. */}
-      <section>
-        <h2 className="text-base font-semibold text-slate-900 mb-3">Other tools</h2>
-        <Link
-          href="/prospector"
-          className="inline-flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-sm transition-all group w-full sm:w-auto"
-        >
-          <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-indigo-50">
-            <Search className="w-5 h-5 text-slate-500 group-hover:text-indigo-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 inline-flex items-center gap-1">
-              Prospector
-              <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500" />
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">Search the external prospect database and pull contacts into your CRM.</p>
-          </div>
-        </Link>
       </section>
     </div>
   );

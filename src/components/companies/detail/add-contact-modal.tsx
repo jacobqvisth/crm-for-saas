@@ -61,6 +61,7 @@ export function AddContactModal({
         phone: form.phone.trim() || null,
         title: form.title.trim() || null,
         lead_status: form.lead_status,
+        source: 'manual',
       })
       .select('id')
       .single();

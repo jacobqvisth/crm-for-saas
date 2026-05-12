@@ -261,6 +261,7 @@ export function CsvImportWizard() {
               phone: fieldToHeader['phone'] ? row[fieldToHeader['phone']]?.trim() || null : null,
               company_id: companyHeader && row[companyHeader]?.trim() ? companyIdMap[row[companyHeader].trim()] || null : null,
               lead_status: resolvedLeadStatus as TablesInsert<'contacts'>['lead_status'],
+              source: 'csv',
               custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
             };
 
