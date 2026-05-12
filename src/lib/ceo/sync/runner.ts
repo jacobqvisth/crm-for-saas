@@ -3,6 +3,7 @@ import { SOURCE_LABELS, type SourceKey } from "@/lib/ceo/sources";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { TABLES } from "@/lib/ceo/tables";
 import { SyncSkippedError } from "./errors";
+import { propagateDashboardToCrm } from "./propagate-to-crm";
 import { getConnector } from "./sources";
 import type { SyncRunResult } from "./types";
 import {
@@ -75,6 +76,29 @@ export async function runSourceSync(
       (await writeMotorUsage(writer, result.motorUsage ?? [])) +
       (await writeCostEntries(writer, result.costEntries ?? []));
 
+    // Push fresh dashboard_users / dashboard_workshops into the CRM contacts
+    // and companies tables (UPDATE-only, never insert). Only meaningful for
+    // the core_app source — the other connectors write to their own tables
+    // and don't touch dashboard_users/dashboard_workshops.
+    let propagationSummary: { contacts_updated: number; companies_updated: number } | null = null;
+    if (sourceKey === "core_app") {
+      try {
+        const r = await propagateDashboardToCrm(supabase);
+        propagationSummary = {
+          contacts_updated: r.contactsUpdated,
+          companies_updated: r.companiesUpdated,
+        };
+      } catch (err) {
+        // Non-fatal: the core_app sync itself succeeded, so we still mark
+        // the run a success. Propagation failure surfaces in the metadata.
+        propagationSummary = {
+          contacts_updated: 0,
+          companies_updated: 0,
+        };
+        console.error("[ceo-sync] propagateDashboardToCrm failed", err);
+      }
+    }
+
     await supabase
       .from(TABLES.syncRuns)
       .update({
@@ -82,7 +106,10 @@ export async function runSourceSync(
         completed_at: new Date().toISOString(),
         rows_read: result.rowsRead,
         rows_written: rowsWritten,
-        metadata: result.metadata ?? {},
+        metadata: {
+          ...(result.metadata ?? {}),
+          ...(propagationSummary ? { crm_propagation: propagationSummary } : {}),
+        },
       })
       .eq("id", run.id);
 
