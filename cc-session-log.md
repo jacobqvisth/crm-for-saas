@@ -14,6 +14,49 @@ updated: 2026-04-22
 
 ---
 
+## Session: Fix core_app sync dedup bug + propagate dashboard_* into CRM (PR #176)
+- **Date:** 2026-05-12
+- **PR:** #176 (squash `658530c`)
+- **Branch:** `feature/core-app-dedup-fix`
+
+### What changed
+Two related fixes for the AWS/S3 core_app sync that had been failing for ~9 days.
+
+**1. Dedup bug** — Postgres rejects an upsert payload containing two rows with the same ON CONFLICT key with `ON CONFLICT DO UPDATE command cannot affect row a second time`. The S3 `user_stats` export occasionally shipped the same `internal_user_id` twice (the same Cognito user appearing in two rows for some reason) and `writeUsers` upserted the raw array, blowing up the whole sync. Last 13 consecutive runs (2026-05-04 → 2026-05-12) all failed with this error.
+
+Added `dedupeByKey(rows, keyField)` helper in `src/lib/ceo/sync/writer.ts` and applied last-value-wins dedup before every upsert: users, workshops, diagnostics, diagnostic_chats, motor_usage, cost_entries, subscriptions. Mirrors what `writeMetricPoints` was already doing.
+
+**2. Propagation** — New `src/lib/ceo/sync/propagate-to-crm.ts`. After a successful `core_app` sync, `runSourceSync` now updates `contacts` and `companies` with fresh dashboard data. UPDATE-only on rows that are already linked via `wl_user_id` / `wl_workshop_id` — never inserts and never unlinks. New WL-app users can't be auto-linked here because `dashboard_users.email_hash` is hashed; that ingest stays a separate concern.
+
+Field mapping:
+- **`dashboard_users` → `contacts`:** `last_seen_at → last_active_at`; metadata-derived: `username → app_username`, `user_role → app_role` (whitelisted to `admin`/`mechanic`), `login_count`, `credits_remaining`, `plan_type → user_plan_type`, `subscription_status → user_subscription_status`, `stripe_customer_id → user_stripe_customer_id` (with `core_stripe_customer_id` preferred), `stripe_subscription_id → user_stripe_subscription_id`.
+- **`dashboard_workshops` → `companies`:** `activated_at`, `plan_key → plan`, `core_subscription_status → subscription_status`, `payment_status`, `trial_end → trial_ends_at`, `core_stripe_customer_id → stripe_customer_id`, `core_stripe_subscription_id → stripe_subscription_id`, `member_count` (from metadata), `customer_status` derived from `core_subscription_status + activated_at` → `trialing` / `active` / `inactive`.
+
+Propagation failure is non-fatal — the sync still completes successfully, with a `crm_propagation: { contacts_updated, companies_updated }` block in `dashboard_sync_runs.metadata`.
+
+### Files changed
+- `src/lib/ceo/sync/writer.ts` — added `dedupeByKey()`, applied to 7 upsert call sites
+- `src/lib/ceo/sync/propagate-to-crm.ts` (new) — `propagateDashboardToCrm()` + helpers
+- `src/lib/ceo/sync/runner.ts` — calls propagation after successful `core_app` sync; surfaces propagation summary in run metadata
+
+### Branch drift recovery
+Initial commit went onto local `main` instead of the feature branch — git did a silent branch switch between `checkout -b` and the actual edits (cause not clear from reflog). Recovered the commit via `git reflog` → cherry-pick onto a fresh branch (`feature/core-app-dedup-fix`) off `origin/main`. Per the parallel-CC-branch-drift memory: `git update-ref` / cherry-pick beats `--hard reset`. Worked cleanly.
+
+### Build / lint / tsc / tests
+- `npm run lint` clean
+- `npx tsc --noEmit` clean
+- `npm run build` green
+- Vitest tests for `src/lib/ceo/sync/*` are blocked by a pre-existing `@/*` alias-resolution issue in the vitest setup (same failure on `origin/main`, not introduced here). The `routes/` test suite runs fine; only the ceo/sync tests are affected. Worth fixing in its own PR.
+
+### Verification
+Vercel auto-deploys on push to main; the next scheduled `ceo-sync-core-app-twice-daily` cron firing (02:25 UTC) will exercise both the dedup fix and the propagation. Expected: `dashboard_sync_runs` shows a `core_app` row with `status='success'` and `metadata.crm_propagation = { contacts_updated, companies_updated }`. The dashboard_users / dashboard_workshops / dashboard_diagnostics tables will get fresh writes for the first time since 2026-05-03, and ~333 contacts + ~269 companies will see their WL-app fields updated.
+
+### Follow-ups
+- Fix the vitest `@/*` alias resolution for `src/lib/ceo/*.test.ts` so the sync logic gets test coverage going forward.
+- If the dashboard sync starts producing `customer_status` values outside `trialing` / `active` / `inactive` (which we pruned from the contacts filter dropdown in PR #174), revisit the filter UI options.
+
+---
+
 ## Session: Remove Prospector + prune dead enum values + AWS sync audit (PR #174)
 - **Date:** 2026-05-12
 - **PR:** #174 (squash `<see git log>`)
