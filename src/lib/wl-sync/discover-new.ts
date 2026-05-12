@@ -33,6 +33,7 @@ export type DiscoverResult = {
   s3RowsValid: number;
   cioRowsFetched: number;
   cioOnlyWorkshops: number;
+  cioFilteredAsTest: number;
 };
 
 type UserStatRow = {
@@ -135,11 +136,20 @@ async function fetchCioCustomer(apiKey: string, cioId: string): Promise<CioCusto
   return body as CioCustomer;
 }
 
+// Test / internal workshops bypass the `dashboard_workshops.is_internal_test`
+// gate when they're CIO-only (no S3 row → no `dashboard_workshops` row). Catch
+// the obvious ones by name match. Word-boundary so it won't false-match
+// legitimate names that contain these substrings as part of a longer word.
+const CIO_TEST_NAME_PATTERN = /\b(test|wrenchlane)\b/i;
+
 // Fetch CIO data for WL signups not already represented in `s3UserIds`.
 // Enumerates segment 1 ("All Users") membership, filters to external_ids
 // that look like UUIDs and aren't already in S3, then attribute-fetches
 // each candidate. Typical run: ~5-10 segment pages + 0-3 attribute fetches.
-async function fetchCioNewWlUsers(s3UserIds: Set<string>): Promise<UserStatRow[]> {
+async function fetchCioNewWlUsers(
+  s3UserIds: Set<string>,
+  counters: { filteredAsTest: number },
+): Promise<UserStatRow[]> {
   const apiKey = process.env.CUSTOMER_IO_APP_API_KEY;
   if (!apiKey) return [];
 
@@ -151,6 +161,10 @@ async function fetchCioNewWlUsers(s3UserIds: Set<string>): Promise<UserStatRow[]
     const c = await fetchCioCustomer(apiKey, m.cio_id);
     const a = c?.attributes ?? {};
     if (!a.workshop_id || !a.email) continue;
+    if (a.company_name && CIO_TEST_NAME_PATTERN.test(a.company_name)) {
+      counters.filteredAsTest++;
+      continue;
+    }
     const externalId = a.id ?? m.id;
     if (!UUID_RE.test(externalId)) continue;
     rows.push({
@@ -195,6 +209,7 @@ export async function discoverNewWlUsers(
     s3RowsValid: 0,
     cioRowsFetched: 0,
     cioOnlyWorkshops: 0,
+    cioFilteredAsTest: 0,
   };
 
   // 1. Pull the latest S3 snapshot first — it carries 343+ users in one
@@ -204,7 +219,9 @@ export async function discoverNewWlUsers(
   //    signup that landed after the most recent S3 export.
   const s3Rows = await fetchUserStats();
   const s3UserIds = new Set(s3Rows.map((r) => r.user_id).filter((id): id is string => !!id));
-  const cioRows = await fetchCioNewWlUsers(s3UserIds);
+  const cioCounters = { filteredAsTest: 0 };
+  const cioRows = await fetchCioNewWlUsers(s3UserIds, cioCounters);
+  result.cioFilteredAsTest = cioCounters.filteredAsTest;
 
   // 2. Filter to rows we can act on (UUID user_id + email + workshop_id).
   const s3WorkshopIds = new Set(s3Rows.map((r) => r.workshop_id).filter((id): id is string => !!id));
