@@ -14,6 +14,50 @@ updated: 2026-04-22
 
 ---
 
+## Session: Daily cron to discover new WL-app signups (PR #179)
+- **Date:** 2026-05-12
+- **PR:** [#179](https://github.com/jacobqvisth/crm-for-saas/pull/179)
+- **Branch:** `feature/discover-new-wl-users-cron`
+
+### What was wrong
+PR #176's propagator is UPDATE-only by design — `dashboard_users.email_hash` is hashed, so it can't insert a new contact (no plaintext email available). Result: a brand-new WL-app signup lands in `dashboard_users` via the twice-daily `core_app` sync but is invisible to `/contacts` until someone manually runs `scripts/import-wl-users.mjs`. Five days since last manual run → 6 stranded signups.
+
+### Fix
+New Vercel cron at **`30 10 * * *`** (5 minutes after the second `ceo-sync-core-app-twice-daily` firing at 10:25 UTC) that fills only the INSERT path:
+
+- **`src/lib/wl-sync/discover-new.ts`** — pulls `s3://codeoc-dashboard-prod/latest/user_stats.json.gz` (the only source with plaintext email). For each workshop_id not yet linked via `companies.wl_workshop_id`, INSERTs a `companies` row + the workshop's users as `contacts` rows.
+- **`src/app/api/cron/discover-new-wl-users/route.ts`** — auth via `SYNC_SECRET`/`CRON_SECRET` Bearer (same pattern as `/api/ceo-sync/*` and `/api/cron/process-emails`).
+- **`vercel.json`** — added the cron entry.
+
+Rules baked in:
+- **Internal-test workshops** (`dashboard_workshops.is_internal_test = true`, PR #164) are skipped.
+- **Email-merge for existing prospects:** if a contact with the same email already exists in the workspace (e.g. a discovery prospect who just signed up), UPDATE it in place (set `wl_user_id` + `source='wl-app'` + `lead_status`) instead of creating a duplicate.
+- **Skip contacts that already carry a `wl_user_id`** — those are the propagator's job.
+- **Lead status derived from `subscription_status`** — `paused`/`inactive`/`past_due` → `churned`, everything else → `customer`. Mirrors `import-wl-users.mjs`.
+
+### Smoke test (post-deploy)
+Curled the route with prod `SYNC_SECRET`:
+```
+{ "status": "ok", "newCompanies": 6, "newContacts": 6, "mergedContacts": 0, "skippedInternalTest": 0, "errors": 0 }
+```
+Verified all 6 are correctly tagged `source='wl-app'`, `lead_status='customer'`, `app_role='admin'`, with `country_code` set. Workshops: SE / GA / GB×2 / BY / IN.
+
+### Notable decisions
+- **Separate cron, not an extension of the propagator.** PR #176 explicitly kept the propagator UPDATE-only. Adding insert logic there would widen blast radius. A separate cron preserves PR #176's design choice and keeps the responsibility split clean: propagator updates, discoverer inserts.
+- **`dashboard_workshops.is_internal_test` query uses an untyped Supabase client** (mirroring `src/lib/ceo/supabase.ts`) because the generated `database.types.ts` doesn't yet include the column added by PR #164. Worth a types regen in a follow-up but not blocking.
+- **Test rows not flagged in `dashboard_workshops`** still slip through — the smoke run created `Matteo apple prod test 02` because nobody had toggled its `is_internal_test` flag yet. The cron is doing the right thing; the tag belongs on the CEO settings page.
+
+### Build / lint / tsc / tests
+- `npm run lint` clean
+- `npx tsc --noEmit` clean
+- `npm run build` green; new route listed at `/api/cron/discover-new-wl-users`
+
+### Follow-ups
+- Regenerate `database.types.ts` so the dashboard_* untyped-client workaround can go away.
+- Decide whether to populate `contacts.diagnostics_total` etc. on insert. The propagator doesn't touch these and the discoverer doesn't either — both leave them at the schema default. Wiring up diagnostics aggregation for new contacts would be a follow-up to either module.
+
+---
+
 ## Session: Fix core_app sync dedup bug + propagate dashboard_* into CRM (PR #176)
 - **Date:** 2026-05-12
 - **PR:** #176 (squash `658530c`)
