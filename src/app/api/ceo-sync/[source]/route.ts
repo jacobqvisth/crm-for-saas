@@ -5,7 +5,7 @@ import { runSourceSync } from "@/lib/ceo/sync/runner";
 
 export const runtime = "nodejs";
 
-export async function POST(
+async function handle(
   request: NextRequest,
   context: { params: Promise<{ source: string }> },
 ) {
@@ -22,4 +22,19 @@ export async function POST(
   const status = result.status === "failed" ? 500 : 200;
 
   return NextResponse.json(result, { status });
+}
+
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ source: string }> },
+) {
+  return handle(request, context);
+}
+
+// Vercel cron fires GET by default. Same auth + behavior as POST.
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ source: string }> },
+) {
+  return handle(request, context);
 }
