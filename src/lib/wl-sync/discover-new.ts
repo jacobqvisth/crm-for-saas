@@ -30,6 +30,9 @@ export type DiscoverResult = {
   mergedContacts: number;
   skippedInternalTest: number;
   errors: number;
+  s3RowsValid: number;
+  cioRowsFetched: number;
+  cioOnlyWorkshops: number;
 };
 
 type UserStatRow = {
@@ -59,6 +62,83 @@ async function fetchUserStats(): Promise<UserStatRow[]> {
   return JSON.parse(gunzipSync(buf).toString("utf8")) as UserStatRow[];
 }
 
+// Customer.io App API customer shape — only the attributes we care about.
+type CioCustomer = {
+  id?: string;
+  attributes?: {
+    id?: string;
+    email?: string;
+    workshop_id?: string;
+    company_name?: string;
+    country?: string;
+    language?: string;
+    user_role?: string;
+    subscription_status?: string;
+    plan_type?: string;
+    phone?: string;
+    name?: string;
+  };
+};
+
+function getCustomerIoBaseUrl(): string {
+  return process.env.CUSTOMER_IO_REGION?.toLowerCase() === "eu"
+    ? "https://api-eu.customer.io/v1"
+    : "https://api.customer.io/v1";
+}
+
+// Fetch up to MAX_PAGES * 100 most recently created customers from Customer.io
+// that have the `workshop_id` attribute set. The default page order is
+// most-recent first per CIO docs. 500 customers is enough headroom to absorb
+// even a busy 24h signup window.
+async function fetchRecentCioWlUsers(): Promise<UserStatRow[]> {
+  const apiKey = process.env.CUSTOMER_IO_APP_API_KEY;
+  if (!apiKey) return [];
+
+  const MAX_PAGES = 5;
+  const LIMIT = 100;
+  const collected: UserStatRow[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = new URL(`${getCustomerIoBaseUrl()}/customers`);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("limit", String(LIMIT));
+    url.searchParams.set("sort", "_created_in_customerio_at:desc");
+
+    const res = await fetch(url, {
+      headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.error(`[discover-new] CIO list failed page=${page} status=${res.status}`);
+      break;
+    }
+    const body = (await res.json()) as { customers?: CioCustomer[]; meta?: { pagination?: { total?: number } } };
+    const customers = body.customers ?? [];
+    if (customers.length === 0) break;
+
+    for (const c of customers) {
+      const a = c.attributes ?? {};
+      if (!a.workshop_id || !a.email || !a.id) continue;
+      if (!UUID_RE.test(a.id)) continue;
+      collected.push({
+        user_id: a.id,
+        username: null,
+        email: a.email,
+        name: a.name ?? null,
+        phone: a.phone ?? null,
+        user_role: a.user_role ?? null,
+        workshop_id: a.workshop_id,
+        company_name: a.company_name ?? null,
+        country: a.country ?? null,
+        language: a.language ?? null,
+        subscription_status: a.subscription_status ?? null,
+        workshop_created_at: null,
+      });
+    }
+    if (customers.length < LIMIT) break;
+  }
+  return collected;
+}
+
 function normalizeAppRole(role: string | null): string | null {
   if (role === "admin" || role === "mechanic") return role;
   return null;
@@ -80,20 +160,43 @@ export async function discoverNewWlUsers(
     mergedContacts: 0,
     skippedInternalTest: 0,
     errors: 0,
+    s3RowsValid: 0,
+    cioRowsFetched: 0,
+    cioOnlyWorkshops: 0,
   };
 
-  // 1. Pull the latest snapshot from S3.
-  const rawRows = await fetchUserStats();
+  // 1. Pull the latest snapshot from S3 AND from Customer.io. S3 refreshes
+  //    only twice a day (02:00 + 10:00 UTC); CIO is real-time. Fold them
+  //    together so a signup that landed after the most recent S3 export still
+  //    shows up in the next discoverer run instead of waiting ~24h.
+  const [s3Rows, cioRows] = await Promise.all([
+    fetchUserStats(),
+    fetchRecentCioWlUsers(),
+  ]);
 
   // 2. Filter to rows we can act on (UUID user_id + email + workshop_id).
-  //    Same UUID gate the script applies to skip test accounts.
-  const validRows = rawRows.filter(
+  //    Same UUID gate the script applies to skip test accounts. CIO rows are
+  //    pre-filtered to this shape in fetchRecentCioWlUsers, but apply the
+  //    gate uniformly here so the two sources go through identical validation.
+  const s3WorkshopIds = new Set(s3Rows.map((r) => r.workshop_id).filter((id): id is string => !!id));
+  const allRows = [...s3Rows, ...cioRows];
+  const validRows = allRows.filter(
     (r) => r.user_id && UUID_RE.test(r.user_id) && r.email && r.workshop_id,
   );
+  result.s3RowsValid = s3Rows.filter(
+    (r) => r.user_id && UUID_RE.test(r.user_id) && r.email && r.workshop_id,
+  ).length;
+  result.cioRowsFetched = cioRows.length;
+  result.cioOnlyWorkshops = cioRows.filter(
+    (r) => r.workshop_id && !s3WorkshopIds.has(r.workshop_id),
+  ).length;
 
   // 3. Group by workshop. First-seen-wins for the workshop meta — the JSON
   //    sometimes carries the same workshop with two users; their workshop-
-  //    level fields are identical so picking the first is fine.
+  //    level fields are identical so picking the first is fine. S3 rows
+  //    come first in `allRows`, so when S3 has the workshop, S3 wins (it
+  //    carries `workshop_created_at` which CIO doesn't). CIO-only workshops
+  //    (brand-new signups not yet in S3) get added to the same Map.
   const workshops = new Map<string, { meta: UserStatRow; users: UserStatRow[] }>();
   for (const r of validRows) {
     if (!r.workshop_id) continue;
@@ -101,8 +204,9 @@ export async function discoverNewWlUsers(
     if (!w) {
       w = { meta: r, users: [] };
       workshops.set(r.workshop_id, w);
+    } else if (!w.users.some((u) => u.user_id === r.user_id)) {
+      w.users.push(r);
     }
-    w.users.push(r);
   }
 
   // 4. Find which workshops are already in the CRM (skip — propagator owns them).
