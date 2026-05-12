@@ -233,7 +233,8 @@ export async function discoverNewWlUsers(
     if (!w) {
       w = { meta: r, users: [] };
       workshops.set(r.workshop_id, w);
-    } else if (!w.users.some((u) => u.user_id === r.user_id)) {
+    }
+    if (!w.users.some((u) => u.user_id === r.user_id)) {
       w.users.push(r);
     }
   }
