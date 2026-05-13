@@ -34,6 +34,10 @@ export type HealthCheckResult = {
     error_message: string | null;
   }>;
   stale_sources: SourceFreshness[];
+  users_missing_signed_up_at: {
+    count: number;
+    sample_internal_user_ids: string[];
+  };
   ok: boolean;
 };
 
@@ -104,10 +108,35 @@ export async function checkSyncHealth(
     }
   }
 
+  // dashboard_users.signed_up_at is the canonical signup timestamp consumed
+  // by /ceo/new-users. The writer derives it via a documented priority chain
+  // (see src/lib/ceo/sync/sources/core-app.ts:deriveSignedUpAt). If a row
+  // lands without ANY signal — user_created_at, workshop_created_at, CIO
+  // or Stripe — the chain is broken and the user disappears from the
+  // Sign-ups chart. Alert on any such row inserted in the last 24h so a
+  // new failure mode never sits silently again (May 11 2026 prompted this).
+  const usersCutoff = new Date(now - 24 * 3600 * 1000).toISOString();
+  const { data: usersMissing, error: uErr } = await supabase
+    .from("dashboard_users")
+    .select("internal_user_id")
+    .is("signed_up_at", null)
+    .gte("created_at", usersCutoff)
+    .limit(20);
+  if (uErr) throw uErr;
+  const usersMissingResult = {
+    count: usersMissing?.length ?? 0,
+    sample_internal_user_ids:
+      (usersMissing ?? []).map((row) => row.internal_user_id as string).slice(0, 5),
+  };
+
   return {
     recent_failures: failures ?? [],
     stale_sources: stale,
-    ok: (failures?.length ?? 0) === 0 && stale.length === 0,
+    users_missing_signed_up_at: usersMissingResult,
+    ok:
+      (failures?.length ?? 0) === 0 &&
+      stale.length === 0 &&
+      usersMissingResult.count === 0,
   };
 }
 
@@ -139,6 +168,17 @@ export async function notifySyncHealth(result: HealthCheckResult): Promise<{
         `• \`${s.source_key}\` — ${h}h since last success (budget ${s.expected_max_hours}h)`,
       );
     }
+  }
+  if (result.users_missing_signed_up_at.count > 0) {
+    lines.push(
+      `*${result.users_missing_signed_up_at.count} new dashboard_users with NULL signed_up_at (last 24h):*`,
+    );
+    for (const id of result.users_missing_signed_up_at.sample_internal_user_ids) {
+      lines.push(`• \`${id}\``);
+    }
+    lines.push(
+      `Investigate the signed_up_at priority chain in core-app.ts:deriveSignedUpAt — none of user_created_at / workshop_created_at / CIO / Stripe fired for these rows.`,
+    );
   }
   const text = lines.join("\n");
 

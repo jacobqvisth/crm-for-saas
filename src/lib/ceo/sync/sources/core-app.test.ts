@@ -6,6 +6,7 @@ import {
   buildUserRows,
   buildWorkshopRows,
   classifyCustomerIoProfile,
+  deriveSignedUpAt,
   flattenNumericLeaves,
 } from "./core-app";
 
@@ -29,6 +30,125 @@ describe("core app helpers", () => {
     expect(users[0]?.workshop_id).toBe("55");
     expect(users[0]?.email_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(users[0]?.last_seen_at).toBe("2026-04-24T08:00:00.000Z");
+  });
+
+  describe("deriveSignedUpAt priority chain", () => {
+    const baseRow = { user_id: "u", workshop_id: "w", email: "x@y.com" };
+
+    it("prefers user_created_at over every other signal", () => {
+      const got = deriveSignedUpAt(
+        {
+          ...baseRow,
+          user_created_at: "2026-05-01T00:00:00.000Z",
+          created_at: "2026-04-01T00:00:00.000Z",
+          workshop_created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          country: null,
+          createdAt: "2026-02-01T00:00:00.000Z",
+          customerIoId: null,
+          customerIoProfileId: "p",
+          customerIoWorkshopId: null,
+          matchType: "id",
+          stripeCustomerId: null,
+          subscriptionStatus: null,
+        },
+        {
+          customerCreatedAt: "2026-01-01T00:00:00.000Z",
+          customerEmail: null,
+          customerId: null,
+          matchType: "customer_email",
+          subscriptionCreatedAt: null,
+          subscriptionCurrentPeriodEnd: null,
+          subscriptionId: "sub",
+          subscriptionStatus: "active",
+        },
+      );
+      expect(got).toEqual({
+        at: "2026-05-01T00:00:00.000Z",
+        source: "core_app_user",
+      });
+    });
+
+    it("falls back to legacy created_at when user_created_at is missing", () => {
+      const got = deriveSignedUpAt(
+        { ...baseRow, created_at: "2026-04-01T00:00:00.000Z" },
+        null,
+        null,
+      );
+      expect(got).toEqual({
+        at: "2026-04-01T00:00:00.000Z",
+        source: "core_app_user",
+      });
+    });
+
+    it("falls back to workshop_created_at when user-level signup is missing (May 11 fix)", () => {
+      const got = deriveSignedUpAt(
+        { ...baseRow, workshop_created_at: "2026-05-11T08:55:52.499Z" },
+        null,
+        null,
+      );
+      expect(got).toEqual({
+        at: "2026-05-11T08:55:52.499Z",
+        source: "core_app_workshop",
+      });
+    });
+
+    it("falls back to customer_io_created_at when no core_app signal exists", () => {
+      const got = deriveSignedUpAt(
+        baseRow,
+        {
+          country: null,
+          createdAt: "2026-02-01T00:00:00.000Z",
+          customerIoId: null,
+          customerIoProfileId: "p",
+          customerIoWorkshopId: null,
+          matchType: "id",
+          stripeCustomerId: null,
+          subscriptionStatus: null,
+        },
+        null,
+      );
+      expect(got).toEqual({
+        at: "2026-02-01T00:00:00.000Z",
+        source: "customer_io",
+      });
+    });
+
+    it("falls back to stripe customerCreatedAt as a last resort", () => {
+      const got = deriveSignedUpAt(baseRow, null, {
+        customerCreatedAt: "2026-01-01T00:00:00.000Z",
+        customerEmail: null,
+        customerId: null,
+        matchType: "customer_email",
+        subscriptionCreatedAt: null,
+        subscriptionCurrentPeriodEnd: null,
+        subscriptionId: "sub",
+        subscriptionStatus: "active",
+      });
+      expect(got).toEqual({
+        at: "2026-01-01T00:00:00.000Z",
+        source: "stripe",
+      });
+    });
+
+    it("returns null source when every signal is absent", () => {
+      const got = deriveSignedUpAt(baseRow, null, null);
+      expect(got).toEqual({ at: null, source: null });
+    });
+  });
+
+  it("stamps signed_up_at + signed_up_at_source on the user row", () => {
+    const users = buildUserRows([
+      {
+        user_id: "u-may11",
+        workshop_id: "w-may11",
+        email: "owner@cusmat.com",
+        workshop_created_at: "2026-05-11T08:55:52.499Z",
+      },
+    ]);
+    expect(users[0]?.signed_up_at).toBe("2026-05-11T08:55:52.499Z");
+    expect(users[0]?.metadata.signed_up_at_source).toBe("core_app_workshop");
   });
 
   it("merges Customer.io profile enrichment into normalized users", () => {

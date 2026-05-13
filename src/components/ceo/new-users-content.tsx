@@ -36,11 +36,10 @@ const COLUMN_INFO: Record<string, SourceInfo> = {
   signUps: {
     title: "New sign-ups",
     body:
-      "Users bucketed by their canonical signup timestamp. Primary source is dashboard_users.created_at, populated from the user_stats.json.gz export's user_created_at field (shipped by the core-app team in PR #33). Older rows that haven't been re-synced yet fall back to metadata.customer_io_created_at → metadata.stripe_customer_created_at. Users with none of these (typically free-trial, non-Stripe accounts that pre-date the canonical field) won't appear.",
+      "Users bucketed by dashboard_users.signed_up_at — a canonical timestamp populated by the core_app sync writer using an explicit fallback chain: (1) user_created_at from the S3 user_stats export; (2) legacy created_at on the same row; (3) the user's workshop_created_at (catches owners whose user-level timestamp lands NULL but whose workshop did get a creation timestamp); (4) Customer.io profile created_at; (5) Stripe customer created. Whichever fires is stamped on metadata.signed_up_at_source. A daily 08:00 UTC health check alerts if any user lands without ANY signal in the last 24h.",
     fields: [
-      "dashboard_users.created_at (from AWS user_stats.user_created_at)",
-      "metadata.customer_io_created_at (legacy fallback)",
-      "metadata.stripe_customer_created_at (legacy fallback)",
+      "dashboard_users.signed_up_at (canonical, single read)",
+      "metadata.signed_up_at_source = core_app_user | core_app_workshop | customer_io | stripe",
     ],
   },
   activated: {
@@ -221,7 +220,8 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
             </h2>
             <p className="panel-description" style={{ marginTop: 4 }}>
               Sign-up date coverage: {coveragePct}% of users (
-              {data.signUpCoverage.fromCoreApp} from core_app,{" "}
+              {data.signUpCoverage.fromCoreAppUser} from core_app,{" "}
+              {data.signUpCoverage.fromCoreAppWorkshop} from workshop fallback,{" "}
               {data.signUpCoverage.fromCustomerIo} from Customer.io,{" "}
               {data.signUpCoverage.fromStripe} from Stripe;{" "}
               {data.signUpCoverage.missing} users have no sign-up date and

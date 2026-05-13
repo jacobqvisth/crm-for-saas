@@ -51,6 +51,7 @@ export type UserRow = {
   customer_io_id: string | null;
   ga_client_id: string | null;
   created_at: string | null;
+  signed_up_at: string | null;
   last_seen_at: string | null;
   name: string | null;
   phone: string | null;
