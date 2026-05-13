@@ -52,6 +52,7 @@ function makeUserRow(overrides: Partial<UserRow> = {}): UserRow {
     customer_io_id: "cio-1",
     ga_client_id: null,
     created_at: "2026-02-01T00:00:00.000Z",
+    signed_up_at: "2026-02-01T00:00:00.000Z",
     last_seen_at: "2026-02-05T00:00:00.000Z",
     name: null,
     phone: null,

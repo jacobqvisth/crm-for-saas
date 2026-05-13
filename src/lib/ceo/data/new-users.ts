@@ -36,7 +36,8 @@ export type NewUsersData = {
   androidConfigured: boolean;
   signUpCoverage: {
     totalUsers: number;
-    fromCoreApp: number;
+    fromCoreAppUser: number;
+    fromCoreAppWorkshop: number;
     fromCustomerIo: number;
     fromStripe: number;
     missing: number;
@@ -47,26 +48,9 @@ export type NewUsersData = {
 type UserRow = {
   internal_user_id: string | null;
   workshop_id: string | null;
-  created_at: string | null;
+  signed_up_at: string | null;
   metadata: Record<string, unknown> | null;
 };
-
-function effectiveCreatedAt(row: UserRow): {
-  at: string | null;
-  source: "core_app" | "customer_io" | "stripe" | null;
-} {
-  if (row.created_at) return { at: row.created_at, source: "core_app" };
-  const metadata = row.metadata ?? {};
-  const cio = metadata.customer_io_created_at;
-  if (typeof cio === "string" && cio) {
-    return { at: cio, source: "customer_io" };
-  }
-  const stripe = metadata.stripe_customer_created_at;
-  if (typeof stripe === "string" && stripe) {
-    return { at: stripe, source: "stripe" };
-  }
-  return { at: null, source: null };
-}
 
 type DiagnosticRow = {
   internal_user_id: string | null;
@@ -91,7 +75,8 @@ function emptyData(
     androidConfigured: false,
     signUpCoverage: {
       totalUsers: 0,
-      fromCoreApp: 0,
+      fromCoreAppUser: 0,
+      fromCoreAppWorkshop: 0,
       fromCustomerIo: 0,
       fromStripe: 0,
       missing: 0,
@@ -114,7 +99,7 @@ export async function getNewUsersData(
 
   const allUsersQuery = supabase
     .from(TABLES.users)
-    .select("internal_user_id, workshop_id, created_at, metadata")
+    .select("internal_user_id, workshop_id, signed_up_at, metadata")
     .limit(FETCH_LIMIT);
 
   const allDiagnosticsQuery = supabase
@@ -213,20 +198,26 @@ export async function getNewUsersData(
 
   const coverage = {
     totalUsers: allUsers.length,
-    fromCoreApp: 0,
+    fromCoreAppUser: 0,
+    fromCoreAppWorkshop: 0,
     fromCustomerIo: 0,
     fromStripe: 0,
     missing: 0,
   };
   const signupAtByUser = new Map<string, Date>();
   for (const u of allUsers) {
-    const eff = effectiveCreatedAt(u);
-    if (eff.source === "core_app") coverage.fromCoreApp += 1;
-    else if (eff.source === "customer_io") coverage.fromCustomerIo += 1;
-    else if (eff.source === "stripe") coverage.fromStripe += 1;
+    const source =
+      (u.metadata && typeof u.metadata === "object"
+        ? (u.metadata as Record<string, unknown>).signed_up_at_source
+        : null) ?? null;
+    if (source === "core_app_user") coverage.fromCoreAppUser += 1;
+    else if (source === "core_app_workshop") coverage.fromCoreAppWorkshop += 1;
+    else if (source === "customer_io") coverage.fromCustomerIo += 1;
+    else if (source === "stripe") coverage.fromStripe += 1;
     else coverage.missing += 1;
-    if (u.internal_user_id && eff.at) {
-      const t = new Date(eff.at);
+
+    if (u.internal_user_id && u.signed_up_at) {
+      const t = new Date(u.signed_up_at);
       if (!Number.isNaN(t.getTime())) {
         signupAtByUser.set(u.internal_user_id, t);
       }

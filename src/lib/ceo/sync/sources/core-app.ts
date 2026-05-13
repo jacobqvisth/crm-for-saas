@@ -1068,6 +1068,49 @@ async function buildStripeEnrichment(
   };
 }
 
+export type SignedUpAtSource =
+  | "core_app_user"
+  | "core_app_workshop"
+  | "customer_io"
+  | "stripe";
+
+// Priority chain for the canonical signup timestamp. Order matters:
+//   1. user_created_at — first-party WL-app DB
+//   2. created_at — legacy alias of (1), still present in some exports
+//   3. workshop_created_at — fallback for the gap where the S3 export ships
+//      a brand-new owner with NULL user-level created_at but a valid
+//      workshop_created_at on the same row. Caught us on 2026-05-11 when
+//      Cusmat + Autostar fell out of the Sign-ups chart entirely.
+//   4. customer_io_created_at — first time CIO saw them
+//   5. stripe_customer_created_at — first time Stripe saw them
+//
+// Whichever fires gets stamped on metadata.signed_up_at_source so the
+// /ceo/new-users coverage breakdown can attribute each user. Changing the
+// chain (adding a new source, reordering) is a one-place edit here.
+export function deriveSignedUpAt(
+  row: UserStatsRecord,
+  customerIoEnrichment: CustomerIoUserEnrichment | null,
+  stripeEnrichment: StripeUserEnrichment | null,
+): { at: string | null; source: SignedUpAtSource | null } {
+  const userCreated = toNullableIso(
+    parseIso(row.user_created_at) ?? parseIso(row.created_at),
+  );
+  if (userCreated) return { at: userCreated, source: "core_app_user" };
+
+  const workshopCreated = toNullableIso(parseIso(row.workshop_created_at));
+  if (workshopCreated) return { at: workshopCreated, source: "core_app_workshop" };
+
+  if (customerIoEnrichment?.createdAt) {
+    return { at: customerIoEnrichment.createdAt, source: "customer_io" };
+  }
+
+  if (stripeEnrichment?.customerCreatedAt) {
+    return { at: stripeEnrichment.customerCreatedAt, source: "stripe" };
+  }
+
+  return { at: null, source: null };
+}
+
 export function buildUserRows(
   rows: UserStatsRecord[],
   customerIoEnrichmentByUserId = new Map<string, CustomerIoUserEnrichment>(),
@@ -1087,12 +1130,13 @@ export function buildUserRows(
       parseIso(row.last_active),
       parseIso(row.last_login),
     );
-    // Prefer the new user_created_at field released alongside the
-    // extended user_stats export (canonical first-party signup time);
-    // fall back to the legacy created_at for older rows in transit
-    // until the export switches over fully.
     const canonicalCreatedAt = toNullableIso(
       parseIso(row.user_created_at) ?? parseIso(row.created_at),
+    );
+    const signedUpAt = deriveSignedUpAt(
+      row,
+      customerIoEnrichment,
+      stripeEnrichment,
     );
     const coreStripeCustomerId = asString(row.stripe_customer_id);
 
@@ -1103,6 +1147,7 @@ export function buildUserRows(
       customer_io_id: customerIoEnrichment?.customerIoId ?? null,
       ga_client_id: null,
       created_at: canonicalCreatedAt,
+      signed_up_at: signedUpAt.at,
       last_seen_at: toNullableIso(lastSeenAt),
       name: asString(row.name),
       phone: asString(row.phone),
@@ -1121,6 +1166,7 @@ export function buildUserRows(
         email_domain: emailDomain(row.email),
         login_count: asInteger(row.login_count),
         plan_type: asString(row.plan_type),
+        signed_up_at_source: signedUpAt.source,
         stripe_customer_created_at: stripeEnrichment?.customerCreatedAt,
         stripe_customer_email: stripeEnrichment?.customerEmail,
         stripe_customer_id: stripeEnrichment?.customerId ?? null,
