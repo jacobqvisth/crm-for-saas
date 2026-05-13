@@ -353,11 +353,16 @@ export function AppUsageContent({
           </span>
         </div>
         <p className="panel-description">
-          Diagnoses-made counts on this page exclude internal/test users and
-          all users belonging to internal/test workshops, so the numbers reflect
-          real-customer activity. GA4 unique-user, session, and page-view
-          metrics cannot exclude internal testers yet because the product app
-          does not send AWS user_id to GA4. Manage the list at{" "}
+          <strong>Diagnoses made</strong> excludes internal/test users (manual
+          list + anyone signed up with an <code>@wrenchlane.com</code> email,
+          auto-flagged at every core_app sync) and every user inside an
+          internal/test workshop. <strong>GA4 unique users, sessions, page
+          views, pages/session, and events</strong> still include internal
+          traffic — GA4 has no way to map its pseudonymous counters back to
+          the internal-test list because the product app does not send a
+          user_id (or an <code>is_internal_test</code> user_property) to
+          GA4/Firebase. Once the app starts emitting either, we can add a
+          GA4 <code>dimensionFilter</code> here. Manage the list at{" "}
           <a href="/ceo/settings">/ceo/settings</a>.
         </p>
         <details className="exclusion-details">

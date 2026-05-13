@@ -1,4 +1,5 @@
 import { getRollingWindow } from "@/lib/ceo/dates";
+import { applyInternalTestDomainFlag } from "@/lib/ceo/internal-test/auto-flag";
 import { SOURCE_LABELS, type SourceKey } from "@/lib/ceo/sources";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { TABLES } from "@/lib/ceo/tables";
@@ -76,6 +77,25 @@ export async function runSourceSync(
       (await writeMotorUsage(writer, result.motorUsage ?? [])) +
       (await writeCostEntries(writer, result.costEntries ?? []));
 
+    // Auto-flag users whose email domain matches INTERNAL_TEST_EMAIL_DOMAINS
+    // (e.g. @wrenchlane.com) so they drop out of every metric that already
+    // filters on dashboard_users.is_internal_test. Runs before the CRM
+    // propagation so the flag is visible to downstream consumers in the same
+    // sync. Non-fatal — auto-flag failure shouldn't fail the whole sync.
+    let autoFlaggedCount: number | null = null;
+    if (sourceKey === "core_app") {
+      try {
+        const r = await applyInternalTestDomainFlag(supabase);
+        autoFlaggedCount = r.flagged;
+      } catch (err) {
+        autoFlaggedCount = null;
+        console.error(
+          "[ceo-sync] applyInternalTestDomainFlag failed",
+          err,
+        );
+      }
+    }
+
     // Push fresh dashboard_users / dashboard_workshops into the CRM contacts
     // and companies tables (UPDATE-only, never insert). Only meaningful for
     // the core_app source — the other connectors write to their own tables
@@ -109,6 +129,9 @@ export async function runSourceSync(
         metadata: {
           ...(result.metadata ?? {}),
           ...(propagationSummary ? { crm_propagation: propagationSummary } : {}),
+          ...(autoFlaggedCount !== null
+            ? { internal_test_auto_flagged: autoFlaggedCount }
+            : {}),
         },
       })
       .eq("id", run.id);
