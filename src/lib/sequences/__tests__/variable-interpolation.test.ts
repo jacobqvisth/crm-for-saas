@@ -134,6 +134,13 @@ const company: Company = {
   do_not_route_reason: null,
   do_not_route_at: null,
   min_revisit_interval_days: null,
+  org_number: null,
+  cfar_number: null,
+  marketing_opt_out: false,
+  nix_blocked: false,
+  is_sole_proprietor: false,
+  employee_size_band: null,
+  county: null,
 };
 
 // ---------------------------------------------------------------------------
