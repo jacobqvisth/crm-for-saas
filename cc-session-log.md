@@ -14,6 +14,73 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-18 — Daily domain-health check + `/ceo/domain-health` UI (PR #201)
+
+- **PR:** #201 (squash `87dde0b`)
+- **Branch:** `feature/domain-health`
+
+### What was built
+
+Daily Vercel cron (08:30 UTC) that snapshots `wrenchlane.com` sending health into a new `dashboard_domain_health_checks` table:
+
+- **DNS auth:** SPF, DKIM (google selector first, then 9 common selectors as fallback), DMARC (captures `policy` for downgrade detection), MX.
+- **Blocklists:** Spamhaus DBL, SURBL multi, URIBL multi — queried through Quad9 (9.9.9.9). Spamhaus `127.255.255.254` and URIBL `127.0.0.1` are classified as `refused`, not `listed`, since those are documented rate-limit codes returned to public resolvers (caught during the initial manual snapshot — Cloudflare 1.1.1.1 produced the same false-positive pattern). Refused states don't trigger alerts.
+- **Send metrics (trailing 24h):** sent, bounces, unsubscribes, replies, queue failures, rolling 7-day-avg daily volume, volume-vs-7d ratio. Source: `email_queue.status='sent'` + `email_events.event_type IN ('bounce','unsubscribe','reply')`.
+
+### Alert thresholds
+
+| Signal | Trigger | Severity |
+|---|---|---|
+| Missing SPF / DKIM / DMARC | absent | critical |
+| DMARC `p=none` | regression from enforcement | warning |
+| Blocklist listed | confirmed code | critical |
+| Bounce rate | ≥3% | warning |
+| Bounce rate | ≥5% (Gmail throttle zone) | critical |
+| Unsubscribe rate | ≥2% | warning |
+| 24h send volume | ≥3× rolling 7-day avg (baseline ≥10/day) | warning |
+| Queue failures | >0 | warning |
+
+### Notification policy
+Reuses `SLACK_ALERT_WEBHOOK_URL` (sister to `/api/cron/check-sync-health`).
+
+- critical → always notify
+- warning + previous=ok → notify (regression)
+- warning + previous=warning + alerts changed → notify
+- warning + previous=warning + same alerts → silent (no daily-spam during slow recovery)
+- ok → silent
+
+### Files
+- `supabase/migrations/20260518120000_dashboard_domain_health_checks.sql` (applied to prod ahead of merge)
+- `src/lib/domain-health/{dns,dnsbl,metrics,index,notify}.ts` + `{index,notify}.test.ts`
+- `src/app/api/cron/domain-health/route.ts`
+- `src/lib/ceo/data/domain-health.ts`
+- `src/components/ceo/domain-health-content.tsx`
+- `src/app/(ceo)/ceo/domain-health/page.tsx`
+- `src/components/ceo/dashboard-sections.tsx` — added `"domain-health"` section ("DM" glyph)
+- `vercel.json` — added cron entry at `30 8 * * *`
+- `src/lib/database.types.ts` — regenerated via the documented manual-header-preserving procedure
+
+### Build / verify
+- `npm run build`, `npm run lint`, `npx tsc --noEmit` all green
+- `npx vitest run src/lib/domain-health` — 18/18 passing
+- Vercel auto-deploy ✓ (`/ceo/domain-health` 307s as expected for unauth)
+- First production check triggered via `curl -X POST https://crm-for-saas.vercel.app/api/cron/domain-health -H "Authorization: Bearer $CRON_SECRET"` — landed `status='ok'` with all DNS records present, SURBL clean, DBL+URIBL refused (Vercel network → public-resolver rate-limit; classifier handled correctly, no false alarm), 15 sent in last 24h, 0 bounces / 0 unsubs.
+
+### Notable decisions / gotchas
+
+- **DNSBL refusal-code handling is the most non-obvious bit.** First snapshot from local network gave Spamhaus `127.255.255.254` and URIBL `127.0.0.1` for wrenchlane.com via Cloudflare 1.1.1.1 — both look like "listed" responses if you only check "did the DNS lookup resolve". They're "go away" codes for unauthenticated queries through busy public resolvers. Encoded the documented refusal codes per-list in `BLOCKLIST.refusalCodes` and the classifier maps them to `state='refused'` (UI shows them in their own column, not as listings).
+- **Quad9 from Vercel still hits refusals for DBL + URIBL.** Vercel's outbound IPs aren't whitelisted by Spamhaus/URIBL either. Functional answer is SURBL (which doesn't refuse). For real authoritative DBL/URIBL data we'd need a paid Spamhaus DQS subscription. Acceptable trade-off for now — the system knows it can't tell, doesn't false-alarm. Document for future.
+- **Vitest `@/*` alias** already configured (PR #193, 2026-05-13). Worked out of the box.
+- **Bounce/unsub baselines (last 30d at ship time):** 33 bounces / 34 unsubs / 2378 sent = ~1.4% each. Below the 3% warning threshold; chosen threshold gives ~2× headroom before paging Hans.
+- **`scripts/diagnose-min-interval-column.mjs` left untracked.** Pre-existed from a prior session; not part of this PR. Worth removing in a cleanup pass.
+
+### Follow-ups
+
+- **Paid Spamhaus DQS** if you ever want authoritative DBL listings from inside Vercel. ~$50–$200/mo depending on tier. Not urgent — wrenchlane.com is a small B2B sender and the SURBL/manual checks plus internal bounce-rate signal cover the common failure modes.
+- **GA4-style server-side reply detection.** Current bounce signal depends on `check-replies` cron writing `event_type='bounce'` rows. If that cron pauses, we'd miss the spike. Cross-reference would be Gmail Postmaster Tools (separate integration, not built).
+- **Recipient-side warnings.** If we ever ship a "back off" auto-pause when bounce ≥5%, hook it here.
+
+
 ## Session: MillionVerifier on 1,697 SCB contacts (2026-05-18, PR TBD)
 
 - **Triggered by:** Final SCB follow-up after PRs #195 / #196 / #197. Pre-send hygiene for the new SCB cohort.
