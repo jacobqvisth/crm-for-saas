@@ -36,6 +36,7 @@ export type DashboardSectionKey =
   | "lifecycle"
   | "revenue"
   | "data-health"
+  | "domain-health"
   | "settings";
 
 type DashboardSectionConfig = {
@@ -155,6 +156,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Data Health",
     description:
       "Freshness, recent sync runs, canonical coverage, and how much confidence to place in every view.",
+  },
+  {
+    key: "domain-health",
+    label: "Domain Health",
+    glyph: "DM",
+    href: "/ceo/domain-health",
+    title: "Domain Health",
+    description:
+      "Daily DNS auth, blocklist, and send-rate snapshot for wrenchlane.com. Alerts when bounce rate, unsubscribe rate, or send volume signals deliverability risk.",
   },
   {
     key: "settings",
