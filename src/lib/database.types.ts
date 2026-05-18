@@ -156,11 +156,13 @@ export type Database = {
           annual_revenue: number | null
           arr_cents: number | null
           category: string | null
+          cfar_number: string | null
           churn_reason: string | null
           churned_at: string | null
           city: string | null
           country: string | null
           country_code: string | null
+          county: string | null
           created_at: string | null
           created_by_agent: string | null
           currency: string | null
@@ -173,6 +175,7 @@ export type Database = {
           do_not_route_reason: string | null
           domain: string | null
           employee_count: number | null
+          employee_size_band: string | null
           facebook_url: string | null
           founded_year: number | null
           geocoded_at: string | null
@@ -181,17 +184,21 @@ export type Database = {
           id: string
           industry: string | null
           instagram_url: string | null
+          is_sole_proprietor: boolean
           last_active_at: string | null
           last_visited_at: string | null
           latitude: number | null
           lifecycle_stage: string | null
           linkedin_url: string | null
           longitude: number | null
+          marketing_opt_out: boolean
           member_count: number | null
           min_revisit_interval_days: number | null
           mrr_cents: number | null
           name: string
+          nix_blocked: boolean
           notes: string | null
+          org_number: string | null
           parent_company_id: string | null
           payment_status: string | null
           phone: string | null
@@ -222,11 +229,13 @@ export type Database = {
           annual_revenue?: number | null
           arr_cents?: number | null
           category?: string | null
+          cfar_number?: string | null
           churn_reason?: string | null
           churned_at?: string | null
           city?: string | null
           country?: string | null
           country_code?: string | null
+          county?: string | null
           created_at?: string | null
           created_by_agent?: string | null
           currency?: string | null
@@ -239,6 +248,7 @@ export type Database = {
           do_not_route_reason?: string | null
           domain?: string | null
           employee_count?: number | null
+          employee_size_band?: string | null
           facebook_url?: string | null
           founded_year?: number | null
           geocoded_at?: string | null
@@ -247,17 +257,21 @@ export type Database = {
           id?: string
           industry?: string | null
           instagram_url?: string | null
+          is_sole_proprietor?: boolean
           last_active_at?: string | null
           last_visited_at?: string | null
           latitude?: number | null
           lifecycle_stage?: string | null
           linkedin_url?: string | null
           longitude?: number | null
+          marketing_opt_out?: boolean
           member_count?: number | null
           min_revisit_interval_days?: number | null
           mrr_cents?: number | null
           name: string
+          nix_blocked?: boolean
           notes?: string | null
+          org_number?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
@@ -288,11 +302,13 @@ export type Database = {
           annual_revenue?: number | null
           arr_cents?: number | null
           category?: string | null
+          cfar_number?: string | null
           churn_reason?: string | null
           churned_at?: string | null
           city?: string | null
           country?: string | null
           country_code?: string | null
+          county?: string | null
           created_at?: string | null
           created_by_agent?: string | null
           currency?: string | null
@@ -305,6 +321,7 @@ export type Database = {
           do_not_route_reason?: string | null
           domain?: string | null
           employee_count?: number | null
+          employee_size_band?: string | null
           facebook_url?: string | null
           founded_year?: number | null
           geocoded_at?: string | null
@@ -313,17 +330,21 @@ export type Database = {
           id?: string
           industry?: string | null
           instagram_url?: string | null
+          is_sole_proprietor?: boolean
           last_active_at?: string | null
           last_visited_at?: string | null
           latitude?: number | null
           lifecycle_stage?: string | null
           linkedin_url?: string | null
           longitude?: number | null
+          marketing_opt_out?: boolean
           member_count?: number | null
           min_revisit_interval_days?: number | null
           mrr_cents?: number | null
           name?: string
+          nix_blocked?: boolean
           notes?: string | null
+          org_number?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null

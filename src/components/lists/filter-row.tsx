@@ -148,7 +148,7 @@ export function FilterRow({ filter, onChange, onRemove, companies, countries }: 
       );
     }
 
-    if (filter.field === 'created_at' || filter.field === 'last_contacted_at') {
+    if (filter.field === 'created_at' || filter.field === 'last_contacted_at' || filter.field === 'last_emailed_at') {
       if (filter.operator === 'older_than_days' || filter.operator === 'within_last_days') {
         return (
           <input

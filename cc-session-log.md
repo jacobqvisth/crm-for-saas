@@ -14,6 +14,31 @@ updated: 2026-04-22
 
 ---
 
+## Session: SCB UI render + dynamic-list `last_emailed_at` filter (2026-05-18, PR TBD)
+
+- **Triggered by:** Jacob spotted that the dynamic-list "Last Contacted = never contacted" filter would match the wrong set — `contacts.last_contacted_at` is set on **reply** only, so "never contacted" actually means "never replied" (i.e. nearly every contact). Also follow-up to make the SCB registry fields visible in `/companies/[id]`.
+
+### Changes
+- `src/components/companies/detail/about-panel.tsx` — surfaces SCB fields (`org_number`, `cfar_number`, `employee_size_band`, `county`) in the Details card, and adds a Compliance card that lights up when `is_sole_proprietor` / `marketing_opt_out` / `nix_blocked` is set (with the GDPR/legal text the SCB metadata sheet warned about).
+- `src/lib/lists/filter-query.ts` — adds `last_emailed_at` as a new dynamic-list filter field with the full date-operator set, including `is_null` ("never emailed") and `is_not_null` ("has been emailed"). Renamed `Last Contacted` operators to "never replied" / "has replied" to disambiguate from the new "Last Emailed" field. Both fields are now labelled with the action (Sent vs. Replied) so the difference is obvious in the picker.
+- `src/components/lists/filter-row.tsx` — wires `last_emailed_at` into the date-input renderer (same shape as `created_at` / `last_contacted_at`).
+- `src/lib/database.types.ts` — adds the 7 SCB columns to `companies` (Row / Insert / Update) so the new about-panel reads them without type errors. Manual edit per PR #128 pattern (don't blow away the file's manual header on regen).
+- `src/lib/sequences/__tests__/variable-interpolation.test.ts` — adds the 7 SCB fields to the company fixture so the type test stays green.
+
+### Data fix during session
+- **Lemlist contacts backfilled** (751 rows): `UPDATE contacts SET last_emailed_at = created_at WHERE source='lemlist' AND last_emailed_at IS NULL`. The email_queue-based backfill missed them because lemlist sends never went through the CRM's queue. After the fix: 2,667 of 12,270 contacts have `last_emailed_at` set; 9,603 are "Never emailed" (down from 10,354).
+
+### What this affects
+- New "Sweden – Never Contacted" style lists can now use **Last Emailed = never emailed** for the actual "never received an email" semantics. The old "Last Contacted = never contacted" still works but means "never replied" — Jacob's screenshot caught this exact confusion.
+- SCB-imported sole-prop companies now visibly warn in the UI ("⚠ Sole proprietor (fysisk person) — email is personal data under GDPR. Use legitimate-interest balancing, not generic B2B blasts."), so Hans and Jacob can see the gate before drafting an outreach.
+
+### Build / verify
+- `npx tsc --noEmit` ✅
+- `npm run lint` ✅
+- `npm run build` ✅ (brew Node)
+
+---
+
 ## Session: contacts.last_emailed_at + "Never emailed" filter (2026-05-18, PR TBD)
 
 - **Triggered by:** Jacob wanted a `/contacts` filter for "never received an email" so he can target the 10k+ untouched contacts (most of them the SCB import from earlier today).

@@ -37,11 +37,17 @@ export function AboutPanel({
   ].filter((s): s is { url: string; icon: typeof Linkedin; label: string } => Boolean(s.url));
 
   const firmographic: Array<{ label: string; value: React.ReactNode }> = [];
-  if (company.employee_count) firmographic.push({ label: 'Employees', value: company.employee_count.toLocaleString() });
+  if (company.org_number) firmographic.push({ label: 'Org-nr', value: <span className="font-mono text-xs">{company.org_number}</span> });
+  if (company.cfar_number) firmographic.push({ label: 'CFAR-nr', value: <span className="font-mono text-xs">{company.cfar_number}</span> });
+  if (company.employee_size_band) firmographic.push({ label: 'Size band', value: `${company.employee_size_band} employees` });
+  else if (company.employee_count) firmographic.push({ label: 'Employees', value: company.employee_count.toLocaleString() });
+  if (company.county) firmographic.push({ label: 'County / Län', value: company.county });
   if (company.annual_revenue != null) firmographic.push({ label: 'Annual revenue', value: `$${company.annual_revenue.toLocaleString()}` });
   if (company.revenue_range) firmographic.push({ label: 'Revenue range', value: company.revenue_range });
   if (company.founded_year) firmographic.push({ label: 'Founded', value: company.founded_year.toString() });
   if (company.description) firmographic.push({ label: 'Description', value: <span className="whitespace-pre-wrap">{company.description}</span> });
+
+  const hasComplianceFlag = company.is_sole_proprietor || company.marketing_opt_out || company.nix_blocked;
 
   return (
     <div className="space-y-4">
@@ -167,6 +173,36 @@ export function AboutPanel({
             <h3 className="text-sm font-semibold text-slate-900">Location</h3>
           </div>
           <p className="text-sm text-slate-700 leading-relaxed">{locationLine}</p>
+        </div>
+      )}
+
+      {/* Compliance flags (from SCB registry) */}
+      {hasComplianceFlag && (
+        <div className="bg-white rounded-xl border border-amber-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldOff className="w-4 h-4 text-amber-600" />
+            <h3 className="text-sm font-semibold text-slate-900">Compliance</h3>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            {company.is_sole_proprietor && (
+              <div className="flex items-start gap-2 text-amber-900">
+                <span className="mt-0.5">⚠</span>
+                <span><strong>Sole proprietor (fysisk person)</strong> — email is personal data under GDPR. Use legitimate-interest balancing, not generic B2B blasts.</span>
+              </div>
+            )}
+            {company.marketing_opt_out && (
+              <div className="flex items-start gap-2 text-rose-900">
+                <span className="mt-0.5">⛔</span>
+                <span><strong>Marketing opt-out (reklam-spärr)</strong> — must skip from any email send.</span>
+              </div>
+            )}
+            {company.nix_blocked && (
+              <div className="flex items-start gap-2 text-rose-900">
+                <span className="mt-0.5">📵</span>
+                <span><strong>NIX / telefonspärr</strong> — must skip from any phone outreach.</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

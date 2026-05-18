@@ -21,6 +21,7 @@ export type FilterField =
   | 'country_code'
   | 'created_at'
   | 'last_contacted_at'
+  | 'last_emailed_at'
   | 'email'
   | 'first_name'
   | 'last_name'
@@ -39,7 +40,8 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'company_id', label: 'Company' },
   { value: 'country_code', label: 'Country' },
   { value: 'created_at', label: 'Created Date' },
-  { value: 'last_contacted_at', label: 'Last Contacted' },
+  { value: 'last_emailed_at', label: 'Last Emailed (sent)' },
+  { value: 'last_contacted_at', label: 'Last Contacted (replied)' },
   { value: 'email', label: 'Email' },
   { value: 'first_name', label: 'First Name' },
   { value: 'last_name', label: 'Last Name' },
@@ -79,8 +81,16 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'after', label: 'after' },
     { value: 'within_last_days', label: 'within last N days' },
     { value: 'older_than_days', label: 'more than N days ago' },
-    { value: 'is_null', label: 'never contacted' },
-    { value: 'is_not_null', label: 'has been contacted' },
+    { value: 'is_null', label: 'never replied' },
+    { value: 'is_not_null', label: 'has replied' },
+  ],
+  last_emailed_at: [
+    { value: 'before', label: 'before' },
+    { value: 'after', label: 'after' },
+    { value: 'within_last_days', label: 'within last N days' },
+    { value: 'older_than_days', label: 'more than N days ago' },
+    { value: 'is_null', label: 'never emailed' },
+    { value: 'is_not_null', label: 'has been emailed' },
   ],
   email: [
     { value: 'equals', label: 'equals' },
