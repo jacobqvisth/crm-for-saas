@@ -45,6 +45,7 @@ const contact = {
   tags: [] as string[],
   notes: null,
   last_contacted_at: null,
+  last_emailed_at: null,
   custom_fields: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),

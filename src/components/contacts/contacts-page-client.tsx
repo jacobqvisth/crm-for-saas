@@ -86,6 +86,11 @@ const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
   { value: 'no',  label: 'Prospect (no account)' },
 ];
 
+const ENGAGEMENT_OPTIONS: MultiSelectOption[] = [
+  { value: 'never_emailed', label: 'Never emailed' },
+  { value: 'emailed',       label: 'Has been emailed' },
+];
+
 type LocalFilters = {
   search: string;
   lead_status: string[];
@@ -98,6 +103,7 @@ type LocalFilters = {
   has_account: string[];
   has_phone: boolean;
   tags: string[];
+  engagement: string[];
 };
 
 const DEFAULT_FILTERS: LocalFilters = {
@@ -112,6 +118,7 @@ const DEFAULT_FILTERS: LocalFilters = {
   has_account: [],
   has_phone: false,
   tags: [],
+  engagement: [],
 };
 
 // ── Sortable columns ─────────────────────────────────────────────────────────
@@ -209,6 +216,11 @@ export function ContactsPageClient() {
     has_account: hasAccountValue,
     has_phone: filters.has_phone || undefined,
     tags:            filters.tags.length            ? filters.tags            : undefined,
+    engagement:
+      filters.engagement.length === 1 &&
+      (filters.engagement[0] === 'never_emailed' || filters.engagement[0] === 'emailed')
+        ? filters.engagement[0]
+        : undefined,
   };
 
   // Fetch contacts
@@ -278,6 +290,11 @@ export function ContactsPageClient() {
 
     if (filters.tags.length > 0) query = query.overlaps('tags', filters.tags);
 
+    if (filters.engagement.length === 1) {
+      if (filters.engagement[0] === 'never_emailed') query = query.is('last_emailed_at', null);
+      else if (filters.engagement[0] === 'emailed') query = query.not('last_emailed_at', 'is', null);
+    }
+
     // Sort. For "name" we sort by last_name primary + first_name secondary
     // (most CRM users sort by surname). For "company" we sort the joined
     // companies table — requires the embedded foreignTable hint.
@@ -342,7 +359,7 @@ export function ContactsPageClient() {
     filters.lead_status, filters.status, filters.country_code, filters.email_status,
     filters.has_phone, filters.source,
     filters.lifecycle_stage, filters.customer_status, filters.has_account,
-    filters.tags, sort,
+    filters.tags, filters.engagement, sort,
   ]);
 
   useEffect(() => {
@@ -465,7 +482,7 @@ export function ContactsPageClient() {
     filters.source.length > 0 ||
     filters.lifecycle_stage.length > 0 || filters.customer_status.length > 0 ||
     filters.has_account.length > 0 || filters.has_phone !== false ||
-    filters.tags.length > 0;
+    filters.tags.length > 0 || filters.engagement.length > 0;
 
   const toggleSelect = (id: string) => {
     setSelectAllMatching(false);
@@ -675,6 +692,12 @@ export function ContactsPageClient() {
               onChange={v => setFilters(f => ({ ...f, tags: v }))}
               options={tagOptions.map(t => ({ value: t, label: t }))}
               allLabel="tags"
+            />
+            <MultiSelect
+              values={filters.engagement}
+              onChange={v => setFilters(f => ({ ...f, engagement: v.slice(-1) }))}
+              options={ENGAGEMENT_OPTIONS}
+              allLabel="email engagement"
             />
 
             {/* Has Phone */}

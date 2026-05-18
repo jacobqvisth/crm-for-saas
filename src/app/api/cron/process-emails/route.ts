@@ -398,15 +398,25 @@ export async function POST(request: NextRequest) {
         }
 
         // Update queue entry
+        const sentAt = new Date().toISOString();
         await supabase
           .from("email_queue")
           .update({
             status: "sent" as const,
-            sent_at: new Date().toISOString(),
+            sent_at: sentAt,
             gmail_message_id: result.messageId || null,
             gmail_thread_id: gmailThreadId,
           })
           .eq("id", item.id);
+
+        // Mark the contact as having received an email — powers the
+        // "Never emailed" filter on /contacts and the last-emailed column.
+        if (item.contact_id) {
+          await supabase
+            .from("contacts")
+            .update({ last_emailed_at: sentAt })
+            .eq("id", item.contact_id);
+        }
 
         // Create activity record
         await supabase.from("activities").insert({
