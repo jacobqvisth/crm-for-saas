@@ -10,7 +10,16 @@ import {
   OPERATORS_BY_FIELD,
   STATUS_OPTIONS,
   LEAD_STATUS_OPTIONS,
+  EMAIL_STATUS_OPTIONS,
 } from '@/lib/lists/filter-query';
+
+const EMAIL_STATUS_LABELS: Record<string, string> = {
+  valid: 'Valid (deliverable)',
+  invalid: 'Invalid (bounces)',
+  catch_all: 'Catch-all (uncertain)',
+  risky: 'Risky (MV couldn’t verify)',
+  unknown: 'Unknown (not yet verified)',
+};
 
 interface FilterRowProps {
   filter: ListFilter;
@@ -75,6 +84,44 @@ export function FilterRow({ filter, onChange, onRemove, companies, countries }: 
           <option value="">Select...</option>
           {STATUS_OPTIONS.map(s => (
             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (filter.field === 'email_status') {
+      if (filter.operator === 'in') {
+        const selected = Array.isArray(filter.value) ? filter.value : [];
+        return (
+          <div className="flex flex-wrap gap-1.5">
+            {EMAIL_STATUS_OPTIONS.map(s => (
+              <label key={s} className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(s)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? [...selected, s]
+                      : selected.filter(x => x !== s);
+                    onChange({ ...filter, value: next });
+                  }}
+                  className="rounded border-slate-300 text-indigo-600"
+                />
+                {EMAIL_STATUS_LABELS[s] ?? s}
+              </label>
+            ))}
+          </div>
+        );
+      }
+      return (
+        <select
+          value={(filter.value as string) || ''}
+          onChange={(e) => onChange({ ...filter, value: e.target.value })}
+          className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Select...</option>
+          {EMAIL_STATUS_OPTIONS.map(s => (
+            <option key={s} value={s}>{EMAIL_STATUS_LABELS[s] ?? s}</option>
           ))}
         </select>
       );
