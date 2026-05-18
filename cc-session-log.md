@@ -14,6 +14,59 @@ updated: 2026-04-22
 
 ---
 
+## Session: SCB Företagsregistret enrichment + bulk import (2026-05-18)
+
+- **Date:** 2026-05-18
+- **Triggered by:** Jacob dropped `scb-bilverkstader-sverige-95311.xlsx` (SCB Företagsregistret export, 11,158 Swedish auto-repair shops at SNI 95311) in `_inbox/` and asked what unique enrichment + net-new contacts it could provide.
+- **PR:** TBD (this entry written pre-PR; will be filled in once merged).
+- **Branch:** `feat/scb-registry-import`
+
+### Schema migration (applied directly to prod)
+`supabase/migrations/20260518000000_scb_registry_fields.sql` — adds 7 columns to `companies`:
+| Column | Why |
+|---|---|
+| `org_number text` | Swedish Organisationsnummer (10 digits). One per legal entity; chains share across branches. Indexed but NOT unique. |
+| `cfar_number text` | SCB CFARnr — unique workplace identifier. **UNIQUE (workspace_id, cfar_number)** → doubles as the SCB-import idempotency key. |
+| `marketing_opt_out boolean` | SCB Reklamstatus = "frånsagt sig reklam". Pre-send gate. |
+| `nix_blocked boolean` | SCB Reklamstatus / Kontaktvarning = NIX / telefonspärr. Pre-call gate. |
+| `is_sole_proprietor boolean` | SCB Persondataflagga = "fysisk person". Email is personal data under GDPR; downstream sender code should gate marketing accordingly. |
+| `employee_size_band text` | SCB Storleksklass: `0` / `1-4` / `5-9` / `10-19` / `20-49` / `50-99` / `100-199` / `200+`. |
+| `county text` | SCB Län (Swedish county). Indexed — used by Field Routes regionalization. |
+
+### Scripts added (one-off ops, kept for reproducibility)
+- `scripts/lib/scb-parse.mjs` — shared parser/normalizer for SCB JSON exports.
+- `scripts/enrich-from-scb.mjs` — enriches existing CRM companies that match SCB by name or email-domain. Always sets registry fields; only backfills `domain`/`address`/`postal_code`/`phone` where CRM is null. Workspace-wide pre-claim of domains avoids `companies_domain_workspace_unique` collisions during chain expansion (memory `project_crm-for-saas.md` pattern).
+- `scripts/import-scb-shops.mjs` — bulk-imports unmatched SCB rows as new companies (+ contacts where applicable). One company per CFARnr (chain branches stay distinct). Idempotent on `(workspace_id, cfar_number)`. Domain collisions handled by JS pre-claim + late-discovery retry with `domain=NULL`.
+- `scripts/backfill-scb-sole-prop-contacts.mjs` — follow-up to add contact rows for sole-prop companies (Jacob's call: GDPR signal is carried on the company's `is_sole_proprietor` flag, contact still wanted).
+
+### Data ops applied to prod (workspace `d946ea1f-74b4-492e-ae6a-d50f59ff04f0`)
+- **Enrichment pass**: 576 existing CRM companies enriched (matched by name 355 / by email-domain 221). 556 got `org_number`, 563 got `cfar_number`, 576 got `employee_size_band` + `county`. 7 flagged marketing-opt-out, 7 NIX-blocked, 20 sole-prop. 27 domain backfills (42 of the original 69 candidates blocked by chain-collision pre-checks). All tagged `scb-enriched-2026-05-17`.
+- **Bulk company import**: 7,376 net-new companies inserted (3,710 sole-prop, 41 reklam-spärr → `do_not_contact=true`, 51 NIX-blocked). 1,447 domains assigned, 372 chain-collision-skipped. Tagged `scb-import-2026-05-17`. Workspace total: 10,512 → 17,888.
+- **Bulk contact import**: 1,379 B2B contacts inserted (sole-prop initially skipped). Workspace total: 10,573 → 11,952.
+- **Sole-prop contact backfill**: 318 additional sole-prop contacts inserted after Jacob reversed the decision mid-session — company's `is_sole_proprietor=true` carries the GDPR signal. Workspace contacts: 11,952 → 12,270. Total SCB-sourced contacts: 1,697 (1,379 B2B + 318 sole-prop). All `email_status='unknown'` so they'll naturally pass through the existing MillionVerifier flow before any send.
+
+### Compliance flags carried through
+Reklam-spärr rows → `do_not_contact=true` + `marketing_opt_out=true` + no contact. NIX-blocked rows → flagged on company, contact created if email exists (subject to other gates). Sole-prop rows → flagged on company, contact created (per Jacob 2026-05-18). Custom-fields stamped with raw SCB strings (`scb_reklamstatus`, `scb_persondataflagga`, `scb_kontaktvarning`) for audit trail.
+
+### Idempotency
+- `companies_cfar_workspace_unique` partial-unique index — re-running `import-scb-shops.mjs` is a no-op against the same SCB pull.
+- `scripts/enrich-from-scb.mjs` only backfills where current value is null; tag/custom_fields merge safely.
+- Source xlsx archive: copy to `_reference/scb-bilverkstader-sverige-2026-05-17.xlsx` (Cowork side; not in repo). JSON cache at `/tmp/scb-bilverkstader-sverige-95311.json` is regenerable via Python (see comment in `scb-parse.mjs`).
+
+### Gap surfaced for follow-up
+1,178 sole-prop SCB rows have email but match an existing CRM company by name/domain whose CFARnr wasn't assigned during enrichment (because the enrichment matches the *first* SCB candidate per CRM row). Those existing CRM companies don't have CFARnr set, so this backfill couldn't find them. Worth a second-pass enrichment that allows multiple SCB rows → one CRM company (or a name+county compound match) to pick those up. Not blocking.
+
+### Verification
+- `org_number` populated on 4,222 companies workspace-wide (558 enriched + ~3,664 net-new B2B; sole-prop orgnrs are masked by SCB → NULL).
+- `cfar_number` populated on 7,939 companies (563 enriched + 7,376 net-new).
+- 48 companies flagged `marketing_opt_out`, 58 `nix_blocked`, 3,730 `is_sole_proprietor`, 41 `do_not_contact`.
+- Sample net-new B2B with contact: Sävar Motor & IT AB (savarturbo.se / mattias@savarturbo.se), Carpro Center Simrishamn AB (carprocenter.se / info@), Vällingby Bilvård AB (vallingbybil.se / info@) — all with orgnr + county + size band populated.
+
+### Build status
+Not run yet for this PR — migration + scripts only, no `src/` changes, so Vercel's `ignoreCommand` will skip the build. Will verify deploy URL still 307 after merge.
+
+---
+
 ## Session: CIO fallback + sync-health alerting + Vercel-cron migration (2026-05-12, PRs #183 / #185 / #186 / #187 / #188 / #189)
 - **Date:** 2026-05-12
 - **Triggered by:** Jacob couldn't find a brand-new signup (`gladjen.tvatt.verkstad@gmail.com`) in `/contacts` even though he'd signed up to the WL app earlier that day.
