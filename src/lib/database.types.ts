@@ -847,6 +847,42 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_domain_health_checks: {
+        Row: {
+          alerts: Json
+          blocklists: Json
+          checked_at: string
+          dns_records: Json
+          domain: string
+          id: string
+          run_notes: string | null
+          send_metrics: Json
+          status: string
+        }
+        Insert: {
+          alerts?: Json
+          blocklists?: Json
+          checked_at?: string
+          dns_records?: Json
+          domain: string
+          id?: string
+          run_notes?: string | null
+          send_metrics?: Json
+          status: string
+        }
+        Update: {
+          alerts?: Json
+          blocklists?: Json
+          checked_at?: string
+          dns_records?: Json
+          domain?: string
+          id?: string
+          run_notes?: string | null
+          send_metrics?: Json
+          status?: string
+        }
+        Relationships: []
+      }
       dashboard_funnel_snapshots: {
         Row: {
           collected_at: string
@@ -880,6 +916,33 @@ export type Database = {
           period_start?: string
           source_key?: string
           step_key?: string
+        }
+        Relationships: []
+      }
+      dashboard_internal_test_patterns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          note: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          value?: string
         }
         Relationships: []
       }
@@ -1126,11 +1189,17 @@ export type Database = {
           customer_io_id: string | null
           email_hash: string | null
           ga_client_id: string | null
+          internal_test_note: string | null
+          internal_test_set_at: string | null
+          internal_test_set_by: string | null
           internal_user_id: string
+          is_internal_test: boolean
+          is_internal_test_exempt: boolean
           last_seen_at: string | null
           metadata: Json
           name: string | null
           phone: string | null
+          signed_up_at: string | null
           workshop_id: string | null
         }
         Insert: {
@@ -1139,11 +1208,17 @@ export type Database = {
           customer_io_id?: string | null
           email_hash?: string | null
           ga_client_id?: string | null
+          internal_test_note?: string | null
+          internal_test_set_at?: string | null
+          internal_test_set_by?: string | null
           internal_user_id: string
+          is_internal_test?: boolean
+          is_internal_test_exempt?: boolean
           last_seen_at?: string | null
           metadata?: Json
           name?: string | null
           phone?: string | null
+          signed_up_at?: string | null
           workshop_id?: string | null
         }
         Update: {
@@ -1152,11 +1227,17 @@ export type Database = {
           customer_io_id?: string | null
           email_hash?: string | null
           ga_client_id?: string | null
+          internal_test_note?: string | null
+          internal_test_set_at?: string | null
+          internal_test_set_by?: string | null
           internal_user_id?: string
+          is_internal_test?: boolean
+          is_internal_test_exempt?: boolean
           last_seen_at?: string | null
           metadata?: Json
           name?: string | null
           phone?: string | null
+          signed_up_at?: string | null
           workshop_id?: string | null
         }
         Relationships: []
@@ -1170,6 +1251,10 @@ export type Database = {
           country: string | null
           created_at: string | null
           created_by_agent: boolean | null
+          internal_test_note: string | null
+          internal_test_set_at: string | null
+          internal_test_set_by: string | null
+          is_internal_test: boolean
           language: string | null
           metadata: Json
           name: string | null
@@ -1187,6 +1272,10 @@ export type Database = {
           country?: string | null
           created_at?: string | null
           created_by_agent?: boolean | null
+          internal_test_note?: string | null
+          internal_test_set_at?: string | null
+          internal_test_set_by?: string | null
+          is_internal_test?: boolean
           language?: string | null
           metadata?: Json
           name?: string | null
@@ -1204,6 +1293,10 @@ export type Database = {
           country?: string | null
           created_at?: string | null
           created_by_agent?: boolean | null
+          internal_test_note?: string | null
+          internal_test_set_at?: string | null
+          internal_test_set_by?: string | null
+          is_internal_test?: boolean
           language?: string | null
           metadata?: Json
           name?: string | null
@@ -2811,7 +2904,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      google_ads_wl_users: {
+        Row: {
+          country_code: string | null
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+          phone_number: string | null
+          postal_code: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_next_send_time: {
@@ -2827,6 +2931,19 @@ export type Database = {
       get_sequence_stats: { Args: { p_sequence_id: string }; Returns: Json }
       get_user_workspace_ids: { Args: never; Returns: string[] }
       is_workspace_admin: { Args: { ws_id: string }; Returns: boolean }
+      reorder_route_stops: {
+        Args: {
+          p_estimated_day_seconds: number
+          p_google_maps_deeplink: string
+          p_route_id: string
+          p_routes_api_response: Json
+          p_stop_orders: Json
+          p_total_drive_meters: number
+          p_total_drive_seconds: number
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       reset_daily_send_counts: { Args: never; Returns: undefined }
     }
     Enums: {

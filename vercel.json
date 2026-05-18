@@ -21,6 +21,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/domain-health",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/ceo-sync/ga4",
       "schedule": "0 6 * * *"
     },
