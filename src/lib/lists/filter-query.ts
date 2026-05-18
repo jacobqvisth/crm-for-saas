@@ -23,6 +23,7 @@ export type FilterField =
   | 'last_contacted_at'
   | 'last_emailed_at'
   | 'email'
+  | 'email_status'
   | 'first_name'
   | 'last_name'
   | 'custom_fields';
@@ -37,6 +38,7 @@ export interface ListFilter {
 export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'status', label: 'Status' },
   { value: 'lead_status', label: 'Lead Status' },
+  { value: 'email_status', label: 'Email Status (verified)' },
   { value: 'company_id', label: 'Company' },
   { value: 'country_code', label: 'Country' },
   { value: 'created_at', label: 'Created Date' },
@@ -58,6 +60,13 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'equals', label: 'is' },
     { value: 'not_equals', label: 'is not' },
     { value: 'in', label: 'is any of' },
+  ],
+  email_status: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'in', label: 'is any of' },
+    { value: 'is_null', label: 'unverified (never checked)' },
+    { value: 'is_not_null', label: 'has been verified' },
   ],
   company_id: [
     { value: 'equals', label: 'is' },
@@ -112,6 +121,7 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
 
 export const STATUS_OPTIONS = ['active', 'bounced', 'unsubscribed'] as const;
 export const LEAD_STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
+export const EMAIL_STATUS_OPTIONS = ['valid', 'invalid', 'catch_all', 'risky', 'unknown'] as const;
 
 function daysAgo(days: number): string {
   const d = new Date();
