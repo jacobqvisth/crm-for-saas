@@ -14,6 +14,29 @@ updated: 2026-04-22
 
 ---
 
+## Session: MillionVerifier on 1,697 SCB contacts (2026-05-18, PR TBD)
+
+- **Triggered by:** Final SCB follow-up after PRs #195 / #196 / #197. Pre-send hygiene for the new SCB cohort.
+- **Script:** `scripts/verify-scb-contacts.mjs` — mirrors the existing `scripts/verify-emails.mjs` shape but targets `contacts` (the SCB cohort landed in `contacts` directly, not `discovered_shops`). Reuses `scripts/lib/email-verify.mjs` for the same loud-fail / status-mapping contract.
+- **Result:** 1,697/1,697 verified in ~90 s, 0 errors, ~$1.50 of MV credit.
+
+| email_status | Count | % |
+|---|---:|---:|
+| valid | 1,091 | 64.3% |
+| invalid | 233 | 13.7% |
+| risky | 194 | 11.4% |
+| catch_all | 179 | 10.5% |
+
+64% valid is on par with the CZ/SK scrape distributions and well above pure Google-Maps scrapes — SCB's registry-grade emails are higher quality on average. Send rules going forward:
+- **valid (1,091)** → safe to enroll in sequences.
+- **catch_all (179)** → enroll only if domain reputation is solid; treat as soft-suppress for cold outreach.
+- **invalid (233)** → suppress; do not send (would bounce + harm sender reputation).
+- **risky (194)** → suppress for cold; only manual reach.
+
+This also closes the "Run MillionVerifier on the 1,697 SCB contacts" follow-up from PR #195.
+
+---
+
 ## Session: SCB UI render + dynamic-list `last_emailed_at` filter (2026-05-18, PR TBD)
 
 - **Triggered by:** Jacob spotted that the dynamic-list "Last Contacted = never contacted" filter would match the wrong set — `contacts.last_contacted_at` is set on **reply** only, so "never contacted" actually means "never replied" (i.e. nearly every contact). Also follow-up to make the SCB registry fields visible in `/companies/[id]`.
