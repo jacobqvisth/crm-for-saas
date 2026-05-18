@@ -14,6 +14,34 @@ updated: 2026-04-22
 
 ---
 
+## Session: contacts.last_emailed_at + "Never emailed" filter (2026-05-18, PR TBD)
+
+- **Triggered by:** Jacob wanted a `/contacts` filter for "never received an email" so he can target the 10k+ untouched contacts (most of them the SCB import from earlier today).
+- **Branch:** `feat/last-emailed-at-filter`
+
+### Migration (applied to prod)
+`supabase/migrations/20260518100000_contacts_last_emailed_at.sql` — adds `contacts.last_emailed_at TIMESTAMPTZ` plus two partial indexes (`workspace_id + last_emailed_at IS NOT NULL` and `workspace_id + last_emailed_at IS NULL`). The "never" partial-index keeps the dominant query path fast as the workspace grows.
+
+**Backfill** ran via direct psql: `UPDATE contacts SET last_emailed_at = MAX(email_queue.sent_at) WHERE status='sent' GROUP BY contact_id`. Result: 1,916 of 12,270 contacts populated; 10,354 have `last_emailed_at IS NULL` (= "never emailed"). Source-of-truth fidelity preserved because the backfill uses `email_queue.sent_at`, not `contacts.created_at` or a guess.
+
+### Code changes
+- `src/app/api/cron/process-emails/route.ts` — when the cron flips `email_queue.status='sent'`, it now also writes `contacts.last_emailed_at = sentAt` (same timestamp). Guarded with `if (item.contact_id)` because the column is nullable on queue rows.
+- `src/lib/contacts-filter.ts` — adds `engagement: 'never_emailed' | 'emailed'` to `ContactFilters` and the server-side resolver. Translates to `.is('last_emailed_at', null)` / `.not('last_emailed_at', 'is', null)`.
+- `src/components/contacts/contacts-page-client.tsx` — adds `engagement` to `LocalFilters` and `DEFAULT_FILTERS`, a new `ENGAGEMENT_OPTIONS` `MultiSelect` (single-select via `v.slice(-1)`, matching the `has_account` pattern), wires it into the client-side query, and adds it to `hasActiveFilters` + the dep array.
+- `src/lib/database.types.ts` — `last_emailed_at` added to Row + Update + Insert for contacts (full regen deferred; same pattern as PR #128's manual-header preservation).
+- `src/lib/sequences/__tests__/variable-interpolation.test.ts` — fixture stub for `last_emailed_at: null` so the test still matches the Row type.
+
+### Idempotency / source-of-truth note
+Going forward, `last_emailed_at` is set by the send path, not the queue. If a future code path bypasses `process-emails/route.ts` (e.g. an Inngest event handler or a one-off send), it must also write `last_emailed_at` to stay accurate. Currently `process-emails` is the only send path → contacts.last_emailed_at is correct.
+
+### Build / verify
+- `npx tsc --noEmit` ✅ green
+- `npm run lint` ✅ green
+- `npm run build` ✅ green (using brew Node `/opt/homebrew/bin/node`; Codex.app's hardened-runtime Node breaks Turbopack + Webpack native bindings — see memory `reference_node-codex-vs-brew.md`)
+- Distribution: 1,916 emailed / 10,354 never emailed (12,270 total contacts)
+
+---
+
 ## Session: SCB Företagsregistret enrichment + bulk import (2026-05-18)
 
 - **Date:** 2026-05-18

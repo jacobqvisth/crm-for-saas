@@ -28,6 +28,12 @@ export type ContactFilters = {
   company_id?: string;
   /** Match contacts whose `tags` array overlaps any of these (OR semantics). */
   tags?: string | string[];
+  /**
+   * `'never_emailed'` → only contacts with last_emailed_at IS NULL.
+   * `'emailed'`       → only contacts with last_emailed_at IS NOT NULL.
+   * undefined → no filter.
+   */
+  engagement?: 'never_emailed' | 'emailed';
 };
 
 function toArray(v: string | string[] | undefined): string[] {
@@ -112,6 +118,9 @@ export async function resolveContactIdsByFilters(
 
   const tags = toArray(filters.tags);
   if (tags.length > 0) query = query.overlaps('tags', tags);
+
+  if (filters.engagement === 'never_emailed') query = query.is('last_emailed_at', null);
+  else if (filters.engagement === 'emailed') query = query.not('last_emailed_at', 'is', null);
 
   const { data, error } = await query;
   if (error || !data) return [];
