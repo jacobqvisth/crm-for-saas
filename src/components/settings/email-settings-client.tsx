@@ -17,6 +17,8 @@ interface TeamMember {
   user_id: string;
   full_name: string | null;
   email: string | null;
+  role: string | null;
+  is_current_user: boolean;
 }
 
 export function EmailSettingsClient() {
@@ -183,18 +185,33 @@ export function EmailSettingsClient() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {accounts.map((account) => {
-              const connectedBy = teamMembers.find((m) => m.user_id === account.user_id);
-              const connectedByName = connectedBy?.full_name ?? connectedBy?.email ?? null;
-              return (
-                <GmailAccountCard
-                  key={account.id}
-                  account={account}
-                  onUpdate={loadAccounts}
-                  connectedByName={teamMembers.length > 1 ? connectedByName : null}
-                />
-              );
-            })}
+            {(() => {
+              const currentUser = teamMembers.find((m) => m.is_current_user);
+              const isAdmin =
+                currentUser?.role === "owner" || currentUser?.role === "admin";
+              const mailboxCounts = accounts.reduce<Record<string, number>>((acc, a) => {
+                if (a.user_id) acc[a.user_id] = (acc[a.user_id] ?? 0) + 1;
+                return acc;
+              }, {});
+              return accounts.map((account) => {
+                const connectedBy = teamMembers.find((m) => m.user_id === account.user_id);
+                const connectedByName = connectedBy?.full_name ?? connectedBy?.email ?? null;
+                const isOwnAccount = currentUser?.user_id === account.user_id;
+                return (
+                  <GmailAccountCard
+                    key={account.id}
+                    account={account}
+                    onUpdate={loadAccounts}
+                    connectedByName={teamMembers.length > 1 ? connectedByName : null}
+                    canEditSignature={isOwnAccount || isAdmin}
+                    signatureUserLabel={connectedByName ?? account.email_address}
+                    signatureMailboxCount={
+                      account.user_id ? mailboxCounts[account.user_id] ?? 1 : 1
+                    }
+                  />
+                );
+              });
+            })()}
           </div>
         )}
       </div>

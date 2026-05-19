@@ -305,6 +305,11 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
           <div className="flex items-center justify-between">
             <label className="block text-sm font-medium text-slate-700">
               Auto-rotate pool
+              {rotationAccounts.length > 0 && (
+                <span className="ml-1.5 text-xs font-normal text-slate-500">
+                  ({rotationAccounts.length} account{rotationAccounts.length === 1 ? "" : "s"})
+                </span>
+              )}
             </label>
             {rotationAccounts.length > 0 && (
               <div className="flex items-center gap-3 text-xs">
@@ -333,7 +338,7 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
           ) : rotationAccounts.length === 0 ? (
             <div className="text-sm text-slate-500 py-2">No Gmail accounts connected.</div>
           ) : (
-            <div className="space-y-1.5 border border-slate-200 rounded-lg p-2 max-h-52 overflow-y-auto">
+            <div className="space-y-1.5 border border-slate-200 rounded-lg p-2 max-h-96 overflow-y-auto">
               {rotationAccounts.map((account) => (
                 <label
                   key={account.id}
