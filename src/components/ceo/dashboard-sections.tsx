@@ -25,6 +25,7 @@ import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 
 export type DashboardSectionKey =
   | "usage"
+  | "cta-clicks"
   | "dashboard"
   | "pilot-stats"
   | "new-users"
@@ -66,6 +67,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "New Users",
     description:
       "Top of the funnel. iOS / Android downloads, sign-ups, first diagnoses, and average days from sign-up to first diagnosis.",
+  },
+  {
+    key: "cta-clicks",
+    label: "CTA Clicks",
+    glyph: "CT",
+    href: "/ceo/cta-clicks",
+    title: "CTA Clicks",
+    description:
+      "Live GA4 view of cta_click events. Filter by host (app / marketing / all), break down by section and button label.",
   },
   {
     key: "dashboard",

@@ -1,15 +1,8 @@
-import { google } from "googleapis";
 import { GA4_EVENT_MAP, FUNNEL_STEPS } from "@/config/ceo/kpi-events";
 import { addUtcDays, parseGa4Date, toIsoDate } from "@/lib/ceo/dates";
-import { getEnv } from "@/lib/ceo/env";
-import { createGoogleAuth } from "@/lib/ceo/sync/google-auth";
+import { runGa4Report } from "@/lib/ceo/sync/ga4-client";
 import { requireSourceEnv } from "../errors";
 import type { MetricPoint, SourceConnector, SourceSyncWindow } from "../types";
-
-type Ga4Row = {
-  dimensionValues?: { value?: string | null }[];
-  metricValues?: { value?: string | null }[];
-};
 
 const EVENT_TO_METRIC = new Map<string, string>(
   Object.entries(GA4_EVENT_MAP).flatMap(([metricKey, eventNames]) =>
@@ -22,21 +15,7 @@ function periodFromGa4Date(value: string) {
   return { start, end: addUtcDays(start, 1) };
 }
 
-async function runReport(
-  requestBody: Record<string, unknown>,
-): Promise<Ga4Row[]> {
-  const propertyId = getEnv("GA4_PROPERTY_ID")!;
-  const auth = await createGoogleAuth([
-    "https://www.googleapis.com/auth/analytics.readonly",
-  ]);
-  const analyticsData = google.analyticsdata({ version: "v1beta", auth });
-  const response = await analyticsData.properties.runReport({
-    property: `properties/${propertyId}`,
-    requestBody,
-  });
-
-  return (response.data.rows ?? []) as Ga4Row[];
-}
+const runReport = runGa4Report;
 
 export const ga4Connector: SourceConnector = {
   sourceKey: "ga4",
