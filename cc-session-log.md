@@ -3566,3 +3566,13 @@ Full feature shipped end-to-end in one session: a sequence step can carry N alte
 - **Verification:** All 5 `@wrenchlane.com` `user_profiles` rows now start with a plain `<p>FirstName</p>` (Jacob's already used `<p>` so untouched). Hans on the `@wrenchlane.co` domain was already a simple `<p>` format, also untouched.
 - **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~30s of merge.
 - **Effect on in-flight queue:** PR #221's lazy re-render means all ~1,000 still-queued Sverige rows pick up the new `appendSignature` path on the next cron tick, and pull whichever signature row matches their sender's `gmail_accounts.user_id` (all 4 of which were just rewritten). Next sends should look tight and visually unified.
+
+
+## 2026-05-19 — Workspace-wide sweep: strip inline sender text from sequence steps
+
+- **Triggered by:** Jacob asked "can u also make that all other sequences gets updated with all the new signatures, so it is not sending the old text messages."
+- **Audit query:** scanned every `sequence_steps.body_override` and `sequence_step_variants.body_html` for inline references to "Hans Markebrant", "Magnus Stein", or Hans's phone "+46709105182".
+- **Findings:** only ONE row across the entire workspace — `United Kingdom — English` step 0 (id `71bcfc69-33f2-419d-85f6-41c126a293b8`) — still had `<p>Hans Markebrant<br>WrenchLane<br>+46709105182</p>` baked into the body, mirroring the pattern Sverige used to have. The other 4 active outbound sequences (Czech, Estonia, Latvia, Lithuania) were already clean. All variants workspace-wide were clean.
+- **Fix:** literal `replace(...)` UPDATE on the UK row, ending the body at `<p>Best regards,</p><p></p>` to match Step 2's existing structure.
+- **Verification:** final sweep returns 0 rows with inline sender text across both `sequence_steps` and `sequence_step_variants` for every workspace, every sequence status.
+- **Effect across in-flight queue:** 1,148 unsent rows total (1,083 Sverige + 65 UK) now re-render through PR #221's lazy path on the next cron tick, producing clean bodies + per-sender unified signatures. Other sequences have 0 unsent, so nothing else to flush.
