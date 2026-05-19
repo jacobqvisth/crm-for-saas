@@ -3531,3 +3531,14 @@ Full feature shipped end-to-end in one session: a sequence step can carry N alte
 - **Pre-flight check on the queued backlog:** 1,084 unsent Sverige rows, 1,077 still carry "Hans Markebrant" inline. Next cron run re-renders all of them from the clean step body and appends per-sender signature.
 - **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~30s of merge.
 - **Follow-up worth queuing:** Multi-auth-identity-per-person is a structural problem. Hans has 1 auth + 5 mailboxes linked to it (works fine because they're all attributed to one user via `gmail_accounts.user_id`). Magnus has 3 auths because he signed in with 3 different aliases — every future Google sign-in by Magnus under a new alias will create a 4th, 5th, etc. with no signature. Options: (a) auto-copy signature on first sign-in if first/last name matches an existing user; (b) move signatures off `auth.users` entirely onto a "team member" abstraction; (c) keep current model and document that admins must explicitly write the signature via `/settings/email` per mailbox. None blocking today.
+
+
+## 2026-05-19 — Remove visible "Unsubscribe" footer from outbound emails (PR #223)
+
+- **What Jacob noticed:** Magnus's first clean send (after PR #221 fixed the stale-body + PR #222 fixed Magnus's signature data) still looked off — a grey horizontal divider with "Unsubscribe" centered underneath was landing BETWEEN "Hälsningar," and Magnus's signature card. Looked like a bulk newsletter footer in a 1:1 outreach email.
+- **Fix:** `ensureUnsubscribeLink` in `src/lib/sequences/variables.ts` is now a passthrough — no more auto-injected `<hr>` + visible link. Function kept (not deleted) so the 6 call sites in `enrollment.ts` / `process-emails/route.ts` / `render.ts` / `enrollments/[id]/route.ts` don't churn; if we ever want a tiny inline disclaimer back, it goes in that one function.
+- **Compliance / deliverability:** Already covered by the `List-Unsubscribe` + `List-Unsubscribe-Post: One-Click` MIME headers set in `src/lib/gmail/send.ts:94-99`. Gmail/Outlook/Apple Mail surface a one-click unsubscribe affordance from those headers without polluting the body. Template authors can still drop `{{unsubscribe_link}}` into a body for an explicit visible link.
+- **Files changed:** 3 — variables.ts (function gutted, full doc comment explaining the rationale), variable-interpolation.test.ts ("appends footer" case flipped to "returns body unchanged"), render.test.ts (same flip + asserts no `<hr>`).
+- **Test result:** `npx tsc --noEmit` clean, `eslint src/` clean, `vitest run src/lib/sequences/` 20/20.
+- **Deploy:** Vercel auto-deploy ✅ — within ~30s of merge.
+- **Effect on the in-flight queue:** PR #221's lazy re-render means all 1,000+ already-queued Sverige rows re-render through the new passthrough on each cron tick — next sends are clean immediately, no re-enrollment needed.
