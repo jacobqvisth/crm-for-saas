@@ -40,18 +40,19 @@ function buildPlatformHref(
 const PLATFORM_FILTERS_INFO: SourceInfo = {
   title: "Platform filter — what each tab counts",
   body:
-    "Each tab applies a different GA4 dimensionFilter so the numbers below answer a different question. Diagnoses (the orange bar / 'Diagnoses made' column) come from the first-party dashboard_diagnostics table and never change between tabs.",
+    "Each tab applies a different GA4 dimensionFilter so the numbers below answer a different question. Diagnoses (the orange bar / 'Diagnoses made' column) come from the first-party dashboard_diagnostics table and have no platform attribution, so they show the same global count on All / Web app / iOS / Android. The Marketing tab forces Diagnoses to 0 because anonymous marketing visitors don't create diagnostic records.",
   sources: [
     "GA4 streams: Website and web app · WrenchLane - iOS · WrenchLane - Android",
   ],
   fields: [
     "All — hostName = app.wrenchlane.com OR streamName ∈ {WrenchLane - iOS, WrenchLane - Android}",
-    "Web — hostName = app.wrenchlane.com",
+    "Web app — hostName = app.wrenchlane.com",
     "iOS — streamName = WrenchLane - iOS",
     "Android — streamName = WrenchLane - Android",
+    "Marketing — hostName ∈ {wrenchlane.com, www.wrenchlane.com}",
   ],
   logic:
-    "All sums product activity across web, iOS, and Android. Marketing-site visits on wrenchlane.com (which share the 'Website and web app' GA4 stream with the product app) are dropped by filtering that stream down to hostName = app.wrenchlane.com. iOS and Android each isolate their native Firebase stream.",
+    "All sums product activity across web app, iOS, and Android (not Marketing). Web app, Marketing, and the product app share the same 'Website and web app' GA4 stream, so we split them by hostName. iOS and Android each isolate their native Firebase stream.",
 };
 
 export function AppUsagePlatformTabs({
