@@ -55,7 +55,12 @@ function applyTracking(htmlBody: string, trackingId: string): string {
 }
 
 function appendSignature(htmlBody: string, signatureHtml: string): string {
-  return `${htmlBody}<br><br>${signatureHtml}`;
+  // Glue the signature onto the body with no extra <br> spacers. The body
+  // typically ends with a closing </p> (TipTap output) whose bottom margin
+  // plus the signature's opening element top margin gives a natural
+  // one-line gap. The old `<br><br>` stacked on top of those margins and
+  // produced a ~50px void between "Hälsningar," and the sender name.
+  return `${htmlBody}${signatureHtml}`;
 }
 
 function buildMimeMessage(params: {
