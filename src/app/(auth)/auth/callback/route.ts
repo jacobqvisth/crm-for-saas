@@ -37,15 +37,27 @@ export async function GET(request: Request) {
           let targetWorkspaceId: string | null = null;
 
           if (emailDomain) {
-            const { data: matchingWorkspace } = await serviceClient
+            // Match either the primary domain OR any registered alias
+            // (e.g. wrenchlane.co users land in the wrenchlane.com workspace).
+            const { data: byDomain } = await serviceClient
               .from("workspaces")
               .select("id")
               .eq("domain", emailDomain)
               .limit(1)
-              .single();
+              .maybeSingle();
 
-            if (matchingWorkspace) {
-              targetWorkspaceId = matchingWorkspace.id;
+            if (byDomain) {
+              targetWorkspaceId = byDomain.id;
+            } else {
+              const { data: byAlias } = await serviceClient
+                .from("workspaces")
+                .select("id")
+                .contains("domain_aliases", [emailDomain])
+                .limit(1)
+                .maybeSingle();
+              if (byAlias) {
+                targetWorkspaceId = byAlias.id;
+              }
             }
           }
 
