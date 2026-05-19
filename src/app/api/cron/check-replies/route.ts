@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { notNull } from "@/lib/types/guards";
 import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
+import { parseNdr, SUGGESTED_NDR_GMAIL_QUERY } from "@/lib/gmail/parse-ndr";
 
 export async function POST(request: NextRequest) {
   // Verify cron secret
@@ -318,9 +319,22 @@ export async function POST(request: NextRequest) {
   }
 
   // --- Bounce Detection ---
+  // SMTP-level rejects come back as NDRs in the sender's own inbox. We poll
+  // each active sender, parse the NDR (Microsoft 365 / RFC 3464 / prose),
+  // and match the bounced message back to email_queue.
+  //
+  // Match priority:
+  //   1. Original Message-ID in the NDR body → email_queue.gmail_message_id
+  //      (precise; works even if the recipient address has been edited).
+  //   2. Fallback: parsed recipient email appears in any of this sender's
+  //      sent queue rows from the search window.
+  //
+  // Dedup: skip if a bounce event already exists for that queue row. The
+  // newer_than:2d window deliberately overlaps cron ticks; the dedup check
+  // prevents double-counting.
   const { data: activeSentEmails } = await supabase
     .from("email_queue")
-    .select("sender_account_id, tracking_id, id, contact_id, workspace_id, to_email")
+    .select("sender_account_id, tracking_id, id, contact_id, workspace_id, to_email, gmail_message_id")
     .eq("status", "sent")
     .gte("sent_at", since);
 
@@ -336,11 +350,20 @@ export async function POST(request: NextRequest) {
 
         const { data: messages } = await gmail.users.messages.list({
           userId: "me",
-          q: "from:(mailer-daemon@* OR postmaster@*) newer_than:1d",
+          q: SUGGESTED_NDR_GMAIL_QUERY,
           maxResults: 50,
         });
 
         if (!messages?.messages) continue;
+
+        const senderEmails = activeSentEmails.filter(
+          (e) => e.sender_account_id === senderAccountId,
+        );
+        const queueByMessageId = new Map(
+          senderEmails
+            .filter((e) => e.gmail_message_id)
+            .map((e) => [e.gmail_message_id!, e]),
+        );
 
         for (const msg of messages.messages) {
           if (!msg.id) continue;
@@ -356,87 +379,129 @@ export async function POST(request: NextRequest) {
           const bodyText = extractTextBody(fullMessage.payload);
           if (!bodyText) continue;
 
-          const senderEmails = activeSentEmails.filter(
-            (e) => e.sender_account_id === senderAccountId
-          );
+          const ndr = parseNdr(bodyText);
 
-          for (const sentEmail of senderEmails) {
-            if (!sentEmail.to_email || !sentEmail.tracking_id) continue;
-            if (bodyText.toLowerCase().includes(sentEmail.to_email.toLowerCase())) {
-              const { data: existingBounce } = await supabase
-                .from("email_events")
+          // 1. Try to match by original Message-ID first (precise).
+          let matchedQueue = ndr.originalMessageId
+            ? queueByMessageId.get(ndr.originalMessageId) ?? null
+            : null;
+
+          // 2. Fall back to recipient-email match against this sender's
+          //    queue rows. Picks the most recent match if multiple exist.
+          if (!matchedQueue && ndr.recipients.length > 0) {
+            const recipientSet = new Set(ndr.recipients);
+            matchedQueue =
+              senderEmails.find(
+                (e) => e.to_email && recipientSet.has(e.to_email.toLowerCase()),
+              ) ?? null;
+          }
+
+          if (!matchedQueue) continue;
+          if (!matchedQueue.tracking_id) continue;
+
+          // Dedup against any existing bounce event for this queue row.
+          const { data: existingBounce } = await supabase
+            .from("email_events")
+            .select("id")
+            .eq("email_queue_id", matchedQueue.id)
+            .eq("event_type", "bounce")
+            .limit(1);
+          if (existingBounce && existingBounce.length > 0) continue;
+
+          await supabase.from("email_events").insert({
+            tracking_id: matchedQueue.tracking_id,
+            email_queue_id: matchedQueue.id,
+            event_type: "bounce",
+          });
+
+          // Mark the queue row failed and stamp the parsed error code/text
+          // so the dashboard can show "why" without re-parsing.
+          const errorLine = [
+            ndr.smtpCode,
+            ndr.enhancedStatus,
+            ndr.errorText ?? "",
+            ndr.rejectingHost ? `(rejected by ${ndr.rejectingHost})` : "",
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim()
+            .slice(0, 1000);
+
+          await supabase
+            .from("email_queue")
+            .update({
+              status: "failed" as const,
+              error_message: errorLine || "NDR received",
+            })
+            .eq("id", matchedQueue.id);
+
+          // Only permanent (5xx) bounces should suppress the contact and
+          // cancel the rest of the sequence. A 4xx soft bounce shouldn't
+          // poison the address — let it retry.
+          if (matchedQueue.contact_id && ndr.permanence === "permanent") {
+            await supabase
+              .from("contacts")
+              .update({ status: "bounced" })
+              .eq("id", matchedQueue.contact_id);
+
+            if (matchedQueue.to_email) {
+              const { data: existingBounceSuppression } = await supabase
+                .from("suppressions")
                 .select("id")
-                .eq("tracking_id", sentEmail.tracking_id)
-                .eq("event_type", "bounce")
-                .limit(1);
+                .eq("workspace_id", matchedQueue.workspace_id)
+                .eq("email", matchedQueue.to_email)
+                .eq("active", true)
+                .maybeSingle();
 
-              if (existingBounce && existingBounce.length > 0) continue;
-
-              await supabase.from("email_events").insert({
-                tracking_id: sentEmail.tracking_id,
-                email_queue_id: sentEmail.id,
-                event_type: "bounce",
-              });
-
-              if (sentEmail.contact_id) {
-                await supabase
-                  .from("contacts")
-                  .update({ status: "bounced" })
-                  .eq("id", sentEmail.contact_id);
-
-                // Add to suppressions list
-                const { data: existingBounceSuppression } = await supabase
-                  .from("suppressions")
-                  .select("id")
-                  .eq("workspace_id", sentEmail.workspace_id)
-                  .eq("email", sentEmail.to_email)
-                  .eq("active", true)
-                  .maybeSingle();
-
-                if (!existingBounceSuppression) {
-                  await supabase.from("suppressions").insert({
-                    workspace_id: sentEmail.workspace_id,
-                    email: sentEmail.to_email,
-                    reason: "bounced",
-                    source: "bounce detected by check-replies cron",
-                  });
-                }
-
-                const { data: contactEnrollments } = await supabase
-                  .from("sequence_enrollments")
-                  .select("id")
-                  .eq("contact_id", sentEmail.contact_id)
-                  .in("status", ["active", "paused"]);
-
-                if (contactEnrollments && contactEnrollments.length > 0) {
-                  const ids = contactEnrollments.map((e) => e.id);
-                  await supabase
-                    .from("sequence_enrollments")
-                    .update({ status: "bounced", completed_at: new Date().toISOString() })
-                    .in("id", ids);
-                  await supabase
-                    .from("email_queue")
-                    .update({ status: "cancelled" as const })
-                    .in("enrollment_id", ids)
-                    .eq("status", "scheduled");
-                }
-
-                await supabase.from("activities").insert({
-                  workspace_id: sentEmail.workspace_id,
-                  type: "email_bounced",
-                  subject: "Email bounced",
-                  description: `Email to ${sentEmail.to_email} bounced`,
-                  contact_id: sentEmail.contact_id,
-                  metadata: {
-                    tracking_id: sentEmail.tracking_id,
-                    email_queue_id: sentEmail.id,
-                  },
+              if (!existingBounceSuppression) {
+                await supabase.from("suppressions").insert({
+                  workspace_id: matchedQueue.workspace_id,
+                  email: matchedQueue.to_email,
+                  reason: "bounced",
+                  source: errorLine
+                    ? `NDR: ${errorLine.slice(0, 200)}`
+                    : "bounce detected by check-replies cron",
                 });
               }
-
-              bouncesFound++;
             }
+
+            const { data: contactEnrollments } = await supabase
+              .from("sequence_enrollments")
+              .select("id")
+              .eq("contact_id", matchedQueue.contact_id)
+              .in("status", ["active", "paused"]);
+
+            if (contactEnrollments && contactEnrollments.length > 0) {
+              const ids = contactEnrollments.map((e) => e.id);
+              await supabase
+                .from("sequence_enrollments")
+                .update({ status: "bounced", completed_at: new Date().toISOString() })
+                .in("id", ids);
+              await supabase
+                .from("email_queue")
+                .update({ status: "cancelled" as const })
+                .in("enrollment_id", ids)
+                .eq("status", "scheduled");
+            }
+
+            await supabase.from("activities").insert({
+              workspace_id: matchedQueue.workspace_id,
+              type: "email_bounced",
+              subject: ndr.permanence === "permanent" ? "Email bounced (permanent)" : "Email bounced (temporary)",
+              description: errorLine || `Email to ${matchedQueue.to_email} bounced`,
+              contact_id: matchedQueue.contact_id,
+              metadata: {
+                tracking_id: matchedQueue.tracking_id,
+                email_queue_id: matchedQueue.id,
+                smtp_code: ndr.smtpCode,
+                enhanced_status: ndr.enhancedStatus,
+                rejecting_host: ndr.rejectingHost,
+                permanence: ndr.permanence,
+              },
+            });
           }
+
+          bouncesFound++;
         }
       } catch (err) {
         console.error(`Bounce check failed for account ${senderAccountId}:`, err);
