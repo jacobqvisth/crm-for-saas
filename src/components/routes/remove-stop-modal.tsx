@@ -2,16 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
+import {
+  REMOVE_REASONS,
+  type RemoveReason,
+} from "@/lib/routes/remove-reasons";
 
-export const REMOVE_REASONS = [
-  "route_too_long",
-  "recent_contact",
-  "wrong_location",
-  "not_icp",
-  "permanently_closed",
-  "other",
-] as const;
-export type RemoveReason = (typeof REMOVE_REASONS)[number];
+// Re-export so existing `import { RemoveReason } from ".../remove-stop-modal"`
+// call sites keep working. The lib module is now the canonical source.
+export { REMOVE_REASONS };
+export type { RemoveReason };
 
 const LABEL: Record<RemoveReason, string> = {
   route_too_long: "Route too long — just trimming",

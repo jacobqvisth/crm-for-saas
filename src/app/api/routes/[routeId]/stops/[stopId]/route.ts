@@ -3,22 +3,11 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { MissingApiKeyError } from "@/lib/routes/geocode";
 import { recomputeRouteAfterMutation } from "@/lib/routes/recompute";
-
-export const REMOVE_REASONS = [
-  "route_too_long",
-  "recent_contact",
-  "wrong_location",
-  "not_icp",
-  "permanently_closed",
-  "other",
-] as const;
-export type RemoveReason = (typeof REMOVE_REASONS)[number];
-
-const FLAGS_DO_NOT_ROUTE: ReadonlySet<RemoveReason> = new Set<RemoveReason>([
-  "wrong_location",
-  "not_icp",
-  "permanently_closed",
-]);
+import {
+  FLAGS_DO_NOT_ROUTE,
+  REMOVE_REASONS,
+  type RemoveReason,
+} from "@/lib/routes/remove-reasons";
 
 const Body = z.object({
   reason: z.enum(REMOVE_REASONS as readonly [RemoveReason, ...RemoveReason[]]),
