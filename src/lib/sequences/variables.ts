@@ -28,13 +28,21 @@ const FALLBACKS: Record<string, string> = {
   unsubscribe_link: "",
 };
 
+function getAppUrl(): string {
+  // .trim() + trailing-slash strip defends against a bad env value. A literal
+  // \n in NEXT_PUBLIC_APP_URL produced unsubscribe hrefs split across two
+  // lines in outbound bodies, which spam filters flag immediately.
+  const raw = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return raw.trim().replace(/\/+$/, "");
+}
+
 function resolveVariable(
   variable: string,
   contact: Contact,
   company?: Company | null,
   trackingId?: string
 ): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   switch (variable) {
     case "first_name":
