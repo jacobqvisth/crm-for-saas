@@ -12,9 +12,11 @@ import {
   XCircle,
   MinusCircle,
   Loader2,
+  PenSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
+import { SignatureEditorModal } from "./signature-editor-modal";
 
 type GmailAccount = Tables<"gmail_accounts">;
 
@@ -44,6 +46,9 @@ interface GmailAccountCardProps {
   account: GmailAccount;
   onUpdate: () => void;
   connectedByName?: string | null;
+  canEditSignature?: boolean;
+  signatureUserLabel?: string | null;
+  signatureMailboxCount?: number;
 }
 
 const statusColors: Record<string, { bg: string; text: string; label: string }> = {
@@ -53,7 +58,14 @@ const statusColors: Record<string, { bg: string; text: string; label: string }> 
   rate_limited: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Rate Limited" },
 };
 
-export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAccountCardProps) {
+export function GmailAccountCard({
+  account,
+  onUpdate,
+  connectedByName,
+  canEditSignature = false,
+  signatureUserLabel,
+  signatureMailboxCount = 1,
+}: GmailAccountCardProps) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [maxSends, setMaxSends] = useState(account.max_daily_sends ?? 50);
@@ -64,6 +76,7 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
     account.min_send_interval_seconds ?? 60
   );
   const [savingInterval, setSavingInterval] = useState(false);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
 
   async function handleCheckHealth() {
     setCheckingHealth(true);
@@ -298,6 +311,15 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
           )}
           {checkingHealth ? "Checking..." : "Check health"}
         </button>
+        {canEditSignature && account.user_id && (
+          <button
+            onClick={() => setSignatureModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <PenSquare className="h-3.5 w-3.5" />
+            Edit signature
+          </button>
+        )}
         {account.status === "paused" ? (
           <button
             onClick={handleResume}
@@ -326,6 +348,18 @@ export function GmailAccountCard({ account, onUpdate, connectedByName }: GmailAc
           </button>
         )}
       </div>
+
+      {/* Signature editor modal */}
+      {canEditSignature && account.user_id && (
+        <SignatureEditorModal
+          userId={account.user_id}
+          userLabel={signatureUserLabel ?? account.email_address}
+          mailboxCount={signatureMailboxCount}
+          open={signatureModalOpen}
+          onClose={() => setSignatureModalOpen(false)}
+          onSaved={onUpdate}
+        />
+      )}
 
       {/* Health check results */}
       {health && (
