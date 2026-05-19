@@ -18,6 +18,8 @@ import {
   Users,
   Check,
   Languages,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 
 type Contact = {
@@ -366,6 +368,12 @@ export function InboxClient() {
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replySending, setReplySending] = useState(false);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  // Track whether the textarea currently holds a draft (so we know when to
+  // show "Regenerate"). Cleared when the user manually edits — we don't want
+  // a hidden flag claiming AI authorship over what's actually their words.
+  const [draftPresent, setDraftPresent] = useState(false);
   const [hideOOO, setHideOOO] = useState(true);
   const [senders, setSenders] = useState<Sender[]>([]);
   const [selectedSenderIds, setSelectedSenderIds] = useState<string[] | null>(null);
@@ -471,11 +479,42 @@ export function InboxClient() {
     }
   }, []);
 
+  const fetchDraft = useCallback(
+    async (messageId: string, regenerate: boolean) => {
+      setDraftLoading(true);
+      setDraftError(null);
+      // Open the composer up-front so the spinner is visible while we wait.
+      setReplyOpen(true);
+      try {
+        const res = await fetch(`/api/inbox/${messageId}/draft-reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ regenerate }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to generate draft");
+        }
+        const data = (await res.json()) as { draft: string };
+        setReplyBody(data.draft);
+        setDraftPresent(true);
+        setReplyOpen(true);
+      } catch (err) {
+        setDraftError(err instanceof Error ? err.message : "Failed to generate draft");
+      } finally {
+        setDraftLoading(false);
+      }
+    },
+    [],
+  );
+
   const selectMessage = useCallback(
     async (msg: InboxMessage) => {
       setSelectedId(msg.id);
       setReplyOpen(false);
       setReplyBody("");
+      setDraftPresent(false);
+      setDraftError(null);
 
       if (!msg.is_read) {
         // Mark as read optimistically
@@ -490,8 +529,15 @@ export function InboxClient() {
       }
 
       loadThread(msg.id);
+
+      // Auto-suggest a draft on non-English threads. EN threads keep the
+      // previous "blank composer" behavior.
+      if (isTranslatable(msg.detected_language)) {
+        // Don't await — let the thread load in parallel.
+        void fetchDraft(msg.id, false);
+      }
     },
-    [loadThread]
+    [loadThread, fetchDraft]
   );
 
   const updateMessage = useCallback(
@@ -852,17 +898,45 @@ export function InboxClient() {
               </button>
               {replyOpen && (
                 <div>
+                  {(draftLoading || draftPresent || draftError) && (
+                    <div className="mb-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-indigo-50/70 border border-indigo-100 text-xs">
+                      <span className="flex items-center gap-1.5 text-indigo-700">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        {draftLoading
+                          ? "Generating English draft…"
+                          : draftError
+                          ? `Couldn't generate draft: ${draftError}`
+                          : "AI-suggested draft in English — edit, then send."}
+                      </span>
+                      {!draftLoading && (
+                        <button
+                          type="button"
+                          onClick={() => fetchDraft(selectedMessage.id, true)}
+                          className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Regenerate
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <textarea
                     value={replyBody}
-                    onChange={(e) => setReplyBody(e.target.value)}
+                    onChange={(e) => {
+                      setReplyBody(e.target.value);
+                      // First manual edit clears the "AI draft" indicator —
+                      // once they've touched it, it's their words.
+                      if (draftPresent) setDraftPresent(false);
+                    }}
                     placeholder={`Reply to ${selectedMessage.from_email}...`}
-                    rows={4}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    rows={6}
+                    disabled={draftLoading}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
                   />
                   <div className="flex justify-end mt-2">
                     <button
                       onClick={sendReply}
-                      disabled={replySending || !replyBody.trim()}
+                      disabled={replySending || draftLoading || !replyBody.trim()}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       <Send className="w-4 h-4" />

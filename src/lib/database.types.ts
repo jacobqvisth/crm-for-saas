@@ -1888,6 +1888,9 @@ export type Database = {
           contact_id: string | null
           created_at: string
           detected_language: string | null
+          draft_en: string | null
+          draft_generated_at: string | null
+          draft_model: string | null
           email_queue_id: string | null
           from_email: string
           from_name: string | null
@@ -1912,6 +1915,9 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           detected_language?: string | null
+          draft_en?: string | null
+          draft_generated_at?: string | null
+          draft_model?: string | null
           email_queue_id?: string | null
           from_email: string
           from_name?: string | null
@@ -1936,6 +1942,9 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           detected_language?: string | null
+          draft_en?: string | null
+          draft_generated_at?: string | null
+          draft_model?: string | null
           email_queue_id?: string | null
           from_email?: string
           from_name?: string | null
