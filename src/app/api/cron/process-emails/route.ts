@@ -6,6 +6,7 @@ import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "@/lib/sequences/variables";
 import { getNextSendTime, calculateStepScheduleTime } from "@/lib/sequences/scheduler";
+import { renderQueuedEmail } from "@/lib/sequences/render";
 import {
   pickVariant,
   fetchVariantsForStep,
@@ -326,6 +327,22 @@ export async function POST(request: NextRequest) {
           .eq("id", item.id);
         continue;
       }
+
+      // Lazy re-render subject + body from the live step (and pinned variant).
+      // enrollment.ts freezes both at enrollment time, but operators routinely
+      // edit a step body after queueing — without this re-render, the next
+      // sends ship the stale text. The frozen item.body_html is kept as a
+      // fallback inside renderQueuedEmail when the step was deleted.
+      const rendered = await renderQueuedEmail(supabase, {
+        step_id: item.step_id,
+        variant_id: item.variant_id,
+        contact_id: item.contact_id,
+        tracking_id: item.tracking_id,
+        subject: item.subject,
+        body_html: item.body_html,
+      });
+      item.subject = rendered.subject;
+      item.body_html = rendered.bodyHtml;
 
       // Look up previous email in this enrollment for threading
       let replyToMessageId: string | undefined;
