@@ -11,7 +11,7 @@ import {
 } from "@/lib/ceo/data/app-usage";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
-import { pageAll } from "@/lib/ceo/supabase-paging";
+import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
 

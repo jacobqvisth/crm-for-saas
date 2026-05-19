@@ -1,7 +1,7 @@
 import { addUtcDays, startOfUtcDay, toIsoDate } from "@/lib/ceo/dates";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
-import { pageAll } from "@/lib/ceo/supabase-paging";
+import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 
 type UserRow = {

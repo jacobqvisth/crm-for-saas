@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { notNull } from "@/lib/types/guards";
+import { pageAll, chunkedIn } from "@/lib/supabase-paging";
 import {
   BarChart,
   Bar,
@@ -129,11 +130,24 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
     for (const step of steps) {
       if (step.type !== "email") continue;
 
-      const { data: queueItems } = await supabase
-        .from("email_queue")
-        .select("id, tracking_id, status, variant_id")
-        .eq("step_id", step.id)
-        .eq("workspace_id", workspaceId);
+      // email_queue can have >1000 rows per step on large sequences (Sverige,
+      // UK each carry 2k+ on step 0). Without pagination the .select() is
+      // capped at 1000 by PostgREST db-max-rows and the per-step "sent"
+      // count + downstream tracking_id list are silently truncated.
+      const { data: queueItems } = await pageAll<{
+        id: string;
+        tracking_id: string | null;
+        status: string | null;
+        variant_id: string | null;
+      }>(({ from, to }) =>
+        supabase
+          .from("email_queue")
+          .select("id, tracking_id, status, variant_id")
+          .eq("step_id", step.id)
+          .eq("workspace_id", workspaceId)
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
 
       const sent = (queueItems || []).filter((q) => q.status === "sent").length;
       const trackingIds = (queueItems || []).map((q) => q.tracking_id).filter(notNull);
@@ -165,10 +179,25 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
       }
 
       if (trackingIds.length > 0) {
-        const { data: events } = await supabase
-          .from("email_events")
-          .select("event_type, tracking_id")
-          .in("tracking_id", trackingIds);
+        // .in("tracking_id", trackingIds) encodes each UUID into the URL;
+        // ~500+ values push the request past the URL-length limit and
+        // PostgREST silently returns { data: null, error: Bad Request }.
+        // chunkedIn slices at 200 AND paginates within each chunk so a
+        // one-to-many join (email_events ↔ email_queue.tracking_id) can't
+        // truncate against the 1000-row db-max-rows cap either.
+        const { data: events } = await chunkedIn<
+          { event_type: string | null; tracking_id: string },
+          string
+        >(
+          (chunk, { from, to }) =>
+            supabase
+              .from("email_events")
+              .select("event_type, tracking_id")
+              .in("tracking_id", chunk)
+              .order("tracking_id", { ascending: true })
+              .range(from, to),
+          trackingIds,
+        );
 
         if (events) {
           const uniqueOpened = new Set<string>();
