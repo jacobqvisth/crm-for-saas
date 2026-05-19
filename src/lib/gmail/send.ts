@@ -30,11 +30,16 @@ interface SendEmailResult {
 const DEFAULT_MIN_SEND_INTERVAL_SECONDS = 60;
 
 function getTrackingBaseUrl(): string {
-  return (
+  // .trim() defends against trailing whitespace/newline in the env value —
+  // a single \n in NEXT_PUBLIC_APP_URL produced URLs split mid-href in
+  // outbound emails AND truncated List-Unsubscribe headers, both of which
+  // are spam-filter smoking guns. See `src/lib/gmail/client.ts` for the
+  // sibling fix; mirroring here so every send-path URL is normalized.
+  const raw =
     process.env.TRACKING_DOMAIN ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "http://localhost:3000"
-  );
+    "http://localhost:3000";
+  return raw.trim().replace(/\/+$/, "");
 }
 
 /**
