@@ -6,6 +6,11 @@ import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "@/lib/sequences/variables";
 import { getNextSendTime, calculateStepScheduleTime } from "@/lib/sequences/scheduler";
+import {
+  pickVariant,
+  fetchVariantsForStep,
+  bumpVariantSendCount,
+} from "@/lib/sequences/variants";
 import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
 
 const DEFAULT_BOUNCE_THRESHOLD = 8; // percent
@@ -495,20 +500,20 @@ export async function POST(request: NextRequest) {
               .single();
 
             if (contact) {
-              let subject = nextStep.subject_override || "";
-              let bodyHtml = nextStep.body_override || "";
-
+              let template: { subject: string; body_html: string } | null = null;
               if (nextStep.template_id) {
-                const { data: template } = await supabase
+                const { data: tplRow } = await supabase
                   .from("email_templates")
                   .select("*")
                   .eq("id", nextStep.template_id)
                   .single();
-                if (template) {
-                  subject = nextStep.subject_override || template.subject;
-                  bodyHtml = nextStep.body_override || template.body_html;
-                }
+                if (tplRow) template = tplRow;
               }
+
+              const variants = await fetchVariantsForStep(supabase, nextStep.id);
+              const picked = pickVariant(nextStep, variants, template);
+              let subject = picked.subject;
+              let bodyHtml = picked.bodyHtml;
 
               const company = (contact as Record<string, unknown>).companies as never;
               const trackingId = crypto.randomUUID();
@@ -531,7 +536,12 @@ export async function POST(request: NextRequest) {
                 status: "scheduled" as const,
                 scheduled_for: scheduledFor.toISOString(),
                 tracking_id: trackingId,
+                variant_id: picked.variantId,
               });
+
+              if (picked.variantId) {
+                await bumpVariantSendCount(supabase, picked.variantId);
+              }
             }
           } else if (nextStep.type === "delay" && settings) {
             // Calculate when delay ends, then look at the step after
@@ -563,20 +573,20 @@ export async function POST(request: NextRequest) {
                 .single();
 
               if (contact) {
-                let subject = stepAfterDelay.subject_override || "";
-                let bodyHtml = stepAfterDelay.body_override || "";
-
+                let template: { subject: string; body_html: string } | null = null;
                 if (stepAfterDelay.template_id) {
-                  const { data: template } = await supabase
+                  const { data: tplRow } = await supabase
                     .from("email_templates")
                     .select("*")
                     .eq("id", stepAfterDelay.template_id)
                     .single();
-                  if (template) {
-                    subject = stepAfterDelay.subject_override || template.subject;
-                    bodyHtml = stepAfterDelay.body_override || template.body_html;
-                  }
+                  if (tplRow) template = tplRow;
                 }
+
+                const variants = await fetchVariantsForStep(supabase, stepAfterDelay.id);
+                const picked = pickVariant(stepAfterDelay, variants, template);
+                let subject = picked.subject;
+                let bodyHtml = picked.bodyHtml;
 
                 const company = (contact as Record<string, unknown>).companies as never;
                 const trackingId = crypto.randomUUID();
@@ -597,7 +607,12 @@ export async function POST(request: NextRequest) {
                   status: "scheduled" as const,
                   scheduled_for: delayEnd.toISOString(),
                   tracking_id: trackingId,
+                  variant_id: picked.variantId,
                 });
+
+                if (picked.variantId) {
+                  await bumpVariantSendCount(supabase, picked.variantId);
+                }
               }
             }
           }
