@@ -109,8 +109,7 @@ export async function POST(
     workspace_id: contact.workspace_id,
     type: "system",
     subject: "GDPR erasure request processed",
-    description:
-      "A contact record was deleted and the email address was added to the suppression list.",
+    body: "A contact record was deleted and the email address was added to the suppression list.",
   });
 
   return NextResponse.json({ success: true });
