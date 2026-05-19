@@ -14,6 +14,57 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-19 — Inbox translation Phases 2-4: English-first viewer, draft suggestion, outbound translation (PRs #244, #245, #246)
+
+Closed out the inbox-translation plan. Phase 1 (#241/#242) populated the data; these three PRs put it to work end-to-end. Plan complete: A0 → A → B → C → D.
+
+### PR #244 — `feat(inbox): show English translation alongside original (PR B)`
+- **Thread list (left panel):** rows with `detected_language != 'en'` and a stored translation now use `subject_translated_en` for the title and a `htmlToPreview(body_translated_en)` text snippet for the preview line. A small globe (`Languages` from lucide) flags each translated row.
+- **Thread header:** title swaps to the translated subject with the same globe icon. Falls back to original when no translation.
+- **Message bubble:** every incoming non-English message renders an indigo banner inside the bubble: "Translated from {Language}" with a "Show original" button that flips the bubble to the source-language `body_html`. Per-bubble local state, no localStorage — fresh sessions always start English. Refactored bubble render into a small `<ThreadBubble />` so it owns its own toggle.
+- **API:** `/api/inbox/[id]/thread/route.ts` now exposes `detected_language` / `subject_translated_en` / `body_translated_en` on the incoming ThreadItem shape so the bubble has both sides.
+- **Helpers:** new `LANG_LABELS` covering the common European codes (en, sv, no, da, fi, et, lv, lt, de, fr, pl, cs, ru, es, it, nl, pt), `isTranslatable()`, `htmlToPreview()`.
+- **Files:** 2 — `inbox-client.tsx` + `thread/route.ts` (+151 / -38).
+- **Verify:** tsc + eslint clean. Vercel deploy ✅ ~10s.
+
+### PR #245 — `feat(inbox): auto-suggest English draft reply on non-English threads (PR C)`
+- **Migration `20260519160000_inbox_draft_replies.sql`** — `draft_en`, `draft_generated_at`, `draft_model` columns on `inbox_messages`. Cache lives on the row so re-opens are instant. Applied to prod via psql before push.
+- **Helper `src/lib/inbox/draft-reply.ts`** — single Claude Haiku 4.5 call. Context: recipient first/last name + company, prior outbound (HTML stripped to text), last ~4 thread messages, current inbound (English-translated body). System prompt anchors tone: 2–4 short sentences, acknowledge what they said, no overselling, no signature/closer.
+- **Endpoint `src/app/api/inbox/[id]/draft-reply/route.ts`** — POST. Returns cached draft unless `{ regenerate: true }`. Workspace-gated. 502 on Claude failure (UI surfaces inline).
+- **UI:** on selecting a non-EN thread, `selectMessage` kicks off `fetchDraft` in parallel with `loadThread`. Composer opens up-front so the spinner is visible. Indigo banner above textarea: "Generating English draft…" → "AI-suggested draft in English — edit, then send." with a Regenerate button. First manual keystroke clears the AI-indicator — once Jacob touches it, it's his words.
+- **Types:** three new columns added to `database.types.ts`.
+- **Files:** 5 — migration, helper, endpoint, inbox-client, types.
+- **Verify:** tsc + eslint clean. Vercel deploy ✅ ~8s.
+
+### PR #246 — `feat(inbox): translate approved English replies to recipient language at send time (PR D)`
+- **Helper `src/lib/inbox/translate-outbound.ts`** — Claude Haiku 4.5 translates plain-text English to the recipient's language. Identity short-circuit when target is `en`. Plain-text in / plain-text out; the reply route HTML-wraps before sending.
+- **Endpoint `src/app/api/inbox/[id]/translate-preview/route.ts`** — POST hit by the composer on textarea blur to render the side-by-side preview. Same helper as send path, so what you preview is what ships.
+- **Updated `src/app/api/inbox/[id]/reply/route.ts`** — server-side translation **before** `sendEmail()`. Translation failure blocks the send (502) — better to surface the error than ship English to a Latvian recipient. `activities.metadata` now stores `body_en` (approved) + `body_sent` (wire) + `target_language` + `translation_model` so the audit trail is clear.
+- **UI:** inline preview pane below the textarea on non-EN threads — "Sends as Latvian" header, translated body underneath. Fires on textarea blur (debounced by an equality guard against `previewBaseRef.current`), invalidates the moment the body diverges, and also fires once a fresh AI draft lands so the preview is ready alongside the suggestion. Also reordered callbacks so `fetchPreview` is defined before `fetchDraft` references it.
+- **Files:** 4 — outbound helper, preview endpoint, reply route, inbox-client.
+- **Verify:** tsc + eslint clean. Vercel deploy ✅ ~8s.
+
+### End-to-end behaviour now
+1. Latvian reply lands → cron translates it on the way in (PR #241).
+2. Inbox left list shows the English subject + preview with a 🌐 (PR #244).
+3. Opening the thread shows the title in English + a "Translated from Latvian / Show original" toggle on each non-EN bubble (PR #244).
+4. Composer pre-populates with an English draft reply via Claude (PR #245).
+5. As Jacob edits, the textarea-blur preview shows the Latvian wire body underneath (PR #246).
+6. Send → reply goes out in Latvian; `activities.metadata` keeps both English (approved) and Latvian (sent) for audit (PR #246).
+
+### Cost
+- Inbound translation: ~$0.001/msg via Haiku.
+- Draft generation: ~$0.001 per non-EN thread open (cached after first).
+- Outbound preview: ~$0.001 per textarea-blur (could debounce harder if it ever shows up in bills; currently fine).
+- Outbound send-time translation: ~$0.001 per send.
+- Total per non-EN conversation roundtrip: ~$0.004. Negligible at expected volume.
+
+### Process
+- All four PRs worked from `~/crm-worktrees/pr-a0-inbox-filters/` off clean `origin/main`. Main checkout is still on a parallel session's branch (`feature/ndr-bounce-ingestion`).
+- Schema applied via the in-repo psql pattern before each PR push.
+- B + C + D each shipped end-to-end (build, push, merge, verify Vercel) within ~5 min of the prior PR.
+
+
 ## 2026-05-19 — Inbox translation Phase 1: detect + translate on receipt (PRs #241, #242)
 
 Second slice of the inbox-improvement plan. Non-English replies now auto-translate to English at the moment `check-replies` ingests them, and a one-off backfill caught up the historic 46 rows.
