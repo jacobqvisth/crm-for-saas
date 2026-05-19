@@ -14,9 +14,23 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Trophy } from "lucide-react";
+import toast from "react-hot-toast";
+
+interface VariantAnalytics {
+  id: string;
+  name: string;
+  weight: number;
+  is_active: boolean;
+  sent: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+  bounced: number;
+}
 
 interface StepAnalytics {
+  step_id: string;
   step_order: number;
   type: string;
   subject: string;
@@ -26,6 +40,7 @@ interface StepAnalytics {
   replied: number;
   bounced: number;
   unsubscribed: number;
+  variants: VariantAnalytics[];
 }
 
 interface SequenceAnalyticsTabProps {
@@ -38,6 +53,45 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
 
   const [stepAnalytics, setStepAnalytics] = useState<StepAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+
+  const toggleStepExpansion = (stepId: string) => {
+    const next = new Set(expandedSteps);
+    if (next.has(stepId)) next.delete(stepId);
+    else next.add(stepId);
+    setExpandedSteps(next);
+  };
+
+  const promoteWinner = async (step: StepAnalytics) => {
+    const eligibleVariants = step.variants.filter((v) => v.sent >= 20);
+    if (eligibleVariants.length < 2) {
+      toast.error("Need ≥2 variants with ≥20 sends each to promote a winner");
+      return;
+    }
+    const winner = eligibleVariants.reduce((a, b) =>
+      a.replied / Math.max(1, a.sent) >= b.replied / Math.max(1, b.sent) ? a : b,
+    );
+    if (
+      !confirm(
+        `Promote "${winner.name}" to weight 5 and set every other variant on this step to weight 1?`,
+      )
+    ) {
+      return;
+    }
+    for (const v of step.variants) {
+      const weight = v.id === winner.id ? 5 : 1;
+      await fetch(
+        `/api/sequences/${sequenceId}/steps/${step.step_id}/variants/${v.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ weight }),
+        },
+      );
+    }
+    toast.success(`Promoted "${winner.name}"`);
+    load();
+  };
 
   const load = useCallback(async () => {
     if (!workspaceId) return;
@@ -56,23 +110,59 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
 
     const analytics: StepAnalytics[] = [];
 
+    // Pre-fetch all variants for every step in this sequence so we can build
+    // per-variant breakdowns without N+1 queries.
+    const stepIds = steps.filter((s) => s.type === "email").map((s) => s.id);
+    const variantsByStep = new Map<string, Array<{ id: string; name: string; weight: number; is_active: boolean }>>();
+    if (stepIds.length > 0) {
+      const { data: allVariants } = await supabase
+        .from("sequence_step_variants")
+        .select("id, sequence_step_id, name, weight, is_active")
+        .in("sequence_step_id", stepIds);
+      for (const v of allVariants ?? []) {
+        const arr = variantsByStep.get(v.sequence_step_id) ?? [];
+        arr.push(v);
+        variantsByStep.set(v.sequence_step_id, arr);
+      }
+    }
+
     for (const step of steps) {
       if (step.type !== "email") continue;
 
       const { data: queueItems } = await supabase
         .from("email_queue")
-        .select("id, tracking_id, status")
+        .select("id, tracking_id, status, variant_id")
         .eq("step_id", step.id)
         .eq("workspace_id", workspaceId);
 
       const sent = (queueItems || []).filter((q) => q.status === "sent").length;
       const trackingIds = (queueItems || []).map((q) => q.tracking_id).filter(notNull);
 
+      // tracking_id → variant_id for this step's queue rows
+      const trackingToVariant = new Map<string, string | null>();
+      for (const q of queueItems ?? []) {
+        if (q.tracking_id) trackingToVariant.set(q.tracking_id, q.variant_id ?? null);
+      }
+
       let opened = 0;
       let clicked = 0;
       let replied = 0;
       let bounced = 0;
       let unsubscribed = 0;
+
+      // Per-variant event sets (Map<variantId, Set<trackingId>>). null key
+      // means "no variant" (legacy fallback path).
+      const openedByVariant = new Map<string | null, Set<string>>();
+      const clickedByVariant = new Map<string | null, Set<string>>();
+      const repliedByVariant = new Map<string | null, Set<string>>();
+      const bouncedByVariant = new Map<string | null, Set<string>>();
+      const sentByVariant = new Map<string | null, number>();
+
+      for (const q of queueItems ?? []) {
+        if (q.status === "sent") {
+          sentByVariant.set(q.variant_id ?? null, (sentByVariant.get(q.variant_id ?? null) ?? 0) + 1);
+        }
+      }
 
       if (trackingIds.length > 0) {
         const { data: events } = await supabase
@@ -100,10 +190,38 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
           replied = uniqueReplied.size;
           bounced = uniqueBounced.size;
           unsubscribed = uniqueUnsub.size;
+
+          const addToVariantSet = (
+            map: Map<string | null, Set<string>>,
+            tid: string,
+          ) => {
+            const vid = trackingToVariant.get(tid) ?? null;
+            if (!map.has(vid)) map.set(vid, new Set());
+            map.get(vid)!.add(tid);
+          };
+          for (const tid of uniqueOpened) addToVariantSet(openedByVariant, tid);
+          for (const tid of uniqueClicked) addToVariantSet(clickedByVariant, tid);
+          for (const tid of uniqueReplied) addToVariantSet(repliedByVariant, tid);
+          for (const tid of uniqueBounced) addToVariantSet(bouncedByVariant, tid);
         }
       }
 
+      const variantAnalytics: VariantAnalytics[] = (variantsByStep.get(step.id) ?? []).map(
+        (v) => ({
+          id: v.id,
+          name: v.name,
+          weight: v.weight,
+          is_active: v.is_active,
+          sent: sentByVariant.get(v.id) ?? 0,
+          opened: openedByVariant.get(v.id)?.size ?? 0,
+          clicked: clickedByVariant.get(v.id)?.size ?? 0,
+          replied: repliedByVariant.get(v.id)?.size ?? 0,
+          bounced: bouncedByVariant.get(v.id)?.size ?? 0,
+        }),
+      );
+
       analytics.push({
+        step_id: step.id,
         step_order: step.step_order,
         type: step.type,
         subject: step.subject_override || `Step ${step.step_order + 1}`,
@@ -113,6 +231,7 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
         replied,
         bounced,
         unsubscribed,
+        variants: variantAnalytics,
       });
     }
 
@@ -244,27 +363,109 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {stepAnalytics.map((s) => (
-              <tr key={s.step_order} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-sm font-medium text-slate-900">Step {s.step_order + 1}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">
-                  <div className="flex items-center gap-2">
-                    {s.subject}
-                    {bestStepOrder === s.step_order && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700 whitespace-nowrap">
-                        ⭐ Most replies
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-center text-sm text-slate-600">{s.sent}</td>
-                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.opened, s.sent)}%</td>
-                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.clicked, s.sent)}%</td>
-                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.replied, s.sent)}%</td>
-                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.bounced, s.sent)}%</td>
-                <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.unsubscribed, s.sent)}%</td>
-              </tr>
-            ))}
+            {stepAnalytics.map((s) => {
+              const isExpanded = expandedSteps.has(s.step_id);
+              const hasVariants = s.variants.length > 0;
+              const variantWinnerId = hasVariants
+                ? s.variants
+                    .filter((v) => v.sent >= 20)
+                    .reduce<{ id: string; rate: number } | null>((best, v) => {
+                      const rate = v.replied / Math.max(1, v.sent);
+                      return best === null || rate > best.rate
+                        ? { id: v.id, rate }
+                        : best;
+                    }, null)?.id ?? null
+                : null;
+              return (
+                <>
+                  <tr key={s.step_order} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                      <div className="flex items-center gap-1">
+                        {hasVariants && (
+                          <button
+                            type="button"
+                            onClick={() => toggleStepExpansion(s.step_id)}
+                            className="text-slate-400 hover:text-slate-700"
+                            title={isExpanded ? "Collapse variants" : "Expand variants"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                        Step {s.step_order + 1}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {s.subject}
+                        {bestStepOrder === s.step_order && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700 whitespace-nowrap">
+                            ⭐ Most replies
+                          </span>
+                        )}
+                        {hasVariants && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 whitespace-nowrap">
+                            {s.variants.length} variant{s.variants.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {hasVariants && s.variants.filter((v) => v.sent >= 20).length >= 2 && (
+                          <button
+                            type="button"
+                            onClick={() => promoteWinner(s)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded"
+                            title="Set the highest-reply-rate variant to weight 5; others to weight 1"
+                          >
+                            <Trophy className="w-3 h-3" />
+                            Promote winner
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{s.sent}</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.opened, s.sent)}%</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.clicked, s.sent)}%</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.replied, s.sent)}%</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.bounced, s.sent)}%</td>
+                    <td className="px-4 py-3 text-center text-sm text-slate-600">{pct(s.unsubscribed, s.sent)}%</td>
+                  </tr>
+                  {isExpanded &&
+                    s.variants.map((v) => (
+                      <tr
+                        key={`${s.step_id}-${v.id}`}
+                        className="bg-slate-50/60 hover:bg-slate-100/60"
+                      >
+                        <td className="px-4 py-2"></td>
+                        <td className="px-4 py-2 text-xs text-slate-700 pl-8">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={v.is_active ? "" : "italic text-slate-400"}>
+                              ↳ {v.name}
+                            </span>
+                            <span className="text-slate-400">
+                              weight {v.weight}
+                              {!v.is_active && " · disabled"}
+                            </span>
+                            {variantWinnerId === v.id && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                                <Trophy className="w-3 h-3" />
+                                Leader
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-center text-xs text-slate-600">{v.sent}</td>
+                        <td className="px-4 py-2 text-center text-xs text-slate-600">{pct(v.opened, v.sent)}%</td>
+                        <td className="px-4 py-2 text-center text-xs text-slate-600">{pct(v.clicked, v.sent)}%</td>
+                        <td className="px-4 py-2 text-center text-xs text-slate-600">{pct(v.replied, v.sent)}%</td>
+                        <td className="px-4 py-2 text-center text-xs text-slate-600">{pct(v.bounced, v.sent)}%</td>
+                        <td className="px-4 py-2 text-center text-xs text-slate-400">—</td>
+                      </tr>
+                    ))}
+                </>
+              );
+            })}
           </tbody>
         </table>
       </div>
