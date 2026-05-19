@@ -3438,3 +3438,15 @@ Not captured in this session — Hans hasn't run the new generator against the r
 - **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 (auth redirect, expected).
 - **Verified post-deploy via service-role query:** May 11 = 2 signups (Cusmat, Autostar); May 12 = 7 real + 2 filtered; May 13 = 1.
 - **Next step:** Watch the next 08:00 UTC health-check run to confirm the new NULL-signed_up_at check lands clean (no false positives from the 2 backfill holdouts since their `created_at` predates the 24h window).
+
+## 2026-05-19 — Admin-editable signatures from /settings/email (PR #209)
+
+- **What was built:** Workspace owners/admins can now edit any team member's email signature from the per-account cards on `/settings/email`. Non-admins still get a self-service edit button on their own cards. Closes the "Hans's signature is wrong but only Hans can fix it" loop.
+- **Why now:** Jacob wanted to fix sender signatures himself without round-tripping through each teammate's login.
+- **New API:** `GET/PATCH /api/admin/signatures/[userId]` — admin check matches the caller and target on a shared workspace where the caller has `role IN ('owner','admin')`; self-edit always allowed. Writes go through `createServiceClient()` because `user_profiles` RLS scopes UPDATE to `auth.uid()`. No schema change — `user_profiles.signature_html` already exists (PR #101) and is read at send time by `src/lib/gmail/send.ts:177`.
+- **UI:** New `<SignatureEditorModal>` (HTML textarea + live preview, debounced save). `GmailAccountCard` got a new `Edit signature` button, gated by `canEditSignature` prop computed in `email-settings-client`. When a single user owns multiple aliases (Hans has 5), the modal copy reads "Applies to all 5 connected mailboxes for this sender" — one save updates the shared `user_profiles` row.
+- **Files changed:** 4 — `src/app/api/admin/signatures/[userId]/route.ts` (new), `src/components/settings/signature-editor-modal.tsx` (new), `src/components/settings/email-settings-client.tsx`, `src/components/settings/gmail-account-card.tsx`. +345 / −13.
+- **Test result:** `npx tsc --noEmit` green, `npm run lint` green. `npm run build` skipped — a parallel CC session was holding the `next build` lock; Vercel build is authoritative on merge.
+- **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 (auth redirect, expected).
+- **Process note:** Mid-session a parallel CC session swapped the working tree to `fix/rotation-pool-visible-accounts` and unstaged my work. Recovered via the `feedback_parallel-cc-branch-drift.md` playbook: didn't reach for `--hard` or force-push, used `git worktree add` on `feature/admin-edit-sender-signatures` to commit cleanly without disrupting the parallel session.
+- **Next step:** Hans (or whoever) loads `/settings/email` and verifies the new button. If we ever want different signatures per alias (instead of per user), schema would need `gmail_accounts.signature_html_override TEXT` + fallback logic in `send.ts` — left as a follow-up, not part of this PR.
