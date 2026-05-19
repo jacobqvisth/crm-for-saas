@@ -14,6 +14,48 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-19 (continued) — Zero-day pattern audit, "Last week" filter, PR #36 cleanup (PRs #207, #208, #211, #36 closed)
+
+Follow-up to the morning's #203-205 session. Same theme: hunt down every remaining instance of the bucket-by-union antipattern, plus a small feature request and an old-PR cleanup.
+
+### PR #207 — `fix: render zero-data days on 5 more /ceo trend charts`
+- `buildTrendPoints` in `src/lib/ceo/metrics/calculations.ts` had the same union-of-data drop pattern PR #205 fixed elsewhere. Powers acquisition / organic / product / revenue / operations trend charts. Threaded `ResolvedDashboardRange` from `calculateDashboardData` down into each `build*Trend` builder. New local helper `enumerateIsoDates(start, end)` (366-day cap) seeds the date set before the union-of-keys merge.
+- Open-ended ranges (`range.start === null`, like `all_time`) keep the union-of-data fallback — enumerating from the epoch would be wasteful.
+- 4 existing calculations tests still passing.
+
+### PR #208 — `fix: render zero-data days on /dashboard emailVolume + contactGrowth`
+- Two more instances in `src/app/api/dashboard/route.ts`: `emailVolumeChart` was dropping days with zero sends + opens; `contactGrowthChart` (cumulative line) had visual gaps on days with no new contacts.
+- Local `enumerateIntervals(start, end, byWeek)` helper handles both daily (7d/30d) and weekly (90d) granularity (400-bucket cap).
+- Contact growth additionally pre-rolls the cumulative count from contacts created **before** the range starts, so the first bucket includes the prior baseline instead of resetting the line.
+
+### PR #211 — `feat: add "Last week" time-range filter (ISO Mon-Sun)`
+- New `last_week` DashboardTimeRangeKey between `last_7_days` and `this_month`. Resolves to previous complete ISO 8601 week (Mon 00:00 UTC → next Mon 00:00 UTC exclusive). Distinct from rolling `last_7_days`.
+- Registered as `granularity: "day"` in `RANGE_GRANULARITY`.
+- 6 new vitest cases cover Mon/Thu/Sun "now" inputs, no current-week overlap, and `formatRangeDateSpan` rendering the inclusive Mon-Sun span.
+
+### PR #36 closed — `feat: email warmup ramp, domain health checks, and sender scoring`
+- 6-week-old PR on `claude/loving-perlman`, never merged. Audited and closed as **superseded but partially salvageable** — see the closing comment on the PR for the full breakdown.
+- Per-account DNS check is redundant with the central `/ceo/domain-health` cron shipped in #201 + #204 + the DBL refusal-code fix in #203.
+- **Warmup ramp + connect-time setup checklist + per-sender health score + preflight `senderHealthWarnings[]`** are still valuable and not duplicated. Documented as a future revival plan in vault memory `project_crm-warmup-orphan-schema.md`.
+- **`gmail_accounts` orphan schema:** the table already has `warmup_day`, `warmup_stage`, `warmup_enabled`, `is_warmup`, `warmup_start_date`, `domain_health`, `health_score` columns from a direct psql apply somewhere (no migration file). Zero current code reads them. Don't drop — earmarked for the warmup revival.
+- Branch `claude/loving-perlman` preserved for cherry-picking if/when revived.
+
+### Operational notes
+- Parallel CC sessions shipped 25 commits while I was working (PRs #225-249 — inbox translation, CTA tracking + GA4 rollup, NDR/M365 bounce ingestion, `activities.type` CHECK widening). Zero conflicts with my work.
+- `gh pr list --state open` empty after #36 closure.
+
+### Build / verify (all three PRs)
+- `npm run build`, `npm run lint`, `npx tsc --noEmit`, `npx vitest run` — all green
+- Vercel auto-deploy ✓ on each merge
+
+### Memory saved (planning vault)
+- `feedback_seed-bucket-sets-by-range.md` — antipattern + `enumerateBuckets` / `enumerateIsoDates` / `enumerateIntervals` helper pattern
+- `project_crm-for-saas-domain-health.md` — full architecture reference for the daily cron
+- `project_wrenchlane-co-dmarc-promotion-2026-06-16.md` — calendar reminder + decision rules
+- `project_crm-warmup-orphan-schema.md` — orphan columns + revival roadmap
+
+---
+
 ## 2026-05-19 — Inbox translation Phases 2-4: English-first viewer, draft suggestion, outbound translation (PRs #244, #245, #246)
 
 Closed out the inbox-translation plan. Phase 1 (#241/#242) populated the data; these three PRs put it to work end-to-end. Plan complete: A0 → A → B → C → D.
