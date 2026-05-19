@@ -1,9 +1,8 @@
 import { addUtcDays, startOfUtcDay, toIsoDate } from "@/lib/ceo/dates";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
+import { pageAll } from "@/lib/ceo/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
-
-const FETCH_LIMIT = 50000;
 
 type UserRow = {
   internal_user_id: string | null;
@@ -191,24 +190,36 @@ export async function getPilotStatsData(): Promise<PilotStatsData> {
     chatsResult,
     freshnessResult,
   ] = await Promise.all([
-    supabase
-      .from(TABLES.users)
-      .select("internal_user_id, workshop_id, last_seen_at, metadata")
-      .limit(FETCH_LIMIT),
-    supabase
-      .from(TABLES.workshops)
-      .select("workshop_id, name")
-      .limit(FETCH_LIMIT),
-    supabase
-      .from(TABLES.diagnostics)
-      .select(
-        "diagnostic_id, internal_user_id, workshop_id, status, created_at, diag_cost, has_chat",
-      )
-      .limit(FETCH_LIMIT),
-    supabase
-      .from(TABLES.diagnosticChats)
-      .select("chat_id, chat_cost")
-      .limit(FETCH_LIMIT),
+    pageAll<UserRow>(({ from, to }) =>
+      supabase
+        .from(TABLES.users)
+        .select("internal_user_id, workshop_id, last_seen_at, metadata")
+        .order("internal_user_id", { ascending: true })
+        .range(from, to),
+    ),
+    pageAll<WorkshopRow>(({ from, to }) =>
+      supabase
+        .from(TABLES.workshops)
+        .select("workshop_id, name")
+        .order("workshop_id", { ascending: true })
+        .range(from, to),
+    ),
+    pageAll<DiagnosticRow>(({ from, to }) =>
+      supabase
+        .from(TABLES.diagnostics)
+        .select(
+          "diagnostic_id, internal_user_id, workshop_id, status, created_at, diag_cost, has_chat",
+        )
+        .order("diagnostic_id", { ascending: true })
+        .range(from, to),
+    ),
+    pageAll<ChatRow>(({ from, to }) =>
+      supabase
+        .from(TABLES.diagnosticChats)
+        .select("chat_id, chat_cost")
+        .order("chat_id", { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from(TABLES.rawMetricRows)
       .select("collected_at")
@@ -227,10 +238,10 @@ export async function getPilotStatsData(): Promise<PilotStatsData> {
     return emptyData();
   }
 
-  const users = (usersResult.data ?? []) as UserRow[];
-  const workshopsList = (workshopsResult.data ?? []) as WorkshopRow[];
-  const diagnostics = (diagnosticsResult.data ?? []) as DiagnosticRow[];
-  const chats = (chatsResult.data ?? []) as ChatRow[];
+  const users = usersResult.data;
+  const workshopsList = workshopsResult.data;
+  const diagnostics = diagnosticsResult.data;
+  const chats = chatsResult.data;
 
   const workshopNames = new Map<string, string>();
   for (const workshop of workshopsList) {

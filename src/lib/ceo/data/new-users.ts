@@ -11,10 +11,9 @@ import {
 } from "@/lib/ceo/data/app-usage";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
+import { pageAll } from "@/lib/ceo/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
-
-const FETCH_LIMIT = 50000;
 
 export type NewUsersGranularity = AppUsageGranularity;
 
@@ -98,52 +97,64 @@ export async function getNewUsersData(
   const endIso = range.end.toISOString();
   const startIso = range.start?.toISOString();
 
-  const allUsersQuery = supabase
-    .from(TABLES.users)
-    .select("internal_user_id, workshop_id, signed_up_at, metadata")
-    .limit(FETCH_LIMIT);
+  const allUsersQuery = pageAll<UserRow>(({ from, to }) =>
+    supabase
+      .from(TABLES.users)
+      .select("internal_user_id, workshop_id, signed_up_at, metadata")
+      .order("internal_user_id", { ascending: true })
+      .range(from, to),
+  );
 
-  const allDiagnosticsQuery = supabase
-    .from(TABLES.diagnostics)
-    .select("internal_user_id, workshop_id, created_at")
-    .limit(FETCH_LIMIT);
+  const allDiagnosticsQuery = pageAll<DiagnosticRow>(({ from, to }) =>
+    supabase
+      .from(TABLES.diagnostics)
+      .select("internal_user_id, workshop_id, created_at")
+      .order("diagnostic_id", { ascending: true })
+      .range(from, to),
+  );
 
   // Apple's modern analytics for this app emits a "Platform App Installs"
   // report (installs column) but no "App Store Downloads" report, so the
   // app_store_downloads metric_key is never populated. app_store_installations
   // is the correct source for the iOS column on /dashboard/new-users.
-  let iosQuery = supabase
-    .from(TABLES.metricSnapshots)
-    .select("period_start, value, dimension_key")
-    .eq("source_key", "app_store_connect")
-    .eq("metric_key", "app_store_installations")
-    .lt("period_start", endIso)
-    .limit(FETCH_LIMIT);
-  if (startIso) {
-    iosQuery = iosQuery.gte("period_start", startIso);
-  }
+  const iosQuery = pageAll<MetricSnapshotRow>(({ from, to }) => {
+    let q = supabase
+      .from(TABLES.metricSnapshots)
+      .select("period_start, value, dimension_key")
+      .eq("source_key", "app_store_connect")
+      .eq("metric_key", "app_store_installations")
+      .lt("period_start", endIso)
+      .order("period_start", { ascending: true })
+      .range(from, to);
+    if (startIso) q = q.gte("period_start", startIso);
+    return q;
+  });
 
-  let androidQuery = supabase
-    .from(TABLES.metricSnapshots)
-    .select("period_start, value, dimension_key")
-    .eq("source_key", "ga4")
-    .eq("metric_key", "android_first_opens")
-    .lt("period_start", endIso)
-    .limit(FETCH_LIMIT);
-  if (startIso) {
-    androidQuery = androidQuery.gte("period_start", startIso);
-  }
+  const androidQuery = pageAll<MetricSnapshotRow>(({ from, to }) => {
+    let q = supabase
+      .from(TABLES.metricSnapshots)
+      .select("period_start, value, dimension_key")
+      .eq("source_key", "ga4")
+      .eq("metric_key", "android_first_opens")
+      .lt("period_start", endIso)
+      .order("period_start", { ascending: true })
+      .range(from, to);
+    if (startIso) q = q.gte("period_start", startIso);
+    return q;
+  });
 
-  let webQuery = supabase
-    .from(TABLES.metricSnapshots)
-    .select("period_start, value, dimension_key")
-    .eq("source_key", "ga4")
-    .eq("metric_key", "app_first_visits")
-    .lt("period_start", endIso)
-    .limit(FETCH_LIMIT);
-  if (startIso) {
-    webQuery = webQuery.gte("period_start", startIso);
-  }
+  const webQuery = pageAll<MetricSnapshotRow>(({ from, to }) => {
+    let q = supabase
+      .from(TABLES.metricSnapshots)
+      .select("period_start, value, dimension_key")
+      .eq("source_key", "ga4")
+      .eq("metric_key", "app_first_visits")
+      .lt("period_start", endIso)
+      .order("period_start", { ascending: true })
+      .range(from, to);
+    if (startIso) q = q.gte("period_start", startIso);
+    return q;
+  });
 
   const [
     allUsersResult,
@@ -167,12 +178,12 @@ export async function getNewUsersData(
     );
   }
 
-  const allUsersRaw = (allUsersResult.data ?? []) as UserRow[];
-  const allDiagnosticsRaw = (allDiagnosticsResult.data ?? []) as DiagnosticRow[];
-  const iosSnapshots = (iosResult.data ?? []) as MetricSnapshotRow[];
-  const androidSnapshots = (androidResult.data ?? []) as MetricSnapshotRow[];
+  const allUsersRaw = allUsersResult.data;
+  const allDiagnosticsRaw = allDiagnosticsResult.data;
+  const iosSnapshots = iosResult.data;
+  const androidSnapshots = androidResult.data;
   const androidConfigured = !androidResult.error;
-  const webSnapshots = (webResult.data ?? []) as MetricSnapshotRow[];
+  const webSnapshots = webResult.data;
   const webConfigured = !webResult.error;
 
   // Drop internal-test users + workshops before any per-user math. Sign-ups,
