@@ -141,7 +141,7 @@ describe("renderQueuedEmail", () => {
     expect(result.bodyHtml).toBe("<p>[stale body]</p>");
   });
 
-  it("appends an unsubscribe link when one isn't already in the rendered body", async () => {
+  it("does NOT inject a visible unsubscribe footer (List-Unsubscribe header handles it instead)", async () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://app.test";
     const { client } = makeSupabase([
       {
@@ -158,7 +158,12 @@ describe("renderQueuedEmail", () => {
     const result = await renderQueuedEmail(client, baseItem);
 
     expect(result.reRendered).toBe(true);
-    expect(result.bodyHtml).toContain("/api/tracking/unsubscribe/track-1");
+    // Previously asserted that the footer URL was appended. We now rely on
+    // the List-Unsubscribe MIME header set in src/lib/gmail/send.ts, so the
+    // visible body should NOT contain a tracking link unless the template
+    // author explicitly added {{unsubscribe_link}}.
+    expect(result.bodyHtml).not.toContain("/api/tracking/unsubscribe/");
+    expect(result.bodyHtml).not.toContain("<hr");
   });
 
   it("returns the frozen content unchanged when step_id is null", async () => {

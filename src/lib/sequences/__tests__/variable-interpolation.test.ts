@@ -310,29 +310,30 @@ assert(
 );
 
 // ---------------------------------------------------------------------------
-// Suite 4: ensureUnsubscribeLink
+// Suite 4: ensureUnsubscribeLink — now a passthrough; List-Unsubscribe header
+// in src/lib/gmail/send.ts handles compliance + Gmail/Outlook one-click UI.
 // ---------------------------------------------------------------------------
 console.log("\n── ensureUnsubscribeLink ─────────────────────────────────────");
 
 const bodyWithLink = `<p>Hello</p><a href="/api/tracking/unsubscribe/abc">Unsub</a>`;
 assert(
-  "does not add second unsubscribe if already present",
+  "bodies with an explicit link are returned unchanged",
   ensureUnsubscribeLink(bodyWithLink, "new-id"),
   bodyWithLink
 );
 
 const bodyWithSpanVar = `<p>Hello</p><span data-variable="unsubscribe_link">{{unsubscribe_link}}</span>`;
 assert(
-  "does not add unsubscribe if span variable is present",
+  "bodies with an explicit span variable are returned unchanged",
   ensureUnsubscribeLink(bodyWithSpanVar, "new-id"),
   bodyWithSpanVar
 );
 
 const bodyNoLink = `<p>Hello Jane</p>`;
-assertContains(
-  "appends unsubscribe footer when none exists",
+assert(
+  "no longer injects a visible footer when one isn't present",
   ensureUnsubscribeLink(bodyNoLink, "track-xyz"),
-  "/api/tracking/unsubscribe/track-xyz"
+  bodyNoLink
 );
 
 assertNotContains(

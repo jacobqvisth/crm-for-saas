@@ -91,23 +91,29 @@ export function resolveVariables(
 }
 
 /**
- * Ensures the email body contains an unsubscribe link.
- * If not present, appends one before sending (CAN-SPAM compliance).
+ * Compliance gate for unsubscribe handling. Now a passthrough.
+ *
+ * Used to auto-inject a visible "Unsubscribe" link + horizontal divider at
+ * the bottom of every outbound body. That looked terrible on a 1:1 cold
+ * outreach email — the divider landed between the closing greeting and the
+ * sender's signature card, and the link itself read like a bulk-newsletter
+ * footer in a context where each email is supposed to feel hand-sent.
+ *
+ * Compliance + deliverability are now covered by the List-Unsubscribe and
+ * List-Unsubscribe-Post: One-Click headers set in `buildMimeMessage`
+ * (src/lib/gmail/send.ts) — Gmail, Outlook, and Apple Mail all surface a
+ * one-click unsubscribe affordance from those headers without polluting
+ * the visible body. Template authors who want a visible link can drop
+ * {{unsubscribe_link}} into the body and resolveVariable will turn it
+ * into a clickable URL.
+ *
+ * The function is kept (not deleted) so the existing call sites in
+ * enrollment.ts / process-emails / render.ts / enrollments[id] don't have
+ * to change. If we ever want a tiny inline disclaimer back, it goes here.
  */
-export function ensureUnsubscribeLink(bodyHtml: string, trackingId: string): string {
-  if (
-    bodyHtml.includes("{{unsubscribe_link}}") ||
-    bodyHtml.includes("/api/tracking/unsubscribe/") ||
-    bodyHtml.includes('data-variable="unsubscribe_link"')
-  ) {
-    return bodyHtml;
-  }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const unsubUrl = `${appUrl}/api/tracking/unsubscribe/${trackingId}`;
-
-  return `${bodyHtml}
-<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;font-size:12px;color:#94a3b8;">
-  <a href="${unsubUrl}" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
-</div>`;
+export function ensureUnsubscribeLink(
+  bodyHtml: string,
+  _trackingId: string,
+): string {
+  return bodyHtml;
 }
