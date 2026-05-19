@@ -3450,3 +3450,48 @@ Not captured in this session — Hans hasn't run the new generator against the r
 - **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 (auth redirect, expected).
 - **Process note:** Mid-session a parallel CC session swapped the working tree to `fix/rotation-pool-visible-accounts` and unstaged my work. Recovered via the `feedback_parallel-cc-branch-drift.md` playbook: didn't reach for `--hard` or force-push, used `git worktree add` on `feature/admin-edit-sender-signatures` to commit cleanly without disrupting the parallel session.
 - **Next step:** Hans (or whoever) loads `/settings/email` and verifies the new button. If we ever want different signatures per alias (instead of per user), schema would need `gmail_accounts.signature_html_override TEXT` + fallback logic in `send.ts` — left as a follow-up, not part of this PR.
+
+
+## 2026-05-19 — Multi-variant sequence steps (PRs #212, #213, #214, #215)
+
+Full feature shipped end-to-end in one session: a sequence step can carry N alternate message bodies, with weighted-greedy least-used rotation at enrollment/send time, an in-step editor, AI batch generation, and per-variant analytics. Motivation: Gmail's content-fingerprint detector flags identical bodies across many recipients, hurting deliverability on 200+ contact lists. Variants let one step rotate copy.
+
+### PR #212 — engine (`feature/sequence-step-variants-engine`)
+- **Migration:** `20260519100000_sequence_step_variants.sql` — new `sequence_step_variants` table (id, sequence_step_id, workspace_id, name, subject, body_html, weight, is_active, ai_generated, sends_count, ...), RLS via `get_user_workspace_ids()`, `email_queue.variant_id` FK, `increment_variant_sends(p_variant_id, p_delta)` RPC for atomic counter updates.
+- **Picker library:** `src/lib/sequences/variants.ts` — `pickVariant` (pure, weighted-greedy least-used, deterministic id tie-break, falls through to `step.body_override` when no active variants), `createBatchVariantPicker` (stateful, maintains in-memory `sends_count` so 500 picks against the same step round-robin), `flushSendCountDeltas` / `bumpVariantSendCount`.
+- **Wired into 4 read sites:** `enrollment.ts` (first step + post-delay step) and `process-emails/route.ts` (next step + step-after-delay).
+- **Tests:** 14 vitest cases. Run with `PATH=/opt/homebrew/bin:$PATH npx vitest run src/lib/sequences/variants.test.ts` (Codex.app Node can't dlopen native rolldown bindings — brew Node only).
+- **Strictly additive:** a step with zero variants behaves exactly like before.
+
+### PR #213 — editor UI + low-variant warning (`feature/sequence-step-variants-editor`)
+- **CRUD endpoints:** `GET/POST /api/sequences/[id]/steps/[stepId]/variants`, `PATCH/DELETE /api/sequences/[id]/steps/[stepId]/variants/[variantId]`.
+- **First-variant seeding:** when a step has no variants yet AND has content in `subject_override`/`body_override`, the POST endpoint inserts an "Original" variant FROM the step content BEFORE the requested new variant — so adding the first variant doesn't silently displace the original copy.
+- **Editor:** variant tabs above the existing subject/body editor; per-variant name, weight (0/1/2/3/5), is_active toggle, sends_count badge, delete (blocked at 1 remaining — disable instead). Subject + body edits PATCH the active variant via debounced 600ms writes.
+- **Preflight:** new `lowVariantWarning` boolean — true when `enrollableCount ≥ 200` AND any email step has < 2 active variants. Launch modal surfaces it as a yellow `PreflightItem`.
+
+### PR #214 — AI batch generation + CTA lock (`feature/sequence-step-variants-ai`)
+- **Migration:** `20260519110000_step_cta_lock.sql` — `sequence_steps.cta_lock TEXT`, an optional "must-include verbatim" phrase.
+- **Endpoint:** `POST /api/ai/generate-variants` — claude-haiku-4-5, count clamped [2,10], system prompt preserves intent + CTA + tokens while varying opener/structure/word choice ±25%, no near-repeats of existing variants. Token allowlist (`first_name, last_name, email, company_name, phone, title, city, country, sender_first_name, sender_company, unsubscribe_link`) enforced server-side — variants using anything outside are silently dropped. CTA-lock enforcement: case-insensitive substring match on subject+body; drops variants that don't include the lock.
+- **Counter:** shared `workspace_ai_settings.daily_email_gen_count` with the single-draft endpoint but reinterpreted as batches/day; cap raised to 20 batches/day.
+- **UI:** new `GenerateVariantsModal` (count selector 3/5/10, persona angle, per-draft Save + Save all, surfaces rejected-count metadata). Wired as a "Generate variants" button in the variant tab row plus the `cta_lock` input below the per-variant controls.
+
+### PR #215 — per-variant analytics + Promote winner (`feature/sequence-step-variants-analytics`)
+- **`sequence-analytics-tab.tsx`:** pre-fetches all variants for the sequence's email steps in one batch query; per step, builds a `tracking_id → variant_id` map so open/click/reply/bounce events attribute cleanly per variant.
+- Step rows are expandable when the step has variants; chevron toggles indented variant rows showing name, weight, active flag, sends, open/click/reply/bounce rates.
+- **"Promote winner":** appears when ≥2 variants have ≥20 sends each. Confirms, then PATCHes the highest-reply-rate variant to weight=5 and the rest to weight=1.
+- **"Leader" badge:** marks the variant with the highest reply rate at n≥20 sends/arm.
+- No new endpoints — reuses CRUD from PR #213.
+
+### Test result across the feature
+- `npm run build` green on every PR
+- `npm run lint` clean
+- `npx tsc --noEmit` clean
+- Picker tests: 14/14 (PR #212)
+- All 4 migrations applied to prod via Supabase Management API + types regenerated each time per the manual-header-preserving procedure
+- Vercel auto-deploy verified (`curl -I https://crm-for-saas.vercel.app` → 307 each merge)
+
+### Notes for follow-up
+- **UI not manually clicked through.** Type/lint/build is green but no in-browser test of the variant tabs, batch-generate modal, or analytics expand. Worth a 5-min smoke on a real sequence before relying on it for a 500-contact launch.
+- **No upstream-tracking branches.** This repo's `remote.origin.fetch` refspec is pinned to `+refs/heads/main:refs/remotes/origin/main`, so feature branches don't get a local `origin/feature/*` ref. Use `gh pr create --head <branch>` instead of relying on `gh`'s default head detection.
+- **Bayesian significance badge** on variants is a future PR — currently "Leader" is just highest reply rate at n≥20, no credible-interval check. Easy upgrade once a real campaign accumulates data.
+- **Spintax / live-AI-paraphrase** alternatives evaluated but rejected (see plan transcript). Variants table is the canonical mechanism; spintax could layer on as micro-variation later if needed.
