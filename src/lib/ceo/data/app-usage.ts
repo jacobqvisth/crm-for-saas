@@ -167,6 +167,54 @@ function ga4Dimension(granularity: AppUsageGranularity): string {
   }
 }
 
+// Enumerate every bucket key from `start` to `end` inclusive at the given
+// granularity. Lets callers seed their bucket set with all intervals in the
+// requested range — so days/hours/weeks with literally zero data still
+// render as zero rows on the chart and table instead of silently dropping.
+// Returns an empty array if `start` is null (open-ended ranges like
+// "all time" — caller should keep the union-of-data fallback for those).
+export function enumerateBuckets(
+  start: Date | null | undefined,
+  end: Date,
+  granularity: AppUsageGranularity,
+): string[] {
+  if (!start) return [];
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  if (start.getTime() > end.getTime()) return [];
+
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const cursor = new Date(start.getTime());
+
+  // Guard against runaway loops if a caller hands us a 10-year hour range.
+  // 10k buckets covers ~13 months of hours / ~27 years of days.
+  const MAX_BUCKETS = 10_000;
+
+  while (cursor.getTime() <= end.getTime() && keys.length < MAX_BUCKETS) {
+    const key = bucketKey(cursor, granularity);
+    if (!seen.has(key)) {
+      seen.add(key);
+      keys.push(key);
+    }
+    switch (granularity) {
+      case "hour":
+        cursor.setUTCHours(cursor.getUTCHours() + 1);
+        break;
+      case "day":
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        break;
+      case "week":
+        cursor.setUTCDate(cursor.getUTCDate() + 7);
+        break;
+      case "month":
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        break;
+    }
+  }
+
+  return keys;
+}
+
 export function bucketKey(date: Date, granularity: AppUsageGranularity): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -460,6 +508,23 @@ export async function getAppUsageData(
     ]);
 
     const rowMap = new Map<string, AppUsageRow>();
+
+    // Seed every bucket in the requested range so zero-signal intervals
+    // still render as zero rows instead of being silently dropped.
+    for (const bucket of enumerateBuckets(range.start, range.end, granularity)) {
+      const labels = formatBucketLabel(bucket, granularity);
+      rowMap.set(bucket, {
+        bucket,
+        bucketLabel: labels.label,
+        bucketShortLabel: labels.shortLabel,
+        activeUsers: 0,
+        sessions: 0,
+        pageViews: 0,
+        diagnosesMade: 0,
+        events: 0,
+        pagesPerSession: 0,
+      });
+    }
 
     for (const row of (response.data.rows ?? []) as Ga4Row[]) {
       const bucket = row.dimensionValues?.[0]?.value ?? "";

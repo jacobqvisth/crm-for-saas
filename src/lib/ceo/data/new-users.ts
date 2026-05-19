@@ -5,6 +5,7 @@ import {
 import {
   type AppUsageGranularity,
   bucketKey,
+  enumerateBuckets,
   formatBucketLabel,
   granularityFromRange,
 } from "@/lib/ceo/data/app-usage";
@@ -307,7 +308,12 @@ export async function getNewUsersData(
     );
   }
 
-  const allBuckets = new Set<string>();
+  // Seed bucket set with every interval in the requested range so zero-
+  // signal days/weeks/months still render. Empty array for open-ended
+  // ranges (range.start is null) → fall back to union-of-data.
+  const allBuckets = new Set<string>(
+    enumerateBuckets(range.start, range.end, granularity),
+  );
   for (const m of [
     signUpsByBucket,
     activatedByBucket,
