@@ -339,6 +339,13 @@ function getStartDate(range: ResolvedDashboardRange) {
   return "365daysAgo";
 }
 
+// Supabase PostgREST caps responses at db-max-rows (1000 by default),
+// overriding any client-side `.limit()`. A naive `.limit(10000)` silently
+// drops everything past row 1000 — for this histogram, sorted ASC by
+// created_at, the newest weeks vanish while older weeks still look right.
+// Page through in 1000-row chunks instead.
+const DIAGNOSTICS_PAGE_SIZE = 1000;
+
 async function getDiagnosisCountsByBucket(
   range: ResolvedDashboardRange,
   granularity: AppUsageGranularity,
@@ -354,42 +361,50 @@ async function getDiagnosisCountsByBucket(
     return counts;
   }
 
-  let query = supabase
-    .from(TABLES.diagnostics)
-    .select("created_at, internal_user_id, workshop_id")
-    .not("created_at", "is", null)
-    .lt("created_at", range.end.toISOString())
-    .order("created_at", { ascending: true })
-    .limit(10000);
-
-  if (range.start) {
-    query = query.gte("created_at", range.start.toISOString());
-  }
-
-  const { data, error } = await query;
-  if (error) {
-    console.error("App usage diagnostics read failed", error);
-    return counts;
-  }
-
   const internalTestSets = await loadInternalTestSets();
-  for (const row of (data ?? []) as DiagnosticRow[]) {
-    if (
-      isInternalTestUserOrWorkshopWith(
-        internalTestSets,
-        row.internal_user_id,
-        row.workshop_id,
-      )
-    ) {
-      continue;
-    }
-    if (!row.created_at) continue;
-    const date = new Date(row.created_at);
-    if (Number.isNaN(date.getTime())) continue;
-    const key = bucketKey(date, granularity);
-    if (!key) continue;
 
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+  let offset = 0;
+  while (true) {
+    let query = supabase
+      .from(TABLES.diagnostics)
+      .select("created_at, internal_user_id, workshop_id")
+      .not("created_at", "is", null)
+      .lt("created_at", range.end.toISOString())
+      .order("created_at", { ascending: true })
+      .range(offset, offset + DIAGNOSTICS_PAGE_SIZE - 1);
+
+    if (range.start) {
+      query = query.gte("created_at", range.start.toISOString());
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("App usage diagnostics read failed", error);
+      return counts;
+    }
+
+    const page = (data ?? []) as DiagnosticRow[];
+    for (const row of page) {
+      if (
+        isInternalTestUserOrWorkshopWith(
+          internalTestSets,
+          row.internal_user_id,
+          row.workshop_id,
+        )
+      ) {
+        continue;
+      }
+      if (!row.created_at) continue;
+      const date = new Date(row.created_at);
+      if (Number.isNaN(date.getTime())) continue;
+      const key = bucketKey(date, granularity);
+      if (!key) continue;
+
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    if (page.length < DIAGNOSTICS_PAGE_SIZE) break;
+    offset += DIAGNOSTICS_PAGE_SIZE;
   }
 
   return counts;
