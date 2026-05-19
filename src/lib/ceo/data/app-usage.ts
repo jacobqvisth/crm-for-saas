@@ -12,13 +12,19 @@ import { TABLES } from "@/lib/ceo/tables";
 import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
 
 export const PRODUCT_APP_HOST = "app.wrenchlane.com";
+export const MARKETING_HOSTS = ["wrenchlane.com", "www.wrenchlane.com"] as const;
 
 const STREAM_IOS = "WrenchLane - iOS";
 const STREAM_ANDROID = "WrenchLane - Android";
 
 export type AppUsageGranularity = "hour" | "day" | "week" | "month";
 
-export type AppUsagePlatform = "all" | "web" | "ios" | "android";
+export type AppUsagePlatform =
+  | "all"
+  | "web"
+  | "ios"
+  | "android"
+  | "marketing";
 
 export type AppUsagePlatformOption = {
   key: AppUsagePlatform;
@@ -33,12 +39,12 @@ export const APP_USAGE_PLATFORMS: readonly AppUsagePlatformOption[] = [
     label: "All",
     shortLabel: "All",
     description:
-      "Product activity only, summed across web (app.wrenchlane.com), iOS, and Android. Marketing-site visits to wrenchlane.com are excluded — All ≈ Web + iOS + Android.",
+      "Product activity only, summed across web app (app.wrenchlane.com), iOS, and Android. Marketing-site visits to wrenchlane.com are NOT included here — pick the Marketing filter for those. All ≈ Web app + iOS + Android.",
   },
   {
     key: "web",
-    label: "Web",
-    shortLabel: "Web",
+    label: "Web app",
+    shortLabel: "Web app",
     description:
       "Only the product app at app.wrenchlane.com. Marketing-site visits to wrenchlane.com are excluded by filtering hostName to app.wrenchlane.com.",
   },
@@ -47,14 +53,21 @@ export const APP_USAGE_PLATFORMS: readonly AppUsagePlatformOption[] = [
     label: "iOS",
     shortLabel: "iOS",
     description:
-      "Activity from the WrenchLane iOS native app, attributed to the 'WrenchLane - iOS' Firebase / GA4 stream. Capacitor webview hits that fire to the web stream show up under Web instead.",
+      "Activity from the WrenchLane iOS native app, attributed to the 'WrenchLane - iOS' Firebase / GA4 stream. Capacitor webview hits that fire to the web stream show up under Web app instead.",
   },
   {
     key: "android",
     label: "Android",
     shortLabel: "Android",
     description:
-      "Activity from the WrenchLane Android native app, attributed to the 'WrenchLane - Android' Firebase / GA4 stream. Capacitor webview hits that fire to the web stream show up under Web instead.",
+      "Activity from the WrenchLane Android native app, attributed to the 'WrenchLane - Android' Firebase / GA4 stream. Capacitor webview hits that fire to the web stream show up under Web app instead.",
+  },
+  {
+    key: "marketing",
+    label: "Marketing",
+    shortLabel: "Marketing",
+    description:
+      "Only the public marketing site at wrenchlane.com (and www.wrenchlane.com). Product-app visits to app.wrenchlane.com are excluded. Diagnoses are forced to 0 here because anonymous marketing visitors don't create diagnostic records.",
   },
 ];
 
@@ -454,6 +467,18 @@ function platformDimensionFilter(platform: AppUsagePlatform): GA4Filter {
           stringFilter: { matchType: "EXACT", value: STREAM_ANDROID },
         },
       };
+    case "marketing":
+      // The product app (app.wrenchlane.com) and the marketing site
+      // (wrenchlane.com / www.wrenchlane.com) share the same "Website and
+      // web app" GA4 stream, so filtering by stream isn't enough — we
+      // match hostName against the marketing apex / www host. iOS and
+      // Android streams have no hostName, so they're implicitly excluded.
+      return {
+        filter: {
+          fieldName: "hostName",
+          inListFilter: { values: [...MARKETING_HOSTS] },
+        },
+      };
   }
 }
 
@@ -479,7 +504,14 @@ export async function getAppUsageData(
 
   try {
     const [diagnosesByBucket, response] = await Promise.all([
-      getDiagnosisCountsByBucket(range, granularity),
+      // Marketing visitors are anonymous and don't create diagnostic
+      // records, so force the count to 0 on that filter instead of
+      // showing the global product-side number (which would be a lie
+      // about who's diagnosing). Other filters share the global count
+      // because diagnostic rows have no platform attribution.
+      platform === "marketing"
+        ? Promise.resolve(new Map<string, number>())
+        : getDiagnosisCountsByBucket(range, granularity),
       (async () => {
         const auth = await createGoogleAuth([
           "https://www.googleapis.com/auth/analytics.readonly",
@@ -515,6 +547,11 @@ export async function getAppUsageData(
 
     // Seed every bucket in the requested range so zero-signal intervals
     // still render as zero rows instead of being silently dropped.
+    // Pre-populate diagnosesMade from diagnosesByBucket here — the GA4
+    // fill loop below will only overwrite buckets where GA4 returned data
+    // for this platform, so on sparse streams (iOS / Android) the days
+    // without GA4 activity would otherwise keep a stale 0 in
+    // diagnosesMade and the column total would silently undercount.
     for (const bucket of enumerateBuckets(range.start, range.end, granularity)) {
       const labels = formatBucketLabel(bucket, granularity);
       rowMap.set(bucket, {
@@ -524,7 +561,7 @@ export async function getAppUsageData(
         activeUsers: 0,
         sessions: 0,
         pageViews: 0,
-        diagnosesMade: 0,
+        diagnosesMade: diagnosesByBucket.get(bucket) ?? 0,
         events: 0,
         pagesPerSession: 0,
       });
