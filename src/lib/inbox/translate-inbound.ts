@@ -50,9 +50,19 @@ export async function translateInboundMessage(input: {
     return { ok: false, reason: "empty message" };
   }
 
-  // Prefer HTML body for translation (preserves formatting); fall back to text
-  // wrapped in a single <p> so the model still has the structure it expects.
-  const bodyForModel = bodyHtml || `<p>${escapeHtml(bodyText)}</p>`;
+  // Prefer HTML body (preserves formatting), fall back to text wrapped in <p>.
+  // Cap input size: bodies larger than this are almost always Microsoft 365
+  // NDRs / Office365 HTML boilerplate (40 KB+ wrappers around a single
+  // "couldn't be delivered" line), and they're already English anyway. Trying
+  // to translate them just busts max_tokens and returns truncated JSON.
+  const MAX_BODY_CHARS = 15_000;
+  let bodyForModel = bodyHtml || `<p>${escapeHtml(bodyText)}</p>`;
+  let truncated = false;
+  if (bodyForModel.length > MAX_BODY_CHARS) {
+    bodyForModel = bodyForModel.slice(0, MAX_BODY_CHARS) + "\n<!-- truncated for translation -->";
+    truncated = true;
+  }
+  void truncated; // for future telemetry; the translation still proceeds
 
   const client = new Anthropic({ apiKey });
 
@@ -60,7 +70,9 @@ export async function translateInboundMessage(input: {
   try {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 4096,
+      // 8192 gives ~2x headroom over realistic email lengths. 4096 truncated
+      // long Latvian replies mid-JSON during the historic backfill.
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {

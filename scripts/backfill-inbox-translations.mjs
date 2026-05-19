@@ -136,11 +136,15 @@ async function translateOne(row) {
   const bodyText = (row.body_text ?? "").trim();
   if (!subject && !bodyHtml && !bodyText) return null;
 
-  const bodyForModel = bodyHtml || `<p>${escapeHtml(bodyText)}</p>`;
+  const MAX_BODY_CHARS = 15_000;
+  let bodyForModel = bodyHtml || `<p>${escapeHtml(bodyText)}</p>`;
+  if (bodyForModel.length > MAX_BODY_CHARS) {
+    bodyForModel = bodyForModel.slice(0, MAX_BODY_CHARS) + "\n<!-- truncated for translation -->";
+  }
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: SYSTEM_PROMPT,
     messages: [
       {
