@@ -14,6 +14,38 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-19 — Inbox translation Phase 1: detect + translate on receipt (PRs #241, #242)
+
+Second slice of the inbox-improvement plan. Non-English replies now auto-translate to English at the moment `check-replies` ingests them, and a one-off backfill caught up the historic 46 rows.
+
+### PR #241 — `feat(inbox): translate non-English replies to English at receipt time`
+- **Migration:** `supabase/migrations/20260519150000_inbox_translations.sql` adds `detected_language`, `subject_translated_en`, `body_translated_en`, `translation_model` to `inbox_messages`, plus a partial index `inbox_messages_needs_translation_idx` on rows where `detected_language IS NULL` (used by the backfill / future sweeps). Applied directly to prod via psql before push, per CLAUDE.md.
+- **Helper:** `src/lib/inbox/translate-inbound.ts` — one Claude Haiku 4.5 call detects ISO-639-1 source language + translates subject + `body_html` in a single round-trip. English is a no-op (just records `detected_language='en'`, leaves EN cols NULL). System prompt preserves HTML tags, URLs, email addresses, and quoted-reply blocks. Returns a discriminated-union so callers can swallow failures cleanly.
+- **Cron wire-up:** `src/app/api/cron/check-replies/route.ts` — added the translate call between contact lookup and the `inbox_messages` insert. All four new columns flow into the insert payload. Translation failures keep the row but leave EN cols NULL (UI falls back to original in Phase B).
+- **Types:** `src/lib/database.types.ts` — `inbox_messages` Row/Insert/Update extended with the four new columns. Manual-exports header preserved per the documented regen procedure.
+- **Backfill:** `scripts/backfill-inbox-translations.mjs` — one-off catcher-upper for historic rows. Reads `.env.local` from `~/crm-for-saas/`, pulls rows via the partial index, processes via the same Claude config the helper uses, writes back. Idempotent — only touches `detected_language IS NULL`. Supports `--limit=N` and `--dry-run`.
+- **Test result:** `npx tsc --noEmit` + `npx eslint` clean. Live-tested the backfill on 3 prod rows first (lv / lt / sv all translated correctly, including the mojibake-mangled Latvian subject from this morning's screenshot — decoded correctly to "Subaru diagnostics" via context). Local `next build` skipped — known-broken on main from PR #150's `REMOVE_REASONS` route export, Vercel build is authoritative.
+- **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~15s of merge.
+- **Backfill run:** 43 rows processed — 41 translated, 1 English, 1 failed (the 42 KB Office365 NDR; fix shipped as PR #242, see below).
+
+### PR #242 — `fix(inbox): cap translation input body at 15 KB`
+- **Problem from PR #241 backfill:** one row (`dbb47d36-…`, an `ferrel.ee` postmaster bounce) wouldn't translate. The body_html was 42 KB of Office365 NDR boilerplate around a one-line "couldn't be delivered". Sending it busted Claude's output budget; the returned JSON was truncated mid-string and `JSON.parse` threw.
+- **Fix:** input cap of 15 KB in both `src/lib/inbox/translate-inbound.ts` and `scripts/backfill-inbox-translations.mjs`. Human replies are well under that; the bodies that exceed it are NDR / autoresponder wrappers where the content is already English so losing the trailing boilerplate is unobservable.
+- **Re-run:** the one failed row translated cleanly. Final coverage: 33 sv, 5 lv, 4 lt, 2 et, 1 en, 1 cs — **0 rows still null**.
+
+### Plan context
+- A0 (#239) — Hide-OOO toggle + sender multi-select ✅
+- **A (#241 + #242) — inbound translation + backfill ✅**
+- B — English-first thread viewer (banner + Show original / Show English toggle, translated subjects in the list)
+- C — auto-suggested English draft reply on non-EN threads
+- D — outgoing translation at send time (preview pane, both versions logged)
+
+### Process notes
+- Worked in `~/crm-worktrees/pr-a0-inbox-filters/` off clean `origin/main` because the primary checkout is still on `feature/ndr-bounce-ingestion` from a parallel session.
+- Schema applied via the in-repo psql pattern from `project_crm-for-saas.md` (`node -e ...` with `pg` + `dotenv`, reading `SUPABASE_DB_PASSWORD` from `~/crm-for-saas/.env.local`). Confirmed columns + index existed before pushing the migration file.
+- Backfill cost was negligible (~46 messages × Haiku rates ≈ $0.05 total).
+
+
 ## 2026-05-19 — Inbox filters: hide OOO + sender multi-select (PR #239)
 
 First slice of a multi-PR inbox-improvement plan. Two noise-reduction filters shipped ahead of the translation work.
