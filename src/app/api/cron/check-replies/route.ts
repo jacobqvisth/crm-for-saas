@@ -4,6 +4,7 @@ import { notNull } from "@/lib/types/guards";
 import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { parseNdr, SUGGESTED_NDR_GMAIL_QUERY } from "@/lib/gmail/parse-ndr";
+import { translateInboundMessage } from "@/lib/inbox/translate-inbound";
 
 export async function POST(request: NextRequest) {
   // Verify cron secret
@@ -118,6 +119,14 @@ export async function POST(request: NextRequest) {
             .eq("email", fromEmail.toLowerCase())
             .maybeSingle();
 
+          // Detect language + translate inbound to English (skipped/noop for English).
+          // Failures are silent — message still gets stored, translation cols stay NULL.
+          const translation = await translateInboundMessage({
+            subject,
+            bodyHtml,
+            bodyText,
+          });
+
           // Insert into inbox_messages
           await supabase.from("inbox_messages").insert({
             workspace_id: account.workspace_id,
@@ -134,6 +143,10 @@ export async function POST(request: NextRequest) {
             received_at: receivedAt,
             is_auto_reply: autoReply,
             category: autoReply ? "out_of_office" : "inbox",
+            detected_language: translation.ok ? translation.language : null,
+            subject_translated_en: translation.ok ? translation.subjectEn : null,
+            body_translated_en: translation.ok ? translation.bodyHtmlEn : null,
+            translation_model: translation.ok ? translation.model : null,
           });
 
           // Insert email_event for reply (always, even for OOO — for stats)

@@ -1883,9 +1883,11 @@ export type Database = {
         Row: {
           body_html: string | null
           body_text: string | null
+          body_translated_en: string | null
           category: string
           contact_id: string | null
           created_at: string
+          detected_language: string | null
           email_queue_id: string | null
           from_email: string
           from_name: string | null
@@ -1897,15 +1899,19 @@ export type Database = {
           is_read: boolean
           received_at: string
           subject: string | null
+          subject_translated_en: string | null
+          translation_model: string | null
           updated_at: string
           workspace_id: string
         }
         Insert: {
           body_html?: string | null
           body_text?: string | null
+          body_translated_en?: string | null
           category?: string
           contact_id?: string | null
           created_at?: string
+          detected_language?: string | null
           email_queue_id?: string | null
           from_email: string
           from_name?: string | null
@@ -1917,15 +1923,19 @@ export type Database = {
           is_read?: boolean
           received_at: string
           subject?: string | null
+          subject_translated_en?: string | null
+          translation_model?: string | null
           updated_at?: string
           workspace_id: string
         }
         Update: {
           body_html?: string | null
           body_text?: string | null
+          body_translated_en?: string | null
           category?: string
           contact_id?: string | null
           created_at?: string
+          detected_language?: string | null
           email_queue_id?: string | null
           from_email?: string
           from_name?: string | null
@@ -1937,6 +1947,8 @@ export type Database = {
           is_read?: boolean
           received_at?: string
           subject?: string | null
+          subject_translated_en?: string | null
+          translation_model?: string | null
           updated_at?: string
           workspace_id?: string
         }
