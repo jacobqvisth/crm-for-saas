@@ -3576,3 +3576,19 @@ Full feature shipped end-to-end in one session: a sequence step can carry N alte
 - **Fix:** literal `replace(...)` UPDATE on the UK row, ending the body at `<p>Best regards,</p><p></p>` to match Step 2's existing structure.
 - **Verification:** final sweep returns 0 rows with inline sender text across both `sequence_steps` and `sequence_step_variants` for every workspace, every sequence status.
 - **Effect across in-flight queue:** 1,148 unsent rows total (1,083 Sverige + 65 UK) now re-render through PR #221's lazy path on the next cron tick, producing clean bodies + per-sender unified signatures. Other sequences have 0 unsent, so nothing else to flush.
+
+
+## 2026-05-19 — /ceo/cta-clicks dashboard (PR #232)
+
+- **Why:** earlier in the day we wired up app-wide `cta_click` GTM tracking with `button_text`, `button_url`, and `cta_location` custom dimensions (GTM container `GTM-5JRQVHHS`, workspace 7, version 6 published). The next ask was a self-serve report so Jacob can monitor those clicks without leaving the CRM.
+- **What shipped:** new `/ceo/cta-clicks` page pulling live from GA4 Data API on every render. KPI cards (events / users / events-per-user), hostname filter tabs (app / marketing / all, defaulting to app), daily SVG bar chart with zero-fill, by-location breakdown, top-30 buttons table.
+- **Architecture choice — pagePath bucketing server-side:** the `cta_location` custom dimension takes up to 24h to flow into GA4 standard reports. Rather than render an empty page until then, the data layer derives the location from `pagePath` server-side using the same regex/mapping as the GTM JS variable (kept in sync deliberately — `locationFromPagePath` in `src/lib/ceo/data/cta-clicks.ts` mirrors the GTM workspace JS). The top-buttons table uses `customEvent:button_text` directly and surfaces a "dimensions warming" banner when every row comes back as `(not set)`.
+- **Refactor:** extracted `runReport` from `src/lib/ceo/sync/sources/ga4.ts` into a shared `src/lib/ceo/sync/ga4-client.ts` so the data layer and the existing GA4 sync source share one auth path. Diff is mechanical — the sync source's `runReport` is now just `runGa4Report`.
+- **Files:** 8 total. 6 new (page, actions, content component, data layer, test, shared client) + 2 modified (`ga4.ts` refactor, `dashboard-sections.tsx` nav entry). +814 / −23.
+- **Tests:** 6 new on `locationFromPagePath` covering every documented section, locale prefixes, vehicle vs vehicle_service split, edge cases. Total ceo suite: 62/62 pass. `npx tsc --noEmit` clean, `eslint src/` clean.
+- **Build:** `npm run build` passes. `/ceo/cta-clicks` registered as `ƒ` (dynamic) — correct since it reads live from GA4 every render.
+- **Deploy:** Vercel auto-deploy on merge ✅ — `curl -I https://crm-for-saas.vercel.app/ceo/cta-clicks` → 307 /login (auth middleware redirect, route correctly registered).
+- **Out of scope / follow-ups:**
+  1. Nightly sync of `cta_click` into a `dashboard_cta_clicks` Supabase table for fast queries + historical retention (currently every page render hits GA4 Data API).
+  2. Extend the `cta_location` taxonomy to also segment `wrenchlane.com` marketing-site sections — today they all bucket as `home` or `other`.
+  3. Verify the page renders + numbers populate after the 24h custom-dimension propagation window completes.
