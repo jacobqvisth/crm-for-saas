@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
@@ -15,6 +15,8 @@ import {
   Clock,
   Mail,
   MailOpen,
+  Users,
+  Check,
 } from "lucide-react";
 
 type Contact = {
@@ -75,6 +77,16 @@ type ThreadItem =
 
 type Filter = "all" | "unread" | "interested" | "not_interested" | "out_of_office";
 
+type Sender = {
+  id: string;
+  email_address: string;
+  display_name: string | null;
+  status: string | null;
+};
+
+const HIDE_OOO_KEY = "inbox.hideOOO";
+const SENDER_FILTER_KEY = "inbox.senderFilter";
+
 const CATEGORY_LABELS: Record<string, string> = {
   uncategorized: "Uncategorized",
   interested: "Interested",
@@ -106,6 +118,125 @@ function getInitials(name: string): string {
     .join("");
 }
 
+function SenderDropdown({
+  senders,
+  selectedIds,
+  summary,
+  onToggle,
+  onSelectAll,
+  onClearAll,
+}: {
+  senders: Sender[];
+  selectedIds: string[] | null;
+  summary: string;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const effectiveSelected = selectedIds ?? senders.map((s) => s.id);
+  const allSelected = senders.length > 0 && effectiveSelected.length === senders.length;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+      >
+        <span className="flex items-center gap-1.5 min-w-0">
+          <Users className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <span className="truncate">{summary}</span>
+        </span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-slate-400 flex-shrink-0 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 left-0 right-0 max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+          {senders.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-slate-400">No senders configured</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 text-xs">
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  className="text-indigo-600 hover:text-indigo-700 font-medium"
+                  disabled={allSelected}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearAll}
+                  className="text-slate-500 hover:text-slate-700"
+                  disabled={effectiveSelected.length === 0}
+                >
+                  Clear
+                </button>
+              </div>
+              {senders.map((s) => {
+                const checked = effectiveSelected.includes(s.id);
+                const label = s.display_name || s.email_address;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => onToggle(s.id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                  >
+                    <span
+                      className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                        checked
+                          ? "bg-indigo-600 border-indigo-600"
+                          : "bg-white border-slate-300"
+                      }`}
+                    >
+                      {checked && <Check className="w-3 h-3 text-white" />}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-slate-900 truncate">{label}</span>
+                      {s.display_name && (
+                        <span className="block text-slate-400 truncate">{s.email_address}</span>
+                      )}
+                    </span>
+                    {s.status && s.status !== "active" && (
+                      <span className="text-[10px] text-slate-400 uppercase">{s.status}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InboxClient() {
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,13 +247,82 @@ export function InboxClient() {
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replySending, setReplySending] = useState(false);
+  const [hideOOO, setHideOOO] = useState(true);
+  const [senders, setSenders] = useState<Sender[]>([]);
+  const [selectedSenderIds, setSelectedSenderIds] = useState<string[] | null>(null);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   const selectedMessage = messages.find((m) => m.id === selectedId) ?? null;
 
+  // Hydrate persisted preferences once on mount.
+  useEffect(() => {
+    try {
+      const storedHideOOO = localStorage.getItem(HIDE_OOO_KEY);
+      if (storedHideOOO !== null) setHideOOO(storedHideOOO === "1");
+      const storedSenders = localStorage.getItem(SENDER_FILTER_KEY);
+      if (storedSenders !== null) {
+        const parsed = JSON.parse(storedSenders);
+        if (Array.isArray(parsed)) setSelectedSenderIds(parsed.filter((v) => typeof v === "string"));
+      }
+    } catch {
+      // Ignore corrupt localStorage values; defaults stand.
+    }
+    setPreferencesLoaded(true);
+  }, []);
+
+  // Persist hideOOO whenever it changes (after hydration).
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    try {
+      localStorage.setItem(HIDE_OOO_KEY, hideOOO ? "1" : "0");
+    } catch {
+      /* quota or unavailable — non-fatal */
+    }
+  }, [hideOOO, preferencesLoaded]);
+
+  // Persist sender selection whenever it changes (after hydration).
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    if (selectedSenderIds === null) return;
+    try {
+      localStorage.setItem(SENDER_FILTER_KEY, JSON.stringify(selectedSenderIds));
+    } catch {
+      /* non-fatal */
+    }
+  }, [selectedSenderIds, preferencesLoaded]);
+
+  // Fetch the workspace's sender list once.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/inbox/senders")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: Sender[]) => {
+        if (cancelled) return;
+        setSenders(data);
+        // First time ever: default to "all selected".
+        setSelectedSenderIds((current) => {
+          if (current !== null) return current;
+          return data.map((s) => s.id);
+        });
+      })
+      .catch(() => {
+        // Failing here just means the multi-select stays empty; inbox itself still loads.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const fetchMessages = useCallback(async () => {
+    if (!preferencesLoaded) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/inbox?filter=${filter}`);
+      const params = new URLSearchParams({ filter });
+      if (hideOOO) params.set("hideOOO", "1");
+      if (selectedSenderIds !== null) {
+        params.set("senders", selectedSenderIds.join(","));
+      }
+      const res = await fetch(`/api/inbox?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load inbox");
       const data = await res.json();
       setMessages(data);
@@ -131,7 +331,7 @@ export function InboxClient() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, hideOOO, selectedSenderIds, preferencesLoaded]);
 
   useEffect(() => {
     fetchMessages();
@@ -223,6 +423,33 @@ export function InboxClient() {
     { key: "out_of_office", label: "OOO" },
   ];
 
+  const senderSummary = useMemo(() => {
+    if (selectedSenderIds === null) return "All senders";
+    if (senders.length === 0) return "No senders";
+    if (selectedSenderIds.length === senders.length) return "All senders";
+    if (selectedSenderIds.length === 0) return "No senders selected";
+    if (selectedSenderIds.length === 1) {
+      const s = senders.find((x) => x.id === selectedSenderIds[0]);
+      return s ? (s.display_name || s.email_address) : "1 sender";
+    }
+    return `${selectedSenderIds.length} senders`;
+  }, [selectedSenderIds, senders]);
+
+  const toggleSender = useCallback((id: string) => {
+    setSelectedSenderIds((current) => {
+      const base = current ?? senders.map((s) => s.id);
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
+  }, [senders]);
+
+  const selectAllSenders = useCallback(() => {
+    setSelectedSenderIds(senders.map((s) => s.id));
+  }, [senders]);
+
+  const clearAllSenders = useCallback(() => {
+    setSelectedSenderIds([]);
+  }, []);
+
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
       {/* Left panel — conversation list */}
@@ -234,7 +461,7 @@ export function InboxClient() {
             <h1 className="font-semibold text-slate-900">Inbox</h1>
           </div>
           {/* Filter tabs */}
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap mb-3">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -248,6 +475,38 @@ export function InboxClient() {
                 {f.label}
               </button>
             ))}
+          </div>
+          {/* Sender + OOO filters */}
+          <div className="flex flex-col gap-2">
+            <SenderDropdown
+              senders={senders}
+              selectedIds={selectedSenderIds}
+              summary={senderSummary}
+              onToggle={toggleSender}
+              onSelectAll={selectAllSenders}
+              onClearAll={clearAllSenders}
+            />
+            <label
+              className={`flex items-center gap-2 text-xs ${
+                filter === "out_of_office"
+                  ? "text-slate-300 cursor-not-allowed"
+                  : "text-slate-600 cursor-pointer"
+              }`}
+              title={
+                filter === "out_of_office"
+                  ? "OOO tab always shows out-of-office replies"
+                  : undefined
+              }
+            >
+              <input
+                type="checkbox"
+                checked={hideOOO}
+                disabled={filter === "out_of_office"}
+                onChange={(e) => setHideOOO(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Hide out-of-office
+            </label>
           </div>
         </div>
 
