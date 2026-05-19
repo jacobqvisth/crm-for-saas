@@ -3765,3 +3765,17 @@ Two follow-up PRs to the /ceo/cta-clicks dashboard shipped in #232.
 - **Follow-ups worth queuing:**
   - Every silent-failure call site should `.select("id").single()` + throw on `.error` like `logVisit` does — same class of bug will recur the next time someone adds a new activity type. A small `insertActivity()` helper that hard-fails would prevent it.
   - The pre-existing `REMOVE_REASONS` Next.js 16 route-export error on `main` (from PR #150) is still red on local builds and CI — keeps masking real test failures behind a "build was already broken" excuse.
+
+
+## 2026-05-19 — Unblock npm run build: move REMOVE_REASONS out of the Route file (PR #251)
+
+- **Why now:** This was on the follow-up list since PR #217 (2026-05-19). Every PR since 2026-05-09 has carried a "Vercel build is authoritative because main is red locally" caveat. With 30+ PRs piled up using that excuse, the cost of NOT fixing it = future PRs can't actually verify their own build before merge. Highest ROI item on the open follow-ups list.
+- **Root cause:** PR #150 (Field Routes Phase 4) added `export const REMOVE_REASONS = [...] as const;` to `src/app/api/routes/[routeId]/stops/[stopId]/route.ts`. Next.js 16 rejects non-handler exports from Route files at build time. Vercel's Turbopack build tolerates it, but `npm run build` / `next build --webpack` fail at the route-validation step.
+- **Fix:** New `src/lib/routes/remove-reasons.ts` holds the canonical `REMOVE_REASONS` / `RemoveReason` / `FLAGS_DO_NOT_ROUTE`. Route file imports (no export). Also consolidated a duplicate `REMOVE_REASONS` declaration in `src/components/routes/remove-stop-modal.tsx` — the modal now imports from the lib and re-exports for backward compat.
+- **Files changed:** 3 — new lib module + 2 edits. +42 / −25.
+- **Test result — ALL GREEN for the first time since 2026-05-09:**
+  - `npx tsc --noEmit` ✓
+  - `eslint src/` ✓
+  - `next build --webpack` ✓ — full compile (5.0 s) + type check (12.7 s) + 65/65 page generation
+- **Deploy:** Vercel auto-deploy ✓ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~30 s of merge.
+- **What this unlocks:** Every future PR can run `npm run build` locally and catch real failures. The "build was already broken" excuse is gone. Future "type was always wrong" / "lint regression" bugs surface at PR-author time instead of slipping into main behind the routes-export error.
