@@ -20,6 +20,12 @@ export const DASHBOARD_TIME_RANGES = [
     description: "Rolling week",
   },
   {
+    key: "last_week",
+    label: "Last week",
+    shortLabel: "Last wk.",
+    description: "Previous Mon–Sun (ISO week)",
+  },
+  {
     key: "this_month",
     label: "This month",
     shortLabel: "MTD",
@@ -117,6 +123,11 @@ export function resolveDashboardTimeRange(
   const lastMonthStart = new Date(
     Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1),
   );
+  // ISO week boundaries — week starts Monday (Jacob is in Sweden, ISO 8601).
+  // JS getUTCDay() returns 0=Sun..6=Sat; map to Mon-anchored (0..6 where 0=Mon).
+  const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+  const thisWeekMonday = addUtcDays(today, -daysSinceMonday);
+  const lastWeekMonday = addUtcDays(thisWeekMonday, -7);
   const definition = DASHBOARD_TIME_RANGES.find((range) => range.key === key)!;
 
   switch (key) {
@@ -135,6 +146,13 @@ export function resolveDashboardTimeRange(
         label: definition.label,
         start: addUtcDays(tomorrow, -7),
         end: tomorrow,
+      };
+    case "last_week":
+      return {
+        key,
+        label: definition.label,
+        start: lastWeekMonday,
+        end: thisWeekMonday,
       };
     case "this_month":
       return { key, label: definition.label, start: monthStart, end: tomorrow };

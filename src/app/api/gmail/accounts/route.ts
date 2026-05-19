@@ -29,11 +29,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Order: active accounts first, then newest-added on top (so a freshly-connected
+  // account is immediately visible in the rotation pool). Within active, secondary
+  // sort by created_at desc.
   const { data: accounts, error } = await supabase
     .from("gmail_accounts")
-    .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status")
+    .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status, created_at")
     .eq("workspace_id", workspaceId)
-    .order("daily_sends_count", { ascending: true });
+    .order("status", { ascending: true })
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: "Failed to fetch accounts" }, { status: 500 });

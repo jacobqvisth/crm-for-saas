@@ -108,6 +108,7 @@ const RANGE_GRANULARITY: Record<string, AppUsageGranularity> = {
   today: "hour",
   yesterday: "hour",
   last_7_days: "day",
+  last_week: "day",
   this_month: "day",
   last_month: "day",
   last_30_days: "day",
