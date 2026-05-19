@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
             workspace_id: account.workspace_id,
             type: "email_received",
             subject: autoReply ? "Auto-reply received (OOO)" : "Reply received",
-            description: autoReply
+            body: autoReply
               ? `Out-of-office auto-reply from ${fromEmail}`
               : `Reply from ${fromEmail}`,
             contact_id: contact?.id ?? null,
@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
                       workspace_id: account.workspace_id,
                       type: "sequence_paused",
                       subject: "Sequence paused — company reply",
-                      description: `Sequence paused — reply received from another contact at ${companyName}`,
+                      body: `Sequence paused — reply received from another contact at ${companyName}`,
                       contact_id: e.contact_id,
                       metadata: {
                         reason: "company_reply",
@@ -501,7 +501,7 @@ export async function POST(request: NextRequest) {
               workspace_id: matchedQueue.workspace_id,
               type: "email_bounced",
               subject: ndr.permanence === "permanent" ? "Email bounced (permanent)" : "Email bounced (temporary)",
-              description: errorLine || `Email to ${matchedQueue.to_email} bounced`,
+              body: errorLine || `Email to ${matchedQueue.to_email} bounced`,
               contact_id: matchedQueue.contact_id,
               metadata: {
                 tracking_id: matchedQueue.tracking_id,

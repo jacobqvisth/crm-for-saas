@@ -47,7 +47,7 @@ export async function GET(
           workspace_id: queueItem.workspace_id,
           type: "link_clicked",
           subject: "Link clicked",
-          description: `Contact clicked a link in a sequence email`,
+          body: `Contact clicked a link in a sequence email`,
           contact_id: queueItem.contact_id,
           metadata: {
             tracking_id: trackingId,

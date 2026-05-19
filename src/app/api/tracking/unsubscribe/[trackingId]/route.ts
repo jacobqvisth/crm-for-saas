@@ -75,7 +75,7 @@ async function processUnsubscribe(trackingId: string) {
       workspace_id: queueItem.workspace_id,
       type: "contact_unsubscribed",
       subject: "Contact unsubscribed",
-      description: "Contact unsubscribed from emails",
+      body: "Contact unsubscribed from emails",
       contact_id: queueItem.contact_id,
       metadata: {
         tracking_id: trackingId,

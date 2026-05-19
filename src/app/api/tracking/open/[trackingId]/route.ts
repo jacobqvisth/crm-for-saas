@@ -133,7 +133,7 @@ export async function GET(
         workspace_id: queueItem.workspace_id,
         type: "email_opened",
         subject: "Email opened",
-        description: "Contact opened a sequence email",
+        body: "Contact opened a sequence email",
         contact_id: queueItem.contact_id,
         metadata: {
           tracking_id: trackingId,
