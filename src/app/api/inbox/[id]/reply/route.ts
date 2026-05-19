@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/gmail/send";
+import { translateOutboundReply } from "@/lib/inbox/translate-outbound";
 
 export async function POST(
   request: NextRequest,
@@ -14,8 +15,8 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await request.json();
-  const { body: replyBody } = body as { body: string };
+  const requestBody = (await request.json()) as { body?: string };
+  const replyBody = requestBody.body;
 
   if (!replyBody?.trim()) {
     return NextResponse.json({ error: "Reply body is required" }, { status: 400 });
@@ -46,7 +47,27 @@ export async function POST(
     );
   }
 
-  const htmlBody = `<p>${replyBody.replace(/\n/g, "<br>")}</p>`;
+  // Translate the (English) reply to the recipient's language if needed.
+  // The composer holds English (Jacob reads and approves in English). The
+  // wire body that actually ships is the translated version. Both are stored
+  // in activities.metadata for audit.
+  const detectedLanguage = inboxMessage.detected_language ?? "en";
+  const translation = await translateOutboundReply({
+    bodyEn: replyBody,
+    targetLanguage: detectedLanguage,
+  });
+
+  if (!translation.ok) {
+    return NextResponse.json(
+      {
+        error: `Translation to ${detectedLanguage} failed: ${translation.reason}. Reply not sent.`,
+      },
+      { status: 502 },
+    );
+  }
+
+  const sentBody = translation.translated;
+  const htmlBody = `<p>${sentBody.replace(/\n/g, "<br>")}</p>`;
   const replySubject = inboxMessage.subject?.startsWith("Re:")
     ? inboxMessage.subject
     : `Re: ${inboxMessage.subject || ""}`;
@@ -63,7 +84,9 @@ export async function POST(
     return NextResponse.json({ error: result.error || "Failed to send reply" }, { status: 500 });
   }
 
-  // Create activity record
+  // Create activity record — keep BOTH the approved English version and the
+  // translated wire body so the audit trail is clear if something looks off
+  // later. (Jacob's preferences in memory: store both versions.)
   await supabase.from("activities").insert({
     workspace_id: inboxMessage.workspace_id,
     type: "email_sent",
@@ -73,8 +96,16 @@ export async function POST(
       inbox_message_id: id,
       gmail_thread_id: inboxMessage.gmail_thread_id,
       reply_message_id: result.messageId,
+      body_en: replyBody,
+      body_sent: sentBody,
+      target_language: translation.targetLanguage,
+      translation_model: translation.model,
     },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    target_language: translation.targetLanguage,
+    body_sent: sentBody,
+  });
 }

@@ -374,6 +374,13 @@ export function InboxClient() {
   // show "Regenerate"). Cleared when the user manually edits — we don't want
   // a hidden flag claiming AI authorship over what's actually their words.
   const [draftPresent, setDraftPresent] = useState(false);
+  // Outbound translation preview.
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  // Most recent English body that the preview was generated against — used to
+  // invalidate the preview when the user edits the textarea.
+  const previewBaseRef = useRef<string | null>(null);
   const [hideOOO, setHideOOO] = useState(true);
   const [senders, setSenders] = useState<Sender[]>([]);
   const [selectedSenderIds, setSelectedSenderIds] = useState<string[] | null>(null);
@@ -479,6 +486,38 @@ export function InboxClient() {
     }
   }, []);
 
+  const fetchPreview = useCallback(
+    async (messageId: string, bodyEn: string) => {
+      if (!bodyEn.trim()) {
+        setPreviewText(null);
+        previewBaseRef.current = null;
+        return;
+      }
+      if (previewBaseRef.current === bodyEn) return; // unchanged
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const res = await fetch(`/api/inbox/${messageId}/translate-preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body_en: bodyEn }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Preview failed");
+        }
+        const data = (await res.json()) as { translated: string };
+        setPreviewText(data.translated);
+        previewBaseRef.current = bodyEn;
+      } catch (err) {
+        setPreviewError(err instanceof Error ? err.message : "Preview failed");
+      } finally {
+        setPreviewLoading(false);
+      }
+    },
+    [],
+  );
+
   const fetchDraft = useCallback(
     async (messageId: string, regenerate: boolean) => {
       setDraftLoading(true);
@@ -499,13 +538,16 @@ export function InboxClient() {
         setReplyBody(data.draft);
         setDraftPresent(true);
         setReplyOpen(true);
+        // Kick off a preview so the translated panel renders alongside the
+        // freshly-suggested draft without a second user action.
+        void fetchPreview(messageId, data.draft);
       } catch (err) {
         setDraftError(err instanceof Error ? err.message : "Failed to generate draft");
       } finally {
         setDraftLoading(false);
       }
     },
-    [],
+    [fetchPreview],
   );
 
   const selectMessage = useCallback(
@@ -515,6 +557,9 @@ export function InboxClient() {
       setReplyBody("");
       setDraftPresent(false);
       setDraftError(null);
+      setPreviewText(null);
+      setPreviewError(null);
+      previewBaseRef.current = null;
 
       if (!msg.is_read) {
         // Mark as read optimistically
@@ -927,12 +972,52 @@ export function InboxClient() {
                       // First manual edit clears the "AI draft" indicator —
                       // once they've touched it, it's their words.
                       if (draftPresent) setDraftPresent(false);
+                      // Invalidate the translation preview the moment the body
+                      // diverges from what was previewed.
+                      if (previewBaseRef.current !== e.target.value) {
+                        setPreviewText(null);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      if (
+                        isTranslatable(selectedMessage.detected_language) &&
+                        e.target.value.trim() &&
+                        previewBaseRef.current !== e.target.value
+                      ) {
+                        void fetchPreview(selectedMessage.id, e.target.value);
+                      }
                     }}
                     placeholder={`Reply to ${selectedMessage.from_email}...`}
                     rows={6}
                     disabled={draftLoading}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
                   />
+                  {isTranslatable(selectedMessage.detected_language) && (
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden">
+                      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-200 text-xs text-slate-600 bg-white">
+                        <span className="flex items-center gap-1.5">
+                          <Languages className="w-3.5 h-3.5 text-slate-400" />
+                          Sends as {languageLabel(selectedMessage.detected_language)}
+                        </span>
+                        {previewLoading && (
+                          <span className="text-slate-400">Translating preview…</span>
+                        )}
+                      </div>
+                      <div className="px-3 py-2 text-sm text-slate-700 whitespace-pre-wrap min-h-[3rem]">
+                        {previewError ? (
+                          <span className="text-rose-600">{previewError}</span>
+                        ) : previewText ? (
+                          previewText
+                        ) : previewLoading ? (
+                          <span className="text-slate-400">…</span>
+                        ) : (
+                          <span className="text-slate-400">
+                            Click out of the textarea to preview the translated reply.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-end mt-2">
                     <button
                       onClick={sendReply}
