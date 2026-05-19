@@ -14,6 +14,41 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-19 — Domain-health hardening + zero-day rendering fix (PRs #203, #204, #205)
+
+Three small, focused PRs on top of yesterday's #201 baseline.
+
+### PR #203 — `fix: stop reporting DNSBL refusal codes as Spamhaus listings`
+- **Bug:** The per-account "Check health" panel on `/settings/email` rendered Spamhaus `127.255.255.254` and URIBL `127.0.0.1` as LISTED. Same false positive that surfaced on `hans@wrenchlane.co` + `magnus@wrenchlane.co` this morning.
+- **Cause:** The route had its own inline DNSBL logic with a partial `.255`-suffix heuristic that missed Spamhaus's actual public-resolver refusal codes (`127.255.255.252/254/255`) and URIBL's `127.0.0.1`.
+- **Fix:** Refactored `src/app/api/gmail/accounts/[id]/health-check/route.ts` to call `checkBlocklists()` from `src/lib/domain-health/dnsbl.ts` (the shared lib shipped in #201) and map its `BlocklistResult.state` → existing `CheckResult.level`. Refused responses now render as neutral "Lookup unavailable. Not a real listing."
+- **Files:** `src/app/api/gmail/accounts/[id]/health-check/route.ts` (-48, +35 — net cleanup).
+
+### PR #204 — `feat: track wrenchlane.co in domain-health cron`
+- **Background:** `wrenchlane.co` is the dedicated outbound sending domain (Hans + Magnus's accounts). Yesterday's `/api/cron/domain-health` only tracked `wrenchlane.com`.
+- **Change:** `DEFAULT_DOMAINS = ["wrenchlane.com", "wrenchlane.co"]` at the route level. Cron iterates, each domain produces its own `dashboard_domain_health_checks` row per run, each is regressed against its own previous row so a `.co` issue can't be masked by `.com` being clean.
+- **API shape change:** Response is now `{ domains: [{ domain, ok, check?, notify?, error? }] }` instead of single-domain. Per-domain failures don't crash the whole run; route returns 207 on partial failure.
+- **UI:** `/ceo/domain-health` page stacks one panel per domain via `getAllDomainHealthData()`. New `getOneDomain` private helper, public `getDomainHealthData` kept for callers that want a single domain.
+- **Override:** `?domain=foo.com,bar.com` query param for one-off troubleshooting.
+- **First post-deploy run captured both domains correctly:** `.com` p=reject ✓, `.co` **p=quarantine** ✓ (DMARC change Jacob made in HostUp this morning is now flowing into snapshots).
+
+### PR #205 — `fix: render zero-data days in /ceo/new-users + /ceo/app-usage`
+- **Bug:** Last-7-days view on `/ceo/new-users` showed only 5 of 7 dates. May 16 + 17 disappeared entirely from both chart and table.
+- **Cause:** Both `getNewUsersData()` and `getAppUsageData()` built their bucket lists from the union of source maps (signups, activations, downloads, GA4 rows, diagnoses). Days with literally zero across *every* signal never got a bucket key and were dropped silently. May 15 stayed visible only because GA4 still recorded 4 web first-visits.
+- **Fix:** New exported helper `enumerateBuckets(start, end, granularity)` in `src/lib/ceo/data/app-usage.ts` produces every interval in the range at the requested granularity (hour / day / week / month, capped at 10k buckets defensively). Both aggregators seed their bucket sets from it before merging in the actual data. Open-ended ranges (`range.start === null`, like "all_time") keep the union-of-data fallback so we don't enumerate from the epoch.
+- **Tests:** 7 vitest cases in new `src/lib/ceo/data/app-usage.test.ts` — day, hour, week, month, null start, start>end, single-bucket.
+- **Verified live:** Both pages now render zero rows for May 16/17 + any future empty day.
+
+### Operational notes
+- DMARC change on `wrenchlane.co`: HostUp DNS update from `p=none` → `p=quarantine; sp=quarantine; pct=100; fo=1` propagated to all four major resolvers (system / Quad9 / Google / Cloudflare). DMARC aggregate reports already flowing into `dmarc@wrenchlane.co` (delivered to Hans's Gmail) from Google + Microsoft. Calendar reminder for 2026-06-16 to promote to `p=reject` to match `.com`.
+- The `scripts/diagnose-min-interval-column.mjs` file got accidentally swept into PR #204's `git add -A`. Followed up immediately with `git rm --cached` in the same branch to restore it to untracked. Lesson: prefer explicit `git add <files>` over `-A` when there are pre-existing untracked items.
+
+### Build / verify (all 3 PRs)
+- `npm run build`, `npm run lint`, `npx tsc --noEmit`, `npx vitest run` — all green
+- Vercel auto-deploy ✓ on each merge
+
+---
+
 ## 2026-05-18 — Daily domain-health check + `/ceo/domain-health` UI (PR #201)
 
 - **PR:** #201 (squash `87dde0b`)
