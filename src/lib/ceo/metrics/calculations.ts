@@ -300,11 +300,49 @@ function metricSeriesByDate(
   return series;
 }
 
+// Enumerate every YYYY-MM-DD date between start and end (inclusive on
+// both ends). Used to pre-seed trend bucket sets so zero-data days
+// render instead of vanishing. Caps at 366 days to keep "last 90 days"
+// + "last year" trend views sane; "all_time" tails always have data
+// anyway so the union-of-keys fallback covers them.
+function enumerateIsoDates(start: Date, end: Date): string[] {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  if (start.getTime() > end.getTime()) return [];
+
+  const out: string[] = [];
+  const cursor = new Date(
+    Date.UTC(
+      start.getUTCFullYear(),
+      start.getUTCMonth(),
+      start.getUTCDate(),
+    ),
+  );
+  const endStamp = end.getTime();
+  const MAX = 366;
+  while (cursor.getTime() <= endStamp && out.length < MAX) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
+}
+
 function buildTrendPoints<T extends { date: string }>(
   maps: Array<[keyof Omit<T, "date">, Map<string, number>]>,
   create: (date: string) => T,
+  range?: ResolvedDashboardRange,
 ) {
+  // Seed the date set with every day in the requested range so a day
+  // with literally zero across every metric still renders as a zero
+  // row on the trend chart. Without this, zero-everywhere days drop
+  // off the timeline entirely (see PR #205 for the same fix on
+  // /ceo/new-users + /ceo/app-usage). Open-ended ranges (range.start
+  // is null, e.g. "all_time") fall back to the union-of-data behavior
+  // — those tails always have data anyway and enumerating from epoch
+  // would be wasteful.
   const dates = new Set<string>();
+  if (range?.start) {
+    for (const d of enumerateIsoDates(range.start, range.end)) dates.add(d);
+  }
 
   for (const [, series] of maps) {
     for (const date of series.keys()) {
@@ -328,6 +366,7 @@ function buildTrendPoints<T extends { date: string }>(
 
 function buildAcquisitionTrend(
   snapshots: MetricSnapshot[],
+  range?: ResolvedDashboardRange,
 ): AcquisitionTrendPoint[] {
   return buildTrendPoints<AcquisitionTrendPoint>(
     [
@@ -339,10 +378,14 @@ function buildAcquisitionTrend(
       ],
     ],
     (date) => ({ date, spend: 0, clicks: 0, conversions: 0 }),
+    range,
   );
 }
 
-function buildOrganicTrend(snapshots: MetricSnapshot[]): OrganicTrendPoint[] {
+function buildOrganicTrend(
+  snapshots: MetricSnapshot[],
+  range?: ResolvedDashboardRange,
+): OrganicTrendPoint[] {
   const clicks = metricSeriesByDate(
     snapshots,
     "organic_search_clicks",
@@ -374,6 +417,7 @@ function buildOrganicTrend(snapshots: MetricSnapshot[]): OrganicTrendPoint[] {
       ctr: 0,
       position: 0,
     }),
+    range,
   );
 }
 
@@ -513,7 +557,10 @@ function buildOrganicSummary(snapshots: MetricSnapshot[]) {
   };
 }
 
-function buildProductTrend(snapshots: MetricSnapshot[]): ProductTrendPoint[] {
+function buildProductTrend(
+  snapshots: MetricSnapshot[],
+  range?: ResolvedDashboardRange,
+): ProductTrendPoint[] {
   return buildTrendPoints<ProductTrendPoint>(
     [
       ["activeUsers", metricSeriesByDate(snapshots, "active_users", "ga4")],
@@ -534,10 +581,14 @@ function buildProductTrend(snapshots: MetricSnapshot[]): ProductTrendPoint[] {
       diagnosticsStarted: 0,
       diagnosticsCompleted: 0,
     }),
+    range,
   );
 }
 
-function buildRevenueTrend(snapshots: MetricSnapshot[]): RevenueTrendPoint[] {
+function buildRevenueTrend(
+  snapshots: MetricSnapshot[],
+  range?: ResolvedDashboardRange,
+): RevenueTrendPoint[] {
   return buildTrendPoints<RevenueTrendPoint>(
     [
       ["mrr", metricSeriesByDate(snapshots, "mrr", "stripe")],
@@ -563,11 +614,13 @@ function buildRevenueTrend(snapshots: MetricSnapshot[]): RevenueTrendPoint[] {
       newPaidWorkshops: 0,
       churnedSubscriptions: 0,
     }),
+    range,
   );
 }
 
 function buildOperationsTrend(
   snapshots: MetricSnapshot[],
+  range?: ResolvedDashboardRange,
 ): OperationsTrendPoint[] {
   return buildTrendPoints<OperationsTrendPoint>(
     [
@@ -602,6 +655,7 @@ function buildOperationsTrend(
       chatMessages: 0,
       chatCost: 0,
     }),
+    range,
   );
 }
 
@@ -1167,11 +1221,11 @@ export function calculateDashboardData({
     funnel.at(-1)?.value ?? 0,
     funnel[0]?.value ?? 0,
   );
-  const acquisitionTrend = buildAcquisitionTrend(snapshots);
-  const organicTrend = buildOrganicTrend(snapshots);
-  const productTrend = buildProductTrend(snapshots);
-  const revenueTrend = buildRevenueTrend(snapshots);
-  const operationsTrend = buildOperationsTrend(snapshots);
+  const acquisitionTrend = buildAcquisitionTrend(snapshots, resolvedRange);
+  const organicTrend = buildOrganicTrend(snapshots, resolvedRange);
+  const productTrend = buildProductTrend(snapshots, resolvedRange);
+  const revenueTrend = buildRevenueTrend(snapshots, resolvedRange);
+  const operationsTrend = buildOperationsTrend(snapshots, resolvedRange);
   const acquisitionCampaigns = buildAcquisitionCampaigns(snapshots);
   const lifecycleCampaigns = buildLifecycleCampaigns(snapshots);
   const motorUsage = buildMotorUsageBreakdown(snapshots);
