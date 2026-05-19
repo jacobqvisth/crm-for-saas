@@ -3592,3 +3592,22 @@ Full feature shipped end-to-end in one session: a sequence step can carry N alte
   1. Nightly sync of `cta_click` into a `dashboard_cta_clicks` Supabase table for fast queries + historical retention (currently every page render hits GA4 Data API).
   2. Extend the `cta_location` taxonomy to also segment `wrenchlane.com` marketing-site sections — today they all bucket as `home` or `other`.
   3. Verify the page renders + numbers populate after the 24h custom-dimension propagation window completes.
+
+
+## 2026-05-19 — CTA tracking follow-ups: marketing taxonomy + Supabase rollup (PRs #234, #235)
+
+Two follow-up PRs to the /ceo/cta-clicks dashboard shipped in #232.
+
+### PR #234 — marketing-site taxonomy
+- `locationFromPagePath` now takes `(pagePath, hostName)` — when host is `wrenchlane.com`, returns `marketing_pricing` / `marketing_home` / `marketing_article` / etc., distinct from the app's `pricing` / `home`. Same regex/mapping mirrored in the GTM "CTA Location" custom JS variable (paste-in instructions in PR description; manual update pending fresh OAuth Playground token).
+- Data layer fetches `hostName` alongside `pagePath` so the by-location and top-buttons reports route correctly.
+- 11/11 tests pass (5 new on marketing fixtures, including `/pricing` app-vs-marketing disambiguation).
+
+### PR #235 — nightly Supabase rollup
+- New `dashboard_cta_clicks` table — schema applied to prod via psql before the PR. Key on (date, host_name, page_path, button_text, cta_location). Indexes on date, (host_name, date), cta_location.
+- New `src/lib/ceo/sync/cta-clicks-sync.ts` + `/api/cron/sync-cta-clicks` route — fetches a 7-day window from GA4 per cron run (configurable via `?days=` for backfills), normalizes "(not set)" to empty string, dedupes in JS before upsert.
+- Vercel cron scheduled at 30 6 * * * (06:30 UTC — 6 min after the upstream GA4 sync at 06:00). Same SYNC_SECRET / CRON_SECRET Bearer auth as the rest of /api/cron/*.
+- `src/lib/ceo/data/cta-clicks.ts` split into `getCtaClicksDataFromSupabase` (rollup reader) + `getCtaClicksDataFromGa4` (original live path) + a dispatcher `getCtaClicksData` that tries Supabase first and falls back to GA4 if the range has zero rows. This auto-handles cold-start, deploy, and cron-failure cases without page errors.
+- 67/67 tests pass. `npx tsc --noEmit` clean, `eslint src/` clean.
+- Manual backfill ran after deploy via `curl POST /api/cron/sync-cta-clicks?days=30` — 240 rows ingested covering 2026-04-19 → 2026-05-19. Breakdown: 225 rows on wrenchlane.com (936 events), 9 rows on app.wrenchlane.com (12 events — matches the pre-tag pre-existing baseline). The new `cta_click` GTM trigger (workspace 7, version 6 published earlier today) will start populating from now on; tomorrow's cron run picks up the first full day of new event volume.
+- Open follow-up: GTM "CTA Location" custom JS variable still on the original app-only mapping. Paste the marketing-aware JS from PR #234's description into the workspace (or get a fresh OAuth Playground token and I'll do it via the Tag Manager API). Without this, the GA4 `cta_location` event-scoped dimension keeps reporting `home` / `other` for marketing-site clicks; the server-side mapper in this PR routes them correctly in the page either way.
