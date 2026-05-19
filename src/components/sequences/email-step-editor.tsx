@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 import { RichEmailEditor } from "./rich-email-editor";
 import { EmailPreviewFrame, previewInterpolate } from "./email-preview-frame";
+import { GenerateVariantsModal } from "./generate-variants-modal";
 
 type Step = Tables<"sequence_steps">;
 type Template = Tables<"email_templates">;
@@ -316,6 +317,8 @@ export function EmailStepEditor({
   const [variants, setVariants] = useState<StepVariant[]>([]);
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [variantsLoaded, setVariantsLoaded] = useState(false);
+  const [showGenerateVariantsModal, setShowGenerateVariantsModal] = useState(false);
+  const [ctaLock, setCtaLock] = useState(step.cta_lock || "");
   const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeVariant =
@@ -384,7 +387,13 @@ export function EmailStepEditor({
     }
     setSelectedTemplateId(step.template_id || "");
     setIncludeSignature(step.include_signature !== false);
+    setCtaLock(step.cta_lock || "");
   }, [step, activeVariant]);
+
+  const handleCtaLockBlur = () => {
+    const value = ctaLock.trim();
+    onUpdate({ cta_lock: value === "" ? null : value });
+  };
 
   const schedulePatch = useCallback(
     (variantId: string, updates: Partial<StepVariant>) => {
@@ -586,12 +595,21 @@ export function EmailStepEditor({
             )}
             <button
               type="button"
+              onClick={() => setShowGenerateVariantsModal(true)}
+              className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 rounded font-medium"
+              title="Generate multiple variants with AI"
+            >
+              <Sparkles className="w-3 h-3" />
+              Generate variants
+            </button>
+            <button
+              type="button"
               onClick={handleAddVariant}
-              className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800"
-              title="Add variant"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded"
+              title="Add an empty variant"
             >
               <Plus className="w-3 h-3" />
-              Add variant
+              Add empty
             </button>
           </div>
           {activeVariant && (
@@ -646,6 +664,19 @@ export function EmailStepEditor({
               </button>
             </div>
           )}
+          <div className="mt-2 px-1">
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              CTA lock <span className="text-slate-400 font-normal">(optional — every AI-generated variant must include this phrase verbatim)</span>
+            </label>
+            <input
+              type="text"
+              value={ctaLock}
+              onChange={(e) => setCtaLock(e.target.value)}
+              onBlur={handleCtaLockBlur}
+              placeholder='e.g. "open to a 15-min call next week?"'
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm"
+            />
+          </div>
         </div>
       )}
 
@@ -765,6 +796,21 @@ export function EmailStepEditor({
           sequenceName={sequenceName}
           onInsert={handleGenerateInsert}
           onClose={() => setShowGenerateModal(false)}
+        />
+      )}
+
+      {showGenerateVariantsModal && workspaceId && (
+        <GenerateVariantsModal
+          workspaceId={workspaceId}
+          sequenceId={step.sequence_id}
+          stepId={step.id}
+          onClose={() => setShowGenerateVariantsModal(false)}
+          onSaved={(newVariants) => {
+            setVariants(newVariants);
+            if (!activeVariantId && newVariants.length > 0) {
+              setActiveVariantId(newVariants[0].id);
+            }
+          }}
         />
       )}
     </div>

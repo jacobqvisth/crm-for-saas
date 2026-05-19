@@ -2306,6 +2306,7 @@ export type Database = {
           condition_branch_yes: number | null
           condition_type: string | null
           created_at: string | null
+          cta_lock: string | null
           delay_days: number | null
           delay_hours: number | null
           id: string
@@ -2322,6 +2323,7 @@ export type Database = {
           condition_branch_yes?: number | null
           condition_type?: string | null
           created_at?: string | null
+          cta_lock?: string | null
           delay_days?: number | null
           delay_hours?: number | null
           id?: string
@@ -2338,6 +2340,7 @@ export type Database = {
           condition_branch_yes?: number | null
           condition_type?: string | null
           created_at?: string | null
+          cta_lock?: string | null
           delay_days?: number | null
           delay_hours?: number | null
           id?: string
