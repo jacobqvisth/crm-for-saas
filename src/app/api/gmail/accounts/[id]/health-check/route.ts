@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { resolveTxt, resolveMx, resolve4 } from "node:dns/promises";
+import { resolveTxt, resolveMx } from "node:dns/promises";
+import { checkBlocklists, type BlocklistResult } from "@/lib/domain-health/dnsbl";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -98,68 +99,53 @@ async function checkDMARC(domain: string): Promise<CheckResult> {
   }
 }
 
-// Domain-based blocklists (DBLs) — query format is `<domain>.<list-host>`.
-// We use domain DBLs rather than IP DNSBLs because Gmail/Workspace egress IPs
-// rotate per send, so an IP check is meaningless for outbound from this app.
-//
-// Spamhaus DBL convention: an A record means LISTED. The first three octets
-// usually classify the listing (127.0.1.X). 127.0.1.255 is reserved to mean
-// "your DNS resolver has been blocked by Spamhaus" (over-quota or public
-// resolver) — we surface that as "lookup unavailable" instead of "listed".
-//
-// SURBL/URIBL follow a similar convention. We treat any return code ending in
-// .255 as "blocked, not listed" defensively.
-const BLOCKLISTS: Array<{ name: string; host: string; about: string }> = [
-  {
+// Domain-based blocklists. The full refusal-code table + Quad9 resolver
+// config lives in `@/lib/domain-health/dnsbl` and is shared with the
+// /ceo/domain-health cron. Per-list refusal codes (Spamhaus 127.255.255.254,
+// URIBL 127.0.0.1, etc.) come back as state='refused', not 'listed' — those
+// codes were silently false-alarming this page before 2026-05-19.
+
+const BLOCKLIST_LABELS: Record<string, { name: string; about: string }> = {
+  "dbl.spamhaus.org": {
     name: "Spamhaus DBL",
-    host: "dbl.spamhaus.org",
     about: "Spamhaus Domain Block List — abused/spammer-owned domains.",
   },
-  {
+  "multi.surbl.org": {
     name: "SURBL",
-    host: "multi.surbl.org",
     about: "SURBL multi list — domains seen in spam/phish messages.",
   },
-  {
+  "multi.uribl.com": {
     name: "URIBL",
-    host: "multi.uribl.com",
     about: "URIBL multi list — black, grey, and abuse-tracker categories.",
   },
-];
+};
 
-async function checkBlocklist(
-  domain: string,
-  list: (typeof BLOCKLISTS)[number],
-): Promise<CheckResult> {
-  const query = `${domain}.${list.host}`;
-  try {
-    const records = await resolve4(query);
-    // Special-case "your resolver is blocked / over quota" markers.
-    if (records.some((ip) => ip.endsWith(".255"))) {
-      return {
-        level: "neutral",
-        label: list.name,
-        detail: "Lookup blocked (DNS resolver rate-limited or public-resolver rejected). Re-run from a different network if needed.",
-      };
-    }
+function blocklistToCheckResult(bl: BlocklistResult): CheckResult {
+  const meta = BLOCKLIST_LABELS[bl.list] ?? { name: bl.list, about: "" };
+  if (bl.state === "clean") {
+    return { level: "good", label: meta.name, detail: "not listed" };
+  }
+  if (bl.state === "listed") {
     return {
       level: "error",
-      label: list.name,
-      detail: `LISTED (return: ${records.join(", ")}). ${list.about} Request delisting from the operator.`,
-      value: query,
-    };
-  } catch (e: unknown) {
-    const err = e as { code?: string };
-    if (err.code === "ENOTFOUND" || err.code === "ENODATA") {
-      // NXDOMAIN / no record = not listed.
-      return { level: "good", label: list.name, detail: "not listed" };
-    }
-    return {
-      level: "neutral",
-      label: list.name,
-      detail: `Lookup unavailable: ${err.code ?? String(e)}`,
+      label: meta.name,
+      detail: `LISTED (return: ${bl.raw ?? "unknown"})${meta.about ? `. ${meta.about}` : ""} Request delisting from the operator.`,
+      value: bl.raw ?? undefined,
     };
   }
+  if (bl.state === "refused") {
+    return {
+      level: "neutral",
+      label: meta.name,
+      detail: `Lookup unavailable (resolver rate-limited / refused — return: ${bl.raw ?? "?"}). Not a real listing.`,
+    };
+  }
+  // error
+  return {
+    level: "neutral",
+    label: meta.name,
+    detail: `Lookup error: ${bl.note ?? "unknown"}`,
+  };
 }
 
 async function checkMX(domain: string): Promise<CheckResult> {
@@ -309,14 +295,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Could not parse domain from email address" }, { status: 400 });
   }
 
-  const [spf, dkim, dmarc, mx, internal, ...blocklists] = await Promise.all([
+  const [spf, dkim, dmarc, mx, internal, blocklistRaw] = await Promise.all([
     checkSPF(domain),
     checkDKIM(domain),
     checkDMARC(domain),
     checkMX(domain),
     computeInternalStats(supabase, account.id, account.status ?? 'disconnected', account.pause_reason),
-    ...BLOCKLISTS.map((b) => checkBlocklist(domain, b)),
+    checkBlocklists(domain),
   ]);
+  const blocklists = blocklistRaw.map(blocklistToCheckResult);
 
   const checks: CheckResult[] = [
     spf,
