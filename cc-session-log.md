@@ -14,6 +14,21 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-19 — Inbox filters: hide OOO + sender multi-select (PR #239)
+
+First slice of a multi-PR inbox-improvement plan. Two noise-reduction filters shipped ahead of the translation work.
+
+- **What:** New "Hide out-of-office" checkbox (defaults ON, localStorage-persisted) and a sender multi-select dropdown listing the workspace's `gmail_accounts`. Default for senders is "all selected". Hides OOO under All / Unread / Interested / Not Interested; the dedicated OOO tab still shows them (checkbox disables visibly there).
+- **Why now:** Jacob's inbox has growing OOO chatter from large send batches, and multiple mailboxes mean it's hard to focus on a single sender's replies. These are independent of the planned translation/draft-reply phases (A → D) and unblock day-to-day inbox use today.
+- **Files changed:** 3 — `src/app/api/inbox/route.ts` (+18 / accepts `?hideOOO=1` and `?senders=id1,id2,...`; empty senders short-circuits to `[]`), new `src/app/api/inbox/senders/route.ts` (workspace gmail_accounts list), `src/app/(dashboard)/inbox/inbox-client.tsx` (state + persistence hooks, `<SenderDropdown />` with click-outside / Esc / Select-all / Clear, Hide-OOO checkbox with `out_of_office`-tab disable).
+- **Test result:** `npx tsc --noEmit` clean, `npx eslint` clean on the three touched files. Local `next build` still blocked by the pre-existing `REMOVE_REASONS` route-export error on main from PR #150 — Vercel build is authoritative here, matching PRs #217/#219/#221.
+- **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~15s of merge.
+- **Plan context:** This is **PR A0** of a larger inbox plan. Remaining: **A** = ingest translation (`inbox_messages` gets `detected_language` / `body_translated_en` / `subject_translated_en`, cron writes translations via Claude Haiku 4.5, backfill script for historic rows); **B** = English-first thread viewer with toggle; **C** = auto-suggested English draft reply (new `/api/inbox/[id]/draft-reply` endpoint, composer auto-populates on non-EN threads); **D** = outgoing translation at send time (preview pane, reply endpoint accepts `body_en + target_language`, both versions logged on `activities`).
+- **Process note:** Worked in a fresh worktree at `~/crm-worktrees/pr-a0-inbox-filters/` off clean `origin/main` because the primary checkout sits on `feature/ndr-bounce-ingestion` from a parallel session — followed `feedback_parallel-cc-branch-drift.md`, didn't touch that tree.
+
+
+---
+
 ## 2026-05-19 — Domain-health hardening + zero-day rendering fix (PRs #203, #204, #205)
 
 Three small, focused PRs on top of yesterday's #201 baseline.
