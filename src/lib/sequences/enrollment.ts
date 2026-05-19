@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "./variables";
 import { getNextSendTime, calculateStepScheduleTime } from "./scheduler";
+import {
+  createBatchVariantPicker,
+  fetchVariantsByStepId,
+  flushSendCountDeltas,
+} from "./variants";
 import type { SequenceSettings, Tables } from "@/lib/database.types";
 
 type ContactWithCompany = Tables<"contacts"> & {
@@ -146,6 +151,15 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     for (const t of templates || []) templateById.set(t.id, t);
   }
 
+  // Pre-fetch variants for every step in this sequence. Batch picker maintains
+  // an in-memory sends_count so 500 picks against the same step produce a
+  // true round-robin (not 500 copies of the lowest-count variant).
+  const variantsByStepId = await fetchVariantsByStepId(
+    supabase,
+    (steps || []).map((s) => s.id),
+  );
+  const variantPicker = createBatchVariantPicker(variantsByStepId);
+
   for (const contact of contacts) {
     // Validation checks
     if (enrolledContactIds.has(contact.id)) {
@@ -231,17 +245,12 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     if (firstStep && firstStep.type === "email" && enrollment) {
       const scheduledFor = getNextSendTime(settings);
 
-      // Get template content
-      let subject = firstStep.subject_override || "";
-      let bodyHtml = firstStep.body_override || "";
-
-      if (firstStep.template_id) {
-        const template = templateById.get(firstStep.template_id);
-        if (template) {
-          subject = firstStep.subject_override || template.subject;
-          bodyHtml = firstStep.body_override || template.body_html;
-        }
-      }
+      const template = firstStep.template_id
+        ? templateById.get(firstStep.template_id) ?? null
+        : null;
+      const picked = variantPicker.pickForStep(firstStep, template);
+      let subject = picked.subject;
+      let bodyHtml = picked.bodyHtml;
 
       const company = (contact as Record<string, unknown>).companies as typeof contact.company_id extends string ? { name: string } : null;
       const trackingId = crypto.randomUUID();
@@ -263,6 +272,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
         status: emailStatus,
         scheduled_for: scheduledFor.toISOString(),
         tracking_id: trackingId,
+        variant_id: picked.variantId,
       });
       if (queueError) {
         await supabase.from("sequence_enrollments").delete().eq("id", enrollment.id);
@@ -281,16 +291,12 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
       // Find next step after delay
       const nextStep = steps?.find((s) => s.step_order === firstStep.step_order + 1);
       if (nextStep && nextStep.type === "email") {
-        let subject = nextStep.subject_override || "";
-        let bodyHtml = nextStep.body_override || "";
-
-        if (nextStep.template_id) {
-          const template = templateById.get(nextStep.template_id);
-          if (template) {
-            subject = nextStep.subject_override || template.subject;
-            bodyHtml = nextStep.body_override || template.body_html;
-          }
-        }
+        const template = nextStep.template_id
+          ? templateById.get(nextStep.template_id) ?? null
+          : null;
+        const picked = variantPicker.pickForStep(nextStep, template);
+        let subject = picked.subject;
+        let bodyHtml = picked.bodyHtml;
 
         const company = (contact as Record<string, unknown>).companies as never;
         const trackingId = crypto.randomUUID();
@@ -311,6 +317,7 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
           status: emailStatus,
           scheduled_for: delayEnd.toISOString(),
           tracking_id: trackingId,
+          variant_id: picked.variantId,
         });
         if (delayQueueError) {
           await supabase.from("sequence_enrollments").delete().eq("id", enrollment.id);
@@ -324,6 +331,9 @@ export async function enrollContacts(params: EnrollParams): Promise<EnrollResult
     result.enrolled++;
     enrolledContactIds.add(contact.id);
   }
+
+  // Persist accumulated variant sends_count deltas (one RPC per variant used).
+  await flushSendCountDeltas(supabase, variantPicker.deltas);
 
   return result;
 }

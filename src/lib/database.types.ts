@@ -1646,6 +1646,7 @@ export type Database = {
           subject: string
           to_email: string
           tracking_id: string | null
+          variant_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -1668,6 +1669,7 @@ export type Database = {
           subject: string
           to_email: string
           tracking_id?: string | null
+          variant_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -1690,6 +1692,7 @@ export type Database = {
           subject?: string
           to_email?: string
           tracking_id?: string | null
+          variant_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -1719,6 +1722,13 @@ export type Database = {
             columns: ["step_id"]
             isOneToOne: false
             referencedRelation: "sequence_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_step_variants"
             referencedColumns: ["id"]
           },
           {
@@ -2212,6 +2222,79 @@ export type Database = {
             columns: ["sequence_id"]
             isOneToOne: false
             referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequence_step_variants: {
+        Row: {
+          ai_generated: boolean
+          ai_generation_model: string | null
+          ai_parent_variant_id: string | null
+          body_html: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sends_count: number
+          sequence_step_id: string
+          subject: string
+          updated_at: string
+          weight: number
+          workspace_id: string
+        }
+        Insert: {
+          ai_generated?: boolean
+          ai_generation_model?: string | null
+          ai_parent_variant_id?: string | null
+          body_html?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sends_count?: number
+          sequence_step_id: string
+          subject?: string
+          updated_at?: string
+          weight?: number
+          workspace_id: string
+        }
+        Update: {
+          ai_generated?: boolean
+          ai_generation_model?: string | null
+          ai_parent_variant_id?: string | null
+          body_html?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sends_count?: number
+          sequence_step_id?: string
+          subject?: string
+          updated_at?: string
+          weight?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_step_variants_ai_parent_variant_id_fkey"
+            columns: ["ai_parent_variant_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_step_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_step_variants_sequence_step_id_fkey"
+            columns: ["sequence_step_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_step_variants_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -2930,6 +3013,10 @@ export type Database = {
       }
       get_sequence_stats: { Args: { p_sequence_id: string }; Returns: Json }
       get_user_workspace_ids: { Args: never; Returns: string[] }
+      increment_variant_sends: {
+        Args: { p_delta: number; p_variant_id: string }
+        Returns: undefined
+      }
       is_workspace_admin: { Args: { ws_id: string }; Returns: boolean }
       reorder_route_stops: {
         Args: {
