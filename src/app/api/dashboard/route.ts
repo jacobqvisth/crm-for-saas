@@ -296,9 +296,16 @@ export async function GET(request: NextRequest) {
     companyName: d.company_id ? companiesMap[d.company_id] ?? null : null,
   }));
 
-  // Email volume chart data (group by day or week)
+  // Email volume chart data (group by day or week).
+  // Pre-seed with every interval in the range so days/weeks with zero
+  // sends + zero opens render as zero rows instead of disappearing from
+  // the chart entirely. Matches the bucket-by-range pattern fixed across
+  // /ceo/* in PRs #205 + #207.
   const shouldGroupByWeek = range === "90d";
   const emailVolumeMap = new Map<string, { sent: number; opened: number }>();
+  for (const key of enumerateIntervals(start, end, shouldGroupByWeek)) {
+    emailVolumeMap.set(key, { sent: 0, opened: 0 });
+  }
 
   for (const email of emailsSent) {
     if (!email.sent_at) continue;
@@ -321,15 +328,46 @@ export async function GET(request: NextRequest) {
     .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Contact growth chart
+  // Contact growth chart — cumulative count of all contacts. Pre-seed
+  // with the running total at each interval boundary so a stretch of
+  // days with no new contacts still renders a flat line at the prior
+  // total instead of dropping out and creating a visual gap.
   const allContacts = contactsAllResult.data ?? [];
+  const sortedContactCreatedAt = allContacts
+    .map((c) => c.created_at)
+    .filter((s): s is string => Boolean(s))
+    .sort((a, b) => a.localeCompare(b));
+
   const contactGrowthMap = new Map<string, number>();
-  let cumulative = 0;
-  for (const contact of allContacts) {
-    if (!contact.created_at) continue;
-    const key = getGroupKey(contact.created_at, shouldGroupByWeek);
-    cumulative++;
-    contactGrowthMap.set(key, cumulative);
+  const intervalKeys = enumerateIntervals(start, end, shouldGroupByWeek);
+  let cursor = 0;
+  let running = 0;
+  // First, count contacts created BEFORE the range starts so the first
+  // bucket includes the prior baseline (otherwise the line resets to 0).
+  if (intervalKeys.length > 0) {
+    const firstBoundary = new Date(intervalKeys[0]).getTime();
+    while (
+      cursor < sortedContactCreatedAt.length &&
+      new Date(sortedContactCreatedAt[cursor]).getTime() < firstBoundary
+    ) {
+      running++;
+      cursor++;
+    }
+  }
+  for (let i = 0; i < intervalKeys.length; i++) {
+    const key = intervalKeys[i];
+    const nextBoundary =
+      i + 1 < intervalKeys.length
+        ? new Date(intervalKeys[i + 1]).getTime()
+        : end.getTime() + 1;
+    while (
+      cursor < sortedContactCreatedAt.length &&
+      new Date(sortedContactCreatedAt[cursor]).getTime() < nextBoundary
+    ) {
+      running++;
+      cursor++;
+    }
+    contactGrowthMap.set(key, running);
   }
 
   const contactGrowthChart = Array.from(contactGrowthMap.entries())
@@ -445,4 +483,30 @@ function getGroupKey(dateStr: string, byWeek: boolean): string {
     return monday.toISOString().split("T")[0];
   }
   return d.toISOString().split("T")[0];
+}
+
+// Pre-seed every interval boundary between start and end (inclusive).
+// Returns the same YYYY-MM-DD string format getGroupKey produces. Capped
+// at 400 buckets to keep "90d weekly" + "30d daily" sane and stop a
+// misconfigured range from runaway-looping.
+function enumerateIntervals(start: Date, end: Date, byWeek: boolean): string[] {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  if (start.getTime() > end.getTime()) return [];
+
+  const out: string[] = [];
+  const MAX = 400;
+
+  // Start from the group-key of `start` so the first bucket aligns with
+  // the user's range and not an arbitrary midnight earlier.
+  const cursor = new Date(getGroupKey(start.toISOString(), byWeek));
+  const endStamp = end.getTime();
+  while (cursor.getTime() <= endStamp && out.length < MAX) {
+    out.push(getGroupKey(cursor.toISOString(), byWeek));
+    if (byWeek) {
+      cursor.setDate(cursor.getDate() + 7);
+    } else {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return out;
 }
