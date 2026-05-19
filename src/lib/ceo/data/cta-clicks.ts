@@ -1,6 +1,8 @@
 import { addUtcDays, toIsoDate } from "@/lib/ceo/dates";
+import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { hasGoogleApiCredentials } from "@/lib/ceo/sync/google-auth";
 import { runGa4Report, type Ga4Row } from "@/lib/ceo/sync/ga4-client";
+import { TABLES } from "@/lib/ceo/tables";
 import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
 
 export type CtaClicksHostFilter = "all" | "app" | "marketing";
@@ -181,7 +183,169 @@ function dim(row: Ga4Row, idx: number) {
   return row.dimensionValues?.[idx]?.value ?? "";
 }
 
+type CtaClickStoredRow = {
+  date: string | null;
+  host_name: string | null;
+  page_path: string | null;
+  button_text: string | null;
+  cta_location: string | null;
+  events: number | string | null;
+  users: number | string | null;
+};
+
+function numericValue(v: number | string | null): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Public entry point. Tries the daily Supabase rollup
+ * (dashboard_cta_clicks, populated by /api/cron/sync-cta-clicks) first.
+ * If the rollup has zero rows for the requested range — typically right
+ * after deploy, before the first sync, or if the cron is down — falls
+ * back to live GA4 so the page still works.
+ */
 export async function getCtaClicksData(
+  range: ResolvedDashboardRange,
+  hostnameFilter: CtaClicksHostFilter,
+): Promise<CtaClicksData> {
+  const stored = await getCtaClicksDataFromSupabase(range, hostnameFilter);
+  if (stored && stored.totals.events > 0) {
+    return stored;
+  }
+  return getCtaClicksDataFromGa4(range, hostnameFilter);
+}
+
+/**
+ * Reads from the daily Supabase rollup. Returns null if Supabase
+ * credentials are missing; returns an empty CtaClicksData (totals = 0)
+ * if there are simply no rows for this range.
+ */
+export async function getCtaClicksDataFromSupabase(
+  range: ResolvedDashboardRange,
+  hostnameFilter: CtaClicksHostFilter,
+): Promise<CtaClicksData | null> {
+  const supabase = createSupabaseServiceClient();
+  if (!supabase) return null;
+
+  const dateRange = rangeForReport(range);
+
+  let query = supabase
+    .from(TABLES.ctaClicks)
+    .select("date,host_name,page_path,button_text,cta_location,events,users")
+    .gte("date", dateRange.startDate)
+    .lte("date", dateRange.endDate);
+
+  const hostValue = HOST_VALUES[hostnameFilter];
+  if (hostValue) {
+    query = query.eq("host_name", hostValue);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return emptyData(hostnameFilter, error.message);
+  }
+
+  const rows = (data ?? []) as CtaClickStoredRow[];
+
+  // Totals
+  let totalEvents = 0;
+  const usersByDate = new Map<string, number>();
+  const eventsByDate = new Map<string, number>();
+  const usersByLocation = new Map<string, number>();
+  const eventsByLocation = new Map<string, number>();
+  const buttonAgg = new Map<
+    string,
+    { buttonText: string; location: string; events: number; users: number }
+  >();
+  // Track total users by summing per-day uniques across days (still an
+  // over-count vs. true distinct users across the whole range, but
+  // matches the existing GA4-path semantics).
+  let totalUsers = 0;
+  let buttonsWithText = 0;
+
+  for (const row of rows) {
+    const date = row.date ?? "";
+    const host = row.host_name ?? "";
+    const path = row.page_path ?? "";
+    const buttonText = row.button_text ?? "";
+    const ctaLocation = row.cta_location ?? "";
+    const events = numericValue(row.events);
+    const users = numericValue(row.users);
+
+    totalEvents += events;
+    totalUsers += users;
+
+    eventsByDate.set(date, (eventsByDate.get(date) ?? 0) + events);
+    usersByDate.set(date, (usersByDate.get(date) ?? 0) + users);
+
+    const location = ctaLocation || locationFromPagePath(path, host);
+    eventsByLocation.set(
+      location,
+      (eventsByLocation.get(location) ?? 0) + events,
+    );
+    usersByLocation.set(
+      location,
+      (usersByLocation.get(location) ?? 0) + users,
+    );
+
+    const displayText = buttonText || "(no text)";
+    if (buttonText) buttonsWithText += events;
+    const key = `${displayText}|${location}`;
+    const existing = buttonAgg.get(key) ?? {
+      buttonText: displayText,
+      location,
+      events: 0,
+      users: 0,
+    };
+    existing.events += events;
+    existing.users += users;
+    buttonAgg.set(key, existing);
+  }
+
+  const daily: CtaDailyPoint[] = enumerateDailyBuckets(range).map((date) => ({
+    date,
+    events: eventsByDate.get(date) ?? 0,
+    users: usersByDate.get(date) ?? 0,
+  }));
+
+  const byLocation: CtaLocationRow[] = [...eventsByLocation.keys()]
+    .map((location) => ({
+      location,
+      events: eventsByLocation.get(location) ?? 0,
+      users: usersByLocation.get(location) ?? 0,
+    }))
+    .sort((a, b) => b.events - a.events);
+
+  const topButtons: CtaButtonRow[] = [...buttonAgg.values()]
+    .sort((a, b) => b.events - a.events)
+    .slice(0, 30);
+
+  const totals: CtaClicksKpis = {
+    events: totalEvents,
+    users: totalUsers,
+    eventsPerUser: totalUsers > 0 ? totalEvents / totalUsers : 0,
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    hostnameFilter,
+    totals,
+    byLocation,
+    topButtons,
+    daily,
+    dimensionsWarming:
+      topButtons.length > 0 && buttonsWithText === 0,
+  };
+}
+
+/**
+ * Live GA4 path — same logic as before the Supabase sync. Used as a
+ * fallback when the daily rollup is empty for the requested range.
+ */
+export async function getCtaClicksDataFromGa4(
   range: ResolvedDashboardRange,
   hostnameFilter: CtaClicksHostFilter,
 ): Promise<CtaClicksData> {
