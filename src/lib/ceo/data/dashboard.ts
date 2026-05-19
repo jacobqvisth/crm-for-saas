@@ -13,6 +13,7 @@ import type {
   WarehouseWorkshop,
 } from "@/lib/ceo/metrics/types";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
+import { pageAll } from "@/lib/ceo/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 import {
   normalizeDashboardTimeRangeKey,
@@ -77,21 +78,8 @@ export async function getDashboardData(
       return getDemoDashboardData(range);
     }
 
-    let metricsQuery = supabase
-      .from(TABLES.metricSnapshots)
-      .select("*")
-      .lt("period_start", range.end.toISOString())
-      .order("period_start", { ascending: false });
-    let funnelQuery = supabase
-      .from(TABLES.funnelSnapshots)
-      .select("*")
-      .lt("period_start", range.end.toISOString())
-      .order("period_start", { ascending: false });
-
-    if (range.start) {
-      metricsQuery = metricsQuery.gte("period_start", range.start.toISOString());
-      funnelQuery = funnelQuery.gte("period_start", range.start.toISOString());
-    }
+    const startIso = range.start?.toISOString();
+    const endIso = range.end.toISOString();
 
     const [
       metricsResult,
@@ -101,28 +89,58 @@ export async function getDashboardData(
       workshopsResult,
       subscriptionsResult,
     ] = await Promise.all([
-      metricsQuery,
-      funnelQuery,
+      pageAll<unknown>(({ from, to }) => {
+        let q = supabase
+          .from(TABLES.metricSnapshots)
+          .select("*")
+          .lt("period_start", endIso)
+          .order("period_start", { ascending: false })
+          .range(from, to);
+        if (startIso) q = q.gte("period_start", startIso);
+        return q;
+      }),
+      pageAll<unknown>(({ from, to }) => {
+        let q = supabase
+          .from(TABLES.funnelSnapshots)
+          .select("*")
+          .lt("period_start", endIso)
+          .order("period_start", { ascending: false })
+          .range(from, to);
+        if (startIso) q = q.gte("period_start", startIso);
+        return q;
+      }),
       supabase
         .from(TABLES.syncRuns)
         .select("*")
         .order("started_at", { ascending: false })
         .limit(50),
-      supabase
-        .from(TABLES.users)
-        .select(
-          "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
-        ),
-      supabase
-        .from(TABLES.workshops)
-        .select(
-          "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
-        ),
-      supabase
-        .from(TABLES.subscriptions)
-        .select(
-          "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
-        ),
+      pageAll<WarehouseUser>(({ from, to }) =>
+        supabase
+          .from(TABLES.users)
+          .select(
+            "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+          )
+          .order("internal_user_id", { ascending: true })
+          .range(from, to),
+      ),
+      pageAll<WarehouseWorkshop>(({ from, to }) =>
+        supabase
+          .from(TABLES.workshops)
+          .select(
+            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+          )
+          .order("workshop_id", { ascending: true })
+          .range(from, to),
+      ),
+      pageAll<WarehouseSubscription>(({ from, to }) =>
+        supabase
+          .from(TABLES.subscriptions)
+          .select(
+            "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
+          )
+          .order("stripe_customer_id", { ascending: true })
+          .range(from, to),
+      ),
     ]);
 
     if (
@@ -146,12 +164,12 @@ export async function getDashboardData(
     }
 
     return calculateDashboardData({
-      snapshots: (metricsResult.data ?? []).map(normalizeMetricSnapshot),
-      funnelSnapshots: (funnelResult.data ?? []).map(normalizeFunnelSnapshot),
+      snapshots: metricsResult.data.map(normalizeMetricSnapshot),
+      funnelSnapshots: funnelResult.data.map(normalizeFunnelSnapshot),
       syncRuns: (syncRunsResult.data ?? []) as SyncRun[],
-      users: (usersResult.data ?? []).map(normalizeUser),
-      workshops: (workshopsResult.data ?? []).map(normalizeWorkshop),
-      subscriptions: (subscriptionsResult.data ?? []) as WarehouseSubscription[],
+      users: usersResult.data.map(normalizeUser),
+      workshops: workshopsResult.data.map(normalizeWorkshop),
+      subscriptions: subscriptionsResult.data,
       range,
     });
   } catch (error) {

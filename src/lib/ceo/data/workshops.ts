@@ -4,6 +4,7 @@ import {
   loadInternalTestSets,
 } from "@/lib/ceo/internal-test/loader";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
+import { pageAll } from "@/lib/ceo/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 import type {
   WarehouseSubscription,
@@ -375,31 +376,51 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
 
   const [workshopsResult, usersResult, subscriptionsResult, diagnosticsResult, chatsResult] =
     await Promise.all([
-      supabase
-        .from(TABLES.workshops)
-        .select(
-          "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
-        ),
-      supabase
-        .from(TABLES.users)
-        .select(
-          "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
-        ),
-      supabase
-        .from(TABLES.subscriptions)
-        .select(
-          "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
-        ),
-      supabase
-        .from(TABLES.diagnostics)
-        .select(
-          "diagnostic_id, workshop_id, internal_user_id, status, created_at, completed_at, diag_cost, num_causes, has_chat, ai_model",
-        ),
-      supabase
-        .from(TABLES.diagnosticChats)
-        .select(
-          "chat_id, workshop_id, diagnostic_id, created_at, message_count, chat_cost",
-        ),
+      pageAll<WarehouseWorkshop>(({ from, to }) =>
+        supabase
+          .from(TABLES.workshops)
+          .select(
+            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+          )
+          .order("workshop_id", { ascending: true })
+          .range(from, to),
+      ),
+      pageAll<WarehouseUser>(({ from, to }) =>
+        supabase
+          .from(TABLES.users)
+          .select(
+            "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+          )
+          .order("internal_user_id", { ascending: true })
+          .range(from, to),
+      ),
+      pageAll<WarehouseSubscription>(({ from, to }) =>
+        supabase
+          .from(TABLES.subscriptions)
+          .select(
+            "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
+          )
+          .order("stripe_customer_id", { ascending: true })
+          .range(from, to),
+      ),
+      pageAll<DiagnosticRecord>(({ from, to }) =>
+        supabase
+          .from(TABLES.diagnostics)
+          .select(
+            "diagnostic_id, workshop_id, internal_user_id, status, created_at, completed_at, diag_cost, num_causes, has_chat, ai_model",
+          )
+          .order("diagnostic_id", { ascending: true })
+          .range(from, to),
+      ),
+      pageAll<DiagnosticChatRecord>(({ from, to }) =>
+        supabase
+          .from(TABLES.diagnosticChats)
+          .select(
+            "chat_id, workshop_id, diagnostic_id, created_at, message_count, chat_cost",
+          )
+          .order("chat_id", { ascending: true })
+          .range(from, to),
+      ),
     ]);
 
   if (
@@ -412,8 +433,8 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
     throw new Error("Workshop drilldown read failed");
   }
 
-  const allWorkshops = (workshopsResult.data ?? []) as unknown as WarehouseWorkshop[];
-  const allDiagnostics = (diagnosticsResult.data ?? []) as DiagnosticRecord[];
+  const allWorkshops = workshopsResult.data;
+  const allDiagnostics = diagnosticsResult.data;
 
   return {
     workshops: includeInternal
@@ -421,8 +442,8 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
       : allWorkshops.filter(
           (workshop) => !isInternalTestWorkshopIdWith(sets, workshop.workshop_id),
         ),
-    users: (usersResult.data ?? []) as WarehouseUser[],
-    subscriptions: (subscriptionsResult.data ?? []) as WarehouseSubscription[],
+    users: usersResult.data,
+    subscriptions: subscriptionsResult.data,
     diagnostics: includeInternal
       ? allDiagnostics
       : allDiagnostics.filter(
@@ -433,7 +454,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
               diagnostic.workshop_id,
             ),
         ),
-    chats: (chatsResult.data ?? []) as DiagnosticChatRecord[],
+    chats: chatsResult.data,
     sets,
   };
 }
