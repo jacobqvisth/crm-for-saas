@@ -1,12 +1,14 @@
 // Server-side data loader for the /ceo/domain-health page. Reads the
-// last N rows from dashboard_domain_health_checks and shapes them for
-// rendering. No transformations beyond unpacking the JSONB columns into
-// typed objects so the component layer stays dumb.
+// last N rows from dashboard_domain_health_checks per tracked domain and
+// shapes them for rendering. No transformations beyond unpacking the
+// JSONB columns into typed objects so the component layer stays dumb.
 
 import { createServiceClient } from "@/lib/supabase/service";
 import type { DomainHealthCheck } from "@/lib/domain-health";
 
-const DEFAULT_DOMAIN = "wrenchlane.com";
+// Keep in sync with DEFAULT_DOMAINS in /api/cron/domain-health/route.ts.
+// Order matters — first listed renders first on the page.
+const TRACKED_DOMAINS = ["wrenchlane.com", "wrenchlane.co"] as const;
 
 export type DomainHealthPageData = {
   domain: string;
@@ -15,9 +17,9 @@ export type DomainHealthPageData = {
   history: DomainHealthCheck[];
 };
 
-export async function getDomainHealthData(
-  domain: string = DEFAULT_DOMAIN,
-  limit = 30,
+async function getOneDomain(
+  domain: string,
+  limit: number,
 ): Promise<DomainHealthPageData> {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -36,4 +38,17 @@ export async function getDomainHealthData(
   const history = [...rows].reverse(); // oldest first for charts
 
   return { domain, latest, history };
+}
+
+export async function getDomainHealthData(
+  domain: string = TRACKED_DOMAINS[0],
+  limit = 30,
+): Promise<DomainHealthPageData> {
+  return getOneDomain(domain, limit);
+}
+
+export async function getAllDomainHealthData(
+  limit = 30,
+): Promise<DomainHealthPageData[]> {
+  return Promise.all(TRACKED_DOMAINS.map((d) => getOneDomain(d, limit)));
 }
