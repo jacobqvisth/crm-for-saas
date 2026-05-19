@@ -66,3 +66,44 @@ export async function pageAll<T>(
   }
   return { data: out, error: null };
 }
+
+// Chunked-`.in()` helper.
+//
+// PostgREST encodes `.in("col", [...])` into a `col=in.(a,b,c,...)` URL query
+// string. ~500+ UUIDs (36 chars + comma each) blow past the upstream URL
+// length limit (Cloudflare, Vercel, PostgREST all reject huge URLs) and the
+// request silently returns `{ data: null, error: { message: "Bad Request" }}`.
+// PR #99 fixed enrollment by chunking at 200; this generalises the pattern.
+//
+// Each chunk is ALSO paginated via `pageAll` so a chunk that fans out into
+// >1000 result rows (one-to-many joins like email_events) doesn't silently
+// truncate at the db-max-rows ceiling. Caller supplies a factory that takes
+// the `(chunk, { from, to })` slice and runs `.in(col, chunk).range(from, to)`.
+const DEFAULT_IN_CHUNK_SIZE = 200;
+
+type ChunkedFactory<T, V> = (
+  chunk: V[],
+  slice: { from: number; to: number },
+) => PromiseLike<{ data: T[] | null; error: PagedError | null }>;
+
+export async function chunkedIn<T, V = string>(
+  factory: ChunkedFactory<T, V>,
+  values: V[],
+  chunkSize: number = DEFAULT_IN_CHUNK_SIZE,
+): Promise<PagedResult<T>> {
+  const out: T[] = [];
+  if (values.length === 0) {
+    return { data: out, error: null };
+  }
+  for (let i = 0; i < values.length; i += chunkSize) {
+    const chunk = values.slice(i, i + chunkSize);
+    const { data, error } = await pageAll<T>(({ from, to }) =>
+      factory(chunk, { from, to }),
+    );
+    if (error) {
+      return { data: out, error };
+    }
+    out.push(...data);
+  }
+  return { data: out, error: null };
+}

@@ -4,7 +4,7 @@ import {
   loadInternalTestSets,
 } from "@/lib/ceo/internal-test/loader";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
-import { pageAll } from "@/lib/ceo/supabase-paging";
+import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 import type {
   WarehouseSubscription,

@@ -13,7 +13,7 @@ import type {
   WarehouseWorkshop,
 } from "@/lib/ceo/metrics/types";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
-import { pageAll } from "@/lib/ceo/supabase-paging";
+import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
 import {
   normalizeDashboardTimeRangeKey,

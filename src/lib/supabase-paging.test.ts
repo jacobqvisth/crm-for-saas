@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { pageAll } from "./supabase-paging";
+import { pageAll, chunkedIn } from "./supabase-paging";
 
 describe("pageAll", () => {
   it("returns a single short page without extra requests", async () => {
@@ -75,5 +75,70 @@ describe("pageAll", () => {
     expect(error).toBeNull();
     expect(data).toHaveLength(1000);
     expect(factory).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("chunkedIn", () => {
+  it("returns an empty result without calling the factory when values is empty", async () => {
+    const factory = vi.fn();
+    const result = await chunkedIn<{ id: number }, string>(factory, [], 200);
+    expect(result).toEqual({ data: [], error: null });
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it("slices the input array into chunks and concatenates results", async () => {
+    const values = Array.from({ length: 450 }, (_, i) => `v${i}`);
+    const chunkSizes: number[] = [];
+
+    const factory = vi.fn(async (chunk: string[], { from }: { from: number; to: number }) => {
+      chunkSizes.push(chunk.length);
+      // Each value yields a single matching row when from=0; subsequent
+      // pages within a chunk return empty so pageAll stops.
+      if (from > 0) return { data: [], error: null };
+      return {
+        data: chunk.map((v) => ({ id: v })),
+        error: null,
+      };
+    });
+
+    const { data, error } = await chunkedIn<{ id: string }, string>(factory, values, 200);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(450);
+    expect(chunkSizes).toEqual([200, 200, 50]);
+  });
+
+  it("paginates within a chunk when a single .in() match fans out past 1000 rows", async () => {
+    const values = ["A", "B"]; // tiny chunk count
+    const rowsPerChunk = 1500;
+    const allRows = Array.from({ length: rowsPerChunk }, (_, i) => ({ id: i }));
+
+    const factory = vi.fn(async (_chunk: string[], { from, to }: { from: number; to: number }) => ({
+      data: allRows.slice(from, to + 1),
+      error: null,
+    }));
+
+    const { data, error } = await chunkedIn<{ id: number }, string>(factory, values, 200);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(rowsPerChunk);
+    // pageAll inside the one chunk: 1000 + 500 short page = 2 calls.
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the error and the rows collected so far on a mid-chunk failure", async () => {
+    const factory = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [{ id: "a" }], error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+
+    const { data, error } = await chunkedIn<{ id: string }, string>(
+      factory,
+      ["v1", "v2"],
+      1,
+    );
+
+    expect(error).toEqual({ message: "boom" });
+    expect(data).toEqual([{ id: "a" }]);
   });
 });
