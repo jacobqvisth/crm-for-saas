@@ -77,12 +77,35 @@ function emptyData(
 }
 
 // Mirror of the "CTA Location" custom JS variable in GTM container
-// GTM-5JRQVHHS (workspace 7, version 6). Keep these in sync — if the GTM
-// regex changes, update this and the test fixture.
-export function locationFromPagePath(pagePath: string | null | undefined): string {
+// GTM-5JRQVHHS. Keep these in sync — if the GTM regex changes, update
+// this and the test fixture. Marketing-site (wrenchlane.com) paths get
+// `marketing_*` prefixes so they're distinguishable from the app's
+// internal sections of the same name (/pricing exists on both).
+export function locationFromPagePath(
+  pagePath: string | null | undefined,
+  hostName?: string | null,
+): string {
   const p = pagePath ?? "";
   const m = p.match(/^\/[a-z]{2,3}(\/.*)?$/);
   const rest = m ? (m[1] ?? "/") : p;
+
+  const isMarketing = hostName === "wrenchlane.com";
+
+  if (isMarketing) {
+    if (rest === "/" || rest === "") return "marketing_home";
+    if (rest === "/pricing") return "marketing_pricing";
+    if (rest === "/wrenchlane-one") return "marketing_wrenchlane_one";
+    if (rest === "/faster-car-diagnostics") return "marketing_landing";
+    if (rest === "/about-us") return "marketing_about";
+    if (rest === "/book-demo") return "marketing_book_demo";
+    if (rest === "/contact") return "marketing_contact";
+    if (rest === "/faq") return "marketing_faq";
+    if (rest === "/signup") return "marketing_signup";
+    if (rest.startsWith("/article")) return "marketing_article";
+    if (rest.startsWith("/tags")) return "marketing_tag";
+    return "marketing_other";
+  }
+
   if (rest === "/" || rest === "") return "home";
   if (rest === "/dashboard") return "dashboard";
   if (rest === "/signup") return "signup";
@@ -188,7 +211,7 @@ export async function getCtaClicksData(
       }),
       runGa4Report({
         dateRanges: [dateRange],
-        dimensions: [{ name: "pagePath" }],
+        dimensions: [{ name: "pagePath" }, { name: "hostName" }],
         metrics: [{ name: "eventCount" }, { name: "totalUsers" }],
         dimensionFilter: filter,
         orderBys: [
@@ -202,6 +225,7 @@ export async function getCtaClicksData(
           { name: "customEvent:button_text" },
           { name: "customEvent:cta_location" },
           { name: "pagePath" },
+          { name: "hostName" },
         ],
         metrics: [{ name: "eventCount" }, { name: "totalUsers" }],
         dimensionFilter: filter,
@@ -235,11 +259,12 @@ export async function getCtaClicksData(
       users: dailyMap.get(date)?.users ?? 0,
     }));
 
-    // Bucket pagePath → cta_location server-side (mirrors GTM JS).
+    // Bucket pagePath + hostName → cta_location server-side (mirrors GTM JS).
     const locationMap = new Map<string, { events: number; users: number }>();
     for (const row of pageRows) {
       const path = dim(row, 0);
-      const location = locationFromPagePath(path);
+      const host = dim(row, 1);
+      const location = locationFromPagePath(path, host);
       const current = locationMap.get(location) ?? { events: 0, users: 0 };
       current.events += num(row, 0);
       // Sum users is a slight over-count because the same user can hit
@@ -263,13 +288,14 @@ export async function getCtaClicksData(
         const buttonText = dim(row, 0).trim();
         const ctaLocation = dim(row, 1).trim();
         const path = dim(row, 2);
+        const host = dim(row, 3);
         if (buttonText && buttonText !== "(not set)") buttonsWithText += 1;
         return {
           buttonText: buttonText || "(no text)",
           location:
             ctaLocation && ctaLocation !== "(not set)"
               ? ctaLocation
-              : locationFromPagePath(path),
+              : locationFromPagePath(path, host),
           events: num(row, 0),
           users: num(row, 1),
         };
