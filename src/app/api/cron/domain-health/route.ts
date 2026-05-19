@@ -17,7 +17,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const DEFAULT_DOMAIN = "wrenchlane.com";
+// Tracked sending domains. Add new ones here as you stand up additional
+// sender identities. Each domain produces one row per cron run in
+// dashboard_domain_health_checks and is regressed against its own
+// previous row for alerting.
+const DEFAULT_DOMAINS = ["wrenchlane.com", "wrenchlane.co"] as const;
 
 function isAuthorized(request: NextRequest): boolean {
   const syncSecret = process.env.SYNC_SECRET;
@@ -40,29 +44,54 @@ async function run(request: NextRequest) {
   }
 
   const url = new URL(request.url);
-  const domain = url.searchParams.get("domain") ?? DEFAULT_DOMAIN;
+  // Allow callers to override the domain set via `?domain=foo.com,bar.com`
+  // (useful for one-off troubleshooting). Default to the constant list.
+  const override = url.searchParams.get("domain");
+  const domains = override
+    ? override.split(",").map((d) => d.trim()).filter(Boolean)
+    : [...DEFAULT_DOMAINS];
 
   const startedAt = new Date().toISOString();
-  try {
-    const supabase = createServiceClient();
-    const current = await runDomainHealthCheck(supabase, { domain });
-    const previous = await getPreviousCheck(supabase, domain, current.checked_at);
-    const notify = await notifyDomainHealth(current, previous);
-    return NextResponse.json({
-      status: "ok",
+  const supabase = createServiceClient();
+
+  const results = await Promise.all(
+    domains.map(async (domain) => {
+      try {
+        const current = await runDomainHealthCheck(supabase, { domain });
+        const previous = await getPreviousCheck(
+          supabase,
+          domain,
+          current.checked_at,
+        );
+        const notify = await notifyDomainHealth(current, previous);
+        return {
+          domain,
+          ok: true as const,
+          check: current,
+          previous_status: previous?.status ?? null,
+          notify,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          domain,
+          ok: false as const,
+          error: message,
+        };
+      }
+    }),
+  );
+
+  const anyFailed = results.some((r) => !r.ok);
+  return NextResponse.json(
+    {
+      status: anyFailed ? "partial" : "ok",
       started_at: startedAt,
       finished_at: new Date().toISOString(),
-      check: current,
-      previous_status: previous?.status ?? null,
-      notify,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { status: "failed", error: message, started_at: startedAt },
-      { status: 500 },
-    );
-  }
+      domains: results,
+    },
+    { status: anyFailed ? 207 : 200 },
+  );
 }
 
 export async function POST(request: NextRequest) {
