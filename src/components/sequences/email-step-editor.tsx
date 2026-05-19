@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
-import { Eye, EyeOff, FileText, Scissors, Sparkles } from "lucide-react";
+import { Eye, EyeOff, FileText, Plus, Scissors, Sparkles, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 import { RichEmailEditor } from "./rich-email-editor";
 import { EmailPreviewFrame, previewInterpolate } from "./email-preview-frame";
@@ -11,6 +12,7 @@ import { EmailPreviewFrame, previewInterpolate } from "./email-preview-frame";
 type Step = Tables<"sequence_steps">;
 type Template = Tables<"email_templates">;
 type Snippet = Tables<"snippets">;
+type StepVariant = Tables<"sequence_step_variants">;
 
 type PersonaAngle = "shop_owner" | "service_advisor" | "technician";
 
@@ -307,6 +309,32 @@ export function EmailStepEditor({
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
+  // Variants: when this step has any rows in sequence_step_variants, the
+  // engine ignores step.subject_override / body_override and picks one of the
+  // active variants per contact. The editor reflects that — tabs above the
+  // subject input, edits go to the active variant via PATCH.
+  const [variants, setVariants] = useState<StepVariant[]>([]);
+  const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
+  const [variantsLoaded, setVariantsLoaded] = useState(false);
+  const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeVariant =
+    activeVariantId !== null
+      ? variants.find((v) => v.id === activeVariantId) ?? null
+      : null;
+  const editingVariant = activeVariant !== null;
+
+  const fetchVariants = useCallback(async () => {
+    const res = await fetch(
+      `/api/sequences/${step.sequence_id}/steps/${step.id}/variants`,
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as { variants: StepVariant[] };
+    setVariants(data.variants);
+    setVariantsLoaded(true);
+    return data.variants;
+  }, [step.sequence_id, step.id]);
+
   useEffect(() => {
     if (!workspaceId) return;
     (async () => {
@@ -333,12 +361,53 @@ export function EmailStepEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
+  // Initial variant fetch + reset when the step changes
   useEffect(() => {
-    setSubject(step.subject_override || "");
-    setBodyHtml(step.body_override || "");
+    setVariantsLoaded(false);
+    fetchVariants().then((vs) => {
+      if (vs && vs.length > 0) {
+        setActiveVariantId(vs[0].id);
+      } else {
+        setActiveVariantId(null);
+      }
+    });
+  }, [fetchVariants]);
+
+  // Sync local form state when step or active variant changes
+  useEffect(() => {
+    if (activeVariant) {
+      setSubject(activeVariant.subject);
+      setBodyHtml(activeVariant.body_html);
+    } else {
+      setSubject(step.subject_override || "");
+      setBodyHtml(step.body_override || "");
+    }
     setSelectedTemplateId(step.template_id || "");
     setIncludeSignature(step.include_signature !== false);
-  }, [step]);
+  }, [step, activeVariant]);
+
+  const schedulePatch = useCallback(
+    (variantId: string, updates: Partial<StepVariant>) => {
+      if (patchTimerRef.current) clearTimeout(patchTimerRef.current);
+      patchTimerRef.current = setTimeout(async () => {
+        const res = await fetch(
+          `/api/sequences/${step.sequence_id}/steps/${step.id}/variants/${variantId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          },
+        );
+        if (res.ok) {
+          const { variant } = (await res.json()) as { variant: StepVariant };
+          setVariants((prev) =>
+            prev.map((v) => (v.id === variant.id ? variant : v)),
+          );
+        }
+      }, 600);
+    },
+    [step.sequence_id, step.id],
+  );
 
   const handleSignatureToggle = (checked: boolean) => {
     setIncludeSignature(checked);
@@ -350,6 +419,16 @@ export function EmailStepEditor({
     if (templateId) {
       const tpl = templates.find((t) => t.id === templateId);
       if (tpl) {
+        if (editingVariant && activeVariantId) {
+          setSubject(tpl.subject);
+          setBodyHtml(tpl.body_html);
+          schedulePatch(activeVariantId, {
+            subject: tpl.subject,
+            body_html: tpl.body_html,
+          });
+          onUpdate({ template_id: templateId });
+          return;
+        }
         setSubject(tpl.subject);
         setBodyHtml(tpl.body_html);
         onUpdate({
@@ -364,31 +443,212 @@ export function EmailStepEditor({
   };
 
   const handleSubjectBlur = () => {
-    onUpdate({ subject_override: subject });
+    if (editingVariant && activeVariantId) {
+      schedulePatch(activeVariantId, { subject });
+    } else {
+      onUpdate({ subject_override: subject });
+    }
   };
 
   const handleBodyChange = (html: string) => {
     setBodyHtml(html);
-    onUpdate({ body_override: html });
+    if (editingVariant && activeVariantId) {
+      schedulePatch(activeVariantId, { body_html: html });
+    } else {
+      onUpdate({ body_override: html });
+    }
   };
 
   const handleInsertSnippet = (snippetBody: string) => {
-    // Append snippet to current body
     const separator = bodyHtml.trim() ? "\n" : "";
     const newBody = bodyHtml + separator + snippetBody;
     setBodyHtml(newBody);
-    onUpdate({ body_override: newBody });
+    if (editingVariant && activeVariantId) {
+      schedulePatch(activeVariantId, { body_html: newBody });
+    } else {
+      onUpdate({ body_override: newBody });
+    }
   };
 
   const handleGenerateInsert = (newSubject: string, newBody: string) => {
     setSubject(newSubject);
     setBodyHtml(newBody);
-    onUpdate({ subject_override: newSubject, body_override: newBody });
+    if (editingVariant && activeVariantId) {
+      schedulePatch(activeVariantId, {
+        subject: newSubject,
+        body_html: newBody,
+      });
+    } else {
+      onUpdate({ subject_override: newSubject, body_override: newBody });
+    }
     setShowGenerateModal(false);
+  };
+
+  const handleAddVariant = async () => {
+    const res = await fetch(
+      `/api/sequences/${step.sequence_id}/steps/${step.id}/variants`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: "", body_html: "" }),
+      },
+    );
+    if (!res.ok) {
+      toast.error("Failed to add variant");
+      return;
+    }
+    const data = (await res.json()) as { variants: StepVariant[] };
+    setVariants(data.variants);
+    const newest = data.variants[data.variants.length - 1];
+    if (newest) setActiveVariantId(newest.id);
+  };
+
+  const handleRenameVariant = (name: string) => {
+    if (!activeVariantId) return;
+    setVariants((prev) =>
+      prev.map((v) => (v.id === activeVariantId ? { ...v, name } : v)),
+    );
+    schedulePatch(activeVariantId, { name });
+  };
+
+  const handleWeightChange = (weight: number) => {
+    if (!activeVariantId) return;
+    setVariants((prev) =>
+      prev.map((v) => (v.id === activeVariantId ? { ...v, weight } : v)),
+    );
+    schedulePatch(activeVariantId, { weight });
+  };
+
+  const handleToggleActive = (is_active: boolean) => {
+    if (!activeVariantId) return;
+    setVariants((prev) =>
+      prev.map((v) => (v.id === activeVariantId ? { ...v, is_active } : v)),
+    );
+    schedulePatch(activeVariantId, { is_active });
+  };
+
+  const handleDeleteVariant = async () => {
+    if (!activeVariantId) return;
+    if (variants.length <= 1) {
+      toast.error("Need at least one variant — disable it instead");
+      return;
+    }
+    if (
+      !confirm(
+        `Delete "${activeVariant?.name ?? "this variant"}"? In-flight queue rows that already chose this variant will still send.`,
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(
+      `/api/sequences/${step.sequence_id}/steps/${step.id}/variants/${activeVariantId}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok) {
+      toast.error("Failed to delete variant");
+      return;
+    }
+    const next = variants.filter((v) => v.id !== activeVariantId);
+    setVariants(next);
+    setActiveVariantId(next[0]?.id ?? null);
   };
 
   return (
     <div className="space-y-3">
+      {variantsLoaded && (
+        <div>
+          <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
+            {variants.length === 0 ? (
+              <span className="px-3 py-1.5 text-xs text-slate-500">
+                Single message — add a variant to rotate copy across contacts
+              </span>
+            ) : (
+              variants.map((v) => {
+                const isActive = v.id === activeVariantId;
+                const disabled = !v.is_active || v.weight === 0;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setActiveVariantId(v.id)}
+                    className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px whitespace-nowrap ${
+                      isActive
+                        ? "border-indigo-600 text-indigo-700"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    } ${disabled ? "italic opacity-60" : ""}`}
+                    title={disabled ? "Disabled — won't be sent" : v.name}
+                  >
+                    {v.name}
+                    {disabled && " (off)"}
+                  </button>
+                );
+              })
+            )}
+            <button
+              type="button"
+              onClick={handleAddVariant}
+              className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800"
+              title="Add variant"
+            >
+              <Plus className="w-3 h-3" />
+              Add variant
+            </button>
+          </div>
+          {activeVariant && (
+            <div className="flex flex-wrap items-center gap-3 mt-2 px-1">
+              <input
+                type="text"
+                value={activeVariant.name}
+                onChange={(e) => handleRenameVariant(e.target.value)}
+                className="text-xs font-medium text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none px-0.5 min-w-0 flex-shrink"
+                placeholder="Variant name"
+              />
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Weight
+                <select
+                  value={activeVariant.weight}
+                  onChange={(e) => handleWeightChange(Number(e.target.value))}
+                  className="text-xs border border-slate-300 rounded px-1 py-0.5"
+                  title="Higher weight = larger share of sends"
+                >
+                  <option value={0}>0 (disabled)</option>
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                  <option value={5}>5</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={activeVariant.is_active}
+                  onChange={(e) => handleToggleActive(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600"
+                />
+                Active
+              </label>
+              <span className="text-xs text-slate-400" title="Number of times this variant has been sent">
+                {activeVariant.sends_count} sends
+              </span>
+              <button
+                type="button"
+                onClick={handleDeleteVariant}
+                disabled={variants.length <= 1}
+                className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-red-600 hover:bg-red-50 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                title={
+                  variants.length <= 1
+                    ? "Can't delete the last variant — disable it instead"
+                    : "Delete this variant"
+                }
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1">
           Use Template
