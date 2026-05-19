@@ -17,6 +17,7 @@ import {
   MailOpen,
   Users,
   Check,
+  Languages,
 } from "lucide-react";
 
 type Contact = {
@@ -49,6 +50,9 @@ type InboxMessage = {
   received_at: string;
   is_read: boolean;
   category: string;
+  detected_language: string | null;
+  subject_translated_en: string | null;
+  body_translated_en: string | null;
   contacts: Contact | null;
   email_queue: EmailQueue | null;
 };
@@ -73,6 +77,9 @@ type ThreadItem =
       from_name: string | null;
       timestamp: string;
       gmail_message_id: string | null;
+      detected_language: string | null;
+      subject_translated_en: string | null;
+      body_translated_en: string | null;
     };
 
 type Filter = "all" | "unread" | "interested" | "not_interested" | "out_of_office";
@@ -86,6 +93,49 @@ type Sender = {
 
 const HIDE_OOO_KEY = "inbox.hideOOO";
 const SENDER_FILTER_KEY = "inbox.senderFilter";
+
+const LANG_LABELS: Record<string, string> = {
+  en: "English",
+  sv: "Swedish",
+  no: "Norwegian",
+  da: "Danish",
+  fi: "Finnish",
+  et: "Estonian",
+  lv: "Latvian",
+  lt: "Lithuanian",
+  de: "German",
+  fr: "French",
+  pl: "Polish",
+  cs: "Czech",
+  ru: "Russian",
+  es: "Spanish",
+  it: "Italian",
+  nl: "Dutch",
+  pt: "Portuguese",
+};
+
+function languageLabel(code: string | null | undefined): string {
+  if (!code) return "Unknown";
+  return LANG_LABELS[code] ?? code.toUpperCase();
+}
+
+function isTranslatable(detected: string | null | undefined): boolean {
+  return !!detected && detected !== "en";
+}
+
+function htmlToPreview(html: string | null | undefined, max = 80): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   uncategorized: "Uncategorized",
@@ -116,6 +166,75 @@ function getInitials(name: string): string {
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() || "")
     .join("");
+}
+
+function ThreadBubble({ item }: { item: ThreadItem }) {
+  // Per-bubble translation toggle. Default = English when a translation exists,
+  // because that's the whole point of the feature. Click "Show original" to flip.
+  const hasTranslation =
+    item.type === "incoming" &&
+    isTranslatable(item.detected_language) &&
+    !!item.body_translated_en;
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  const isIncoming = item.type === "incoming";
+
+  // Pick which body to render.
+  const bodyHtml = hasTranslation && !showOriginal
+    ? item.body_translated_en
+    : item.body_html;
+
+  return (
+    <div className={`max-w-2xl ${item.type === "outgoing" ? "ml-auto" : ""}`}>
+      <div
+        className={`rounded-xl p-4 text-sm ${
+          item.type === "outgoing"
+            ? "bg-slate-100 text-slate-700"
+            : "bg-white border border-slate-200 text-slate-900"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
+          <span>
+            {item.type === "outgoing"
+              ? `To: ${item.to_email}`
+              : `From: ${item.from_name || item.from_email}`}
+          </span>
+          <span>
+            {item.timestamp
+              ? formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })
+              : ""}
+          </span>
+        </div>
+
+        {isIncoming && hasTranslation && (
+          <div className="flex items-center justify-between gap-2 mb-3 px-2.5 py-1.5 rounded-md bg-indigo-50/70 border border-indigo-100 text-xs">
+            <span className="flex items-center gap-1.5 text-indigo-700">
+              <Languages className="w-3.5 h-3.5" />
+              {showOriginal
+                ? `Original (${languageLabel(item.detected_language)})`
+                : `Translated from ${languageLabel(item.detected_language)}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowOriginal((v) => !v)}
+              className="text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              {showOriginal ? "Show English" : "Show original"}
+            </button>
+          </div>
+        )}
+
+        {bodyHtml ? (
+          <div
+            className="prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+          />
+        ) : (
+          <p className="text-slate-400 italic">(empty)</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function SenderDropdown({
@@ -523,7 +642,13 @@ export function InboxClient() {
             messages.map((msg) => {
               const name = getContactName(msg);
               const isSelected = selectedId === msg.id;
-              const preview = msg.body_text
+              const translated = isTranslatable(msg.detected_language);
+              const displaySubject = translated && msg.subject_translated_en
+                ? msg.subject_translated_en
+                : msg.subject;
+              const preview = translated && msg.body_translated_en
+                ? htmlToPreview(msg.body_translated_en)
+                : msg.body_text
                 ? msg.body_text.replace(/\s+/g, " ").slice(0, 80)
                 : "";
 
@@ -562,8 +687,14 @@ export function InboxClient() {
                         {formatDistanceToNow(new Date(msg.received_at), { addSuffix: true })}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-600 truncate mb-0.5">
-                      {msg.subject || "(no subject)"}
+                    <div className="text-xs text-slate-600 truncate mb-0.5 flex items-center gap-1">
+                      {translated && (
+                        <Languages
+                          className="w-3 h-3 text-indigo-400 flex-shrink-0"
+                          aria-label={`Translated from ${languageLabel(msg.detected_language)}`}
+                        />
+                      )}
+                      <span className="truncate">{displaySubject || "(no subject)"}</span>
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs text-slate-400 truncate">{preview}</span>
@@ -599,8 +730,19 @@ export function InboxClient() {
             {/* Thread header */}
             <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-slate-900 truncate">
-                  {selectedMessage.subject || "(no subject)"}
+                <h2 className="text-base font-semibold text-slate-900 truncate flex items-center gap-1.5">
+                  {isTranslatable(selectedMessage.detected_language) && (
+                    <Languages
+                      className="w-4 h-4 text-indigo-500 flex-shrink-0"
+                      aria-label={`Translated from ${languageLabel(selectedMessage.detected_language)}`}
+                    />
+                  )}
+                  <span className="truncate">
+                    {(isTranslatable(selectedMessage.detected_language) &&
+                      selectedMessage.subject_translated_en) ||
+                      selectedMessage.subject ||
+                      "(no subject)"}
+                  </span>
                 </h2>
                 <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
                   <span>{selectedMessage.from_name || selectedMessage.from_email}</span>
@@ -689,39 +831,7 @@ export function InboxClient() {
                 <div className="text-sm text-slate-400">Loading thread...</div>
               ) : (
                 thread.map((item, i) => (
-                  <div
-                    key={`${item.type}-${i}`}
-                    className={`max-w-2xl ${item.type === "outgoing" ? "ml-auto" : ""}`}
-                  >
-                    <div
-                      className={`rounded-xl p-4 text-sm ${
-                        item.type === "outgoing"
-                          ? "bg-slate-100 text-slate-700"
-                          : "bg-white border border-slate-200 text-slate-900"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
-                        <span>
-                          {item.type === "outgoing"
-                            ? `To: ${item.to_email}`
-                            : `From: ${item.from_name || item.from_email}`}
-                        </span>
-                        <span>
-                          {item.timestamp
-                            ? formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })
-                            : ""}
-                        </span>
-                      </div>
-                      {item.body_html ? (
-                        <div
-                          className="prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: item.body_html }}
-                        />
-                      ) : (
-                        <p className="text-slate-400 italic">(empty)</p>
-                      )}
-                    </div>
-                  </div>
+                  <ThreadBubble key={`${item.type}-${i}`} item={item} />
                 ))
               )}
             </div>

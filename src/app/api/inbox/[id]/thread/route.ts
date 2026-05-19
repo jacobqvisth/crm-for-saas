@@ -61,6 +61,9 @@ export async function GET(
       from_name: m.from_name,
       timestamp: m.received_at,
       gmail_message_id: m.gmail_message_id,
+      detected_language: m.detected_language,
+      subject_translated_en: m.subject_translated_en,
+      body_translated_en: m.body_translated_en,
     })),
   ].sort((a, b) => {
     const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
