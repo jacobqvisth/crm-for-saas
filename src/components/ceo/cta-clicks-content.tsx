@@ -18,6 +18,7 @@ const HOST_DESCRIPTIONS: Record<CtaClicksHostFilter, string> = {
 };
 
 const LOCATION_LABELS: Record<string, string> = {
+  // App (app.wrenchlane.com)
   dashboard: "Dashboard",
   signup: "Sign-up",
   profile: "Profile",
@@ -29,6 +30,19 @@ const LOCATION_LABELS: Record<string, string> = {
   vehicle_service: "Vehicle — Service",
   home: "Home / Landing",
   other: "Other",
+  // Marketing (wrenchlane.com)
+  marketing_home: "Marketing — Home",
+  marketing_pricing: "Marketing — Pricing",
+  marketing_wrenchlane_one: "Marketing — WrenchLane ONE",
+  marketing_landing: "Marketing — Faster Diagnostics LP",
+  marketing_about: "Marketing — About",
+  marketing_book_demo: "Marketing — Book Demo",
+  marketing_contact: "Marketing — Contact",
+  marketing_faq: "Marketing — FAQ",
+  marketing_signup: "Marketing — Sign-up",
+  marketing_article: "Marketing — Articles",
+  marketing_tag: "Marketing — Tags",
+  marketing_other: "Marketing — Other",
 };
 
 function formatNumber(n: number) {
