@@ -236,6 +236,42 @@ export async function GET(
   const estimatedDaysToSend =
     totalDailyCapacity > 0 ? Math.ceil(enrollableCount / totalDailyCapacity) : null;
 
+  // 7. Low-variant warning — if a high-volume send (≥200 enrollable) is about
+  // to go out with any email step that has fewer than 2 active variants,
+  // Gmail's content-fingerprint detector is likely to batch-flag the run.
+  let lowVariantWarning = false;
+  if (enrollableCount >= 200) {
+    const { data: emailStepIds } = await supabase
+      .from("sequence_steps")
+      .select("id")
+      .eq("sequence_id", sequenceId)
+      .eq("type", "email");
+
+    const stepIds = (emailStepIds ?? []).map((s) => s.id);
+    if (stepIds.length > 0) {
+      const { data: activeVariants } = await supabase
+        .from("sequence_step_variants")
+        .select("sequence_step_id, is_active, weight")
+        .in("sequence_step_id", stepIds);
+
+      const activeByStep = new Map<string, number>();
+      for (const v of activeVariants ?? []) {
+        if (v.is_active && v.weight > 0) {
+          activeByStep.set(
+            v.sequence_step_id,
+            (activeByStep.get(v.sequence_step_id) ?? 0) + 1,
+          );
+        }
+      }
+      // A step has "enough" variation if it has ≥2 active variants. A step
+      // with 0 active variants falls back to its single body_override (also
+      // a 1-arm send). Either way, < 2 is the warning trigger.
+      lowVariantWarning = stepIds.some(
+        (id) => (activeByStep.get(id) ?? 0) < 2,
+      );
+    }
+  }
+
   return NextResponse.json({
     gmailConnected: !!gmailAccount,
     gmailAccount,
@@ -252,5 +288,6 @@ export async function GET(
     senderAccounts,
     totalDailyCapacity,
     estimatedDaysToSend,
+    lowVariantWarning,
   });
 }

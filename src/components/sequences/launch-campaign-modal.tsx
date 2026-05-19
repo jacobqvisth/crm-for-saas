@@ -32,6 +32,7 @@ interface PreflightData {
   invalidEmailCount: number;
   unverifiedEmailCount: number;
   tokenFallbackCount: number;
+  lowVariantWarning: boolean;
 }
 
 interface ContactList {
@@ -283,6 +284,12 @@ export function LaunchCampaignModal({
                       <PreflightItem
                         status="info"
                         message={`${preflight.tokenFallbackCount} contact${preflight.tokenFallbackCount !== 1 ? "s" : ""} are missing one or more template variables — they'll receive fallback text (e.g. "Hi there")`}
+                      />
+                    )}
+                    {preflight.lowVariantWarning && (
+                      <PreflightItem
+                        status="warn"
+                        message="Sending the same email body to 200+ contacts. Gmail's batch detector may flag this — add ≥2 variants per step to rotate copy."
                       />
                     )}
                   </div>
