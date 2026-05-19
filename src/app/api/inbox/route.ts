@@ -11,6 +11,11 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const filter = searchParams.get("filter") || "all";
+  const hideOOO = searchParams.get("hideOOO") === "1";
+  const sendersParam = searchParams.get("senders");
+  const senders = sendersParam
+    ? sendersParam.split(",").map((s) => s.trim()).filter(Boolean)
+    : null;
   const page = parseInt(searchParams.get("page") || "0");
   const limit = parseInt(searchParams.get("limit") || "50");
   const offset = page * limit;
@@ -45,6 +50,19 @@ export async function GET(request: NextRequest) {
     query = query.eq("category", "not_interested");
   } else if (filter === "out_of_office") {
     query = query.eq("category", "out_of_office");
+  }
+
+  // Hide OOO from any non-OOO tab when toggle is on.
+  if (hideOOO && filter !== "out_of_office") {
+    query = query.neq("category", "out_of_office");
+  }
+
+  if (senders) {
+    if (senders.length === 0) {
+      // Explicit empty selection — caller asked to see nothing.
+      return NextResponse.json([]);
+    }
+    query = query.in("gmail_account_id", senders);
   }
 
   const { data, error } = await query;
