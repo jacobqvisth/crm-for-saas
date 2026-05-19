@@ -11,4 +11,5 @@ export const TABLES = {
   diagnosticChats: "dashboard_diagnostic_chats",
   motorUsage: "dashboard_motor_usage",
   costEntries: "dashboard_cost_entries",
+  ctaClicks: "dashboard_cta_clicks",
 } as const;

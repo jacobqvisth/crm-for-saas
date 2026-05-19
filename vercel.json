@@ -39,6 +39,10 @@
     {
       "path": "/api/ceo-sync/app_store_connect",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-cta-clicks",
+      "schedule": "30 6 * * *"
     }
   ]
 }
