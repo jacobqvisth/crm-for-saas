@@ -3507,3 +3507,14 @@ Full feature shipped end-to-end in one session: a sequence step can carry N alte
 - **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 (auth redirect, expected) within ~60s of merge.
 - **Process note:** Worked in a worktree off `origin/main` because the main checkout was sitting on `fix/rotation-pool-visible-v2` (a parallel CC session's branch) with untracked `scripts/check-wrenchlane-co-state.mjs` + `supabase/migrations/20260519000000_workspace_domain_aliases.sql`. Followed the `feedback_parallel-cc-branch-drift.md` playbook — didn't touch the parallel session's working tree.
 - **Next step:** Jacob reloads `/ceo/app-usage?range=last_90_days` and confirms Diagnoses for W18–W21 now show ≈ 86 / 110 / 75 / 38 (subject to internal-test filter). If any other CEO data path uses `.limit(N>1000)` on a Supabase select-and-aggregate query, the same silent-truncation pattern applies — worth a sweep when time permits.
+
+
+## 2026-05-19 — Sweep: paginate every CEO dashboard Supabase read (PR #219)
+
+- **Why this came right after PR #217:** Jacob asked "will this be a problem in the future again?" Audit found 18 other reads with the same silent-truncation shape — 5 in workshops.ts (already truncating today because `dashboard_diagnostics` holds 1326 rows), 5 in dashboard.ts, 5 in new-users.ts, 4 in pilot-stats.ts. All would have broken silently as their underlying tables grew past 1000 rows in the queried window.
+- **What was built:** New `pageAll<T>(factory, pageSize=1000)` helper at `src/lib/ceo/supabase-paging.ts`. Wraps a `.range(from, to)` loop, concatenates pages, returns Supabase's `{ data, error }` shape so call sites swap with a single-token change. Every paginated query also got a stable `.order(id_column)` — without one `.range()` slices are non-deterministic and pages can overlap or skip rows.
+- **Files changed:** 7 — new helper + new test + 5 data-layer files. +370 / −174.
+- **Test result:** `npx tsc --noEmit` clean, `eslint src/` clean, `vitest run src/lib/ceo/` 60/60 (incl. 4 new `pageAll` tests covering happy path, multi-page walk, mid-walk error, exact-multiple-of-pageSize edge case).
+- **Deploy:** Vercel auto-deploy ✅ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~30s of merge.
+- **Process note:** Build still blocked locally by the pre-existing `REMOVE_REASONS` route-export error from PR #150. Vercel build is authoritative. **That broken-on-main type error has been silently failing CI on every PR since 2026-05-09 — worth a dedicated fix PR.**
+- **Coverage gap left for follow-up:** Histograms (`/ceo/app-usage`, `/ceo/new-users`, `/ceo/pilot-stats`) would be cheaper and forever-correct as SQL RPCs returning one row per bucket — never truncated, never re-pageable. Pagination is fine for now but the right shape long-term is server-side aggregation. Logged as a should-do, not blocking.
