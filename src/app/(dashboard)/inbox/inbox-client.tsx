@@ -388,6 +388,17 @@ export function InboxClient() {
 
   const selectedMessage = messages.find((m) => m.id === selectedId) ?? null;
 
+  // Map of sender id → sender, used to resolve which of our mailboxes
+  // received each inbound message (so the user knows whose name to sign with).
+  const sendersById = useMemo(
+    () => new Map(senders.map((s) => [s.id, s])),
+    [senders],
+  );
+
+  const recipientSender = selectedMessage
+    ? sendersById.get(selectedMessage.gmail_account_id) ?? null
+    : null;
+
   // Hydrate persisted preferences once on mount.
   useEffect(() => {
     try {
@@ -734,6 +745,10 @@ export function InboxClient() {
               const name = getContactName(msg);
               const isSelected = selectedId === msg.id;
               const translated = isTranslatable(msg.detected_language);
+              const recipient = sendersById.get(msg.gmail_account_id);
+              const recipientLabel = recipient
+                ? recipient.display_name || recipient.email_address
+                : null;
               const displaySubject = translated && msg.subject_translated_en
                 ? msg.subject_translated_en
                 : msg.subject;
@@ -778,6 +793,12 @@ export function InboxClient() {
                         {formatDistanceToNow(new Date(msg.received_at), { addSuffix: true })}
                       </span>
                     </div>
+                    {recipientLabel && (
+                      <div className="text-xs text-slate-500 truncate mb-0.5">
+                        <span className="text-slate-400">to</span>{" "}
+                        <span className="font-medium">{recipientLabel}</span>
+                      </div>
+                    )}
                     <div className="text-xs text-slate-600 truncate mb-0.5 flex items-center gap-1">
                       {translated && (
                         <Languages
@@ -836,6 +857,7 @@ export function InboxClient() {
                   </span>
                 </h2>
                 <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                  <span className="text-slate-400 text-xs uppercase tracking-wide">From</span>
                   <span>{selectedMessage.from_name || selectedMessage.from_email}</span>
                   <span className="text-slate-300">·</span>
                   <span>{selectedMessage.from_email}</span>
@@ -852,6 +874,20 @@ export function InboxClient() {
                     </>
                   )}
                 </div>
+                {recipientSender && (
+                  <div className="flex items-center gap-2 mt-0.5 text-sm text-slate-500">
+                    <span className="text-slate-400 text-xs uppercase tracking-wide">To</span>
+                    <span className="font-medium text-slate-700">
+                      {recipientSender.display_name || recipientSender.email_address}
+                    </span>
+                    {recipientSender.display_name && (
+                      <>
+                        <span className="text-slate-300">·</span>
+                        <span>{recipientSender.email_address}</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Category selector */}
