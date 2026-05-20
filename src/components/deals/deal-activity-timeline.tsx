@@ -153,6 +153,11 @@ export function DealActivityTimeline({ dealId }: DealActivityTimelineProps) {
                   <p className="text-sm text-slate-700">
                     {activity.subject || activity.type.replace(/_/g, ' ')}
                   </p>
+                  {activity.type === 'email_sent' && (metadata?.sender_name || metadata?.sender_email) && (
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Sent by {metadata.sender_name || metadata.sender_email}
+                    </p>
+                  )}
                   {activity.type === 'deal_stage_change' && metadata?.from_stage && (
                     <p className="text-xs text-slate-500 mt-0.5">
                       {metadata.from_stage} → {metadata.to_stage}

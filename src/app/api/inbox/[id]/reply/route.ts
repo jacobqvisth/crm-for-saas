@@ -85,6 +85,12 @@ export async function POST(
     return NextResponse.json({ error: result.error || "Failed to send reply" }, { status: 500 });
   }
 
+  const { data: senderAccount } = await supabase
+    .from("gmail_accounts")
+    .select("email_address, display_name")
+    .eq("id", emailQueue.sender_account_id)
+    .maybeSingle();
+
   // Create activity record — keep BOTH the approved English version and the
   // translated wire body so the audit trail is clear if something looks off
   // later. (Jacob's preferences in memory: store both versions.)
@@ -101,6 +107,9 @@ export async function POST(
       body_sent: sentBody,
       target_language: translation.targetLanguage,
       translation_model: translation.model,
+      sender_account_id: emailQueue.sender_account_id,
+      sender_email: senderAccount?.email_address ?? null,
+      sender_name: senderAccount?.display_name ?? null,
     },
   });
 
