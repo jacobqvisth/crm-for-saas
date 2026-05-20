@@ -3820,3 +3820,23 @@ Two follow-up PRs to the /ceo/cta-clicks dashboard shipped in #232.
 - **Why:** The file was top-level `console.log` + manual `assert()` calls running at module import time. All 19 assertions passed, but vitest's discovery layer marked the file as "no test suite found" and added a spurious FAIL line to every test run. Every PR description in this session had to caveat the "1 failed" line.
 - **What:** Same 19 assertions rewritten in standard `describe`/`it`/`expect`, four suites matching the original section headers. No behaviour change to the code under test.
 - **Test result:** Full `vitest run src/` — **210/210, 26/26 files passed, zero failed entries**. (Previously: 1 failed | 25 passed, 191 tests.)
+
+
+## 2026-05-20 — Auth callback + unsubscribe + route-test hardening (PRs #257, #258, #260)
+
+Three follow-up PRs riding the wave that PR #251 (build unblock) and PR #253 (insertActivity sweep) started — every one is a silent-failure path turned loud.
+
+### PR #257 — auth-callback onboarding failures no longer drop new users into limbo
+- `src/app/(auth)/auth/callback/route.ts` had four silent inserts on the sign-in path: `workspaces`, `workspace_members` (join existing), `workspace_members` (own newly-created), `pipelines` (default Sales Pipeline). If any failed, the user was redirected to `/dashboard` with no workspace membership and saw an empty broken page.
+- Every insert now checks `.error`. Membership / workspace failures redirect to `/login?error=onboarding` so the user gets feedback + can retry. Pipeline failure is logged but not redirected — the user can still use the app, just hits an empty kanban.
+- All failures `console.error` with `user_id` / `workspace_id` context for Vercel logs.
+
+### PR #258 — every unsubscribe write now surfaces in Vercel logs (no more silent compliance gaps)
+- `processUnsubscribe` in `tracking/unsubscribe` had six writes (`unsubscribes` upsert, `suppressions` insert, `email_events` insert, `contacts.status` update, `sequence_enrollments` update, `email_queue` cancel) that all discarded `.error`. The outer try/catch logged but nothing inside threw, so any failure rendered "You've been unsubscribed" while the underlying state stayed broken — worst case: future enrollments find no `suppressions` row + keep emailing the recipient.
+- Each write now checks `.error` and throws with `tracking_id` + `email` context. Outer try/catch still returns the 200 success HTML (RFC 8058 contract) but every failure surfaces in Vercel logs.
+- Two layered compliance gates still apply (`suppressions` + `contacts.status='unsubscribed'`); now any failure of either lights up.
+
+### PR #260 — route-mode-assignment test stops flaking in the full suite
+- After PR #251 unblocked local builds and PR #255 cleaned up the spurious "no test suite found" entry, a real flake emerged: `generateDailyRoutes` test passed standalone but failed about half the time in the full `vitest run src/` because `cluster()` uses `Math.random` for k-means++ init. Earlier tests advanced the global RNG state and shifted which centroid k-means picked.
+- Added optional `rng?: () => number` to `GenerateInput`. Production leaves it undefined and falls back to `Math.random` (no behaviour change). Test seeds with a tiny inline mulberry32.
+- **3 consecutive full `vitest run src/` runs:** 210/210, 26/26 files, **zero failed entries**.
