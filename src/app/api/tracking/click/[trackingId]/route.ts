@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { insertActivity } from "@/lib/activities/insert";
 
 export async function GET(
   request: Request,
@@ -41,20 +42,29 @@ export async function GET(
         ip_address: ipAddress,
       });
 
-      // Create activity record
+      // Create activity record. Soft-fail: a failed activity insert must
+      // not break the redirect — the user's browser is waiting for a 302.
       if (queueItem.contact_id) {
-        await supabase.from("activities").insert({
-          workspace_id: queueItem.workspace_id,
-          type: "link_clicked",
-          subject: "Link clicked",
-          body: `Contact clicked a link in a sequence email`,
-          contact_id: queueItem.contact_id,
-          metadata: {
-            tracking_id: trackingId,
-            email_queue_id: queueItem.id,
-            link_url: url,
-          },
-        });
+        try {
+          await insertActivity(
+            supabase,
+            {
+              workspace_id: queueItem.workspace_id,
+              type: "link_clicked",
+              subject: "Link clicked",
+              body: `Contact clicked a link in a sequence email`,
+              contact_id: queueItem.contact_id,
+              metadata: {
+                tracking_id: trackingId,
+                email_queue_id: queueItem.id,
+                link_url: url,
+              },
+            },
+            { context: "tracking/click" },
+          );
+        } catch (err) {
+          console.error("tracking/click activity insert failed", err);
+        }
       }
     }
   } catch (err) {

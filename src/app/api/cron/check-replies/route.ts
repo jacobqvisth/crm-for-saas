@@ -5,6 +5,11 @@ import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { parseNdr, SUGGESTED_NDR_GMAIL_QUERY } from "@/lib/gmail/parse-ndr";
 import { translateInboundMessage } from "@/lib/inbox/translate-inbound";
+import {
+  insertActivities,
+  insertActivity,
+  type ActivityRow,
+} from "@/lib/activities/insert";
 
 export async function POST(request: NextRequest) {
   // Verify cron secret
@@ -167,21 +172,25 @@ export async function POST(request: NextRequest) {
           }
 
           // Create activity record
-          await supabase.from("activities").insert({
-            workspace_id: account.workspace_id,
-            type: "email_received",
-            subject: autoReply ? "Auto-reply received (OOO)" : "Reply received",
-            body: autoReply
-              ? `Out-of-office auto-reply from ${fromEmail}`
-              : `Reply from ${fromEmail}`,
-            contact_id: contact?.id ?? null,
-            metadata: {
-              gmail_message_id: message.id,
-              gmail_thread_id: email.gmail_thread_id,
-              email_queue_id: threadEmail?.id ?? null,
-              is_auto_reply: autoReply,
+          await insertActivity(
+            supabase,
+            {
+              workspace_id: account.workspace_id,
+              type: "email_received",
+              subject: autoReply ? "Auto-reply received (OOO)" : "Reply received",
+              body: autoReply
+                ? `Out-of-office auto-reply from ${fromEmail}`
+                : `Reply from ${fromEmail}`,
+              contact_id: contact?.id ?? null,
+              metadata: {
+                gmail_message_id: message.id,
+                gmail_thread_id: email.gmail_thread_id,
+                email_queue_id: threadEmail?.id ?? null,
+                is_auto_reply: autoReply,
+              },
             },
-          });
+            { context: "check-replies/reply" },
+          );
 
           if (autoReply) {
             autoRepliesFound++;
@@ -306,19 +315,23 @@ export async function POST(request: NextRequest) {
 
                     // Create activity records for each paused contact
                     const companyName = company?.name ?? "their company";
-                    const activityInserts = otherEnrollments.map((e) => ({
-                      workspace_id: account.workspace_id,
-                      type: "sequence_paused",
-                      subject: "Sequence paused — company reply",
-                      body: `Sequence paused — reply received from another contact at ${companyName}`,
-                      contact_id: e.contact_id,
-                      metadata: {
-                        reason: "company_reply",
-                        company_id: companyId,
-                        replying_enrollment_id: enrollment.id,
-                      },
-                    }));
-                    await supabase.from("activities").insert(activityInserts);
+                    const activityInserts: ActivityRow[] = otherEnrollments.map(
+                      (e) => ({
+                        workspace_id: account.workspace_id,
+                        type: "sequence_paused",
+                        subject: "Sequence paused — company reply",
+                        body: `Sequence paused — reply received from another contact at ${companyName}`,
+                        contact_id: e.contact_id,
+                        metadata: {
+                          reason: "company_reply",
+                          company_id: companyId,
+                          replying_enrollment_id: enrollment.id,
+                        },
+                      }),
+                    );
+                    await insertActivities(supabase, activityInserts, {
+                      context: "check-replies/company-paused",
+                    });
                   }
                 }
               }
@@ -497,21 +510,28 @@ export async function POST(request: NextRequest) {
                 .eq("status", "scheduled");
             }
 
-            await supabase.from("activities").insert({
-              workspace_id: matchedQueue.workspace_id,
-              type: "email_bounced",
-              subject: ndr.permanence === "permanent" ? "Email bounced (permanent)" : "Email bounced (temporary)",
-              body: errorLine || `Email to ${matchedQueue.to_email} bounced`,
-              contact_id: matchedQueue.contact_id,
-              metadata: {
-                tracking_id: matchedQueue.tracking_id,
-                email_queue_id: matchedQueue.id,
-                smtp_code: ndr.smtpCode,
-                enhanced_status: ndr.enhancedStatus,
-                rejecting_host: ndr.rejectingHost,
-                permanence: ndr.permanence,
+            await insertActivity(
+              supabase,
+              {
+                workspace_id: matchedQueue.workspace_id,
+                type: "email_bounced",
+                subject:
+                  ndr.permanence === "permanent"
+                    ? "Email bounced (permanent)"
+                    : "Email bounced (temporary)",
+                body: errorLine || `Email to ${matchedQueue.to_email} bounced`,
+                contact_id: matchedQueue.contact_id,
+                metadata: {
+                  tracking_id: matchedQueue.tracking_id,
+                  email_queue_id: matchedQueue.id,
+                  smtp_code: ndr.smtpCode,
+                  enhanced_status: ndr.enhancedStatus,
+                  rejecting_host: ndr.rejectingHost,
+                  permanence: ndr.permanence,
+                },
               },
-            });
+              { context: "check-replies/bounce" },
+            );
           }
 
           bouncesFound++;

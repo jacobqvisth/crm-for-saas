@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { insertActivity } from "@/lib/activities/insert";
 
 export async function POST(
   request: NextRequest,
@@ -105,12 +106,16 @@ export async function POST(
   await supabase.from("contacts").delete().eq("id", contactId);
 
   // 12. Log an anonymized system activity (not tied to the deleted contact)
-  await supabase.from("activities").insert({
-    workspace_id: contact.workspace_id,
-    type: "system",
-    subject: "GDPR erasure request processed",
-    body: "A contact record was deleted and the email address was added to the suppression list.",
-  });
+  await insertActivity(
+    supabase,
+    {
+      workspace_id: contact.workspace_id,
+      type: "system",
+      subject: "GDPR erasure request processed",
+      body: "A contact record was deleted and the email address was added to the suppression list.",
+    },
+    { context: "contacts/forget" },
+  );
 
   return NextResponse.json({ success: true });
 }

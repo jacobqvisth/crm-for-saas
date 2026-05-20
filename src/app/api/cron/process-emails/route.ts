@@ -12,6 +12,7 @@ import {
   fetchVariantsForStep,
   bumpVariantSendCount,
 } from "@/lib/sequences/variants";
+import { insertActivity } from "@/lib/activities/insert";
 import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
 
 const DEFAULT_BOUNCE_THRESHOLD = 8; // percent
@@ -141,18 +142,22 @@ export async function POST(request: NextRequest) {
           .eq("status", "scheduled");
 
         // Log an activity
-        await supabase.from("activities").insert({
-          workspace_id: account.workspace_id,
-          type: "system",
-          subject: `Sending paused for ${account.email_address} — bounce rate ${bounceRate.toFixed(1)}%`,
-          metadata: {
-            sender_account_id: senderAccountId,
-            bounce_rate: bounceRate,
-            bounce_count: bounceCount,
-            send_count: sendCount,
-            threshold: bounceThreshold,
+        await insertActivity(
+          supabase,
+          {
+            workspace_id: account.workspace_id,
+            type: "system",
+            subject: `Sending paused for ${account.email_address} — bounce rate ${bounceRate.toFixed(1)}%`,
+            metadata: {
+              sender_account_id: senderAccountId,
+              bounce_rate: bounceRate,
+              bounce_count: bounceCount,
+              send_count: sendCount,
+              threshold: bounceThreshold,
+            },
           },
-        });
+          { context: "process-emails/circuit-breaker" },
+        );
 
         continue; // Skip this sender
       }
@@ -441,17 +446,21 @@ export async function POST(request: NextRequest) {
         }
 
         // Create activity record
-        await supabase.from("activities").insert({
-          workspace_id: item.workspace_id,
-          type: "email_sent",
-          subject: `Email sent: ${item.subject}`,
-          contact_id: item.contact_id,
-          metadata: {
-            sequence_id: enrollment.sequence_id,
-            enrollment_id: enrollment.id,
-            email_queue_id: item.id,
+        await insertActivity(
+          supabase,
+          {
+            workspace_id: item.workspace_id,
+            type: "email_sent",
+            subject: `Email sent: ${item.subject}`,
+            contact_id: item.contact_id,
+            metadata: {
+              sequence_id: enrollment.sequence_id,
+              enrollment_id: enrollment.id,
+              email_queue_id: item.id,
+            },
           },
-        });
+          { context: "process-emails/sent" },
+        );
 
         // Advance enrollment
         const currentStep = enrollment.current_step ?? 0;

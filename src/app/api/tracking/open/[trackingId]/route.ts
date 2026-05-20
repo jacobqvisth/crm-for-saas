@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { insertActivity } from "@/lib/activities/insert";
 
 // 1x1 transparent pixel GIF
 const PIXEL = Buffer.from(
@@ -127,19 +128,30 @@ export async function GET(
       ip_address: ipAddress,
     });
 
-    // Create activity record only for first open
+    // Create activity record only for first open. Soft-fail: the tracking
+    // pixel must always return a 1x1 GIF — an activity-insert failure
+    // can't crash the response or the recipient's email client shows a
+    // broken-image placeholder.
     if (isFirstOpen && queueItem.contact_id) {
-      await supabase.from("activities").insert({
-        workspace_id: queueItem.workspace_id,
-        type: "email_opened",
-        subject: "Email opened",
-        body: "Contact opened a sequence email",
-        contact_id: queueItem.contact_id,
-        metadata: {
-          tracking_id: trackingId,
-          email_queue_id: queueItem.id,
-        },
-      });
+      try {
+        await insertActivity(
+          supabase,
+          {
+            workspace_id: queueItem.workspace_id,
+            type: "email_opened",
+            subject: "Email opened",
+            body: "Contact opened a sequence email",
+            contact_id: queueItem.contact_id,
+            metadata: {
+              tracking_id: trackingId,
+              email_queue_id: queueItem.id,
+            },
+          },
+          { context: "tracking/open" },
+        );
+      } catch (err) {
+        console.error("tracking/open activity insert failed", err);
+      }
     }
 
     // Hot-lead detection: if contact has opened 3+ times without a reply, create a task

@@ -8,6 +8,7 @@ import {
   REMOVE_REASONS,
   type RemoveReason,
 } from "@/lib/routes/remove-reasons";
+import { insertActivity } from "@/lib/activities/insert";
 
 const Body = z.object({
   reason: z.enum(REMOVE_REASONS as readonly [RemoveReason, ...RemoveReason[]]),
@@ -76,22 +77,26 @@ export async function DELETE(
   }
 
   // 3) Activity row.
-  await supabase.from("activities").insert({
-    workspace_id: stop.workspace_id,
-    user_id: user.id,
-    company_id: stop.company_id,
-    type: "route_stop_removed",
-    subject: reason,
-    body: notes ?? null,
-    metadata: {
-      routeId,
-      stopId,
-      shopName: stop.shop_name,
-      companyId: stop.company_id,
-      discoveredShopId: stop.discovered_shop_id,
-      reason,
+  await insertActivity(
+    supabase,
+    {
+      workspace_id: stop.workspace_id,
+      user_id: user.id,
+      company_id: stop.company_id,
+      type: "route_stop_removed",
+      subject: reason,
+      body: notes ?? null,
+      metadata: {
+        routeId,
+        stopId,
+        shopName: stop.shop_name,
+        companyId: stop.company_id,
+        discoveredShopId: stop.discovered_shop_id,
+        reason,
+      },
     },
-  });
+    { context: "routes/stops/remove" },
+  );
 
   // 4) do_not_route flag flips for reasons that imply a bad shop.
   if (FLAGS_DO_NOT_ROUTE.has(reason)) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getNextSendTime } from "@/lib/sequences/scheduler";
+import { insertActivity } from "@/lib/activities/insert";
 import type { SequenceSettings } from "@/lib/database.types";
 
 export async function PATCH(
@@ -136,12 +137,16 @@ export async function DELETE(
   }
 
   // Log an activity trail before deletion (sequence row will no longer exist after)
-  await supabase.from("activities").insert({
-    workspace_id: sequence.workspace_id,
-    type: "system",
-    subject: `Sequence deleted: ${sequence.name}`,
-    user_id: user.id,
-  });
+  await insertActivity(
+    supabase,
+    {
+      workspace_id: sequence.workspace_id,
+      type: "system",
+      subject: `Sequence deleted: ${sequence.name}`,
+      user_id: user.id,
+    },
+    { context: "sequences/delete" },
+  );
 
   // Step 1: Gather enrollment IDs so we can clean up related tables
   const { data: enrollments } = await supabase
