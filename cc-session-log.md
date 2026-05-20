@@ -14,6 +14,30 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-20 — Fix: check-replies cron has been silently timing out for ~5 days (PR #254)
+
+Triggered by Jacob noticing a reply from `marcus@sodertorp.se` (to a sequence email from `magnus.stein@wrenchlane.com`, sent 2026-05-19) was in Gmail but not in the CRM inbox.
+
+- **Symptom Jacob caught:** "Re: WrenchLane - snabbare diagnos" thread with three Marcus Carlén replies in Gmail (16:11 + 16:35 yesterday, and a fresh one this morning), nothing in `/inbox`.
+- **Investigation against prod (psql):**
+  - Outbound is in `email_queue` (id `36e4a6f2-…`) sent via gmail_accounts row `6f14a155-…` (magnus.stein), with `gmail_thread_id` `19e40804051f9b5d`. Magnus account active, Marcus is a known contact.
+  - **Zero `inbox_messages` for marcus@sodertorp.se**, and zero EVER ingested via the magnus.stein gmail_account.
+  - Most recent `inbox_messages` row across the whole table: **2026-05-14**. Cron silent for ~5 days.
+- **Root cause:** `email_queue` rows in last 60 days with `gmail_thread_id` = **3,117** → **2,353 unique threads**. The cron's reply-detection block iterates these sequentially via `gmail.users.threads.get(format: 'full')` at ~250ms each (plus translation + DB inserts per stored message). The function exhausted its budget mid-loop. Threads were walked in `Map` insertion order = oldest first, so newer threads (like Marcus's) never got reached. Not caused by yesterday's translation work (#241) — that just added ~1–2s per insert on top of an already-failing loop.
+- **Fix (PR #254):**
+  - `since` window: 60d → **7d**.
+  - Added `.order("sent_at", { ascending: false }).limit(500)` so even on a slow pass the newest threads finish first.
+  - `export const maxDuration = 300` on the route for headroom on Pro Fluid Compute.
+- **Verification:** Manually triggered the cron via `curl -H "Authorization: Bearer $CRON_SECRET" /api/cron/check-replies`. Returned `{checked: 500, repliesFound: 0, autoRepliesFound: 3, bouncesFound: 8}` in 151 s. Database confirmed 10 new `inbox_messages` rows ingested in the run, including:
+  - **All 3 Marcus Carlén emails** on thread `19e40804051f9b5d` (May 19 14:10, May 19 14:35, May 20 05:21 UTC).
+  - Two other backfilled real replies (`info@support.autobutler.se` Swedish, `jacob@wrenchlane.com` Swedish).
+  - 5 bounce/postmaster NDRs from May 5 → May 19 that the timed-out cron had been missing.
+  - (Note: the cron's response counters don't match the actual DB outcome — `repliesFound: 0` was reported despite real replies landing. Possibly a multi-instance race during the deploy rollout; the DB is the source of truth and the rows are there.)
+- **Architectural follow-up (queued, not blocking):** The right long-term shape is per-sender `messages.list?q=newer_than:1d in:inbox` (O(actual recent inbox messages) instead of O(sent threads)). One API call per sender instead of one per thread. This PR is belt-and-suspenders until we get there.
+- **Deploy:** Vercel auto-deploy ✅ — first manual trigger after deploy still hit old code (`checked: 725` exceeding the 500 limit); ~30 s later the new code was live and ingestion succeeded.
+- **Process note:** Worked from `~/crm-worktrees/pr-a0-inbox-filters/` off clean `origin/main`. Used `~/crm-for-saas/.env.local` `SUPABASE_DB_PASSWORD` + `CRON_SECRET` for direct DB inspection and manual cron trigger.
+
+
 ## 2026-05-19 (continued) — Zero-day pattern audit, "Last week" filter, PR #36 cleanup (PRs #207, #208, #211, #36 closed)
 
 Follow-up to the morning's #203-205 session. Same theme: hunt down every remaining instance of the bucket-by-union antipattern, plus a small feature request and an old-PR cleanup.
