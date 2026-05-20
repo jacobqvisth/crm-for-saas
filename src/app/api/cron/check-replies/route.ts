@@ -6,6 +6,11 @@ import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { parseNdr, SUGGESTED_NDR_GMAIL_QUERY } from "@/lib/gmail/parse-ndr";
 import { translateInboundMessage } from "@/lib/inbox/translate-inbound";
 
+// Reply detection iterates Gmail threads sequentially — give it a real budget.
+// Hit the Pro plan's max so a slow pass can't take down newer items at the
+// front of the queue. Belt-and-suspenders alongside the 7-day / 500-row cap.
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   // Verify cron secret
   const authHeader = request.headers.get("authorization");
@@ -23,14 +28,21 @@ export async function POST(request: NextRequest) {
   let bouncesFound = 0;
 
   // --- Reply Detection ---
-  // Get sent emails with a thread ID from the last 60 days
-  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+  // Cap the workload so the function can't time out before it reaches the
+  // newest threads (where real-time reply ingestion actually matters).
+  // The 60-day window grew to 2,353 unique threads × ~250ms per Gmail
+  // `threads.get` and the cron stopped completing — inbox went silent for
+  // 5+ days before anyone noticed. 7 days × newest-first × 500-row cap keeps
+  // us well inside the function budget without losing actionable replies.
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: sentEmails } = await supabase
     .from("email_queue")
-    .select("id, tracking_id, contact_id, workspace_id, sender_account_id, to_email, gmail_thread_id, enrollment_id")
+    .select("id, tracking_id, contact_id, workspace_id, sender_account_id, to_email, gmail_thread_id, enrollment_id, sent_at")
     .eq("status", "sent")
     .not("gmail_thread_id", "is", null)
-    .gte("sent_at", since);
+    .gte("sent_at", since)
+    .order("sent_at", { ascending: false })
+    .limit(500);
 
   if (sentEmails && sentEmails.length > 0) {
     // Group by (sender_account_id, gmail_thread_id) — one API call per thread
