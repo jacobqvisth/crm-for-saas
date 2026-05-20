@@ -326,30 +326,46 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
   const addNote = async () => {
     if (!workspaceId || !noteText.trim()) return;
-    await supabase.from('activities').insert({
+    const { data: userData } = await supabase.auth.getUser();
+    const { error } = await supabase.from('activities').insert({
       workspace_id: workspaceId,
       type: 'note',
       contact_id: contactId,
-      description: noteText.trim(),
+      body: noteText.trim(),
+      user_id: userData?.user?.id ?? null,
     });
+    if (error) {
+      toast.error('Failed to add note');
+      return;
+    }
     setNoteText('');
     setShowAddNote(false);
     toast.success('Note added');
+    setActivitiesPage(0);
+    await fetchActivities(0);
   };
 
   const logCall = async () => {
     if (!workspaceId) return;
-    await supabase.from('activities').insert({
+    const { data: userData } = await supabase.auth.getUser();
+    const { error } = await supabase.from('activities').insert({
       workspace_id: workspaceId,
       type: 'call',
       contact_id: contactId,
       subject: callSubject.trim() || 'Phone call',
-      description: callNotes.trim() || null,
+      body: callNotes.trim() || null,
+      user_id: userData?.user?.id ?? null,
     });
+    if (error) {
+      toast.error('Failed to log call');
+      return;
+    }
     setCallSubject('');
     setCallNotes('');
     setShowLogCall(false);
     toast.success('Call logged');
+    setActivitiesPage(0);
+    await fetchActivities(0);
   };
 
   if (loading) {
