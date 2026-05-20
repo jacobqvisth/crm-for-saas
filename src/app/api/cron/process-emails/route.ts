@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     // Check sender daily limit
     const { data: account } = await supabase
       .from("gmail_accounts")
-      .select("daily_sends_count, max_daily_sends, status, workspace_id, email_address")
+      .select("daily_sends_count, max_daily_sends, status, workspace_id, email_address, display_name")
       .eq("id", senderAccountId)
       .single();
 
@@ -457,6 +457,9 @@ export async function POST(request: NextRequest) {
               sequence_id: enrollment.sequence_id,
               enrollment_id: enrollment.id,
               email_queue_id: item.id,
+              sender_account_id: senderAccountId,
+              sender_email: account.email_address,
+              sender_name: account.display_name,
             },
           },
           { context: "process-emails/sent" },

@@ -48,9 +48,25 @@ const activityIcons: Record<string, React.ReactNode> = {
   task: <FileText className="w-4 h-4 text-slate-400" />,
 };
 
+function stripPrefix(subject: string | null | undefined, prefix: string): string {
+  if (!subject) return 'No subject';
+  return subject.startsWith(prefix) ? subject.slice(prefix.length).trim() || 'No subject' : subject;
+}
+
 function getActivityTitle(activity: Activity): string {
   switch (activity.type) {
-    case 'email_sent': return `Email sent: ${activity.subject || 'No subject'}`;
+    case 'email_sent': {
+      const meta = (activity.metadata ?? {}) as Record<string, unknown>;
+      const senderName = typeof meta.sender_name === 'string' ? meta.sender_name : null;
+      const senderEmail = typeof meta.sender_email === 'string' ? meta.sender_email : null;
+      const who = senderName || senderEmail;
+      const isReply = activity.subject?.startsWith('Reply sent:');
+      const verb = isReply ? 'Reply sent' : 'Email sent';
+      const subject = isReply
+        ? stripPrefix(activity.subject, 'Reply sent: ')
+        : stripPrefix(activity.subject, 'Email sent: ');
+      return who ? `${verb} by ${who}: ${subject}` : `${verb}: ${subject}`;
+    }
     case 'email_received': return `Reply received: ${activity.subject || 'No subject'}`;
     case 'email_opened': return `Opened: ${activity.subject || 'No subject'}`;
     case 'email_clicked': return `Clicked link in: ${activity.subject || 'No subject'}`;
