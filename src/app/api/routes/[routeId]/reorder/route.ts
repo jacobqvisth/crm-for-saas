@@ -16,9 +16,9 @@ const Body = z.object({
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ routeId: string }> },
 ) {
-  const { id } = await params;
+  const { routeId: id } = await params;
   const url = new URL(request.url);
   const force = url.searchParams.get("force") === "true";
 

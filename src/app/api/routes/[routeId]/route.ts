@@ -30,9 +30,9 @@ async function authorize(supabase: Awaited<ReturnType<typeof createClient>>, rou
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ routeId: string }> },
 ) {
-  const { id } = await params;
+  const { routeId: id } = await params;
   const supabase = await createClient();
 
   const auth = await authorize(supabase, id);
@@ -83,9 +83,9 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ routeId: string }> },
 ) {
-  const { id } = await params;
+  const { routeId: id } = await params;
   const supabase = await createClient();
 
   const auth = await authorize(supabase, id);
