@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { insertActivity } from "@/lib/activities/insert";
 
 const UNSUBSCRIBE_HTML = `<!DOCTYPE html>
 <html>
@@ -70,18 +71,27 @@ async function processUnsubscribe(trackingId: string) {
       .update({ status: "unsubscribed" })
       .eq("id", queueItem.contact_id);
 
-    // Create activity record
-    await supabase.from("activities").insert({
-      workspace_id: queueItem.workspace_id,
-      type: "contact_unsubscribed",
-      subject: "Contact unsubscribed",
-      body: "Contact unsubscribed from emails",
-      contact_id: queueItem.contact_id,
-      metadata: {
-        tracking_id: trackingId,
-        email_queue_id: queueItem.id,
-      },
-    });
+    // Create activity record. Soft-fail: the unsubscribe page must return
+    // 200 to the recipient regardless of whether the audit row was written.
+    try {
+      await insertActivity(
+        supabase,
+        {
+          workspace_id: queueItem.workspace_id,
+          type: "contact_unsubscribed",
+          subject: "Contact unsubscribed",
+          body: "Contact unsubscribed from emails",
+          contact_id: queueItem.contact_id,
+          metadata: {
+            tracking_id: trackingId,
+            email_queue_id: queueItem.id,
+          },
+        },
+        { context: "tracking/unsubscribe" },
+      );
+    } catch (err) {
+      console.error("tracking/unsubscribe activity insert failed", err);
+    }
   }
 
   // Cancel ALL active sequence enrollments for this contact

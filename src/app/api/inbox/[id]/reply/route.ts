@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/gmail/send";
 import { translateOutboundReply } from "@/lib/inbox/translate-outbound";
+import { insertActivity } from "@/lib/activities/insert";
 
 export async function POST(
   request: NextRequest,
@@ -87,7 +88,7 @@ export async function POST(
   // Create activity record — keep BOTH the approved English version and the
   // translated wire body so the audit trail is clear if something looks off
   // later. (Jacob's preferences in memory: store both versions.)
-  await supabase.from("activities").insert({
+  await insertActivity(supabase, {
     workspace_id: inboxMessage.workspace_id,
     type: "email_sent",
     subject: `Reply sent: ${replySubject}`,
