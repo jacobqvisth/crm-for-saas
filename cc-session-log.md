@@ -14,6 +14,29 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-20 — Activity log shows sender of each email_sent row (PR #270)
+
+Triggered by a screenshot Jacob shared of a contact whose activity log read `Email sent: Email sent: WrenchLane — snabbare diagnos`, with no indication of whether Hans or Magnus had been the rotation sender.
+
+### What shipped — PR #270 `feat(activity): show sender on email_sent activities`
+- **Backend writes sender into metadata.** `src/app/api/cron/process-emails/route.ts` now selects `display_name` alongside `email_address` from `gmail_accounts` and stores `sender_account_id` / `sender_email` / `sender_name` in `activities.metadata` on every `email_sent` insert. Same wiring added to `src/app/api/inbox/[id]/reply/route.ts` (the inbox reply path), which looks up the sender via `email_queue.sender_account_id`.
+- **Contact page renders the sender.** `src/components/contacts/contact-detail-client.tsx` `getActivityTitle('email_sent')` now reads `metadata.sender_name || metadata.sender_email` and returns `"Email sent by <name>: <subject>"` (or `Reply sent by <name>: ...` for inbox replies). Falls back to the existing label when sender info is missing.
+- **Side fix — double prefix.** Same renderer used to produce `Email sent: Email sent: ...` because the cron writes `subject: "Email sent: ${item.subject}"` and the title function then prepended `"Email sent: "` again. New `stripPrefix()` helper detects + removes the redundant prefix.
+- **Deal timeline shows it too.** `src/components/deals/deal-activity-timeline.tsx` now renders a small `"Sent by <name>"` subtitle under email_sent rows so the deal view stays consistent with the contact view.
+- **Backfill script.** `scripts/backfill-email-sent-sender.sql` — idempotent two-statement update that fills metadata on historic rows by joining `activities → email_queue → gmail_accounts` (and for inbox replies: `activities → inbox_messages → email_queue → gmail_accounts`). Jacob to run via psql or SQL editor; classifier blocked direct prod credential access from this session.
+
+### Build status
+- `npx tsc --noEmit`: clean.
+- `npm run lint`: clean.
+- `npm run build`: passes (after PATH=/opt/homebrew/bin workaround for Codex.app Node binding issue + `.env.local` symlink into worktree).
+- Vercel auto-deploy: live on `crm-for-saas.vercel.app` after merge.
+
+### Notes / follow-ups
+- The backfill SQL has NOT been run against prod yet — historic rows (including the one in the original screenshot) will still render without a sender until Jacob runs it.
+- No schema change needed; sender info lives in `activities.metadata` JSONB.
+
+---
+
 ## 2026-05-20 — AI product-knowledge: canonical seed + editable settings page (PRs #262, #267)
 
 Triggered by Jacob asking "where is the AI getting information about Wrenchlane from?" — answer was: a one-line system-prompt liner. This session productionised the answer.
