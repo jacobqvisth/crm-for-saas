@@ -3840,3 +3840,51 @@ Three follow-up PRs riding the wave that PR #251 (build unblock) and PR #253 (in
 - After PR #251 unblocked local builds and PR #255 cleaned up the spurious "no test suite found" entry, a real flake emerged: `generateDailyRoutes` test passed standalone but failed about half the time in the full `vitest run src/` because `cluster()` uses `Math.random` for k-means++ init. Earlier tests advanced the global RNG state and shifted which centroid k-means picked.
 - Added optional `rng?: () => number` to `GenerateInput`. Production leaves it undefined and falls back to `Math.random` (no behaviour change). Test seeds with a tiny inline mulberry32.
 - **3 consecutive full `vitest run src/` runs:** 210/210, 26/26 files, **zero failed entries**.
+
+
+## 2026-05-20 — Routes slug collision fix + session close-out (PR #263)
+
+### PR #263 — fix `/api/routes/[id]` vs `[routeId]` dynamic-slug collision
+- **Symptom:** CI's E2E job had been failing on every commit with `You cannot use different slug names for the same dynamic path ('id' !== 'routeId')` — Playwright's `next start` couldn't boot. Build & Lint had been green since PR #251, so this was the only remaining red signal.
+- **Cause:** Two sibling dynamic routes under `src/app/api/routes/` — `[id]/` (route.ts + assign + reorder, 3 files) and `[routeId]/` (route.ts + stops/[stopId]/visit + stop-search + suggestions, 6 files). Next.js requires the same slug name across sibling dynamic routes.
+- **Fix:** Consolidated `[id]/` into `[routeId]/` (deeper subtree wins). The three handlers now destructure with `const { routeId: id } = await params;` so the URL slug is `routeId` but the local variable stays `id` — every `.eq("id", id)` / `authorize(supabase, id)` call in the bodies works unchanged. URL behaviour identical: `/api/routes/{uuid}/assign|reorder` and `/api/routes/{uuid}` still respond to the same paths.
+- **Test result:** tsc / eslint / vitest 210/210 all clean. `next build --webpack` compiles + 65/65 page generation green end-to-end.
+- **CI after merge:** Build & Lint ✓ (2m0s). E2E still red — but on a DIFFERENT failure now (`CRON_SECRET is not set in .env.local — required for E2E auth`). That's a GitHub Actions secret that needs to be added to the repo settings; not a code bug. The routing collision is gone.
+
+### Session close-out — full status snapshot (2026-05-20)
+
+**State at session close:**
+- Working tree: on `main`, clean, no untracked files, no stash
+- Worktrees: only the codex (parallel session, untouched) and `crm-worktrees/pr-a0-inbox-filters` (another parallel session) — none owned by this session
+- Open PRs: **0**
+- Vercel: `curl -I https://crm-for-saas.vercel.app` → 307 (auth redirect, expected — app is up)
+- CI Build & Lint: ✓ green (first time stable since 2026-05-09)
+- CI E2E: ✗ red on a NEW root cause — missing `CRON_SECRET` GitHub Actions repo secret. Needs Jacob to add it via repo Settings → Secrets and variables → Actions.
+
+**This session's PRs (in merge order):**
+- **#251** — Hoist `REMOVE_REASONS` out of Route file → local + CI build green again
+- **#253** — `insertActivity()` helper + sweep 12 silent server-side activity inserts
+- **#255** — Convert `variable-interpolation.test.ts` to `describe/it/expect` (kills spurious FAIL line)
+- **#257** — Auth-callback onboarding writes now surface errors (workspaces / workspace_members × 2 / pipelines)
+- **#258** — Unsubscribe handler's six writes now throw + log instead of silently dropping (closes compliance gap)
+- **#260** — Inject seeded RNG into `generateDailyRoutes` → route-mode test no longer flakes
+- **#263** — Resolve `/api/routes/[id]` vs `[routeId]` dynamic-slug collision (this PR)
+- Plus log PRs: #252, #256, #261, and this close-out
+
+**Quality bar at close:**
+- `npx tsc --noEmit` ✓
+- `eslint src/` ✓
+- `vitest run src/` → **210/210, 26/26 files, 0 failed entries** (3 consecutive runs)
+- `next build --webpack` → full compile + 65/65 page generation green
+- All previously-silent failure modes (sign-in onboarding, unsubscribe writes, activity logging) now surface in Vercel logs
+
+**Still open / needs Jacob:**
+1. **GitHub Actions secret `CRON_SECRET`** — add to repo to get E2E green. One-time settings change.
+2. **GTM "CTA Location" custom JS variable** — still on app-only mapping per PR #234's note; needs the marketing-aware paste from that PR description, or a fresh OAuth Playground token so it can be done via the Tag Manager API.
+3. **Multi-auth-identity Magnus signature autocopy** — product decision (auto-copy from sibling on first sign-in vs migrate signatures off auth.users entirely vs admin manual write per mailbox).
+4. **Histograms → SQL RPCs** — architectural; pagination via `pageAll` works, but RPC is the cleaner long-term shape.
+5. **Lower-priority sweeps left for later:**
+   - 9 client-side `.from('activities').insert()` sites (already toast on `.error`, low value to convert).
+   - `email_events` / `tasks` / `inbox_messages` silent inserts in `cron/check-replies` and `cron/process-emails` (lower stakes than the auth + unsubscribe paths already hardened).
+
+Session closed.
