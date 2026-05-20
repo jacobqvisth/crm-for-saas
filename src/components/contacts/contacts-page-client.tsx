@@ -1151,12 +1151,18 @@ function AddContactForm({
 
 function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
   switch (id) {
-    case 'name':
-      return (
+    case 'name': {
+      const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+      return fullName ? (
         <Link href={`/contacts/${contact.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
-          {[contact.first_name, contact.last_name].filter(Boolean).join(' ') || '—'}
+          {fullName}
+        </Link>
+      ) : (
+        <Link href={`/contacts/${contact.id}`} className="text-indigo-600 hover:text-indigo-700 italic">
+          No name
         </Link>
       );
+    }
     case 'email':
       return (
         <div className="flex items-center gap-1.5 text-slate-600">
