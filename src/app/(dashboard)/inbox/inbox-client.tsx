@@ -95,6 +95,10 @@ type Sender = {
 
 const HIDE_OOO_KEY = "inbox.hideOOO";
 const SENDER_FILTER_KEY = "inbox.senderFilter";
+const LIST_WIDTH_KEY = "inbox.listWidth";
+const LIST_WIDTH_DEFAULT = 320;
+const LIST_WIDTH_MIN = 240;
+const LIST_WIDTH_MAX = 720;
 
 const LANG_LABELS: Record<string, string> = {
   en: "English",
@@ -385,6 +389,9 @@ export function InboxClient() {
   const [senders, setSenders] = useState<Sender[]>([]);
   const [selectedSenderIds, setSelectedSenderIds] = useState<string[] | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [listWidth, setListWidth] = useState(LIST_WIDTH_DEFAULT);
+  const [isResizing, setIsResizing] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedMessage = messages.find((m) => m.id === selectedId) ?? null;
 
@@ -408,6 +415,13 @@ export function InboxClient() {
       if (storedSenders !== null) {
         const parsed = JSON.parse(storedSenders);
         if (Array.isArray(parsed)) setSelectedSenderIds(parsed.filter((v) => typeof v === "string"));
+      }
+      const storedWidth = localStorage.getItem(LIST_WIDTH_KEY);
+      if (storedWidth !== null) {
+        const parsed = Number(storedWidth);
+        if (Number.isFinite(parsed)) {
+          setListWidth(Math.min(LIST_WIDTH_MAX, Math.max(LIST_WIDTH_MIN, parsed)));
+        }
       }
     } catch {
       // Ignore corrupt localStorage values; defaults stand.
@@ -435,6 +449,42 @@ export function InboxClient() {
       /* non-fatal */
     }
   }, [selectedSenderIds, preferencesLoaded]);
+
+  // Persist list width whenever it changes (after hydration).
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    try {
+      localStorage.setItem(LIST_WIDTH_KEY, String(listWidth));
+    } catch {
+      /* non-fatal */
+    }
+  }, [listWidth, preferencesLoaded]);
+
+  // Drag-to-resize the conversation list. Mouse events bind to window so the
+  // drag continues smoothly even when the cursor leaves the handle.
+  useEffect(() => {
+    if (!isResizing) return;
+    const handleMove = (e: MouseEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const containerLeft = container.getBoundingClientRect().left;
+      const next = e.clientX - containerLeft;
+      setListWidth(Math.min(LIST_WIDTH_MAX, Math.max(LIST_WIDTH_MIN, next)));
+    };
+    const handleUp = () => setIsResizing(false);
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    const prevCursor = document.body.style.cursor;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevUserSelect;
+    };
+  }, [isResizing]);
 
   // Fetch the workspace's sender list once.
   useEffect(() => {
@@ -672,9 +722,12 @@ export function InboxClient() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    <div ref={containerRef} className="flex h-[calc(100vh-4rem)] overflow-hidden">
       {/* Left panel — conversation list */}
-      <div className="w-80 flex-shrink-0 border-r border-slate-200 flex flex-col bg-white">
+      <div
+        className="flex-shrink-0 border-r border-slate-200 flex flex-col bg-white"
+        style={{ width: `${listWidth}px` }}
+      >
         {/* Header */}
         <div className="px-4 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2 mb-3">
@@ -827,6 +880,22 @@ export function InboxClient() {
           )}
         </div>
       </div>
+
+      {/* Resize handle */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize conversation list"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setIsResizing(true);
+        }}
+        onDoubleClick={() => setListWidth(LIST_WIDTH_DEFAULT)}
+        className={`relative w-1 -mx-0.5 z-10 cursor-col-resize group flex-shrink-0 ${
+          isResizing ? "bg-indigo-400" : "bg-transparent hover:bg-indigo-300"
+        } transition-colors`}
+        title="Drag to resize · double-click to reset"
+      />
 
       {/* Right panel — thread view */}
       <div className="flex-1 flex flex-col bg-slate-50 min-w-0">
