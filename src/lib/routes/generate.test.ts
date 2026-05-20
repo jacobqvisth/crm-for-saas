@@ -1,6 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildGoogleMapsDeeplink } from "./generate";
 
+// Deterministic 32-bit RNG (mulberry32). The k-means++ init in cluster.ts
+// is the only source of nondeterminism in generateDailyRoutes — without a
+// seeded RNG this test was flaky in the full src/ suite, because earlier
+// tests advance the global Math.random state and shift which centroid the
+// algorithm picks.
+function seededRng(seed = 1): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // Mock the Routes API module so generate.ts imports a stub
 vi.mock("./routes-api", () => ({
   optimizeRoute: vi.fn(async ({ waypoints }: { waypoints: { lat: number; lng: number }[] }) => ({
@@ -81,6 +97,7 @@ describe("generateDailyRoutes — mode-assignment math", () => {
       desiredCount: 3,
       modeMix: { mixed: 1, cold: 1, lapsed: 1 },
       supabase: supabase as never,
+      rng: seededRng(1),
     });
 
     const modes = summary.routes.map((r) => r.mode).sort();
