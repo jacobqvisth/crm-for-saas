@@ -27,8 +27,19 @@ async function processUnsubscribe(trackingId: string) {
     return;
   }
 
+  // Every write below throws on .error so it propagates to the outer
+  // try/catch in GET/POST, which logs to console.error. Two layered
+  // compliance gates protect against re-enrollment after an unsubscribe:
+  // (1) a `suppressions` row by (workspace_id, email) blocks the email
+  // from any future sequence enroll; (2) `contacts.status = 'unsubscribed'`
+  // blocks that specific contact row. Both used to be silent — if either
+  // failed, "Unsubscribed" would still render but downstream sequences
+  // could keep enrolling the contact. Now any failure surfaces in Vercel
+  // logs with the offending email + tracking_id so on-call can act.
+  const ctx = `tracking_id=${trackingId} email=${queueItem.to_email}`;
+
   // Insert into unsubscribes (upsert to handle duplicates)
-  await supabase
+  const { error: unsubError } = await supabase
     .from("unsubscribes")
     .upsert(
       {
@@ -38,6 +49,9 @@ async function processUnsubscribe(trackingId: string) {
       },
       { onConflict: "workspace_id,email" }
     );
+  if (unsubError) {
+    throw new Error(`unsubscribes upsert (${ctx}): ${unsubError.message}`);
+  }
 
   // Also insert into suppressions (primary suppression gate)
   const { data: existingSuppression } = await supabase
@@ -49,27 +63,42 @@ async function processUnsubscribe(trackingId: string) {
     .maybeSingle();
 
   if (!existingSuppression) {
-    await supabase.from("suppressions").insert({
-      workspace_id: queueItem.workspace_id,
-      email: queueItem.to_email,
-      reason: "unsubscribed",
-      source: "recipient clicked unsubscribe",
-    });
+    const { error: suppressionError } = await supabase
+      .from("suppressions")
+      .insert({
+        workspace_id: queueItem.workspace_id,
+        email: queueItem.to_email,
+        reason: "unsubscribed",
+        source: "recipient clicked unsubscribe",
+      });
+    if (suppressionError) {
+      throw new Error(
+        `suppressions insert (${ctx}): ${suppressionError.message}`,
+      );
+    }
   }
 
   // Insert email_event
-  await supabase.from("email_events").insert({
+  const { error: eventError } = await supabase.from("email_events").insert({
     tracking_id: trackingId,
     email_queue_id: queueItem.id,
     event_type: "unsubscribe",
   });
+  if (eventError) {
+    throw new Error(`email_events insert (${ctx}): ${eventError.message}`);
+  }
 
   // Update contact status to 'unsubscribed'
   if (queueItem.contact_id) {
-    await supabase
+    const { error: contactError } = await supabase
       .from("contacts")
       .update({ status: "unsubscribed" })
       .eq("id", queueItem.contact_id);
+    if (contactError) {
+      throw new Error(
+        `contacts.status update (${ctx} contact=${queueItem.contact_id}): ${contactError.message}`,
+      );
+    }
 
     // Create activity record. Soft-fail: the unsubscribe page must return
     // 200 to the recipient regardless of whether the audit row was written.
@@ -105,20 +134,30 @@ async function processUnsubscribe(trackingId: string) {
     const enrollmentIds = activeEnrollments.map((e) => e.id);
 
     // Update enrollment statuses
-    await supabase
+    const { error: enrollmentError } = await supabase
       .from("sequence_enrollments")
       .update({
         status: "unsubscribed",
         completed_at: new Date().toISOString(),
       })
       .in("id", enrollmentIds);
+    if (enrollmentError) {
+      throw new Error(
+        `sequence_enrollments update (${ctx} count=${enrollmentIds.length}): ${enrollmentError.message}`,
+      );
+    }
 
     // Cancel all scheduled emails for these enrollments
-    await supabase
+    const { error: queueError } = await supabase
       .from("email_queue")
       .update({ status: "cancelled" as const })
       .in("enrollment_id", enrollmentIds)
       .eq("status", "scheduled");
+    if (queueError) {
+      throw new Error(
+        `email_queue cancel (${ctx} count=${enrollmentIds.length}): ${queueError.message}`,
+      );
+    }
   }
 }
 
