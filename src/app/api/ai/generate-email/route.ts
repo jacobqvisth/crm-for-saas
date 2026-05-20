@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
+import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
 
 type PersonaAngle = "shop_owner" | "service_advisor" | "technician";
 
@@ -42,10 +42,10 @@ Key benefits to emphasize: AI-assisted DTC interpretation, guided repair steps, 
 Tone: technically credible, peer-to-peer, show you understand their world.`,
 };
 
-// Product knowledge is the single source of truth in src/lib/inbox/wrenchlane-knowledge.ts.
-// Both this cold-email generator and the inbox draft-reply helper import it so the
-// AI grounds outbound and reply copy in the same facts.
-const PRODUCT_CONTEXT = WRENCHLANE_KNOWLEDGE;
+// Product knowledge is loaded per-call from loadWrenchlaneKnowledge (which reads
+// workspace_ai_knowledge editable from /settings/ai-knowledge, with the seed at
+// src/lib/inbox/wrenchlane-knowledge.ts as fallback). Variable name PRODUCT_CONTEXT
+// is kept for the inline `${PRODUCT_CONTEXT}` interpolation below.
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -112,6 +112,11 @@ export async function POST(request: NextRequest) {
   ]
     .filter(Boolean)
     .join("\n");
+
+  // Workspace-editable product knowledge (settings page). Seed fallback applied
+  // inside loadWrenchlaneKnowledge when no row exists yet.
+  const knowledge = await loadWrenchlaneKnowledge(supabase, workspaceId);
+  const PRODUCT_CONTEXT = knowledge.contentMd;
 
   const systemPrompt = `You are an expert B2B cold email writer for Wrenchlane.
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, MapPin, ShieldCheck, Users, User as UserIcon } from 'lucide-react';
+import { GitBranch, Mail, MapPin, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -35,6 +35,12 @@ const settingsItems = [
     description: 'Auto-enroll companies in a sequence after a field-route stop is logged',
     href: '/settings/field-visits',
     icon: MapPin,
+  },
+  {
+    title: 'AI Product Knowledge',
+    description: 'What the AI knows about Wrenchlane when drafting inbox replies and cold emails',
+    href: '/settings/ai-knowledge',
+    icon: Sparkles,
   },
 ];
 

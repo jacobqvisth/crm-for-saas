@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { draftReplyInEnglish, htmlToText } from "@/lib/inbox/draft-reply";
+import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
 
 /**
  * Generate (or fetch cached) an English-language draft reply for an inbox message.
@@ -162,6 +163,9 @@ export async function POST(
     .slice(-4)
     .map((h) => ({ from: h.from, body: h.body, subject: h.subject }));
 
+  // Pull the workspace's editable knowledge (settings page) — falls back to seed.
+  const knowledge = await loadWrenchlaneKnowledge(supabase, inboxMessage.workspace_id);
+
   const result = await draftReplyInEnglish({
     contactFirstName,
     contactLastName,
@@ -172,6 +176,7 @@ export async function POST(
     inboundBodyEn,
     inboundSubject,
     threadHistory: trimmedHistory,
+    knowledgeMd: knowledge.contentMd,
   });
 
   if (!result.ok) {

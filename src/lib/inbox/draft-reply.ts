@@ -3,12 +3,13 @@ import { WRENCHLANE_KNOWLEDGE } from "./wrenchlane-knowledge";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
-const SYSTEM_PROMPT = `You draft short, professional follow-up replies to inbound emails for a B2B SaaS called Wrenchlane.
+function buildSystemPrompt(knowledgeMd: string): string {
+  return `You draft short, professional follow-up replies to inbound emails for a B2B SaaS called Wrenchlane.
 
 The user (a Wrenchlane sales person) will review and approve your draft before it sends. Stay grounded in the canonical product knowledge below — do not invent features, pricing, partners, stats, or links that aren't in that document.
 
 === WRENCHLANE PRODUCT KNOWLEDGE (authoritative) ===
-${WRENCHLANE_KNOWLEDGE}
+${knowledgeMd}
 === END PRODUCT KNOWLEDGE ===
 
 How to draft:
@@ -26,6 +27,7 @@ When (and how) to include a video or article link:
 - If nothing maps cleanly, do not include any URL. Don't shoehorn one in.
 
 Return ONLY the draft body text (plain text, no markdown, no quotes around it, no JSON). One blank line between paragraphs. URLs go on their own line, not inline with prose.`;
+}
 
 export type DraftContext = {
   contactFirstName: string | null;
@@ -40,6 +42,9 @@ export type DraftContext = {
   inboundSubject: string | null;
   // Optional richer thread history (last N messages, each with type + body_en).
   threadHistory?: Array<{ from: "us" | "them"; body: string; subject?: string | null }>;
+  // Workspace-edited product knowledge. Pass through from loadWrenchlaneKnowledge();
+  // defaults to the static seed if omitted.
+  knowledgeMd?: string;
 };
 
 export type DraftResult =
@@ -93,12 +98,14 @@ export async function draftReplyInEnglish(ctx: DraftContext): Promise<DraftResul
   lines.push("");
   lines.push("Draft your reply now. Body text only — no signature, no greeting closer.");
 
+  const systemPrompt = buildSystemPrompt(ctx.knowledgeMd ?? WRENCHLANE_KNOWLEDGE);
+
   let raw = "";
   try {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [{ role: "user", content: lines.join("\n") }],
     });
     raw = response.content[0].type === "text" ? response.content[0].text : "";
