@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
 
 type PersonaAngle = "shop_owner" | "service_advisor" | "technician";
 
@@ -41,14 +42,10 @@ Key benefits to emphasize: AI-assisted DTC interpretation, guided repair steps, 
 Tone: technically credible, peer-to-peer, show you understand their world.`,
 };
 
-const PRODUCT_CONTEXT = `
-Product: Wrenchlane — AI-powered workshop management software for automotive repair shops.
-What it does: Replaces fragmented tools (scan tools, paper job cards, SMS to customers) with a single platform.
-Core modules: AI diagnostics assistant, digital job cards, technician task queue, service advisor dashboard, customer communication.
-Target market: Independent automotive workshops in the Nordics (Sweden, Norway, Denmark, Finland), 3–30 employees.
-Key differentiator: AI that interprets DTCs, suggests root causes, and guides technicians — not just a digital clipboard.
-Competitive context: Most Nordic shops use outdated SMS or basic workshop software with no AI. We are entering a greenfield.
-`;
+// Product knowledge is the single source of truth in src/lib/inbox/wrenchlane-knowledge.ts.
+// Both this cold-email generator and the inbox draft-reply helper import it so the
+// AI grounds outbound and reply copy in the same facts.
+const PRODUCT_CONTEXT = WRENCHLANE_KNOWLEDGE;
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
