@@ -4000,3 +4000,31 @@ Result: **9.5/10**. Breakdown:
 - **mail-tester `HTML_IMAGE_ONLY_20`** ding could be eliminated by either lengthening the body 30-50 words or wrapping the tracking pixel in a zero-height container — not urgent.
 
 Session closed.
+
+---
+
+## 2026-05-20 — Companies page: design parity with /contacts (PR #273)
+
+**Branch:** feature/companies-page-parity → main (squash merge 05480e26).
+**Deploy:** live on Vercel (dpl_84PRvzR9iddPM3YbQW2x3Y6HKdyV).
+**Files:**
+- `src/components/companies/column-config.ts` (new) — 18 columns w/ default+sortable flags, localStorage helpers
+- `src/components/companies/column-customizer.tsx` (new) — drag/reorder + show/hide slide-over, mirrors contacts
+- `src/components/companies/companies-page-client.tsx` (rewritten) — full UI rebuild
+
+**What changed:**
+- Header stats bar (total / with-domain / with-phone) + Columns button + Add Company
+- Filter card w/ 7 MultiSelects (country, industry, source, lifecycle stage, customer status, app-account, tags) + Has phone / Has domain checkboxes + debounced search across name/domain/phone + "Clear all"
+- Sortable column headers (name, domain, country, industry, last active, created); default sort `created_at desc`
+- 18 customizable, drag-reorderable columns persisted to localStorage per workspace, incl. App-workshop badge, lifecycle/customer-status pills, contacts/deals counts, tags, website/phone/city
+- Pre-existing per-page contact/deal count fetching preserved
+- Local-state filters (no URL params); page resets on filter change
+- Add Company slide-over kept as-is; no bulk actions in this pass
+
+**Verification:**
+- `npx tsc --noEmit` — clean
+- `npm run lint` — clean
+- `npx next build --webpack` (with brew Node + symlinked .env.local) — 67/67 pages generated
+- E2E CI failed on `CRON_SECRET missing` in the workflow's `.env.local` — pre-existing infra problem unrelated to this PR (auth.setup.ts errors before any test runs)
+
+**Skipped:** bulk actions (delete / change lifecycle / add to list). Easy follow-up if desired.
