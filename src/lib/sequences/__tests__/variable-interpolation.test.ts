@@ -1,10 +1,15 @@
 /**
  * Unit tests for resolveVariables() — covers plain {{var}}, TipTap span-wrapped
- * variables, and missing/unknown variables.
+ * variables, and missing/unknown variables. Also covers ensureUnsubscribeLink.
  *
- * Run with: npx tsx --test src/lib/sequences/__tests__/variable-interpolation.test.ts
- * (or integrate into your preferred test runner)
+ * Originally written as bare top-level `console.log` + manual `assert()`
+ * calls. Vitest's discovery layer then flagged the file as "no test suite
+ * found" on every CI run (1 spurious FAIL even though all assertions
+ * passed) because nothing was inside a `describe`/`it` block. Converted
+ * to the standard framework shape so the failed-suite line is gone.
  */
+
+import { describe, expect, it } from "vitest";
 
 import { resolveVariables, ensureUnsubscribeLink } from "../variables";
 import type { Tables } from "@/lib/database.types";
@@ -144,13 +149,13 @@ const company: Company = {
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helper
 // ---------------------------------------------------------------------------
 function run(
   template: string,
   c: Contact = contact,
   co: Company | null = company,
-  trackingId = "track-123"
+  trackingId = "track-123",
 ) {
   return resolveVariables(template, c, co, trackingId);
 }
@@ -158,197 +163,108 @@ function run(
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-let passed = 0;
-let failed = 0;
+describe("resolveVariables — bare {{variable}} patterns", () => {
+  it("replaces {{first_name}}", () => {
+    expect(run("Hi {{first_name}},")).toBe("Hi Jane,");
+  });
 
-function assert(description: string, actual: string, expected: string) {
-  if (actual === expected) {
-    console.log(`  ✓ ${description}`);
-    passed++;
-  } else {
-    console.error(`  ✗ ${description}`);
-    console.error(`    Expected: ${JSON.stringify(expected)}`);
-    console.error(`    Actual:   ${JSON.stringify(actual)}`);
-    failed++;
-  }
-}
+  it("replaces {{last_name}}", () => {
+    expect(run("{{last_name}}")).toBe("Smith");
+  });
 
-function assertContains(description: string, actual: string, substring: string) {
-  if (actual.includes(substring)) {
-    console.log(`  ✓ ${description}`);
-    passed++;
-  } else {
-    console.error(`  ✗ ${description}`);
-    console.error(`    Expected to contain: ${JSON.stringify(substring)}`);
-    console.error(`    Actual:   ${JSON.stringify(actual)}`);
-    failed++;
-  }
-}
+  it("replaces {{email}}", () => {
+    expect(run("{{email}}")).toBe("jane@example.com");
+  });
 
-function assertNotContains(description: string, actual: string, substring: string) {
-  if (!actual.includes(substring)) {
-    console.log(`  ✓ ${description}`);
-    passed++;
-  } else {
-    console.error(`  ✗ ${description}`);
-    console.error(`    Expected NOT to contain: ${JSON.stringify(substring)}`);
-    console.error(`    Actual:   ${JSON.stringify(actual)}`);
-    failed++;
-  }
-}
+  it("replaces {{company_name}}", () => {
+    expect(run("{{company_name}}")).toBe("Test Garage");
+  });
 
-// ---------------------------------------------------------------------------
-// Suite 1: Plain {{var}} — backward compat
-// ---------------------------------------------------------------------------
-console.log("\n── Bare {{variable}} patterns ──────────────────────────────");
+  it("replaces {{phone}}", () => {
+    expect(run("{{phone}}")).toBe("+46 70 123 45 67");
+  });
 
-assert(
-  "replaces {{first_name}}",
-  run("Hi {{first_name}},"),
-  "Hi Jane,"
-);
+  it("replaces {{unsubscribe_link}} with the tracking URL", () => {
+    expect(run("{{unsubscribe_link}}")).toContain(
+      "/api/tracking/unsubscribe/track-123",
+    );
+  });
 
-assert(
-  "replaces {{last_name}}",
-  run("{{last_name}}"),
-  "Smith"
-);
+  it("turns unknown variables into the empty string", () => {
+    expect(run("{{unknown_var}}")).toBe("");
+  });
 
-assert(
-  "replaces {{email}}",
-  run("{{email}}"),
-  "jane@example.com"
-);
+  it("falls back to 'there' when first_name is missing", () => {
+    expect(run("Hi {{first_name}},", { ...contact, first_name: null })).toBe(
+      "Hi there,",
+    );
+  });
 
-assert(
-  "replaces {{company_name}}",
-  run("{{company_name}}"),
-  "Test Garage"
-);
+  it("falls back to 'your company' when no company is provided", () => {
+    expect(run("{{company_name}}", contact, null)).toBe("your company");
+  });
+});
 
-assert(
-  "replaces {{phone}}",
-  run("{{phone}}"),
-  "+46 70 123 45 67"
-);
+describe("resolveVariables — TipTap <span data-variable> patterns", () => {
+  it("replaces span-wrapped first_name", () => {
+    const tpl = `<p>Hi <span data-variable="first_name">{{first_name}}</span>,</p>`;
+    expect(run(tpl)).toBe("<p>Hi Jane,</p>");
+  });
 
-assertContains(
-  "replaces {{unsubscribe_link}} with tracking URL",
-  run("{{unsubscribe_link}}"),
-  "/api/tracking/unsubscribe/track-123"
-);
+  it("replaces span-wrapped company_name", () => {
+    const tpl = `<span data-variable="company_name">{{company_name}}</span>`;
+    expect(run(tpl)).toBe("Test Garage");
+  });
 
-assert(
-  "unknown variable becomes empty string",
-  run("{{unknown_var}}"),
-  ""
-);
+  it("replaces span-wrapped unsubscribe_link", () => {
+    const tpl = `<a href=""><span data-variable="unsubscribe_link">{{unsubscribe_link}}</span></a>`;
+    expect(run(tpl)).toContain("/api/tracking/unsubscribe/track-123");
+  });
 
-assert(
-  "missing first_name falls back to 'there'",
-  run("Hi {{first_name}},", { ...contact, first_name: null }),
-  "Hi there,"
-);
+  it("turns unknown span variables into the empty string", () => {
+    const tpl = `<span data-variable="mystery_field">{{mystery_field}}</span>`;
+    expect(run(tpl)).toBe("");
+  });
 
-assert(
-  "missing company falls back to 'your company'",
-  run("{{company_name}}", contact, null),
-  "your company"
-);
+  it("still resolves correctly when the span uses a human-readable label", () => {
+    // Legacy format — the inner text was "First name" instead of {{first_name}}.
+    const tpl = `<span data-variable="first_name">First name</span>`;
+    expect(run(tpl)).toBe("Jane");
+  });
+});
 
-// ---------------------------------------------------------------------------
-// Suite 2: TipTap span-wrapped variables
-// ---------------------------------------------------------------------------
-console.log("\n── TipTap <span data-variable> patterns ────────────────────");
+describe("resolveVariables — mixed span + bare patterns in one template", () => {
+  it("resolves both span and bare vars in one pass", () => {
+    const mixed = `<p>Hi <span data-variable="first_name">{{first_name}}</span>, thanks for reaching out. Your company {{company_name}} is interesting.</p>`;
+    expect(run(mixed)).toBe(
+      "<p>Hi Jane, thanks for reaching out. Your company Test Garage is interesting.</p>",
+    );
+  });
+});
 
-const spanFirst = `<p>Hi <span data-variable="first_name">{{first_name}}</span>,</p>`;
-assert(
-  "replaces span-wrapped first_name",
-  run(spanFirst),
-  "<p>Hi Jane,</p>"
-);
+describe("ensureUnsubscribeLink — now a passthrough (List-Unsubscribe header handles compliance)", () => {
+  it("returns bodies with an explicit link unchanged", () => {
+    const body = `<p>Hello</p><a href="/api/tracking/unsubscribe/abc">Unsub</a>`;
+    expect(ensureUnsubscribeLink(body, "new-id")).toBe(body);
+  });
 
-const spanCompany = `<span data-variable="company_name">{{company_name}}</span>`;
-assert(
-  "replaces span-wrapped company_name",
-  run(spanCompany),
-  "Test Garage"
-);
+  it("returns bodies with an explicit span variable unchanged", () => {
+    const body = `<p>Hello</p><span data-variable="unsubscribe_link">{{unsubscribe_link}}</span>`;
+    expect(ensureUnsubscribeLink(body, "new-id")).toBe(body);
+  });
 
-const spanUnsubscribe = `<a href=""><span data-variable="unsubscribe_link">{{unsubscribe_link}}</span></a>`;
-assertContains(
-  "replaces span-wrapped unsubscribe_link",
-  run(spanUnsubscribe),
-  "/api/tracking/unsubscribe/track-123"
-);
+  it("no longer injects a visible footer when one isn't present", () => {
+    const body = `<p>Hello Jane</p>`;
+    expect(ensureUnsubscribeLink(body, "track-xyz")).toBe(body);
+  });
 
-const spanUnknown = `<span data-variable="mystery_field">{{mystery_field}}</span>`;
-assert(
-  "unknown span variable becomes empty string",
-  run(spanUnknown),
-  ""
-);
-
-// Span with human-readable label (legacy format)
-const spanLegacy = `<span data-variable="first_name">First name</span>`;
-assert(
-  "span with human-readable label inner text still resolves correctly",
-  run(spanLegacy),
-  "Jane"
-);
-
-// ---------------------------------------------------------------------------
-// Suite 3: Mixed — spans and bare vars in same template
-// ---------------------------------------------------------------------------
-console.log("\n── Mixed span + bare patterns ───────────────────────────────");
-
-const mixed = `<p>Hi <span data-variable="first_name">{{first_name}}</span>, thanks for reaching out. Your company {{company_name}} is interesting.</p>`;
-assert(
-  "resolves both span and bare vars in one pass",
-  run(mixed),
-  "<p>Hi Jane, thanks for reaching out. Your company Test Garage is interesting.</p>"
-);
-
-// ---------------------------------------------------------------------------
-// Suite 4: ensureUnsubscribeLink — now a passthrough; List-Unsubscribe header
-// in src/lib/gmail/send.ts handles compliance + Gmail/Outlook one-click UI.
-// ---------------------------------------------------------------------------
-console.log("\n── ensureUnsubscribeLink ─────────────────────────────────────");
-
-const bodyWithLink = `<p>Hello</p><a href="/api/tracking/unsubscribe/abc">Unsub</a>`;
-assert(
-  "bodies with an explicit link are returned unchanged",
-  ensureUnsubscribeLink(bodyWithLink, "new-id"),
-  bodyWithLink
-);
-
-const bodyWithSpanVar = `<p>Hello</p><span data-variable="unsubscribe_link">{{unsubscribe_link}}</span>`;
-assert(
-  "bodies with an explicit span variable are returned unchanged",
-  ensureUnsubscribeLink(bodyWithSpanVar, "new-id"),
-  bodyWithSpanVar
-);
-
-const bodyNoLink = `<p>Hello Jane</p>`;
-assert(
-  "no longer injects a visible footer when one isn't present",
-  ensureUnsubscribeLink(bodyNoLink, "track-xyz"),
-  bodyNoLink
-);
-
-assertNotContains(
-  "raw {{unsubscribe_link}} placeholder does not remain after resolve+ensure",
-  resolveVariables(
-    ensureUnsubscribeLink("<p>Hi</p>", "tid-abc"),
-    contact,
-    company,
-    "tid-abc"
-  ),
-  "{{unsubscribe_link}}"
-);
-
-// ---------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------
-console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed\n`);
-if (failed > 0) process.exit(1);
+  it("leaves no raw {{unsubscribe_link}} placeholder after resolve+ensure", () => {
+    const out = resolveVariables(
+      ensureUnsubscribeLink("<p>Hi</p>", "tid-abc"),
+      contact,
+      company,
+      "tid-abc",
+    );
+    expect(out).not.toContain("{{unsubscribe_link}}");
+  });
+});
