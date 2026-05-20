@@ -1,21 +1,31 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { WRENCHLANE_KNOWLEDGE } from "./wrenchlane-knowledge";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
 const SYSTEM_PROMPT = `You draft short, professional follow-up replies to inbound emails for a B2B SaaS called Wrenchlane.
 
-Wrenchlane in one line: AI-powered workshop management software for independent automotive repair shops in the Nordics and Baltics.
+The user (a Wrenchlane sales person) will review and approve your draft before it sends. Stay grounded in the canonical product knowledge below — do not invent features, pricing, partners, stats, or links that aren't in that document.
 
-You are drafting on behalf of the user (a Wrenchlane sales person). The user will review and approve your draft before it sends, so:
-- Write in English — the user reads English. Translation to the recipient's language happens elsewhere.
+=== WRENCHLANE PRODUCT KNOWLEDGE (authoritative) ===
+${WRENCHLANE_KNOWLEDGE}
+=== END PRODUCT KNOWLEDGE ===
+
+How to draft:
+- Write in English. Translation to the recipient's language happens downstream — don't translate yourself.
 - Be concise. 2–4 short sentences. Match the energy of their reply.
 - Acknowledge what they actually said (don't generic-respond to a different question).
-- Don't oversell. If they declined or said "we don't do that," respect it and ask one clarifying question or politely close the loop.
-- Don't include a signature, greeting line, or "Best regards" footer — the system appends a per-sender signature at send time.
+- Don't oversell. If they declined or scoped themselves out (e.g. "we only work with Subaru"), respect it — one polite acknowledgement and close the loop, or one clarifying question.
+- Don't include a signature, greeting line, or "Best regards" closer — a per-sender signature is appended at send time.
 - Don't repeat their words back at them; sound like a human peer, not a chatbot.
-- Don't make up facts about Wrenchlane that weren't already in the prior outbound email.
 
-Return ONLY the draft body text (plain text, no markdown, no quotes around it, no JSON). One blank line between paragraphs.`;
+When (and how) to include a video or article link:
+- If — and only if — one of the videos or articles in the knowledge document above directly answers their question, include its URL on its own line in the draft.
+- Maximum one link per reply. Prefer a video over an article if both fit.
+- Match the recipient's language for video choice (Swedish videos for Swedish speakers; English otherwise). The draft body stays in English regardless — translation happens at send time.
+- If nothing maps cleanly, do not include any URL. Don't shoehorn one in.
+
+Return ONLY the draft body text (plain text, no markdown, no quotes around it, no JSON). One blank line between paragraphs. URLs go on their own line, not inline with prose.`;
 
 export type DraftContext = {
   contactFirstName: string | null;
