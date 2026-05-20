@@ -61,13 +61,30 @@ export async function GET(request: Request) {
             }
           }
 
+          // Onboarding writes were silently swallowed before this hardening.
+          // A failure on any of them put the user into a broken state:
+          // signed in but with no workspace membership, no owner record,
+          // or no default pipeline. The user would see an empty dashboard
+          // with no obvious error. Now each insert is checked and any
+          // failure short-circuits to /login?error=onboarding so the user
+          // gets feedback + can retry instead of landing in limbo.
           if (targetWorkspaceId) {
-            // Join existing workspace as member
-            await serviceClient.from("workspace_members").insert({
-              workspace_id: targetWorkspaceId,
-              user_id: user.id,
-              role: "member",
-            });
+            const { error: joinError } = await serviceClient
+              .from("workspace_members")
+              .insert({
+                workspace_id: targetWorkspaceId,
+                user_id: user.id,
+                role: "member",
+              });
+            if (joinError) {
+              console.error(
+                `[auth/callback] join workspace ${targetWorkspaceId} for user ${user.id}:`,
+                joinError,
+              );
+              return NextResponse.redirect(
+                `${origin}/login?error=onboarding`,
+              );
+            }
           } else {
             // No matching workspace — create a new one
             const workspaceName =
@@ -75,7 +92,7 @@ export async function GET(request: Request) {
                 ? `${user.user_metadata.full_name}'s Workspace`
                 : "My Workspace";
 
-            const { data: workspace } = await serviceClient
+            const { data: workspace, error: workspaceError } = await serviceClient
               .from("workspaces")
               .insert({
                 name: workspaceName,
@@ -84,15 +101,40 @@ export async function GET(request: Request) {
               .select("id")
               .single();
 
-            if (workspace) {
-              await serviceClient.from("workspace_members").insert({
+            if (workspaceError || !workspace) {
+              console.error(
+                `[auth/callback] create workspace for user ${user.id}:`,
+                workspaceError ?? "no row returned",
+              );
+              return NextResponse.redirect(
+                `${origin}/login?error=onboarding`,
+              );
+            }
+
+            const { error: ownerError } = await serviceClient
+              .from("workspace_members")
+              .insert({
                 workspace_id: workspace.id,
                 user_id: user.id,
                 role: "owner",
               });
+            if (ownerError) {
+              console.error(
+                `[auth/callback] add owner ${user.id} to workspace ${workspace.id}:`,
+                ownerError,
+              );
+              return NextResponse.redirect(
+                `${origin}/login?error=onboarding`,
+              );
+            }
 
-              // Create a default pipeline
-              await serviceClient.from("pipelines").insert({
+            // Create a default pipeline. A failure here is less catastrophic
+            // than the membership writes — the user can still use the app,
+            // they'd just hit an empty kanban — but it's still worth
+            // surfacing in logs so we can investigate.
+            const { error: pipelineError } = await serviceClient
+              .from("pipelines")
+              .insert({
                 workspace_id: workspace.id,
                 name: "Sales Pipeline",
                 stages: [
@@ -104,6 +146,13 @@ export async function GET(request: Request) {
                   { name: "Closed Lost", order: 5, probability: 0, color: "#ef4444" },
                 ],
               });
+            if (pipelineError) {
+              console.error(
+                `[auth/callback] create default pipeline for workspace ${workspace.id}:`,
+                pipelineError,
+              );
+              // Don't redirect to error here — the user can still use the app,
+              // they'd just hit an empty kanban.
             }
           }
         }
