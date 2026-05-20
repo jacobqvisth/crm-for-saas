@@ -42,6 +42,14 @@ export type GenerateInput = {
   desiredCount?: number;
   modeMix?: ModeMix;
   supabase: SupabaseClient<Database>;
+  /**
+   * Optional deterministic RNG for the k-means++ initialization. Production
+   * leaves this undefined and the algorithm uses `Math.random`. Tests pass
+   * a seeded RNG so cluster assignment is stable when the suite runs in any
+   * order — without it `generate.test.ts` was flaky in the full src/ run
+   * because other tests had advanced the global random state.
+   */
+  rng?: () => number;
 };
 
 export type GenerateSummary = {
@@ -74,6 +82,7 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
     desiredCount = 10,
     modeMix = { mixed: 5, cold: 3, lapsed: 2 },
     supabase,
+    rng,
   } = input;
 
   // Read workspace-level min revisit interval (overridden per-company below).
@@ -101,7 +110,7 @@ export async function generateDailyRoutes(input: GenerateInput): Promise<Generat
     throw new Error("No candidate shops in range — nothing to route.");
   }
 
-  const clusters = cluster(allPoints, desiredCount);
+  const clusters = cluster(allPoints, desiredCount, { rng });
 
   // 3. Compute lapsed-density per cluster, then assign modes.
   const ranked = clusters
