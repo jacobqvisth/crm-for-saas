@@ -8,9 +8,9 @@ const Body = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ routeId: string }> },
 ) {
-  const { id } = await params;
+  const { routeId: id } = await params;
   const supabase = await createClient();
 
   const {
