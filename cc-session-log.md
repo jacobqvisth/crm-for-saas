@@ -14,6 +14,33 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-20 — AI product-knowledge: canonical seed + editable settings page (PRs #262, #267)
+
+Triggered by Jacob asking "where is the AI getting information about Wrenchlane from?" — answer was: a one-line system-prompt liner. This session productionised the answer.
+
+### PR #262 — \`feat(ai): ground inbox drafts + cold emails in canonical Wrenchlane knowledge\`
+- **Before:** \`src/lib/inbox/draft-reply.ts\` had one hand-written sentence. \`src/app/api/ai/generate-email/route.ts\` had a slightly fuller \`PRODUCT_CONTEXT\` constant. Unsynced. No FAQ, no pricing, no YouTube, no objection handling.
+- **What shipped:** new \`src/lib/inbox/wrenchlane-knowledge.ts\` as a single ~150-line markdown string covering: product description (incl. CodeOC → Wrenchlane rebrand + founders), capability names verbatim, ICP, full pricing tiers (Free / One \$19 / Small \$79 / Large \$195 + yearly variants + 14-day no-card trial), differentiators (incl. the FAQ quote *"ChatGPT can talk about cars. WrenchLane is built to help fix them."*), cite-only stats (7× faster, 42% fewer comebacks, 200+ workshops, 2.4M DTCs), tone rules (no buzzwords, no "AI" in subject lines), an objection playbook (we-only-do-Subaru / too-small / already-use-X / no-time / why-not-Google / need-new-OBD / data-safe / unsubscribed), full **YouTube video library** (8 videos tagged EN/SV with "best when" hints), 13 \`/en/article/<slug>\` references, and hard "don't invent" guardrails.
+- **Seeded by crawling** wrenchlane.com (home + FAQ + pricing + about-us + article index) and youtube.com/@wrenchlane via a Jina reader proxy (SE consent wall blocked direct fetch).
+- **Wired into both AI paths.** \`draft-reply.ts\` system prompt now starts with the full knowledge block + new instructions: max one video/article link per reply, on its own line, only when it directly answers, match recipient language for video choice. \`generate-email/route.ts\` \`PRODUCT_CONTEXT\` collapsed to a re-export.
+- **Cost impact:** ~1k extra system-prompt tokens per call ≈ \$0.001 extra per draft / cold email. Negligible.
+
+### PR #267 — \`feat(settings): editable AI product knowledge page\`
+- **Migration** \`20260520070000_workspace_ai_knowledge.sql\` — new table (workspace_id PK + content_md + updated_at + updated_by). RLS scoped to user's workspaces via \`get_user_workspace_ids()\`. \`updated_at\` trigger. Applied to prod via psql.
+- **\`src/lib/inbox/load-knowledge.ts\`** — async resolver: returns DB row's \`content_md\` when present, falls back to \`WRENCHLANE_KNOWLEDGE\` seed otherwise. Surfaces a \`source: "db" | "seed"\` flag for the UI.
+- **Helper refactor:** \`draft-reply.ts\` no longer holds a top-level \`SYSTEM_PROMPT\` constant — it builds the system prompt per-call from \`ctx.knowledgeMd\` (defaulting to the seed). Endpoints call \`loadWrenchlaneKnowledge()\` before delegating.
+- **Settings API** — \`GET /api/settings/ai-knowledge\` returns \`{content_md, source, updated_at, default_md}\`; \`PATCH\` upserts the row. Both workspace-gated.
+- **UI** — full-width page at \`/settings/ai-knowledge\` with monospace 32-row textarea, Save / Discard / Reset-to-defaults controls, status badge (*"Custom (saved …)"* vs *"Using built-in defaults — never edited"*), live word + char counters, info banner explaining where the content is used (inbox drafts + sequence builder). New Sparkles-icon card on the \`/settings\` index.
+- **Behaviour:** seed wins on first load. After first save, DB wins on every subsequent AI call. *Reset to defaults* repopulates the editor but doesn't save until **Save** is clicked — so an accidental click is recoverable via **Discard changes**.
+- **Types:** \`workspace_ai_knowledge\` added to \`database.types.ts\`.
+
+### Plan complete: inbox UX overhaul end-to-end
+PR A0 (#239) hide-OOO + sender filter → PR A (#241/#242) translate inbound + backfill → PR B (#244) English-first viewer → PR C (#245) auto-suggested draft → PR D (#246) outbound translation at send time → PR #254 cron timeout fix → PR #262 canonical knowledge file → PR #267 editable knowledge settings page. The Mārtiņš (Subaru-only) thread is now a complete round-trip: Latvian in → English title + body + draft auto-fill → translated preview pane → translated send → both EN and LV stored on \`activities.metadata\`. Future tuning of AI quality lives entirely in \`/settings/ai-knowledge\` — no code deploy.
+
+### Process note
+All worked from \`~/crm-worktrees/pr-a0-inbox-filters/\` off clean \`origin/main\` because the primary checkout is still on \`feature/ndr-bounce-ingestion\` from a parallel session. Six feature merges + four log/fix merges back-to-back without entangling the parallel tree.
+
+
 ## 2026-05-20 — Fix: check-replies cron has been silently timing out for ~5 days (PR #254)
 
 Triggered by Jacob noticing a reply from `marcus@sodertorp.se` (to a sequence email from `magnus.stein@wrenchlane.com`, sent 2026-05-19) was in Gmail but not in the CRM inbox.
