@@ -3779,3 +3779,20 @@ Two follow-up PRs to the /ceo/cta-clicks dashboard shipped in #232.
   - `next build --webpack` ✓ — full compile (5.0 s) + type check (12.7 s) + 65/65 page generation
 - **Deploy:** Vercel auto-deploy ✓ — `curl -I https://crm-for-saas.vercel.app` → 307 within ~30 s of merge.
 - **What this unlocks:** Every future PR can run `npm run build` locally and catch real failures. The "build was already broken" excuse is gone. Future "type was always wrong" / "lint regression" bugs surface at PR-author time instead of slipping into main behind the routes-export error.
+
+
+## 2026-05-20 — insertActivity helper + variable-interpolation test conversion (PRs #253 + #255)
+
+### PR #253 — `insertActivity` helper that throws on error
+- **Why:** PR #248 widened `activities_type_check` for the immediate breach, but the underlying anti-pattern (every server-side call site discarded `.error` after the insert) remained. Next time the schema diverges, we'd silently lose months of data again.
+- **What:** New `src/lib/activities/insert.ts` with `insertActivity()` + `insertActivities()` — both throw on `.error` with a rich message (type, workspace_id, optional caller context, underlying Postgres error). Same throw-on-error contract that `logVisit` already used. 8 unit tests.
+- **Converted 12 server-side call sites:**
+  - **Hard-fail** (let the throw propagate to the outer error boundary): inbox/reply, contacts/forget, sequences/delete, routes/stops/remove, process-emails (× 2), check-replies (× 3 including a batch insert).
+  - **Soft-fail** (try/catch + `console.error` so the pixel/redirect still returns 200, but the failure is no longer silent): tracking/open, tracking/click, tracking/unsubscribe.
+- **Left alone:** 9 client-component call sites (deals, contacts, companies modals, csv-import wizard). They already check `.error` and toast to the user — they don't have the silent-for-months failure mode this PR targets.
+- **Test result:** tsc/eslint clean. vitest 191/191. `next build --webpack` end-to-end green — first real check possible since PR #251 unblocked the build.
+
+### PR #255 — convert variable-interpolation.test.ts to describe/it
+- **Why:** The file was top-level `console.log` + manual `assert()` calls running at module import time. All 19 assertions passed, but vitest's discovery layer marked the file as "no test suite found" and added a spurious FAIL line to every test run. Every PR description in this session had to caveat the "1 failed" line.
+- **What:** Same 19 assertions rewritten in standard `describe`/`it`/`expect`, four suites matching the original section headers. No behaviour change to the code under test.
+- **Test result:** Full `vitest run src/` — **210/210, 26/26 files passed, zero failed entries**. (Previously: 1 failed | 25 passed, 191 tests.)
