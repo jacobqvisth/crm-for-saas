@@ -73,21 +73,30 @@ function ActivityTab({ activities }: { activities: Activity[] }) {
   }
   return (
     <div className="space-y-0">
-      {activities.map((a) => (
-        <div key={a.id} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-900">
-              {a.subject || a.type.replace(/_/g, ' ')}
-            </p>
-            {a.body && <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{a.body}</p>}
-            {a.created_at && (
-              <p className="text-xs text-slate-400 mt-1">
-                {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+      {activities.map((a) => {
+        const meta = (a.metadata ?? {}) as Record<string, unknown>;
+        const senderName = typeof meta.sender_name === 'string' ? meta.sender_name : null;
+        const senderEmail = typeof meta.sender_email === 'string' ? meta.sender_email : null;
+        const who = senderName || senderEmail;
+        return (
+          <div key={a.id} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-900">
+                {a.subject || a.type.replace(/_/g, ' ')}
               </p>
-            )}
+              {a.type === 'email_sent' && who && (
+                <p className="text-xs text-slate-500 mt-0.5">Sent by {who}</p>
+              )}
+              {a.body && <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{a.body}</p>}
+              {a.created_at && (
+                <p className="text-xs text-slate-400 mt-1">
+                  {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

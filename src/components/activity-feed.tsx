@@ -95,6 +95,10 @@ export function ActivityFeed({ activities, showFilters = false }: ActivityFeedPr
       <div className="space-y-1">
         {visible.map((activity) => {
           const Icon = iconMap[activity.type] || Activity;
+          const meta = (activity.metadata ?? {}) as Record<string, unknown>;
+          const senderName = typeof meta.sender_name === "string" ? meta.sender_name : null;
+          const senderEmail = typeof meta.sender_email === "string" ? meta.sender_email : null;
+          const who = senderName || senderEmail;
           return (
             <div
               key={activity.id}
@@ -107,6 +111,11 @@ export function ActivityFeed({ activities, showFilters = false }: ActivityFeedPr
                 <p className="text-sm text-slate-700 truncate">
                   {activity.subject || activity.type.replace(/_/g, " ")}
                 </p>
+                {activity.type === "email_sent" && who && (
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    Sent by {who}
+                  </p>
+                )}
                 {activity.body && (
                   <p className="text-xs text-slate-400 truncate mt-0.5">
                     {activity.body}
