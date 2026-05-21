@@ -14,6 +14,22 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-21 — Email-stats audit: OOO reply pollution + 1000-row cap + stat tooltips (PR #284)
+
+- **Trigger:** Jacob asked three questions about the dashboard email stats: do "opened" counts include OOO auto-replies, can users see what each stat means, and why does "Sent" never go over 1000?
+- **Findings:**
+  1. **Opens are clean.** `src/app/api/tracking/open/[trackingId]/route.ts` filters Google Image Proxy + common scanner UAs + IP ranges; OOO autoresponders rarely fetch images. No change.
+  2. **Replies were polluted by OOO.** `src/app/api/cron/check-replies/route.ts:169-176` was inserting `event_type=reply` for *every* reply including auto-replies, comment literally read `(always, even for OOO — for stats)`. OOO is correctly detected (`isAutoReply()` checks `Auto-Submitted`/`X-AutoReply`/`Precedence: bulk` headers + multilingual subject patterns: "out of office", "frånvarande", "poissa", "abwesenheit", etc.) and stored in `inbox_messages.is_auto_reply` + a distinct activity subject — but the reply-rate stat saw all of them.
+  3. **1000-row cap was real in two routes.** `src/app/api/dashboard/route.ts` did `select("sent_at")` then `.length`d the result — capped at PostgREST's `db-max-rows` ceiling once the period crossed 1000 sends. Same on the `email_events`, `contacts`-for-growth, and `sequence_enrollments` reads. `src/app/(dashboard)/sequences/[id]/analytics/page.tsx` had the same bug on `enrollmentIds`, then every downstream `.in()` ran on a truncated id set (also at risk of the `.in()` URL-length trap from PR #99/#102).
+- **Fix (PR #284, branch `feat/email-stats-info`, commit `143a1d3`):**
+  - `check-replies` now skips the `reply` event insert when `autoReply === true`. OOO still shows up in Inbox flagged + as activity "Auto-reply received (OOO)", just not in the stat.
+  - Dashboard + analytics routes route through `pageAll` (existing helper in `src/lib/supabase-paging.ts`); the analytics page's downstream `.in()` calls use `chunkedIn` (chunk 200 + paginate each chunk).
+  - New `src/components/info-tooltip.tsx` (small CSS popover, no Radix dep) wired into both `src/components/dashboard/email-performance.tsx` (6 stats) and the analytics StatCard (8 stats). Each tooltip explains the dedup/filter rules and calls out the OOO exclusion explicitly.
+- **Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `PATH=/opt/homebrew/bin:$PATH npx next build --webpack` 67/67 pages green. CI Build & Lint green. Vercel preview failed prerendering `/login` — same chronic preview-env-vars gap that's hit every preview for weeks; not blocking. Merged 09:43 UTC; prod deploy `crm-for-saas-2f0cu2id8` Ready ~1min later; `curl -I https://crm-for-saas.vercel.app` → 307 (login redirect, expected).
+- **Follow-up to keep in mind:** the analytics route makes one chunked `select("id", count:exact, head:true)` per 200-id slice to sum sent counts — fine at current scale but if a sequence ever crosses ~5k enrollments the per-chunk round-trips will add up; an SQL RPC similar to `get_sequence_stats` but scoped per-status would be cheaper.
+
+---
+
 ## 2026-05-21 — Trace + DNC: kundtjanst@skelleftea.se (Konsument Skellefteå)
 
 - **Trigger:** Jacob spotted a non-workshop email (`kundtjanst@skelleftea.se`) in the CRM and asked how it got there.
