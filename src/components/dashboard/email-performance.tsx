@@ -18,6 +18,21 @@ import {
   Mail,
 } from "lucide-react";
 import Link from "next/link";
+import { InfoTooltip } from "@/components/info-tooltip";
+
+const STAT_HELP: Record<string, string> = {
+  Sent: "Number of sequence emails successfully handed off to Gmail in the selected period. Excludes scheduled, paused, cancelled, or failed sends.",
+  Opened:
+    "Unique emails whose tracking pixel was loaded. Known bots and scanners (Google Image Proxy, etc.) are filtered out. Multiple opens of the same email count once per hour.",
+  Clicked:
+    "Unique emails where the recipient clicked at least one tracked link.",
+  Replied:
+    "Real replies only. Out-of-office and other auto-replies are detected via headers and subject patterns and excluded from this count — they still show up in Inbox flagged as 'Out of office'.",
+  Bounced:
+    "Permanent (5xx) bounces detected from non-delivery reports in the sender's inbox. Soft (4xx) bounces are retried instead.",
+  Unsubscribes:
+    "Recipients who clicked the unsubscribe link or were added to the suppression list. They will not receive further sequence emails.",
+};
 
 interface EmailStats {
   sent: number;
@@ -50,14 +65,18 @@ function StatCard({
   count: number;
   percentage: string | null;
 }) {
+  const help = STAT_HELP[label];
   return (
     <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
       <Icon className="w-4 h-4 text-slate-400 shrink-0" />
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-900">{count.toLocaleString()}</p>
-        <p className="text-xs text-slate-500 truncate">
-          {label}
-          {percentage && <span className="text-slate-400"> ({percentage})</span>}
+        <p className="text-xs text-slate-500 truncate flex items-center gap-1">
+          <span className="truncate">
+            {label}
+            {percentage && <span className="text-slate-400"> ({percentage})</span>}
+          </span>
+          {help && <InfoTooltip label={help} />}
         </p>
       </div>
     </div>

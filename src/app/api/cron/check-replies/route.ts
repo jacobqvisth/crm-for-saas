@@ -166,8 +166,12 @@ export async function POST(request: NextRequest) {
             translation_model: translation.ok ? translation.model : null,
           });
 
-          // Insert email_event for reply (always, even for OOO — for stats)
-          if (threadEmail?.tracking_id) {
+          // Insert email_event for reply — REAL replies only.
+          // OOO / auto-replies are still recorded as inbox_messages
+          // (`is_auto_reply = true`, `category = "out_of_office"`) and as an
+          // `email_received` activity with a distinct subject, so the signal
+          // isn't lost; it just doesn't pollute the "Replied" stat / reply rate.
+          if (!autoReply && threadEmail?.tracking_id) {
             await supabase.from("email_events").insert({
               tracking_id: threadEmail.tracking_id,
               email_queue_id: threadEmail.id,
