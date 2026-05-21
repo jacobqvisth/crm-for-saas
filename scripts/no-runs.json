@@ -31,11 +31,11 @@
     },
     "runId": "EGZCxuPMsUhmSQmEI",
     "datasetId": "baKrawgcNc7tDd4lR",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:02:58.836Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:13:52.565Z",
     "stats": {
-      "computeUnits": 0.38152
+      "computeUnits": 0.72619
     }
   },
   {
@@ -70,11 +70,11 @@
     },
     "runId": "5QUc7IBbBAGEzGm0I",
     "datasetId": "StnYqYsgiABPy79Nb",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:02:59.167Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:09:14.863Z",
     "stats": {
-      "computeUnits": 0.3847388888888889
+      "computeUnits": 0.41725444444444443
     }
   },
   {
@@ -109,11 +109,11 @@
     },
     "runId": "mu0mwptC03ZnXzbhA",
     "datasetId": "WdO926FsqRSGAiBIg",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:02:59.622Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:08:55.687Z",
     "stats": {
-      "computeUnits": 0.38276777777777776
+      "computeUnits": 0.3954755555555556
     }
   },
   {
@@ -187,11 +187,11 @@
     },
     "runId": "V1OjfClUnT9dmrLbs",
     "datasetId": "uN5GOyCLNLGQTK6cH",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:00.262Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:09:11.477Z",
     "stats": {
-      "computeUnits": 0.3811522222222222
+      "computeUnits": 0.4122733333333333
     }
   },
   {
@@ -265,11 +265,11 @@
     },
     "runId": "R0a4cMX68gvc2Egr6",
     "datasetId": "bjEgDfFm7woJOAZ3F",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:01.277Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:12:00.858Z",
     "stats": {
-      "computeUnits": 0.3839911111111111
+      "computeUnits": 0.5992511111111111
     }
   },
   {
@@ -382,11 +382,11 @@
     },
     "runId": "vDBtd60H7OzTDIG39",
     "datasetId": "Upd7y3hhuKwcjufF9",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:02.877Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:27:10.589Z",
     "stats": {
-      "computeUnits": 0.37976666666666664
+      "computeUnits": 1.6083277777777778
     }
   },
   {
@@ -499,11 +499,11 @@
     },
     "runId": "y2vXBnGtU3kKGOp3M",
     "datasetId": "xMzsbHQ100c0TOUFr",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:04.417Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:10:15.359Z",
     "stats": {
-      "computeUnits": 0.3787277777777778
+      "computeUnits": 0.47866444444444445
     }
   },
   {
@@ -733,11 +733,11 @@
     },
     "runId": "HOnyxVf8QLnVi5tyS",
     "datasetId": "OQPFvf4HBw0og0K0i",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:06.846Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:09:43.896Z",
     "stats": {
-      "computeUnits": 0.37598
+      "computeUnits": 0.4409588888888889
     }
   },
   {
@@ -967,11 +967,11 @@
     },
     "runId": "w12D1s1AlIml0zcaJ",
     "datasetId": "pOPJmi0ysPJRz4sKa",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:09.637Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:11:09.658Z",
     "stats": {
-      "computeUnits": 0.37234333333333336
+      "computeUnits": 0.5332033333333334
     }
   },
   {
@@ -1201,11 +1201,11 @@
     },
     "runId": "UxHuv58FO4udAC1Q9",
     "datasetId": "sPed937oSv0tNcGXf",
-    "status": "RUNNING",
+    "status": "SUCCEEDED",
     "startedAt": "2026-05-21T16:03:12.205Z",
-    "finishedAt": null,
+    "finishedAt": "2026-05-21T16:10:17.192Z",
     "stats": {
-      "computeUnits": 0.3705333333333333
+      "computeUnits": 0.47205888888888886
     }
   },
   {
@@ -1279,8 +1279,12 @@
     },
     "runId": "vEmWkfe3UncvSQ3rh",
     "datasetId": "1f6L5BRO9pLFkc8Th",
-    "status": "READY",
-    "startedAt": "2026-05-21T16:08:49.948Z"
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:08:49.948Z",
+    "finishedAt": "2026-05-21T16:13:42.827Z",
+    "stats": {
+      "computeUnits": 0.3252511111111111
+    }
   },
   {
     "label": "Fredrikstad/Sarpsborg — karosseriverksted",
@@ -1314,8 +1318,12 @@
     },
     "runId": "9lgra24h0MoXjOkUL",
     "datasetId": "PavLcdWRKHUFIOyes",
-    "status": "READY",
-    "startedAt": "2026-05-21T16:08:50.261Z"
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:08:50.261Z",
+    "finishedAt": "2026-05-21T16:12:10.466Z",
+    "stats": {
+      "computeUnits": 0.22223777777777778
+    }
   },
   {
     "label": "Fredrikstad/Sarpsborg — billakkering",
@@ -1349,8 +1357,12 @@
     },
     "runId": "aUN7PTzy0wZwM36h6",
     "datasetId": "UEtcnm5zuEsg3VIUr",
-    "status": "READY",
-    "startedAt": "2026-05-21T16:08:50.939Z"
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:08:50.939Z",
+    "finishedAt": "2026-05-21T16:13:04.320Z",
+    "stats": {
+      "computeUnits": 0.2814111111111111
+    }
   },
   {
     "label": "Fredrikstad/Sarpsborg — elbilverksted",
@@ -1384,8 +1396,12 @@
     },
     "runId": "gPJ1SSR5o4wXMvgVC",
     "datasetId": "8yWamUlZgN3zROmXh",
-    "status": "READY",
-    "startedAt": "2026-05-21T16:08:51.309Z"
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:08:51.309Z",
+    "finishedAt": "2026-05-21T16:11:37.573Z",
+    "stats": {
+      "computeUnits": 0.18451222222222222
+    }
   },
   {
     "label": "Kristiansand — bilverksted",
@@ -1419,8 +1435,12 @@
     },
     "runId": "22VOMtxpxYZCKXWt1",
     "datasetId": "zg7isivFSgaOWvZoB",
-    "status": "READY",
-    "startedAt": "2026-05-21T16:08:51.721Z"
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:08:51.721Z",
+    "finishedAt": "2026-05-21T16:15:16.656Z",
+    "stats": {
+      "computeUnits": 0.42756666666666665
+    }
   },
   {
     "label": "Kristiansand — bilmekaniker",
@@ -1452,10 +1472,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "KG6wJn8oOp4iimyMC",
+    "datasetId": "9RjjFh5bFvcy1nYXQ",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:09:24.573Z",
+    "finishedAt": "2026-05-21T16:11:17.475Z",
+    "stats": {
+      "computeUnits": 0.12531111111111112
+    }
   },
   {
     "label": "Kristiansand — dekkverksted",
@@ -1487,10 +1511,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "mfsyeHSQbVkcph3d9",
+    "datasetId": "9trg3FXlCtMrnT1el",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:09:24.905Z",
+    "finishedAt": "2026-05-21T16:11:36.688Z",
+    "stats": {
+      "computeUnits": 0.14621222222222222
+    }
   },
   {
     "label": "Kristiansand — karosseriverksted",
@@ -1522,10 +1550,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "MLWRTqvXxSd7Gf1kx",
+    "datasetId": "4LHYiAH72YcPRIOn1",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:09:25.280Z",
+    "finishedAt": "2026-05-21T16:12:02.109Z",
+    "stats": {
+      "computeUnits": 0.17407444444444445
+    }
   },
   {
     "label": "Kristiansand — billakkering",
@@ -1557,10 +1589,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "SuHEDh8EEhusrRtng",
+    "datasetId": "P4jfqYraeXs4L9t3y",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:09:25.961Z",
+    "finishedAt": "2026-05-21T16:11:43.701Z",
+    "stats": {
+      "computeUnits": 0.15287777777777778
+    }
   },
   {
     "label": "Kristiansand — elbilverksted",
@@ -1592,10 +1628,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "BUGc5xDxJNLq1x309",
+    "datasetId": "A9qsJiTg9UiJWeFDs",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:09:26.560Z",
+    "finishedAt": "2026-05-21T16:09:47.332Z",
+    "stats": {
+      "computeUnits": 0.02278
+    }
   },
   {
     "label": "Tromsø — bilverksted",
@@ -1627,10 +1667,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "rogy77qeJ9F2nMdNo",
+    "datasetId": "ZftZ4TdwtlFJFqlvL",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:00.128Z",
+    "finishedAt": "2026-05-21T16:16:10.390Z",
+    "stats": {
+      "computeUnits": 0.4112688888888889
+    }
   },
   {
     "label": "Tromsø — bilmekaniker",
@@ -1662,10 +1706,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "rPcJERVqYTyAAbR3Y",
+    "datasetId": "dQTzq6ivdd538tiuM",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:00.460Z",
+    "finishedAt": "2026-05-21T16:13:09.245Z",
+    "stats": {
+      "computeUnits": 0.20956222222222223
+    }
   },
   {
     "label": "Tromsø — dekkverksted",
@@ -1697,10 +1745,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "DjRnc1gOTWyRwFfbD",
+    "datasetId": "KjhmFeewCqA2UIpDd",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:00.886Z",
+    "finishedAt": "2026-05-21T16:11:58.396Z",
+    "stats": {
+      "computeUnits": 0.13034777777777778
+    }
   },
   {
     "label": "Tromsø — karosseriverksted",
@@ -1732,10 +1784,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "tl53RTscadIbwtPxg",
+    "datasetId": "MTP7LC2VcJuJiWGGH",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:01.272Z",
+    "finishedAt": "2026-05-21T16:13:28.346Z",
+    "stats": {
+      "computeUnits": 0.2298611111111111
+    }
   },
   {
     "label": "Tromsø — billakkering",
@@ -1767,10 +1823,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "y2dm1yC5PbDuth3GV",
+    "datasetId": "AxY3waQ89rpxgGJaB",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:01.648Z",
+    "finishedAt": "2026-05-21T16:12:48.400Z",
+    "stats": {
+      "computeUnits": 0.18505666666666667
+    }
   },
   {
     "label": "Tromsø — elbilverksted",
@@ -1802,10 +1862,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "y9QfPR4IqhaNK3z5g",
+    "datasetId": "4KRVuIvKDLjdSqLN6",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:35.755Z",
+    "finishedAt": "2026-05-21T16:11:20.164Z",
+    "stats": {
+      "computeUnits": 0.04915888888888889
+    }
   },
   {
     "label": "Sør-Norge fringe — bilverksted",
@@ -1837,10 +1901,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "lxdAY6lkU91JJIUJ9",
+    "datasetId": "pV5w9yeGalX6jt3Bk",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:36.100Z",
+    "finishedAt": "2026-05-21T16:20:55.966Z",
+    "stats": {
+      "computeUnits": 0.6885366666666667
+    }
   },
   {
     "label": "Sør-Norge fringe — bilmekaniker",
@@ -1872,10 +1940,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "s10PIS30K3PHUAVV4",
+    "datasetId": "bkSQWlZeFXuxiO7Ht",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:36.545Z",
+    "finishedAt": "2026-05-21T16:22:57.854Z",
+    "stats": {
+      "computeUnits": 0.8235488888888889
+    }
   },
   {
     "label": "Sør-Norge fringe — dekkverksted",
@@ -1907,10 +1979,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "kk52XhLP0FCKp1rGe",
+    "datasetId": "9kgJ17HNpcPXVaI4k",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:36.857Z",
+    "finishedAt": "2026-05-21T16:29:59.826Z",
+    "stats": {
+      "computeUnits": 1.2920244444444444
+    }
   },
   {
     "label": "Sør-Norge fringe — karosseriverksted",
@@ -1942,10 +2018,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "fAeLPEGE4zCu1DQI4",
+    "datasetId": "vd1i29IGJpWqO5OXs",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:10:37.186Z",
+    "finishedAt": "2026-05-21T16:29:58.754Z",
+    "stats": {
+      "computeUnits": 1.29047
+    }
   },
   {
     "label": "Sør-Norge fringe — billakkering",
@@ -1977,10 +2057,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "tkmiVd6dSF8IJFCAF",
+    "datasetId": "cH0cBM3VMaLZkEbPK",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:11.626Z",
+    "finishedAt": "2026-05-21T16:24:22.087Z",
+    "stats": {
+      "computeUnits": 0.8781477777777777
+    }
   },
   {
     "label": "Sør-Norge fringe — elbilverksted",
@@ -2012,10 +2096,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "0FBW6VMIlxGzgLIz7",
+    "datasetId": "u8h239uycdYpfUSSb",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:11.942Z",
+    "finishedAt": "2026-05-21T16:26:47.951Z",
+    "stats": {
+      "computeUnits": 1.0398966666666667
+    }
   },
   {
     "label": "Vestlandet fringe — bilverksted",
@@ -2047,10 +2135,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "ZpUO52bC9ViZfGsvN",
+    "datasetId": "HXnQZgxIGqcGN9y0u",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:12.568Z",
+    "finishedAt": "2026-05-21T16:22:42.893Z",
+    "stats": {
+      "computeUnits": 0.7668833333333334
+    }
   },
   {
     "label": "Vestlandet fringe — bilmekaniker",
@@ -2082,10 +2174,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "p2oeD06klx4jUG9pV",
+    "datasetId": "I5dTE9wivpvXIFucV",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:12.905Z",
+    "finishedAt": "2026-05-21T16:25:52.183Z",
+    "stats": {
+      "computeUnits": 0.9768188888888889
+    }
   },
   {
     "label": "Vestlandet fringe — dekkverksted",
@@ -2117,10 +2213,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "jJZ7xMAMJnzmxvdtm",
+    "datasetId": "XKFQeZ0tU29LW5GiX",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:13.239Z",
+    "finishedAt": "2026-05-21T16:26:04.984Z",
+    "stats": {
+      "computeUnits": 0.9906255555555555
+    }
   },
   {
     "label": "Vestlandet fringe — karosseriverksted",
@@ -2152,10 +2252,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "DfyeznmddvbA3eMgX",
+    "datasetId": "5d23qdc8PWBfGyhBN",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:48.788Z",
+    "finishedAt": "2026-05-21T16:26:41.816Z",
+    "stats": {
+      "computeUnits": 0.9920988888888889
+    }
   },
   {
     "label": "Vestlandet fringe — billakkering",
@@ -2187,10 +2291,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "pvdcImPtTW7OztPHJ",
+    "datasetId": "4Lh9gVbopXhFM68u9",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:49.137Z",
+    "finishedAt": "2026-05-21T16:26:24.997Z",
+    "stats": {
+      "computeUnits": 0.9729811111111111
+    }
   },
   {
     "label": "Vestlandet fringe — elbilverksted",
@@ -2222,10 +2330,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "dBO6sQIOragzDazI5",
+    "datasetId": "eAxAWMqjnDeQOWISu",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:49.501Z",
+    "finishedAt": "2026-05-21T16:25:25.057Z",
+    "stats": {
+      "computeUnits": 0.9059211111111111
+    }
   },
   {
     "label": "Midt-Norge fringe — bilverksted",
@@ -2257,10 +2369,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "dRflNe9DJJyUJIRK7",
+    "datasetId": "6QJRalkrxFk7PsuuR",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:49.940Z",
+    "finishedAt": "2026-05-21T16:23:06.771Z",
+    "stats": {
+      "computeUnits": 0.7518344444444445
+    }
   },
   {
     "label": "Midt-Norge fringe — bilmekaniker",
@@ -2292,10 +2408,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "wE2q9L0crXdUHnL6n",
+    "datasetId": "gJEWtmDIypbN5Pep1",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:11:50.305Z",
+    "finishedAt": "2026-05-21T16:26:07.315Z",
+    "stats": {
+      "computeUnits": 0.9520911111111111
+    }
   },
   {
     "label": "Midt-Norge fringe — dekkverksted",
@@ -2327,10 +2447,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "ZcWOpoSaZ4ACaiCFC",
+    "datasetId": "raMSA9QTQwXt4yQwX",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:12:27.084Z",
+    "finishedAt": "2026-05-21T16:26:14.491Z",
+    "stats": {
+      "computeUnits": 0.9191711111111112
+    }
   },
   {
     "label": "Midt-Norge fringe — karosseriverksted",
@@ -2362,10 +2486,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "PVuZ1h0SSnrYZXXR5",
+    "datasetId": "CXc0AK2uNcF6AxWnC",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:12:27.404Z",
+    "finishedAt": "2026-05-21T16:26:15.512Z",
+    "stats": {
+      "computeUnits": 0.9199311111111111
+    }
   },
   {
     "label": "Midt-Norge fringe — billakkering",
@@ -2397,10 +2525,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "bWaaDgSTFV9yaCRgY",
+    "datasetId": "WER4abB1cNUD1VRri",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:12:27.844Z",
+    "finishedAt": "2026-05-21T16:26:28.318Z",
+    "stats": {
+      "computeUnits": 0.9336688888888889
+    }
   },
   {
     "label": "Midt-Norge fringe — elbilverksted",
@@ -2432,10 +2564,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "tJC3damqQRnworAbc",
+    "datasetId": "5F99qryohttz9pMnH",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:12:28.195Z",
+    "finishedAt": "2026-05-21T16:25:14.906Z",
+    "stats": {
+      "computeUnits": 0.8517588888888888
+    }
   },
   {
     "label": "Nord-Norge fringe — bilverksted",
@@ -2467,10 +2603,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "6ZYKxazZEZ5f3fzHe",
+    "datasetId": "woPHZTiHhVlM4fUtw",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:12:28.609Z",
+    "finishedAt": "2026-05-21T16:23:20.411Z",
+    "stats": {
+      "computeUnits": 0.7240466666666666
+    }
   },
   {
     "label": "Nord-Norge fringe — bilmekaniker",
@@ -2502,10 +2642,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "fwhxYoRyFNLN4nOWc",
+    "datasetId": "EbNaKaJ00k5jatnOW",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:13:03.816Z",
+    "finishedAt": "2026-05-21T16:30:47.025Z",
+    "stats": {
+      "computeUnits": 1.1812022222222223
+    }
   },
   {
     "label": "Nord-Norge fringe — dekkverksted",
@@ -2537,10 +2681,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "YJNSdRCLiehGHjPtd",
+    "datasetId": "gsu37KI3wKJW6C3KM",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:13:04.441Z",
+    "finishedAt": "2026-05-21T16:31:30.039Z",
+    "stats": {
+      "computeUnits": 1.22827
+    }
   },
   {
     "label": "Nord-Norge fringe — karosseriverksted",
@@ -2572,10 +2720,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "jwFEzPp3rGyfHrli5",
+    "datasetId": "ZQ49MqEQGeG0CrKQS",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:13:04.862Z",
+    "finishedAt": "2026-05-21T16:31:23.863Z",
+    "stats": {
+      "computeUnits": 1.2209077777777777
+    }
   },
   {
     "label": "Nord-Norge fringe — billakkering",
@@ -2607,10 +2759,14 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "tpWV4RoS9oi0k6KOw",
+    "datasetId": "lZCqZy8P7kzm7Tved",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:13:05.250Z",
+    "finishedAt": "2026-05-21T16:31:36.565Z",
+    "stats": {
+      "computeUnits": 1.2346477777777778
+    }
   },
   {
     "label": "Nord-Norge fringe — elbilverksted",
@@ -2642,9 +2798,13 @@
       "maxImages": 0,
       "maxReviews": 0
     },
-    "runId": null,
-    "datasetId": null,
-    "status": "KICKOFF_FAILED",
-    "startedAt": null
+    "runId": "RxSjBD1Yf2QEhFJlx",
+    "datasetId": "SFDXEpYytKCztelz2",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:13:05.571Z",
+    "finishedAt": "2026-05-21T16:29:57.522Z",
+    "stats": {
+      "computeUnits": 1.1242188888888889
+    }
   }
 ]
