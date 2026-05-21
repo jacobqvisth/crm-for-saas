@@ -4049,3 +4049,22 @@ Session closed.
 **Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` 67/67 pages. E2E CI still red on the pre-existing `CRON_SECRET missing` infra issue from yesterday's session (auth.setup.ts errors before any test runs) — unrelated.
 
 **Out of scope:** /deals, /lists, /sequences, /tasks lists weren't touched. If they need the same behaviour later, the same pattern applies — each gets a unique `LIST_STATE_KEY` constant and the four useEffects.
+
+---
+
+## 2026-05-21 — Drag-resizable inbox panels (PR #269)
+
+**Branch:** feature/inbox-resizable-panels → main (squash merge 2026-05-20T10:01:45Z).
+**Deploy:** live on crm-for-saas.vercel.app (HTTP 307 → /login as expected after merge).
+**Files:**
+- `src/app/(dashboard)/inbox/inbox-client.tsx` — replaced fixed `w-80` on the conversation-list column with state-driven inline width; added a 4 px col-resize divider between the list and the thread view
+
+**Behaviour:**
+- Drag the divider to resize the inbox list between 240–720 px (default 320 px).
+- Double-click the divider to reset to default.
+- Width persists per browser via localStorage key `inbox.listWidth`, hydrated alongside the existing `inbox.hideOOO` / `inbox.senderFilter` prefs.
+- Mouse-move / mouse-up bind to window (not the handle) so the drag continues when the cursor leaves the handle; body cursor + user-select are pinned to `col-resize` / `none` while dragging.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` compiled + TypeScript pass (prerender failed in worktree on missing `.env.local` — known worktree limitation, unrelated to this change). Production smoke: `curl -I https://crm-for-saas.vercel.app` returns 307 → /login after merge.
+
+**Out of scope:** /messages, /sequences/[id] builder, and any other 2-pane views still use fixed widths. Same pattern applies if they need it later — declare `*_WIDTH_KEY` + `_DEFAULT` + `_MIN` + `_MAX`, hydrate from localStorage in the existing prefs `useEffect`, and add a `<div role="separator" onMouseDown=…>` between the panes.
