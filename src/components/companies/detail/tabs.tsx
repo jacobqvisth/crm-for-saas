@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Activity as ActivityIcon } from 'lucide-react';
-import { LeadStatusBadge, DealStageBadge } from '@/components/ui/badge';
+import { LeadStatusBadge, DealStageBadge, OutcomeBadge } from '@/components/ui/badge';
 import { StatusesTab } from './statuses-tab';
 import type { OutreachStatus } from './status';
 import type {
@@ -81,9 +81,12 @@ function ActivityTab({ activities }: { activities: Activity[] }) {
         return (
           <div key={a.id} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-slate-900">
-                {a.subject || a.type.replace(/_/g, ' ')}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium text-slate-900">
+                  {a.subject || a.type.replace(/_/g, ' ')}
+                </p>
+                <OutcomeBadge outcome={a.outcome} />
+              </div>
               {a.type === 'email_sent' && who && (
                 <p className="text-xs text-slate-500 mt-0.5">Sent by {who}</p>
               )}

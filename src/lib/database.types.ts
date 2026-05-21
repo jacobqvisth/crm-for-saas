@@ -85,6 +85,7 @@ export type Database = {
           deal_id: string | null
           id: string
           metadata: Json | null
+          outcome: string | null
           subject: string | null
           type: string
           user_id: string | null
@@ -98,6 +99,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           metadata?: Json | null
+          outcome?: string | null
           subject?: string | null
           type: string
           user_id?: string | null
@@ -111,6 +113,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           metadata?: Json | null
+          outcome?: string | null
           subject?: string | null
           type?: string
           user_id?: string | null

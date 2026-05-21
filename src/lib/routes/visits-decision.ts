@@ -1,21 +1,20 @@
 // Pure decision logic for field-visit follow-up.
 // Kept import-free of Supabase / promote / enroll so it's vitest-friendly
 // without path-alias configuration.
+//
+// The outcome taxonomy itself lives in `src/lib/activities/outcomes.ts` so
+// calls + emails + visits all share one enum. Field visits stay aliased to
+// `VisitOutcome` here to keep the established imports working.
 
-export type VisitOutcome =
-  | "interested"
-  | "not_interested"
-  | "closed"
-  | "no_answer"
-  | "skipped";
+import {
+  ACTIVITY_OUTCOMES,
+  OUTCOME_LABEL as ACTIVITY_OUTCOME_LABEL,
+  type ActivityOutcome,
+} from "@/lib/activities/outcomes";
 
-export const VISIT_OUTCOMES: readonly VisitOutcome[] = [
-  "interested",
-  "not_interested",
-  "closed",
-  "no_answer",
-  "skipped",
-] as const;
+export type VisitOutcome = ActivityOutcome;
+export const VISIT_OUTCOMES = ACTIVITY_OUTCOMES;
+export const OUTCOME_LABEL = ACTIVITY_OUTCOME_LABEL;
 
 export const FOLLOW_UP_REQUIRED_DEFAULT: Record<VisitOutcome, boolean> = {
   interested: true,
@@ -31,14 +30,6 @@ export const AUTO_ENROLL_DEFAULT: Record<VisitOutcome, boolean> = {
   closed: false,
   no_answer: true,
   skipped: false,
-};
-
-export const OUTCOME_LABEL: Record<VisitOutcome, string> = {
-  interested: "Interested",
-  not_interested: "Not interested",
-  closed: "Closed (signed up)",
-  no_answer: "No answer",
-  skipped: "Skipped",
 };
 
 export interface FieldVisitsSettings {

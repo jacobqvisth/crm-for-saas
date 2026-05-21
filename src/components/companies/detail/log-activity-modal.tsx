@@ -5,6 +5,12 @@ import { Loader2, FileText, Phone, Users, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/modal';
 import { createClient } from '@/lib/supabase/client';
+import {
+  OUTCOME_OPTIONS,
+  type ActivityOutcome,
+} from '@/lib/activities/outcomes';
+
+const OUTCOME_ELIGIBLE_TYPES = new Set(['call', 'meeting', 'email_logged']);
 
 const ACTIVITY_TYPES = [
   { value: 'note',          label: 'Note',           icon: FileText, defaultSubject: '' },
@@ -33,6 +39,7 @@ export function LogActivityModal({
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [contactId, setContactId] = useState<string>('');
+  const [outcome, setOutcome] = useState<ActivityOutcome | ''>('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -41,6 +48,7 @@ export function LogActivityModal({
       setSubject('');
       setBody('');
       setContactId('');
+      setOutcome('');
     }
   }, [open]);
 
@@ -70,6 +78,7 @@ export function LogActivityModal({
       type,
       subject: subject.trim() || null,
       body: body.trim() || null,
+      outcome: OUTCOME_ELIGIBLE_TYPES.has(type) && outcome ? outcome : null,
       user_id: user?.user?.id || null,
     });
     if (error) {
@@ -132,6 +141,31 @@ export function LogActivityModal({
             className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
           />
         </div>
+
+        {OUTCOME_ELIGIBLE_TYPES.has(type) && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              Outcome (optional)
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {OUTCOME_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setOutcome(outcome === opt.value ? '' : opt.value)}
+                  title={opt.helper}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    outcome === opt.value
+                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {contactOptions.length > 0 && (
           <div>

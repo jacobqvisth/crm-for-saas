@@ -11,7 +11,12 @@ import {
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
-import { LeadStatusBadge, ContactStatusBadge, DealStageBadge } from '@/components/ui/badge';
+import { LeadStatusBadge, ContactStatusBadge, DealStageBadge, OutcomeBadge } from '@/components/ui/badge';
+import {
+  OUTCOME_OPTIONS,
+  isActivityOutcome,
+  type ActivityOutcome,
+} from '@/lib/activities/outcomes';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
@@ -106,6 +111,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [noteText, setNoteText] = useState('');
   const [callSubject, setCallSubject] = useState('');
   const [callNotes, setCallNotes] = useState('');
+  const [callOutcome, setCallOutcome] = useState<ActivityOutcome | ''>('');
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [newFieldKey, setNewFieldKey] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
@@ -354,6 +360,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
       contact_id: contactId,
       subject: callSubject.trim() || 'Phone call',
       body: callNotes.trim() || null,
+      outcome: callOutcome || null,
       user_id: userData?.user?.id ?? null,
     });
     if (error) {
@@ -362,10 +369,25 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     }
     setCallSubject('');
     setCallNotes('');
+    setCallOutcome('');
     setShowLogCall(false);
     toast.success('Call logged');
     setActivitiesPage(0);
     await fetchActivities(0);
+  };
+
+  const setActivityOutcome = async (activityId: string, outcome: ActivityOutcome | null) => {
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from('activities')
+      .update({ outcome })
+      .eq('id', activityId)
+      .eq('workspace_id', workspaceId);
+    if (error) {
+      toast.error('Failed to set outcome');
+      return;
+    }
+    setActivities((prev) => prev.map((a) => (a.id === activityId ? { ...a, outcome } : a)));
   };
 
   if (loading) {
@@ -948,6 +970,26 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   rows={2}
                   className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
                 />
+                <div className="mb-2">
+                  <p className="text-xs font-medium text-slate-600 mb-1">Outcome (optional)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {OUTCOME_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setCallOutcome(callOutcome === opt.value ? '' : opt.value)}
+                        title={opt.helper}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          callOutcome === opt.value
+                            ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setShowLogCall(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
                   <button onClick={logCall} className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">Log Call</button>
@@ -966,7 +1008,13 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                       {activityIcons[activity.type] || <FileText className="w-4 h-4 text-slate-400" />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900">{getActivityTitle(activity)}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium text-slate-900">{getActivityTitle(activity)}</p>
+                        <ActivityOutcomeControl
+                          activity={activity}
+                          onSet={(o) => setActivityOutcome(activity.id, o)}
+                        />
+                      </div>
                       {activity.body && (
                         <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
                       )}
@@ -1142,6 +1190,83 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           </button>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+const OUTCOME_ELIGIBLE_TYPES = new Set([
+  'call',
+  'meeting',
+  'field_visit',
+  'email_sent',
+  'email_received',
+]);
+
+function ActivityOutcomeControl({
+  activity,
+  onSet,
+}: {
+  activity: Activity;
+  onSet: (outcome: ActivityOutcome | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!OUTCOME_ELIGIBLE_TYPES.has(activity.type)) return null;
+  const current = isActivityOutcome(activity.outcome) ? activity.outcome : null;
+
+  if (current && !open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-300 rounded-full"
+        title="Change outcome"
+      >
+        <OutcomeBadge outcome={current} />
+      </button>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex-shrink-0 text-[11px] text-slate-400 hover:text-indigo-600 underline-offset-2 hover:underline"
+      >
+        Set outcome
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex-shrink-0 flex flex-wrap gap-1 items-center justify-end max-w-[260px]">
+      {OUTCOME_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => { onSet(opt.value); setOpen(false); }}
+          title={opt.helper}
+          className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+            current === opt.value
+              ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+      {current && (
+        <button
+          onClick={() => { onSet(null); setOpen(false); }}
+          className="text-[11px] text-slate-400 hover:text-red-600"
+          title="Clear outcome"
+        >
+          Clear
+        </button>
+      )}
+      <button
+        onClick={() => setOpen(false)}
+        className="text-[11px] text-slate-400 hover:text-slate-700"
+      >
+        <X className="w-3 h-3" />
+      </button>
     </div>
   );
 }
