@@ -136,6 +136,7 @@ export async function logVisit(params: LogVisitParams): Promise<LogVisitResult> 
       type: "field_visit",
       subject: `Field visit: ${OUTCOME_LABEL[outcome]} — ${stop.shop_name}`,
       body: notes ?? null,
+      outcome,
       company_id: effectiveCompanyId,
       user_id: userId,
       metadata: activityMetadata,

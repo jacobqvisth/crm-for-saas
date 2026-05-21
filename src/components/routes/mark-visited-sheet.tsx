@@ -3,34 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { VISIT_OUTCOMES, type VisitOutcome } from "@/lib/routes/visits-decision";
-
-const OUTCOME_OPTIONS: { value: VisitOutcome; label: string; helper: string }[] = [
-  {
-    value: "interested",
-    label: "Interested",
-    helper: "Wants more info / will sign up",
-  },
-  {
-    value: "closed",
-    label: "Closed",
-    helper: "Signed up on the spot",
-  },
-  {
-    value: "no_answer",
-    label: "No answer",
-    helper: "Nobody there / closed for the day",
-  },
-  {
-    value: "not_interested",
-    label: "Not interested",
-    helper: "Explicit no — marks the company Do Not Contact",
-  },
-  {
-    value: "skipped",
-    label: "Skipped",
-    helper: "Drove past, didn't go in",
-  },
-];
+import { OUTCOME_OPTIONS } from "@/lib/activities/outcomes";
 
 const AUTO_ENROLL_DEFAULT: Record<VisitOutcome, boolean> = {
   interested: true,

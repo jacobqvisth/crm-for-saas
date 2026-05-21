@@ -1,3 +1,9 @@
+import {
+  OUTCOME_BADGE_COLORS,
+  OUTCOME_LABEL,
+  isActivityOutcome,
+} from '@/lib/activities/outcomes';
+
 const leadStatusColors: Record<string, string> = {
   new: 'bg-blue-100 text-blue-700',
   contacted: 'bg-yellow-100 text-yellow-700',
@@ -35,6 +41,15 @@ export function DealStageBadge({ stage }: { stage: string }) {
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 capitalize">
       {stage}
+    </span>
+  );
+}
+
+export function OutcomeBadge({ outcome }: { outcome: string | null | undefined }) {
+  if (!outcome || !isActivityOutcome(outcome)) return null;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${OUTCOME_BADGE_COLORS[outcome]}`}>
+      {OUTCOME_LABEL[outcome]}
     </span>
   );
 }

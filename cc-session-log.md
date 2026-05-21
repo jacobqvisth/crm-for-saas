@@ -14,6 +14,32 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-21 — Shared activity outcome enum + status-column visibility (PR #288)
+
+- **Trigger:** Jacob asked, looking at the "Mark visited" outcome dialog: are these outcome notes separate from contact/company notes, can we add the same flow after a phone call or email, can the contacts/companies list show a status column, and "check all the other statuses — they're starting to be many."
+- **Audit findings (recorded in PR body):**
+  - Outcome notes from Mark Visited are *not* separate from regular notes — the note text already lands as `activities.body` on a `type='field_visit'` row. What WAS siloed was the outcome enum itself, which lived only on `route_stops.visit_outcome`.
+  - The system has 7+ overlapping "status" fields: `contacts.status`, `contacts.lead_status`, `contacts.email_status`, `companies.lifecycle_stage`, `companies.customer_status`, `companies.do_not_contact`, `companies.skip_auto_followup`, plus `route_stops.visit_outcome` and various infra statuses. Recommended collapsing into 3 orthogonal axes (sales state / deliverability / event outcome) — that's PR2.
+  - Prod population: `contacts.lead_status` 100% populated; `companies.lifecycle_stage` 43% (7,689/18,048); `companies.customer_status` only 1.5% (268/18,048).
+  - Drive-by bug found: company-side "Log Activity" modal offers "Email (logged)" as a type but `email_logged` is not in the activities CHECK constraint, so every such insert has been silently failing since launch (prod has 0 rows). Same class as the bug PR #248 fixed for visit logging.
+- **What shipped (PR #288):**
+  - DB: `activities.outcome` column with CHECK (5 values: interested/closed/no_answer/not_interested/skipped) + index + backfill from `route_stops` (0-row no-op).
+  - DB: widened `activities_type_check` to include `email_logged`.
+  - New shared module `src/lib/activities/outcomes.ts` — canonical enum, labels, OUTCOME_OPTIONS, OUTCOME_BADGE_COLORS, OutcomeBadge.
+  - `src/lib/routes/visits-decision.ts` now re-exports `VisitOutcome` = `ActivityOutcome`; Mark Visited dialog imports shared OUTCOME_OPTIONS.
+  - `logVisit` writes outcome to the activity row (in addition to `route_stops.visit_outcome`) so the timeline is the single read source.
+  - Contact detail: outcome chip selector in Log Call form; per-row OutcomeBadge + inline "Set outcome" / change / clear picker on call/meeting/field_visit/email_sent/email_received rows.
+  - Company detail: read-only OutcomeBadge on the Activity tab; outcome chip selector wired into the Log Activity modal for call/meeting/email_logged types.
+  - Companies list: `lifecycle_stage` ("Lifecycle") column flipped to default:true. Contacts list already had `lead_status` default-visible.
+- **Migrations applied to prod (via Supabase Management API):**
+  - `20260521090000_activities_outcome` ✓
+  - `20260521091000_activities_allow_email_logged` ✓
+- **Test result:** `tsc --noEmit` clean; `npm run lint` clean; `next build --webpack` succeeds in worktree (after `.env.local` symlink); `vitest run visits.test.ts insert.test.ts` → 25/25 passing.
+- **Out of scope for this PR (deferred to PR2):** collapsing `lead_status` + `lifecycle_stage` + `customer_status` into a unified `lead_state` enum; collapsing `contacts.status` + `email_status` into `email_state`; generalizing `workspace.settings.field_visits.sequence_by_outcome` to fire on call/email outcomes, not just visits.
+- **Next:** awaiting Jacob's merge → deploy → manual UAT before scoping PR2.
+
+---
+
 ## 2026-05-21 — Email-stats audit: OOO reply pollution + 1000-row cap + stat tooltips (PR #284)
 
 - **Trigger:** Jacob asked three questions about the dashboard email stats: do "opened" counts include OOO auto-replies, can users see what each stat means, and why does "Sent" never go over 1000?
