@@ -4,81 +4,119 @@ const DAY_MAP: Record<string, number> = {
   sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
 };
 
-/**
- * Calculates the next valid send time within the sequence's send window.
- * Takes into account send_days, start/end hours, and timezone.
- */
-export function getNextSendTime(
-  settings: SequenceSettings,
-  afterDate?: Date
-): Date {
-  const now = afterDate || new Date();
+interface ZonedParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  weekday: number;
+}
 
-  // Convert send_days (number[]) to day-of-week numbers
-  // The DB stores them as numbers (0-6) already based on the type
-  const allowedDays = new Set(settings.send_days);
-
-  // Create a date in the target timezone
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: settings.timezone || "Europe/Stockholm",
+function getZonedParts(d: Date, timezone: string): ZonedParts {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: false,
   });
+  const parts = fmt.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const hourRaw = parseInt(get("hour"));
+  return {
+    year: parseInt(get("year")),
+    month: parseInt(get("month")),
+    day: parseInt(get("day")),
+    hour: hourRaw === 24 ? 0 : hourRaw,
+    minute: parseInt(get("minute")),
+    weekday: DAY_MAP[get("weekday").toLowerCase().slice(0, 3)] ?? 0,
+  };
+}
 
-  const parts = formatter.formatToParts(now);
-  const getPart = (type: string) =>
-    parts.find((p) => p.type === type)?.value || "0";
+// Returns the UTC Date whose clock-time in `timezone` reads y-m-d h:min:00.
+// Handles DST by measuring the tz offset at a first guess and correcting once.
+function zonedToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timezone: string,
+): Date {
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  const observed = getZonedParts(guess, timezone);
+  const observedUtc = Date.UTC(
+    observed.year,
+    observed.month - 1,
+    observed.day,
+    observed.hour,
+    observed.minute,
+    0,
+  );
+  const desiredUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const offset = observedUtc - desiredUtc;
+  return new Date(guess.getTime() - offset);
+}
 
-  let currentHour = parseInt(getPart("hour"));
-  const currentDay = now.getDay();
-
+export function isWithinSendWindow(
+  settings: SequenceSettings,
+  at: Date = new Date(),
+): boolean {
+  const tz = settings.timezone || "Europe/Stockholm";
   const startHour = settings.send_start_hour ?? 9;
   const endHour = settings.send_end_hour ?? 17;
+  const allowedDays = new Set(settings.send_days);
+  const parts = getZonedParts(at, tz);
+  return (
+    allowedDays.has(parts.weekday) &&
+    parts.hour >= startHour &&
+    parts.hour < endHour
+  );
+}
 
-  // Check if current time is within the send window
-  if (allowedDays.has(currentDay) && currentHour >= startHour && currentHour < endHour) {
-    // We're in the window — schedule for now (or a few seconds from now)
+/**
+ * Calculates the next valid send time within the sequence's send window.
+ * Takes into account send_days, start/end hours, and timezone (DST-aware).
+ */
+export function getNextSendTime(
+  settings: SequenceSettings,
+  afterDate?: Date,
+): Date {
+  const now = afterDate || new Date();
+  const tz = settings.timezone || "Europe/Stockholm";
+  const startHour = settings.send_start_hour ?? 9;
+  const allowedDays = new Set(settings.send_days);
+
+  if (isWithinSendWindow(settings, now)) {
     return new Date(now.getTime() + 5000);
   }
 
-  // Find the next valid send time
-  let candidate = new Date(now);
+  // Walk forward day-by-day in tz-local time. For each candidate day, compute
+  // the UTC instant for startHour:00 in the target tz, and return the first
+  // one that is on an allowed weekday and in the future.
+  const today = getZonedParts(now, tz);
+  let y = today.year;
+  let m = today.month;
+  let d = today.day;
 
-  // If we're past the end hour today or today isn't an allowed day,
-  // move to the start of the next allowed day
-  if (currentHour >= endHour || !allowedDays.has(currentDay)) {
-    candidate.setDate(candidate.getDate() + 1);
-  }
-
-  // Find next allowed day (max 7 iterations)
-  for (let i = 0; i < 7; i++) {
-    if (allowedDays.has(candidate.getDay())) {
-      break;
+  for (let i = 0; i < 8; i++) {
+    const candidate = zonedToUtc(y, m, d, startHour, 0, tz);
+    const cParts = getZonedParts(candidate, tz);
+    if (allowedDays.has(cParts.weekday) && candidate > now) {
+      return candidate;
     }
-    candidate.setDate(candidate.getDate() + 1);
+    const next = new Date(candidate.getTime() + 25 * 60 * 60 * 1000);
+    const nParts = getZonedParts(next, tz);
+    y = nParts.year;
+    m = nParts.month;
+    d = nParts.day;
   }
 
-  // Set to start hour in the target timezone
-  // We approximate by setting the hour directly (timezone offset handled by DB function for precision)
-  candidate.setHours(startHour, 0, 0, 0);
-
-  // If the candidate is still in the past (e.g., today before start hour),
-  // and current time is before start hour on an allowed day
-  if (candidate <= now) {
-    candidate.setDate(candidate.getDate() + 1);
-    for (let i = 0; i < 7; i++) {
-      if (allowedDays.has(candidate.getDay())) break;
-      candidate.setDate(candidate.getDate() + 1);
-    }
-    candidate.setHours(startHour, 0, 0, 0);
-  }
-
-  return candidate;
+  return new Date(now.getTime() + 24 * 60 * 60 * 1000);
 }
 
 /**
@@ -88,11 +126,10 @@ export function calculateStepScheduleTime(
   settings: SequenceSettings,
   delayDays: number,
   delayHours: number,
-  afterDate?: Date
+  afterDate?: Date,
 ): Date {
   const base = afterDate || new Date();
   const totalMs = (delayDays * 24 + delayHours) * 60 * 60 * 1000;
   const afterDelay = new Date(base.getTime() + totalMs);
   return getNextSendTime(settings, afterDelay);
 }
-
