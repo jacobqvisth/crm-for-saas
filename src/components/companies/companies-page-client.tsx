@@ -18,6 +18,16 @@ import {
   type ColumnId, type Company,
 } from './column-config';
 import { ColumnCustomizer } from './column-customizer';
+import { loadListState, saveListState } from '@/lib/list-state';
+
+const LIST_STATE_KEY = 'crm-companies-list-state';
+
+type PersistedListState = {
+  filters?: LocalFilters;
+  sort?: { key: SortKey; dir: SortDir };
+  page?: number;
+  scrollY?: number;
+};
 
 const PAGE_SIZE = 50;
 
@@ -112,15 +122,26 @@ export function CompaniesPageClient() {
   const [statsWithPhone, setStatsWithPhone] = useState(0);
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // Filters / sort / page hydrated from sessionStorage so back-nav from a
+  // company detail returns to the same filtered view.
   const [filters, setFilters] = useState<LocalFilters>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
+  const [hydrated, setHydrated] = useState(false);
+  const [pendingScrollY, setPendingScrollY] = useState<number | null>(null);
 
   // Column visibility + order — persisted to localStorage per workspace
   const [columnIds, setColumnIds] = useState<ColumnId[]>(DEFAULT_COLUMN_IDS);
   const [columnsOpen, setColumnsOpen] = useState(false);
   useEffect(() => {
-    if (workspaceId) setColumnIds(loadColumnIds(workspaceId));
+    if (!workspaceId) return;
+    setColumnIds(loadColumnIds(workspaceId));
+    const saved = loadListState<PersistedListState>(LIST_STATE_KEY, workspaceId, {});
+    if (saved.filters) setFilters({ ...DEFAULT_FILTERS, ...saved.filters });
+    if (saved.sort) setSort(saved.sort);
+    if (saved.page && saved.page > 0) setPage(saved.page);
+    if (typeof saved.scrollY === 'number') setPendingScrollY(saved.scrollY);
+    setHydrated(true);
   }, [workspaceId]);
   const handleColumnsChange = (next: ColumnId[]) => {
     setColumnIds(next);
@@ -144,18 +165,47 @@ export function CompaniesPageClient() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [filters.search]);
 
-  // Reset page when filters change
+  // Reset page when filters change (skipped during hydration so a restored
+  // page isn't blown away by restoring filters).
   const prevFiltersRef = useRef(filters);
   useEffect(() => {
+    if (!hydrated) {
+      prevFiltersRef.current = filters;
+      return;
+    }
     if (prevFiltersRef.current !== filters) {
       setPage(1);
       prevFiltersRef.current = filters;
     }
-  }, [filters]);
+  }, [filters, hydrated]);
+
+  // Persist filters / sort / page to sessionStorage.
+  useEffect(() => {
+    if (!hydrated || !workspaceId) return;
+    const existing = loadListState<PersistedListState>(LIST_STATE_KEY, workspaceId, {});
+    saveListState<PersistedListState>(LIST_STATE_KEY, workspaceId, {
+      ...existing,
+      filters,
+      sort,
+      page,
+    });
+  }, [hydrated, workspaceId, filters, sort, page]);
+
+  // Save scrollY on unmount.
+  useEffect(() => {
+    if (!hydrated || !workspaceId) return;
+    return () => {
+      const existing = loadListState<PersistedListState>(LIST_STATE_KEY, workspaceId, {});
+      saveListState<PersistedListState>(LIST_STATE_KEY, workspaceId, {
+        ...existing,
+        scrollY: typeof window !== 'undefined' ? window.scrollY : 0,
+      });
+    };
+  }, [hydrated, workspaceId]);
 
   // Fetch companies
   const fetchCompanies = useCallback(async () => {
-    if (!workspaceId) return;
+    if (!workspaceId || !hydrated) return;
     setLoading(true);
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -270,7 +320,7 @@ export function CompaniesPageClient() {
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    workspaceId, page, debouncedSearch,
+    workspaceId, hydrated, page, debouncedSearch,
     filters.country_code, filters.source, filters.industry,
     filters.lifecycle_stage, filters.customer_status, filters.has_account,
     filters.tags, filters.has_phone, filters.has_domain, sort,
@@ -279,6 +329,13 @@ export function CompaniesPageClient() {
   useEffect(() => {
     fetchCompanies();
   }, [fetchCompanies]);
+
+  // Restore scroll position once after the first data load completes.
+  useEffect(() => {
+    if (pendingScrollY == null || loading || typeof window === 'undefined') return;
+    window.scrollTo(0, pendingScrollY);
+    setPendingScrollY(null);
+  }, [pendingScrollY, loading]);
 
   // Workspace-level stats (unfiltered, fetched once)
   useEffect(() => {
