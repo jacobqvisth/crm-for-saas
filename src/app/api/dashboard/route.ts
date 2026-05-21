@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { pageAll } from "@/lib/supabase-paging";
 import type { PipelineStage } from "@/lib/database.types";
 
 type RangeKey = "1d" | "7d" | "30d" | "90d" | "all";
@@ -90,26 +91,37 @@ export async function GET(request: NextRequest) {
       .eq("workspace_id", workspaceId)
       .gte("created_at", prevStartISO)
       .lt("created_at", startISO),
-    // All contacts with created_at for growth chart
-    supabase
-      .from("contacts")
-      .select("created_at, lead_status")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true }),
+    // All contacts with created_at for growth chart — paginated; this
+    // workspace already has >10k contacts so the unpaginated select silently
+    // truncated to the oldest 1000.
+    pageAll<{ created_at: string | null; lead_status: string | null }>(
+      ({ from, to }) =>
+        supabase
+          .from("contacts")
+          .select("created_at, lead_status")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: true })
+          .range(from, to),
+    ),
     // Active sequences
     supabase
       .from("sequences")
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
       .eq("status", "active"),
-    // Emails sent in period
-    supabase
-      .from("email_queue")
-      .select("sent_at")
-      .eq("workspace_id", workspaceId)
-      .eq("status", "sent")
-      .gte("sent_at", startISO)
-      .lte("sent_at", endISO),
+    // Emails sent in period — paginated so the headline + the date-bucket
+    // chart aren't capped at PostgREST's 1000-row ceiling.
+    pageAll<{ sent_at: string | null }>(({ from, to }) =>
+      supabase
+        .from("email_queue")
+        .select("sent_at")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "sent")
+        .gte("sent_at", startISO)
+        .lte("sent_at", endISO)
+        .order("sent_at", { ascending: true })
+        .range(from, to),
+    ),
     // Emails sent in prev period
     supabase
       .from("email_queue")
@@ -118,18 +130,28 @@ export async function GET(request: NextRequest) {
       .eq("status", "sent")
       .gte("sent_at", prevStartISO)
       .lt("sent_at", startISO),
-    // Email events in period
-    supabase
-      .from("email_events")
-      .select("event_type, created_at")
-      .gte("created_at", startISO)
-      .lte("created_at", endISO),
-    // Email events in prev period
-    supabase
-      .from("email_events")
-      .select("event_type")
-      .gte("created_at", prevStartISO)
-      .lt("created_at", startISO),
+    // Email events in period — paginated for the same reason. The event row
+    // count grows ~1.5× the sent count (open + reply + click + bounce + unsub)
+    // so it hits the 1000 ceiling even earlier than the sent scan.
+    pageAll<{ event_type: string; created_at: string | null }>(({ from, to }) =>
+      supabase
+        .from("email_events")
+        .select("event_type, created_at")
+        .gte("created_at", startISO)
+        .lte("created_at", endISO)
+        .order("created_at", { ascending: true })
+        .range(from, to),
+    ),
+    // Email events in prev period — paginated.
+    pageAll<{ event_type: string }>(({ from, to }) =>
+      supabase
+        .from("email_events")
+        .select("event_type, created_at")
+        .gte("created_at", prevStartISO)
+        .lt("created_at", startISO)
+        .order("created_at", { ascending: true })
+        .range(from, to),
+    ),
     // Pipelines
     supabase
       .from("pipelines")
@@ -191,11 +213,24 @@ export async function GET(request: NextRequest) {
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(50),
-    // Sequence enrollments with sequence info
-    supabase
-      .from("sequence_enrollments")
-      .select("id, sequence_id, status, enrolled_at, completed_at")
-      .eq("workspace_id", workspaceId),
+    // Sequence enrollments with sequence info — paginated. Drives the
+    // per-sequence table further down; the workspace already has >10k
+    // enrollments and an unpaginated read silently dropped everything past
+    // the first 1000.
+    pageAll<{
+      id: string;
+      sequence_id: string | null;
+      status: string | null;
+      enrolled_at: string | null;
+      completed_at: string | null;
+    }>(({ from, to }) =>
+      supabase
+        .from("sequence_enrollments")
+        .select("id, sequence_id, status, enrolled_at, completed_at")
+        .eq("workspace_id", workspaceId)
+        .order("enrolled_at", { ascending: true })
+        .range(from, to),
+    ),
     // Unsubscribes in period
     supabase
       .from("unsubscribes")

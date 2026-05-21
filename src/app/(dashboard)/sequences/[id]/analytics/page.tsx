@@ -4,9 +4,30 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { notNull } from "@/lib/types/guards";
+import { pageAll, chunkedIn } from "@/lib/supabase-paging";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { ArrowLeft, Pause, Play, Mail } from "lucide-react";
+
+const STAT_HELP: Record<string, string> = {
+  Enrolled:
+    "Total contacts ever enrolled in this sequence, regardless of current status.",
+  "Emails Sent":
+    "Sequence emails successfully handed off to Gmail. Excludes scheduled, paused, cancelled, or failed sends.",
+  "Open Rate":
+    "Unique emails opened ÷ emails sent. Known bots and scanners (Google Image Proxy, etc.) are filtered out. Repeat opens of the same email count once per hour.",
+  "Reply Rate":
+    "Real replies ÷ emails sent. Out-of-office and other auto-replies are detected via headers and subject patterns and excluded from this rate — they still appear in Inbox flagged as 'Out of office'.",
+  "Click Rate":
+    "Unique emails with a tracked link click ÷ emails sent.",
+  "Bounce Rate":
+    "Enrollments marked bounced ÷ total enrolled. Triggered by permanent (5xx) NDRs; soft (4xx) bounces are retried.",
+  "Unsubscribe Rate":
+    "Enrollments unsubscribed ÷ total enrolled.",
+  Completed:
+    "Enrollments that finished all sequence steps without being stopped by a reply, bounce, or unsubscribe.",
+};
 import { format } from "date-fns";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -84,13 +105,20 @@ export default function SequenceAnalyticsPage() {
       .select("id", { count: "exact", head: true })
       .eq("sequence_id", sequenceId);
 
-    // Get all enrollment IDs for this sequence
-    const { data: enrollmentIds } = await supabase
-      .from("sequence_enrollments")
-      .select("id")
-      .eq("sequence_id", sequenceId);
+    // Get all enrollment IDs for this sequence — paginated. Sequences with
+    // >1000 enrollments silently truncated to the first 1000, which then
+    // capped every downstream stat (Sent, Open %, Reply %, etc.).
+    const { data: enrollmentIds } = await pageAll<{ id: string }>(
+      ({ from, to }) =>
+        supabase
+          .from("sequence_enrollments")
+          .select("id")
+          .eq("sequence_id", sequenceId)
+          .order("id", { ascending: true })
+          .range(from, to),
+    );
 
-    const ids = (enrollmentIds || []).map((e) => e.id);
+    const ids = enrollmentIds.map((e) => e.id);
 
     // Emails sent
     let sent = 0;
@@ -99,43 +127,61 @@ export default function SequenceAnalyticsPage() {
     let clicks = 0;
 
     if (ids.length > 0) {
-      const { count: sentCount } = await supabase
-        .from("email_queue")
-        .select("id", { count: "exact", head: true })
-        .in("enrollment_id", ids)
-        .eq("status", "sent");
-      sent = sentCount || 0;
+      // `.in()` with >~500 UUIDs blows past PostgREST's URL length limit and
+      // silently returns Bad Request — chunk it. Each chunk's count is
+      // server-side, so summing chunks gives the true total.
+      let sentCountSum = 0;
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { count: chunkCount } = await supabase
+          .from("email_queue")
+          .select("id", { count: "exact", head: true })
+          .in("enrollment_id", chunk)
+          .eq("status", "sent");
+        sentCountSum += chunkCount || 0;
+      }
+      sent = sentCountSum;
 
-      // Get tracking IDs for sent emails
-      const { data: sentEmails } = await supabase
-        .from("email_queue")
-        .select("tracking_id")
-        .in("enrollment_id", ids)
-        .eq("status", "sent");
+      // Get tracking IDs for sent emails — chunked + paginated.
+      const { data: sentEmails } = await chunkedIn<{ tracking_id: string | null }, string>(
+        (chunk, { from, to }) =>
+          supabase
+            .from("email_queue")
+            .select("tracking_id")
+            .in("enrollment_id", chunk)
+            .eq("status", "sent")
+            .order("tracking_id", { ascending: true })
+            .range(from, to),
+        ids,
+      );
 
-      const trackingIds = (sentEmails || []).map((e) => e.tracking_id).filter(notNull);
+      const trackingIds = sentEmails.map((e) => e.tracking_id).filter(notNull);
 
       if (trackingIds.length > 0) {
-        const { data: events } = await supabase
-          .from("email_events")
-          .select("event_type, tracking_id")
-          .in("tracking_id", trackingIds);
+        const { data: events } = await chunkedIn<{ event_type: string; tracking_id: string }, string>(
+          (chunk, { from, to }) =>
+            supabase
+              .from("email_events")
+              .select("event_type, tracking_id")
+              .in("tracking_id", chunk)
+              .order("created_at", { ascending: true })
+              .range(from, to),
+          trackingIds,
+        );
 
-        if (events) {
-          const openSet = new Set<string>();
-          const replySet = new Set<string>();
-          const clickSet = new Set<string>();
+        const openSet = new Set<string>();
+        const replySet = new Set<string>();
+        const clickSet = new Set<string>();
 
-          for (const ev of events) {
-            if (ev.event_type === "open") openSet.add(ev.tracking_id);
-            if (ev.event_type === "reply") replySet.add(ev.tracking_id);
-            if (ev.event_type === "click") clickSet.add(ev.tracking_id);
-          }
-
-          uniqueOpens = openSet.size;
-          replies = replySet.size;
-          clicks = clickSet.size;
+        for (const ev of events) {
+          if (ev.event_type === "open") openSet.add(ev.tracking_id);
+          if (ev.event_type === "reply") replySet.add(ev.tracking_id);
+          if (ev.event_type === "click") clickSet.add(ev.tracking_id);
         }
+
+        uniqueOpens = openSet.size;
+        replies = replySet.size;
+        clicks = clickSet.size;
       }
     }
 
@@ -174,30 +220,51 @@ export default function SequenceAnalyticsPage() {
       completed: completedCount || 0,
     });
 
-    // Sender breakdown — group sent emails by sender, join gmail_accounts for email address
+    // Sender breakdown — group sent emails by sender, join gmail_accounts for email address.
+    // Paginated + chunked for the same reason as the headline stats above.
     if (ids.length > 0) {
-      const { data: sentByAccount } = await supabase
-        .from("email_queue")
-        .select("sender_account_id, tracking_id, gmail_accounts(email_address)")
-        .in("enrollment_id", ids)
-        .eq("status", "sent");
+      type SentByAccountRow = {
+        sender_account_id: string | null;
+        tracking_id: string | null;
+        gmail_accounts: { email_address: string } | null;
+      };
+      const { data: sentByAccount } = await chunkedIn<SentByAccountRow, string>(
+        (chunk, { from, to }) =>
+          supabase
+            .from("email_queue")
+            .select("sender_account_id, tracking_id, gmail_accounts(email_address)")
+            .in("enrollment_id", chunk)
+            .eq("status", "sent")
+            .order("tracking_id", { ascending: true })
+            .range(from, to) as unknown as Promise<{
+              data: SentByAccountRow[] | null;
+              error: { message: string } | null;
+            }>,
+        ids,
+      );
 
-      if (sentByAccount && sentByAccount.length > 0) {
+      if (sentByAccount.length > 0) {
         const allTrackingIds = sentByAccount.map((r) => r.tracking_id).filter(notNull);
 
         const { data: breakdownEvents } = allTrackingIds.length > 0
-          ? await supabase
-              .from("email_events")
-              .select("event_type, tracking_id")
-              .in("tracking_id", allTrackingIds)
-          : { data: [] };
+          ? await chunkedIn<{ event_type: string; tracking_id: string }, string>(
+              (chunk, { from, to }) =>
+                supabase
+                  .from("email_events")
+                  .select("event_type, tracking_id")
+                  .in("tracking_id", chunk)
+                  .order("created_at", { ascending: true })
+                  .range(from, to),
+              allTrackingIds,
+            )
+          : { data: [] as { event_type: string; tracking_id: string }[] };
 
         // Map tracking_id → events
         const opensByTracking = new Set(
-          (breakdownEvents || []).filter((e) => e.event_type === "open").map((e) => e.tracking_id)
+          breakdownEvents.filter((e) => e.event_type === "open").map((e) => e.tracking_id)
         );
         const repliesByTracking = new Set(
-          (breakdownEvents || []).filter((e) => e.event_type === "reply").map((e) => e.tracking_id)
+          breakdownEvents.filter((e) => e.event_type === "reply").map((e) => e.tracking_id)
         );
 
         // Group by sender
@@ -205,7 +272,7 @@ export default function SequenceAnalyticsPage() {
         for (const row of sentByAccount) {
           const accountId = row.sender_account_id;
           if (!accountId) continue;
-          const emailAddress = (row.gmail_accounts as { email_address: string } | null)?.email_address ?? accountId;
+          const emailAddress = row.gmail_accounts?.email_address ?? accountId;
           if (!bySender.has(accountId)) {
             bySender.set(accountId, { email_address: emailAddress, sent: 0, opens: 0, replies: 0 });
           }
@@ -553,10 +620,14 @@ function StatCard({
   value: string;
   valueClass?: string;
 }) {
+  const help = STAT_HELP[label];
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <div className={`text-2xl font-bold ${valueClass ?? "text-slate-900"}`}>{value}</div>
-      <div className="text-sm text-slate-500 mt-1">{label}</div>
+      <div className="text-sm text-slate-500 mt-1 flex items-center gap-1">
+        <span>{label}</span>
+        {help && <InfoTooltip label={help} />}
+      </div>
     </div>
   );
 }
