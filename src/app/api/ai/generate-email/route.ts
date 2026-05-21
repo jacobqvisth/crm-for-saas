@@ -131,7 +131,7 @@ Rules:
 - DO NOT mention "AI" in the subject line — it triggers spam filters
 - Subject line: 5–8 words, plain language, no exclamation marks
 - Body: short paragraphs, max 3–4 sentences each, exactly 1 soft CTA at the end (not "book a demo" — try "worth a quick chat?" or "open to a 15-min call?")
-- Use {{first_name}} as the salutation placeholder
+- Salutation: write it exactly as "Hi{{first_name_optional}}," (no space before the token). At send time this renders to "Hi Jane," when the contact has a first name and "Hi," when they don't — never use the bare {{first_name}} token in the salutation
 - Return ONLY valid JSON: {"subject": "...", "body": "..."}
 - Body should be HTML using only <p> tags. No bold, no headers, no lists.`;
 

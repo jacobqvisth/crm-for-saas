@@ -26,6 +26,12 @@ const FALLBACKS: Record<string, string> = {
   sender_first_name: "",
   sender_company: "",
   unsubscribe_link: "",
+  // first_name_optional renders to " {first_name}" with a leading space when
+  // the contact has a name, and to "" otherwise. Lets template authors write
+  // "Hi{{first_name_optional}}," and have it become "Hi Jane," for known
+  // contacts and "Hi," for the (majority) where first_name is null — without
+  // the "Hi there," fallback.
+  first_name_optional: "",
 };
 
 function getAppUrl(): string {
@@ -47,6 +53,8 @@ function resolveVariable(
   switch (variable) {
     case "first_name":
       return contact.first_name || FALLBACKS.first_name;
+    case "first_name_optional":
+      return contact.first_name ? ` ${contact.first_name}` : "";
     case "last_name":
       return contact.last_name || FALLBACKS.last_name;
     case "email":
