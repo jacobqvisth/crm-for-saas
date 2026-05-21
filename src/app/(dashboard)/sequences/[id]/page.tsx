@@ -68,6 +68,8 @@ export default function SequenceDetailPage() {
   const [launchOpen, setLaunchOpen] = useState(false);
   const [pauseAllOpen, setPauseAllOpen] = useState(false);
   const [pauseAllLoading, setPauseAllLoading] = useState(false);
+  const [resumeAllOpen, setResumeAllOpen] = useState(false);
+  const [resumeAllLoading, setResumeAllLoading] = useState(false);
   const [toggleLoading, setToggleLoading] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -304,13 +306,20 @@ export default function SequenceDetailPage() {
               <MoreHorizontal className="w-4 h-4" />
             </button>
             {moreMenuOpen && (
-              <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
+              <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
                 <button
                   onClick={() => { setMoreMenuOpen(false); setPauseAllOpen(true); }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   <Pause className="w-3.5 h-3.5 text-slate-400" />
                   Pause All
+                </button>
+                <button
+                  onClick={() => { setMoreMenuOpen(false); setResumeAllOpen(true); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5 text-slate-400" />
+                  Resume All
                 </button>
               </div>
             )}
@@ -563,6 +572,61 @@ export default function SequenceDetailPage() {
                 className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
               >
                 {pauseAllLoading ? "Pausing..." : "Pause All"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resume All Confirmation Modal */}
+      {resumeAllOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Resume All Enrollments?</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              This re-activates every paused enrollment in this sequence and reschedules
+              their next email for the sequence&apos;s next send window. Use this to undo a
+              previous &quot;Pause All&quot;.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setResumeAllOpen(false)}
+                disabled={resumeAllLoading}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setResumeAllLoading(true);
+                  try {
+                    const res = await fetch(`/api/sequences/${sequenceId}/resume-all`, {
+                      method: "POST",
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      toast.error(data.error || "Failed to resume enrollments");
+                    } else {
+                      const r = data.reactivated ?? 0;
+                      const v = data.revived ?? 0;
+                      toast.success(
+                        r === 0 && v === 0
+                          ? "Nothing to resume — all enrollments already active and queued"
+                          : `${r} reactivated, ${v} email${v !== 1 ? "s" : ""} re-queued`
+                      );
+                      setResumeAllOpen(false);
+                      load();
+                    }
+                  } catch {
+                    toast.error("Failed to resume enrollments");
+                  } finally {
+                    setResumeAllLoading(false);
+                  }
+                }}
+                disabled={resumeAllLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+              >
+                {resumeAllLoading ? "Resuming..." : "Resume All"}
               </button>
             </div>
           </div>
