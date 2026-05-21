@@ -1,0 +1,2650 @@
+[
+  {
+    "label": "Oslo — bilverksted",
+    "cell": "Oslo",
+    "term": "bilverksted",
+    "lat": 59.9139,
+    "lng": 10.7522,
+    "radiusKm": 20,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.7522,
+          59.9139
+        ],
+        "radiusKm": 20
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "EGZCxuPMsUhmSQmEI",
+    "datasetId": "baKrawgcNc7tDd4lR",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:02:58.836Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.38152
+    }
+  },
+  {
+    "label": "Oslo — bilmekaniker",
+    "cell": "Oslo",
+    "term": "bilmekaniker",
+    "lat": 59.9139,
+    "lng": 10.7522,
+    "radiusKm": 20,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.7522,
+          59.9139
+        ],
+        "radiusKm": 20
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "5QUc7IBbBAGEzGm0I",
+    "datasetId": "StnYqYsgiABPy79Nb",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:02:59.167Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.3847388888888889
+    }
+  },
+  {
+    "label": "Oslo — dekkverksted",
+    "cell": "Oslo",
+    "term": "dekkverksted",
+    "lat": 59.9139,
+    "lng": 10.7522,
+    "radiusKm": 20,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.7522,
+          59.9139
+        ],
+        "radiusKm": 20
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "mu0mwptC03ZnXzbhA",
+    "datasetId": "WdO926FsqRSGAiBIg",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:02:59.622Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.38276777777777776
+    }
+  },
+  {
+    "label": "Oslo — karosseriverksted",
+    "cell": "Oslo",
+    "term": "karosseriverksted",
+    "lat": 59.9139,
+    "lng": 10.7522,
+    "radiusKm": 20,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.7522,
+          59.9139
+        ],
+        "radiusKm": 20
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "UxdfP6C3La6qmUBRe",
+    "datasetId": "P7YC0x901kmxetVPU",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:02:59.936Z",
+    "finishedAt": "2026-05-21T16:08:47.276Z",
+    "stats": {
+      "computeUnits": 0.38576222222222223
+    }
+  },
+  {
+    "label": "Oslo — billakkering",
+    "cell": "Oslo",
+    "term": "billakkering",
+    "lat": 59.9139,
+    "lng": 10.7522,
+    "radiusKm": 20,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.7522,
+          59.9139
+        ],
+        "radiusKm": 20
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "V1OjfClUnT9dmrLbs",
+    "datasetId": "uN5GOyCLNLGQTK6cH",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:00.262Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.3811522222222222
+    }
+  },
+  {
+    "label": "Oslo — elbilverksted",
+    "cell": "Oslo",
+    "term": "elbilverksted",
+    "lat": 59.9139,
+    "lng": 10.7522,
+    "radiusKm": 20,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.7522,
+          59.9139
+        ],
+        "radiusKm": 20
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "MvanCy91aqwCFfuLd",
+    "datasetId": "fzGeeDFrrX9P2GWBd",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:00.746Z",
+    "finishedAt": "2026-05-21T16:05:29.394Z",
+    "stats": {
+      "computeUnits": 0.16498666666666667
+    }
+  },
+  {
+    "label": "Bergen — bilverksted",
+    "cell": "Bergen",
+    "term": "bilverksted",
+    "lat": 60.3913,
+    "lng": 5.3221,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.3221,
+          60.3913
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "R0a4cMX68gvc2Egr6",
+    "datasetId": "bjEgDfFm7woJOAZ3F",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:01.277Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.3839911111111111
+    }
+  },
+  {
+    "label": "Bergen — bilmekaniker",
+    "cell": "Bergen",
+    "term": "bilmekaniker",
+    "lat": 60.3913,
+    "lng": 5.3221,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.3221,
+          60.3913
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "8chxxg4tAdWYtkdv8",
+    "datasetId": "mFvfrcCNxdpdSIeUv",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:02.014Z",
+    "finishedAt": "2026-05-21T16:06:58.079Z",
+    "stats": {
+      "computeUnits": 0.2619577777777778
+    }
+  },
+  {
+    "label": "Bergen — dekkverksted",
+    "cell": "Bergen",
+    "term": "dekkverksted",
+    "lat": 60.3913,
+    "lng": 5.3221,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.3221,
+          60.3913
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "07OAyIrC7JGSItwqM",
+    "datasetId": "xi2OAqhLSxe01XkPU",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:02.526Z",
+    "finishedAt": "2026-05-21T16:08:34.163Z",
+    "stats": {
+      "computeUnits": 0.36828222222222223
+    }
+  },
+  {
+    "label": "Bergen — karosseriverksted",
+    "cell": "Bergen",
+    "term": "karosseriverksted",
+    "lat": 60.3913,
+    "lng": 5.3221,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.3221,
+          60.3913
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "vDBtd60H7OzTDIG39",
+    "datasetId": "Upd7y3hhuKwcjufF9",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:02.877Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.37976666666666664
+    }
+  },
+  {
+    "label": "Bergen — billakkering",
+    "cell": "Bergen",
+    "term": "billakkering",
+    "lat": 60.3913,
+    "lng": 5.3221,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.3221,
+          60.3913
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "Ve2Vt14vGuGrq3NQA",
+    "datasetId": "xGDEjRWYDa2dKSVMj",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:03.371Z",
+    "finishedAt": "2026-05-21T16:08:35.652Z",
+    "stats": {
+      "computeUnits": 0.36894444444444446
+    }
+  },
+  {
+    "label": "Bergen — elbilverksted",
+    "cell": "Bergen",
+    "term": "elbilverksted",
+    "lat": 60.3913,
+    "lng": 5.3221,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.3221,
+          60.3913
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "xBSO5AMbURC3qYWT5",
+    "datasetId": "Onmkk7FzFAxzZFxgi",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:03.914Z",
+    "finishedAt": "2026-05-21T16:06:50.665Z",
+    "stats": {
+      "computeUnits": 0.2517433333333333
+    }
+  },
+  {
+    "label": "Stavanger/Sandnes — bilverksted",
+    "cell": "Stavanger/Sandnes",
+    "term": "bilverksted",
+    "lat": 58.97,
+    "lng": 5.7331,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.7331,
+          58.97
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "y2vXBnGtU3kKGOp3M",
+    "datasetId": "xMzsbHQ100c0TOUFr",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:04.417Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.3787277777777778
+    }
+  },
+  {
+    "label": "Stavanger/Sandnes — bilmekaniker",
+    "cell": "Stavanger/Sandnes",
+    "term": "bilmekaniker",
+    "lat": 58.97,
+    "lng": 5.7331,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.7331,
+          58.97
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "1DrBA6O4tSsU9ddgA",
+    "datasetId": "8U0V70C2BydD4awXc",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:05.000Z",
+    "finishedAt": "2026-05-21T16:07:33.863Z",
+    "stats": {
+      "computeUnits": 0.29838333333333333
+    }
+  },
+  {
+    "label": "Stavanger/Sandnes — dekkverksted",
+    "cell": "Stavanger/Sandnes",
+    "term": "dekkverksted",
+    "lat": 58.97,
+    "lng": 5.7331,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.7331,
+          58.97
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "ADLbBmsCKrlP90e37",
+    "datasetId": "10VhwGFPPx3ZKKgjH",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:05.512Z",
+    "finishedAt": "2026-05-21T16:07:17.424Z",
+    "stats": {
+      "computeUnits": 0.27974
+    }
+  },
+  {
+    "label": "Stavanger/Sandnes — karosseriverksted",
+    "cell": "Stavanger/Sandnes",
+    "term": "karosseriverksted",
+    "lat": 58.97,
+    "lng": 5.7331,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.7331,
+          58.97
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "Rt5PrkaNe6ziLisfd",
+    "datasetId": "3bKXFi5aR561RdWPK",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:05.834Z",
+    "finishedAt": "2026-05-21T16:06:42.423Z",
+    "stats": {
+      "computeUnits": 0.2404911111111111
+    }
+  },
+  {
+    "label": "Stavanger/Sandnes — billakkering",
+    "cell": "Stavanger/Sandnes",
+    "term": "billakkering",
+    "lat": 58.97,
+    "lng": 5.7331,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.7331,
+          58.97
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "PVi8Q7IcrJRg3mFOq",
+    "datasetId": "rn0paWKSpPKtmlGnR",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:06.148Z",
+    "finishedAt": "2026-05-21T16:06:04.933Z",
+    "stats": {
+      "computeUnits": 0.19850444444444446
+    }
+  },
+  {
+    "label": "Stavanger/Sandnes — elbilverksted",
+    "cell": "Stavanger/Sandnes",
+    "term": "elbilverksted",
+    "lat": 58.97,
+    "lng": 5.7331,
+    "radiusKm": 15,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          5.7331,
+          58.97
+        ],
+        "radiusKm": 15
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "0mIYrNtyRMS1gFBwg",
+    "datasetId": "KkJAVa4jW4rBPKbCQ",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:06.473Z",
+    "finishedAt": "2026-05-21T16:06:07.817Z",
+    "stats": {
+      "computeUnits": 0.20129111111111112
+    }
+  },
+  {
+    "label": "Trondheim — bilverksted",
+    "cell": "Trondheim",
+    "term": "bilverksted",
+    "lat": 63.4305,
+    "lng": 10.3951,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.3951,
+          63.4305
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "HOnyxVf8QLnVi5tyS",
+    "datasetId": "OQPFvf4HBw0og0K0i",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:06.846Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.37598
+    }
+  },
+  {
+    "label": "Trondheim — bilmekaniker",
+    "cell": "Trondheim",
+    "term": "bilmekaniker",
+    "lat": 63.4305,
+    "lng": 10.3951,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.3951,
+          63.4305
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "3uCb0t5yz0MyixRPv",
+    "datasetId": "KegGb4GuUy8zPAiEB",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:07.327Z",
+    "finishedAt": "2026-05-21T16:07:21.300Z",
+    "stats": {
+      "computeUnits": 0.2817077777777778
+    }
+  },
+  {
+    "label": "Trondheim — dekkverksted",
+    "cell": "Trondheim",
+    "term": "dekkverksted",
+    "lat": 63.4305,
+    "lng": 10.3951,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.3951,
+          63.4305
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "SfVPbQH6mOXTFnjOK",
+    "datasetId": "sTvSJLx0AOLMoPtzM",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:07.949Z",
+    "finishedAt": "2026-05-21T16:07:31.569Z",
+    "stats": {
+      "computeUnits": 0.29266888888888887
+    }
+  },
+  {
+    "label": "Trondheim — karosseriverksted",
+    "cell": "Trondheim",
+    "term": "karosseriverksted",
+    "lat": 63.4305,
+    "lng": 10.3951,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.3951,
+          63.4305
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "GfvZP9YuDyV5XHiIh",
+    "datasetId": "Gb6oNKQee14NM8rsP",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:08.405Z",
+    "finishedAt": "2026-05-21T16:07:50.260Z",
+    "stats": {
+      "computeUnits": 0.31297
+    }
+  },
+  {
+    "label": "Trondheim — billakkering",
+    "cell": "Trondheim",
+    "term": "billakkering",
+    "lat": 63.4305,
+    "lng": 10.3951,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.3951,
+          63.4305
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "K6c162qEVdbZEhDwt",
+    "datasetId": "G2ATuqnYDIc0JAec7",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:08.790Z",
+    "finishedAt": "2026-05-21T16:07:32.496Z",
+    "stats": {
+      "computeUnits": 0.2927633333333333
+    }
+  },
+  {
+    "label": "Trondheim — elbilverksted",
+    "cell": "Trondheim",
+    "term": "elbilverksted",
+    "lat": 63.4305,
+    "lng": 10.3951,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.3951,
+          63.4305
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "vdVT3I1vfTA3Bm9LH",
+    "datasetId": "D2bngY7xo9HhY4Q9L",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:09.194Z",
+    "finishedAt": "2026-05-21T16:05:10.854Z",
+    "stats": {
+      "computeUnits": 0.13487666666666667
+    }
+  },
+  {
+    "label": "Drammen — bilverksted",
+    "cell": "Drammen",
+    "term": "bilverksted",
+    "lat": 59.744,
+    "lng": 10.2045,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.2045,
+          59.744
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "w12D1s1AlIml0zcaJ",
+    "datasetId": "pOPJmi0ysPJRz4sKa",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:09.637Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.37234333333333336
+    }
+  },
+  {
+    "label": "Drammen — bilmekaniker",
+    "cell": "Drammen",
+    "term": "bilmekaniker",
+    "lat": 59.744,
+    "lng": 10.2045,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.2045,
+          59.744
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "2PVDmwfnbWUQm9Jdk",
+    "datasetId": "Alc4vCEfkbeR8FZiS",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:10.081Z",
+    "finishedAt": "2026-05-21T16:08:42.781Z",
+    "stats": {
+      "computeUnits": 0.36950333333333335
+    }
+  },
+  {
+    "label": "Drammen — dekkverksted",
+    "cell": "Drammen",
+    "term": "dekkverksted",
+    "lat": 59.744,
+    "lng": 10.2045,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.2045,
+          59.744
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "vdQ9NnDagtrP0AtXI",
+    "datasetId": "bveYCq96cmeQNEKWb",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:10.563Z",
+    "finishedAt": "2026-05-21T16:06:06.037Z",
+    "stats": {
+      "computeUnits": 0.19479
+    }
+  },
+  {
+    "label": "Drammen — karosseriverksted",
+    "cell": "Drammen",
+    "term": "karosseriverksted",
+    "lat": 59.744,
+    "lng": 10.2045,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.2045,
+          59.744
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "gsqwaKXAqnm1BORz3",
+    "datasetId": "iyi4PDFhI2qt7ttNJ",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:10.903Z",
+    "finishedAt": "2026-05-21T16:07:25.373Z",
+    "stats": {
+      "computeUnits": 0.28239888888888887
+    }
+  },
+  {
+    "label": "Drammen — billakkering",
+    "cell": "Drammen",
+    "term": "billakkering",
+    "lat": 59.744,
+    "lng": 10.2045,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.2045,
+          59.744
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "KiYIi7be7OOTi1dkG",
+    "datasetId": "SxEIC7QGpAyuzeFwc",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:11.399Z",
+    "finishedAt": "2026-05-21T16:07:52.042Z",
+    "stats": {
+      "computeUnits": 0.3116111111111111
+    }
+  },
+  {
+    "label": "Drammen — elbilverksted",
+    "cell": "Drammen",
+    "term": "elbilverksted",
+    "lat": 59.744,
+    "lng": 10.2045,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.2045,
+          59.744
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "WrSxIh15gM0P1kJ0c",
+    "datasetId": "GVIwfMnchLtgwbmYb",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:11.766Z",
+    "finishedAt": "2026-05-21T16:03:55.476Z",
+    "stats": {
+      "computeUnits": 0.048391111111111114
+    }
+  },
+  {
+    "label": "Fredrikstad/Sarpsborg — bilverksted",
+    "cell": "Fredrikstad/Sarpsborg",
+    "term": "bilverksted",
+    "lat": 59.2181,
+    "lng": 10.9298,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.9298,
+          59.2181
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "UxHuv58FO4udAC1Q9",
+    "datasetId": "sPed937oSv0tNcGXf",
+    "status": "RUNNING",
+    "startedAt": "2026-05-21T16:03:12.205Z",
+    "finishedAt": null,
+    "stats": {
+      "computeUnits": 0.3705333333333333
+    }
+  },
+  {
+    "label": "Fredrikstad/Sarpsborg — bilmekaniker",
+    "cell": "Fredrikstad/Sarpsborg",
+    "term": "bilmekaniker",
+    "lat": 59.2181,
+    "lng": 10.9298,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.9298,
+          59.2181
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "dtZWAIVozKPqpS1mU",
+    "datasetId": "xz2DLlao7VjIJ0YJY",
+    "status": "SUCCEEDED",
+    "startedAt": "2026-05-21T16:03:12.814Z",
+    "finishedAt": "2026-05-21T16:05:25.237Z",
+    "stats": {
+      "computeUnits": 0.1468888888888889
+    }
+  },
+  {
+    "label": "Fredrikstad/Sarpsborg — dekkverksted",
+    "cell": "Fredrikstad/Sarpsborg",
+    "term": "dekkverksted",
+    "lat": 59.2181,
+    "lng": 10.9298,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.9298,
+          59.2181
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "vEmWkfe3UncvSQ3rh",
+    "datasetId": "1f6L5BRO9pLFkc8Th",
+    "status": "READY",
+    "startedAt": "2026-05-21T16:08:49.948Z"
+  },
+  {
+    "label": "Fredrikstad/Sarpsborg — karosseriverksted",
+    "cell": "Fredrikstad/Sarpsborg",
+    "term": "karosseriverksted",
+    "lat": 59.2181,
+    "lng": 10.9298,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.9298,
+          59.2181
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "9lgra24h0MoXjOkUL",
+    "datasetId": "PavLcdWRKHUFIOyes",
+    "status": "READY",
+    "startedAt": "2026-05-21T16:08:50.261Z"
+  },
+  {
+    "label": "Fredrikstad/Sarpsborg — billakkering",
+    "cell": "Fredrikstad/Sarpsborg",
+    "term": "billakkering",
+    "lat": 59.2181,
+    "lng": 10.9298,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.9298,
+          59.2181
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "aUN7PTzy0wZwM36h6",
+    "datasetId": "UEtcnm5zuEsg3VIUr",
+    "status": "READY",
+    "startedAt": "2026-05-21T16:08:50.939Z"
+  },
+  {
+    "label": "Fredrikstad/Sarpsborg — elbilverksted",
+    "cell": "Fredrikstad/Sarpsborg",
+    "term": "elbilverksted",
+    "lat": 59.2181,
+    "lng": 10.9298,
+    "radiusKm": 12,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          10.9298,
+          59.2181
+        ],
+        "radiusKm": 12
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "gPJ1SSR5o4wXMvgVC",
+    "datasetId": "8yWamUlZgN3zROmXh",
+    "status": "READY",
+    "startedAt": "2026-05-21T16:08:51.309Z"
+  },
+  {
+    "label": "Kristiansand — bilverksted",
+    "cell": "Kristiansand",
+    "term": "bilverksted",
+    "lat": 58.1467,
+    "lng": 7.9956,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          7.9956,
+          58.1467
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": "22VOMtxpxYZCKXWt1",
+    "datasetId": "zg7isivFSgaOWvZoB",
+    "status": "READY",
+    "startedAt": "2026-05-21T16:08:51.721Z"
+  },
+  {
+    "label": "Kristiansand — bilmekaniker",
+    "cell": "Kristiansand",
+    "term": "bilmekaniker",
+    "lat": 58.1467,
+    "lng": 7.9956,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          7.9956,
+          58.1467
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Kristiansand — dekkverksted",
+    "cell": "Kristiansand",
+    "term": "dekkverksted",
+    "lat": 58.1467,
+    "lng": 7.9956,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          7.9956,
+          58.1467
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Kristiansand — karosseriverksted",
+    "cell": "Kristiansand",
+    "term": "karosseriverksted",
+    "lat": 58.1467,
+    "lng": 7.9956,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          7.9956,
+          58.1467
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Kristiansand — billakkering",
+    "cell": "Kristiansand",
+    "term": "billakkering",
+    "lat": 58.1467,
+    "lng": 7.9956,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          7.9956,
+          58.1467
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Kristiansand — elbilverksted",
+    "cell": "Kristiansand",
+    "term": "elbilverksted",
+    "lat": 58.1467,
+    "lng": 7.9956,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          7.9956,
+          58.1467
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Tromsø — bilverksted",
+    "cell": "Tromsø",
+    "term": "bilverksted",
+    "lat": 69.6492,
+    "lng": 18.9553,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          18.9553,
+          69.6492
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Tromsø — bilmekaniker",
+    "cell": "Tromsø",
+    "term": "bilmekaniker",
+    "lat": 69.6492,
+    "lng": 18.9553,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          18.9553,
+          69.6492
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Tromsø — dekkverksted",
+    "cell": "Tromsø",
+    "term": "dekkverksted",
+    "lat": 69.6492,
+    "lng": 18.9553,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          18.9553,
+          69.6492
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Tromsø — karosseriverksted",
+    "cell": "Tromsø",
+    "term": "karosseriverksted",
+    "lat": 69.6492,
+    "lng": 18.9553,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          18.9553,
+          69.6492
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Tromsø — billakkering",
+    "cell": "Tromsø",
+    "term": "billakkering",
+    "lat": 69.6492,
+    "lng": 18.9553,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          18.9553,
+          69.6492
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Tromsø — elbilverksted",
+    "cell": "Tromsø",
+    "term": "elbilverksted",
+    "lat": 69.6492,
+    "lng": 18.9553,
+    "radiusKm": 10,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          18.9553,
+          69.6492
+        ],
+        "radiusKm": 10
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Sør-Norge fringe — bilverksted",
+    "cell": "Sør-Norge fringe",
+    "term": "bilverksted",
+    "lat": 59,
+    "lng": 8.5,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          8.5,
+          59
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Sør-Norge fringe — bilmekaniker",
+    "cell": "Sør-Norge fringe",
+    "term": "bilmekaniker",
+    "lat": 59,
+    "lng": 8.5,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          8.5,
+          59
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Sør-Norge fringe — dekkverksted",
+    "cell": "Sør-Norge fringe",
+    "term": "dekkverksted",
+    "lat": 59,
+    "lng": 8.5,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          8.5,
+          59
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Sør-Norge fringe — karosseriverksted",
+    "cell": "Sør-Norge fringe",
+    "term": "karosseriverksted",
+    "lat": 59,
+    "lng": 8.5,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          8.5,
+          59
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Sør-Norge fringe — billakkering",
+    "cell": "Sør-Norge fringe",
+    "term": "billakkering",
+    "lat": 59,
+    "lng": 8.5,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          8.5,
+          59
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Sør-Norge fringe — elbilverksted",
+    "cell": "Sør-Norge fringe",
+    "term": "elbilverksted",
+    "lat": 59,
+    "lng": 8.5,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          8.5,
+          59
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Vestlandet fringe — bilverksted",
+    "cell": "Vestlandet fringe",
+    "term": "bilverksted",
+    "lat": 61.5,
+    "lng": 6,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          6,
+          61.5
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Vestlandet fringe — bilmekaniker",
+    "cell": "Vestlandet fringe",
+    "term": "bilmekaniker",
+    "lat": 61.5,
+    "lng": 6,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          6,
+          61.5
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Vestlandet fringe — dekkverksted",
+    "cell": "Vestlandet fringe",
+    "term": "dekkverksted",
+    "lat": 61.5,
+    "lng": 6,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          6,
+          61.5
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Vestlandet fringe — karosseriverksted",
+    "cell": "Vestlandet fringe",
+    "term": "karosseriverksted",
+    "lat": 61.5,
+    "lng": 6,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          6,
+          61.5
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Vestlandet fringe — billakkering",
+    "cell": "Vestlandet fringe",
+    "term": "billakkering",
+    "lat": 61.5,
+    "lng": 6,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          6,
+          61.5
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Vestlandet fringe — elbilverksted",
+    "cell": "Vestlandet fringe",
+    "term": "elbilverksted",
+    "lat": 61.5,
+    "lng": 6,
+    "radiusKm": 200,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          6,
+          61.5
+        ],
+        "radiusKm": 200
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Midt-Norge fringe — bilverksted",
+    "cell": "Midt-Norge fringe",
+    "term": "bilverksted",
+    "lat": 64.5,
+    "lng": 11,
+    "radiusKm": 250,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          11,
+          64.5
+        ],
+        "radiusKm": 250
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Midt-Norge fringe — bilmekaniker",
+    "cell": "Midt-Norge fringe",
+    "term": "bilmekaniker",
+    "lat": 64.5,
+    "lng": 11,
+    "radiusKm": 250,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          11,
+          64.5
+        ],
+        "radiusKm": 250
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Midt-Norge fringe — dekkverksted",
+    "cell": "Midt-Norge fringe",
+    "term": "dekkverksted",
+    "lat": 64.5,
+    "lng": 11,
+    "radiusKm": 250,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          11,
+          64.5
+        ],
+        "radiusKm": 250
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Midt-Norge fringe — karosseriverksted",
+    "cell": "Midt-Norge fringe",
+    "term": "karosseriverksted",
+    "lat": 64.5,
+    "lng": 11,
+    "radiusKm": 250,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          11,
+          64.5
+        ],
+        "radiusKm": 250
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Midt-Norge fringe — billakkering",
+    "cell": "Midt-Norge fringe",
+    "term": "billakkering",
+    "lat": 64.5,
+    "lng": 11,
+    "radiusKm": 250,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          11,
+          64.5
+        ],
+        "radiusKm": 250
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Midt-Norge fringe — elbilverksted",
+    "cell": "Midt-Norge fringe",
+    "term": "elbilverksted",
+    "lat": 64.5,
+    "lng": 11,
+    "radiusKm": 250,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          11,
+          64.5
+        ],
+        "radiusKm": 250
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Nord-Norge fringe — bilverksted",
+    "cell": "Nord-Norge fringe",
+    "term": "bilverksted",
+    "lat": 68.5,
+    "lng": 17.5,
+    "radiusKm": 400,
+    "input": {
+      "searchStringsArray": [
+        "bilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          17.5,
+          68.5
+        ],
+        "radiusKm": 400
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Nord-Norge fringe — bilmekaniker",
+    "cell": "Nord-Norge fringe",
+    "term": "bilmekaniker",
+    "lat": 68.5,
+    "lng": 17.5,
+    "radiusKm": 400,
+    "input": {
+      "searchStringsArray": [
+        "bilmekaniker"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          17.5,
+          68.5
+        ],
+        "radiusKm": 400
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Nord-Norge fringe — dekkverksted",
+    "cell": "Nord-Norge fringe",
+    "term": "dekkverksted",
+    "lat": 68.5,
+    "lng": 17.5,
+    "radiusKm": 400,
+    "input": {
+      "searchStringsArray": [
+        "dekkverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          17.5,
+          68.5
+        ],
+        "radiusKm": 400
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Nord-Norge fringe — karosseriverksted",
+    "cell": "Nord-Norge fringe",
+    "term": "karosseriverksted",
+    "lat": 68.5,
+    "lng": 17.5,
+    "radiusKm": 400,
+    "input": {
+      "searchStringsArray": [
+        "karosseriverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          17.5,
+          68.5
+        ],
+        "radiusKm": 400
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Nord-Norge fringe — billakkering",
+    "cell": "Nord-Norge fringe",
+    "term": "billakkering",
+    "lat": 68.5,
+    "lng": 17.5,
+    "radiusKm": 400,
+    "input": {
+      "searchStringsArray": [
+        "billakkering"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          17.5,
+          68.5
+        ],
+        "radiusKm": 400
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  },
+  {
+    "label": "Nord-Norge fringe — elbilverksted",
+    "cell": "Nord-Norge fringe",
+    "term": "elbilverksted",
+    "lat": 68.5,
+    "lng": 17.5,
+    "radiusKm": 400,
+    "input": {
+      "searchStringsArray": [
+        "elbilverksted"
+      ],
+      "countryCode": "no",
+      "customGeolocation": {
+        "type": "Point",
+        "coordinates": [
+          17.5,
+          68.5
+        ],
+        "radiusKm": 400
+      },
+      "maxCrawledPlacesPerSearch": 500,
+      "scrapeContacts": true,
+      "scrapePlaceDetailPage": true,
+      "includeOpeningHours": true,
+      "skipClosedPlaces": false,
+      "language": "en",
+      "includeHistogram": false,
+      "maxImages": 0,
+      "maxReviews": 0
+    },
+    "runId": null,
+    "datasetId": null,
+    "status": "KICKOFF_FAILED",
+    "startedAt": null
+  }
+]
