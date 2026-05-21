@@ -200,6 +200,22 @@ describe("resolveVariables — bare {{variable}} patterns", () => {
     );
   });
 
+  it("renders {{first_name_optional}} as a space-prefixed name when present", () => {
+    expect(run("Hi{{first_name_optional}},")).toBe("Hi Jane,");
+  });
+
+  it("renders {{first_name_optional}} as empty when first_name is missing", () => {
+    expect(
+      run("Hi{{first_name_optional}},", { ...contact, first_name: null }),
+    ).toBe("Hi,");
+  });
+
+  it("renders {{first_name_optional}} as empty when first_name is an empty string", () => {
+    expect(
+      run("Hi{{first_name_optional}},", { ...contact, first_name: "" }),
+    ).toBe("Hi,");
+  });
+
   it("falls back to 'your company' when no company is provided", () => {
     expect(run("{{company_name}}", contact, null)).toBe("your company");
   });

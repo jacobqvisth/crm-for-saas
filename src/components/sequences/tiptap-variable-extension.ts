@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 
 export const EDITOR_VARIABLES = [
   { key: "first_name", label: "First name" },
+  { key: "first_name_optional", label: "First name (optional)" },
   { key: "last_name", label: "Last name" },
   { key: "email", label: "Email" },
   { key: "company_name", label: "Company name" },

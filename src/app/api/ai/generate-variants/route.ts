@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const ALLOWED_TOKENS = [
   "first_name",
+  "first_name_optional",
   "last_name",
   "email",
   "company_name",
@@ -169,7 +170,7 @@ Output rules:
 - Each variant must be substantially different from every other variant AND from any existing variant shown below — different opener, different rhythm, different word choices. Do NOT just rephrase one sentence.
 - Subject lines: 5–8 words, no exclamation marks, do NOT mention "AI"
 - Body: HTML with only <p> tags. No bold, no lists, no headers. Short paragraphs (max 3–4 sentences each).
-- Salutation token: use {{first_name}}
+- Salutation: write it exactly as "Hi{{first_name_optional}}," (no space before the token). At send time this renders to "Hi Jane," when the contact has a first name and "Hi," when they don't — never use the bare {{first_name}} token in the salutation, and never invent your own greeting
 - Return ONLY valid JSON: an array of exactly ${count} objects, each { "name": string, "subject": string, "body": string }
 - "name" should be a 1–3 word evocative label (e.g. "Curious opener", "Pain-led", "Peer reference")`;
 

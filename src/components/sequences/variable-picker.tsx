@@ -5,6 +5,7 @@ import { Variable } from "lucide-react";
 
 const VARIABLES = [
   { key: "first_name", label: "First Name", example: "John" },
+  { key: "first_name_optional", label: "First Name (optional)", example: " John" },
   { key: "last_name", label: "Last Name", example: "Doe" },
   { key: "email", label: "Email", example: "john@example.com" },
   { key: "company_name", label: "Company Name", example: "Acme Inc" },
