@@ -45,6 +45,11 @@ next-env.d.ts
 # CC prompts — local only, not versioned
 docs/prompts/
 
+# Local planning surface (prompts + inbox) — moved here 2026-05-21 from
+# ~/Documents/First Vault/02_Projects/wrenchlane-crm/ when the Cowork
+# two-folder split was retired for this project. Not versioned.
+_planning/
+
 # Discovery pipeline data files (regeneratable, not versioned)
 scripts/*-shops-data.json
 scripts/lemlist-*.json

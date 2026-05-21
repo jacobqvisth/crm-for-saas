@@ -216,8 +216,9 @@ Every 3–4 phases, a dedicated health check session runs: lint to zero, dead co
 
 - `CLAUDE.md` — CC reads this automatically. Project conventions and architecture.
 - `PROJECT-STATUS.md` — Cowork's persistent memory. Updated after each phase.
-- `cc-session-log.md` — CC appends a summary here after every session. Cowork reads this at startup to know what was last built.
-- CC prompts are stored in Jacob's planning vault and pasted in at session start — they are not in this repo.
+- `cc-session-log.md` — CC appends a summary here after every session. This is the canonical build log.
+- `_planning/prompts/` — historical CC prompt files (locally-gitignored, moved here 2026-05-21 from the old Cowork planning vault).
+- `_planning/inbox/` — drop folder for files Jacob wants reviewed (also gitignored).
 - `docs/icp/` — ICP research, personas, market data for email content.
 
 ---
