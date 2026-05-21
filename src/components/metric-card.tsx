@@ -1,10 +1,12 @@
 import type { LucideIcon } from "lucide-react";
+import { InfoTooltip } from "@/components/info-tooltip";
 
 interface MetricCardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
   subtitle?: string;
+  tooltip?: string;
   trend?: {
     value: number;
     positive: boolean;
@@ -16,13 +18,17 @@ export function MetricCard({
   value,
   icon: Icon,
   subtitle,
+  tooltip,
   trend,
 }: MetricCardProps) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6">
       <div className="flex items-start justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
+            <span>{title}</span>
+            {tooltip && <InfoTooltip label={tooltip} />}
+          </p>
           <p className="text-2xl font-semibold text-slate-900">{value}</p>
           {subtitle && (
             <p className="text-xs text-slate-400">{subtitle}</p>

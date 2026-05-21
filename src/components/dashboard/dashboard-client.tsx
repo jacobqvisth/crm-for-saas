@@ -188,6 +188,7 @@ export function DashboardClient() {
           value={metrics.totalContacts.toLocaleString()}
           icon={Users}
           subtitle={`+${metrics.contactsInPeriod} this period`}
+          tooltip="Every contact in this workspace, regardless of when they were added. The '+N this period' line below counts contacts created inside the selected date range; the trend percentage compares that to the previous range of the same length."
           trend={
             metrics.contactsTrend !== 0
               ? { value: Math.abs(metrics.contactsTrend), positive: metrics.contactsTrend > 0 }
@@ -198,12 +199,14 @@ export function DashboardClient() {
           title="Active Sequences"
           value={metrics.activeSequences}
           icon={Mail}
+          tooltip="Sequences currently set to status = 'active'. Paused or draft sequences are not counted. This is a live count and does not depend on the selected date range."
         />
         <MetricCard
           title="Emails Sent"
           value={metrics.emailsSentCount.toLocaleString()}
           icon={Send}
           subtitle="in selected period"
+          tooltip="Sequence emails successfully handed off to Gmail inside the selected period (email_queue rows with status = 'sent'). Excludes scheduled, paused, cancelled, or failed sends. Trend compares to the previous range of the same length."
           trend={
             metrics.emailsTrend !== 0
               ? { value: Math.abs(metrics.emailsTrend), positive: metrics.emailsTrend > 0 }
@@ -215,6 +218,7 @@ export function DashboardClient() {
           value={`${metrics.openRate}%`}
           icon={Eye}
           subtitle="in selected period"
+          tooltip="Unique opens ÷ emails sent in the period. Opens are tracking-pixel loads — out-of-office and auto-reply messages do not trigger an open because their mail clients don't load the pixel. Known mail-scanner bots (Google Image Proxy etc.) are filtered. Trend is the percentage-point change vs. the previous range."
           trend={
             metrics.openRateTrend !== 0
               ? { value: Math.abs(metrics.openRateTrend), positive: metrics.openRateTrend > 0 }
@@ -226,6 +230,7 @@ export function DashboardClient() {
           value={`${metrics.replyRate}%`}
           icon={MessageSquare}
           subtitle="in selected period"
+          tooltip="Real replies ÷ emails sent in the period. Out-of-office and auto-reply messages are detected by headers and subject patterns and excluded — they still show up in Inbox flagged as 'Out of office' but do not count here. Trend is the percentage-point change vs. the previous range."
           trend={
             metrics.replyRateTrend !== 0
               ? { value: Math.abs(metrics.replyRateTrend), positive: metrics.replyRateTrend > 0 }
@@ -237,6 +242,7 @@ export function DashboardClient() {
           value={formatCurrency(metrics.pipelineValue)}
           icon={DollarSign}
           subtitle="open deals"
+          tooltip="Sum of deal amounts for all open deals (every stage except Closed Won and Closed Lost). Live total — not filtered by the date range."
         />
       </div>
 
