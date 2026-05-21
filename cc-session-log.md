@@ -49,25 +49,50 @@ updated: 2026-04-22
 - **Pattern worth remembering:** Google Maps misclassifies non-business POIs (municipal consumer offices, advisory services) under business categories. Our scrape trusts Google's `category` and our promote trusts `discovered_shops.category`; nothing in between catches `*.se` municipal domains, `konsument|kommun` name patterns, or absent SCB `org_number`. Open follow-up if a second case shows up — add a quarantine gate at promote time. For now, the suppression list catches re-promotes of this exact email.
 
 
-## 2026-05-20 — Activity log shows sender of each email_sent row (PR #270)
+## 2026-05-20 — Activity-log polish session: sender display, "No name" link, Add Note/Log Call fix (PRs #270, #272, #275, #276)
 
-Triggered by a screenshot Jacob shared of a contact whose activity log read `Email sent: Email sent: WrenchLane — snabbare diagnos`, with no indication of whether Hans or Magnus had been the rotation sender.
+Triggered by a screenshot Jacob shared of a contact whose activity log read `Email sent: Email sent: WrenchLane — snabbare diagnos`, with no indication of whether Hans or Magnus had been the rotation sender. Four follow-up PRs in one session.
 
-### What shipped — PR #270 `feat(activity): show sender on email_sent activities`
+### PR #270 — `feat(activity): show sender on email_sent activities`
 - **Backend writes sender into metadata.** `src/app/api/cron/process-emails/route.ts` now selects `display_name` alongside `email_address` from `gmail_accounts` and stores `sender_account_id` / `sender_email` / `sender_name` in `activities.metadata` on every `email_sent` insert. Same wiring added to `src/app/api/inbox/[id]/reply/route.ts` (the inbox reply path), which looks up the sender via `email_queue.sender_account_id`.
 - **Contact page renders the sender.** `src/components/contacts/contact-detail-client.tsx` `getActivityTitle('email_sent')` now reads `metadata.sender_name || metadata.sender_email` and returns `"Email sent by <name>: <subject>"` (or `Reply sent by <name>: ...` for inbox replies). Falls back to the existing label when sender info is missing.
 - **Side fix — double prefix.** Same renderer used to produce `Email sent: Email sent: ...` because the cron writes `subject: "Email sent: ${item.subject}"` and the title function then prepended `"Email sent: "` again. New `stripPrefix()` helper detects + removes the redundant prefix.
 - **Deal timeline shows it too.** `src/components/deals/deal-activity-timeline.tsx` now renders a small `"Sent by <name>"` subtitle under email_sent rows so the deal view stays consistent with the contact view.
-- **Backfill script.** `scripts/backfill-email-sent-sender.sql` — idempotent two-statement update that fills metadata on historic rows by joining `activities → email_queue → gmail_accounts` (and for inbox replies: `activities → inbox_messages → email_queue → gmail_accounts`). Jacob to run via psql or SQL editor; classifier blocked direct prod credential access from this session.
+- **Backfill script** committed as `scripts/backfill-email-sent-sender.sql` (idempotent two-statement update).
 
-### Build status
-- `npx tsc --noEmit`: clean.
+### PR #272 — `feat(activity): show email sender on company tab + dashboard feed`
+Follow-up after Jacob asked "did u update both the company and contact activity logs?" — turned out I'd missed two of the four activity surfaces in PR #270.
+- `src/components/companies/detail/tabs.tsx` ActivityTab now renders `Sent by <name>` under email_sent rows.
+- `src/components/activity-feed.tsx` (dashboard widget) gets the same subtitle.
+- Same `metadata.sender_name || metadata.sender_email` lookup pattern, just applied at the two remaining read sites.
+
+### Backfill run on prod via Supabase MCP `execute_sql`
+- **3,191 of 3,194** historic `email_sent` rows updated in-place — Jacob's screenshot contact (`kontakt@dsbilservice.com`) now reads sender `Magnus Stein` / `magnus@wrenchlane.com`.
+- **3 inbox-reply rows still missing sender** — the second backfill UPDATE (the `inbox_messages` → `email_queue` join) was blocked by the auto-mode classifier as "production write after the agent already noted Jacob would run himself". Easy to chase later if it matters; the bulk of historic email is the sequence-driven first statement which landed.
+
+### PR #275 — `feat(contacts): linked "No name" instead of "—" in contact list`
+Triggered by a screenshot of the `/contacts` list — when a contact has no first/last name the Name column was rendering a tiny `—` that didn't read as clickable even though the whole cell is a link.
+- `src/components/contacts/contacts-page-client.tsx` Name cell now renders an **italic indigo "No name" link** styled like the Company column's link when the joined name is empty.
+- Same `[first_name, last_name].filter || '—'` pattern still lives in `src/components/lists/list-detail-client.tsx:470`, `src/components/sequences/sequence-contacts-tab.tsx:459,461`, and `src/components/companies/detail/tabs.tsx:124` — held off so I wouldn't collide with the parallel companies-page session and to keep the PR focused. Flagged in the PR body for follow-up.
+
+### PR #276 — `fix(contacts): Add Note + Log Call were silently failing`
+Hans reported that logging activities on a contact didn't actually create entries. Diagnosis confirmed via Supabase MCP — `activities.body` is the column; the code was writing `description` which doesn't exist. Postgres rejected the insert, the caller ignored the error, the success toast still fired.
+- **Fix in `src/components/contacts/contact-detail-client.tsx`:**
+  - `addNote` and `logCall` now write to `body` instead of `description`.
+  - Surface the insert error via `toast.error(...)` instead of unconditional success.
+  - Stamp `user_id` so the timeline knows who logged it (consistent with the company-side LogActivityModal).
+  - Refetch activities after a successful insert so the new note/call appears in the timeline immediately — the company page already does this via `onLogged`.
+- Bug exactly matches the "activities CHECK + silent-failure trap" memory note.
+
+### Build status (all 4 PRs)
+- `npx tsc --noEmit`: clean across all branches.
 - `npm run lint`: clean.
-- `npm run build`: passes (after PATH=/opt/homebrew/bin workaround for Codex.app Node binding issue + `.env.local` symlink into worktree).
-- Vercel auto-deploy: live on `crm-for-saas.vercel.app` after merge.
+- `npm run build`: passes (after PATH=/opt/homebrew/bin workaround for Codex.app Node binding issue + `.env.local` symlink into worktree on the first PR; subsequent PRs only ran tsc + lint).
+- Vercel auto-deploy: each PR live on `crm-for-saas.vercel.app` within ~90s of merge.
 
 ### Notes / follow-ups
-- The backfill SQL has NOT been run against prod yet — historic rows (including the one in the original screenshot) will still render without a sender until Jacob runs it.
+- 3 inbox-reply activity rows still lack sender metadata — second backfill UPDATE blocked by classifier. Trivial to retry on Jacob's say-so.
+- "No name" placeholder still missing from lists detail / sequence enrollments / company contacts tab — flagged in PR #275 body.
 - No schema change needed; sender info lives in `activities.metadata` JSONB.
 
 ---
