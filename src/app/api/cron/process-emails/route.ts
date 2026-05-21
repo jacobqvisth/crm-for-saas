@@ -5,7 +5,11 @@ import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "@/lib/sequences/variables";
-import { getNextSendTime, calculateStepScheduleTime } from "@/lib/sequences/scheduler";
+import {
+  getNextSendTime,
+  calculateStepScheduleTime,
+  isWithinSendWindow,
+} from "@/lib/sequences/scheduler";
 import { renderQueuedEmail } from "@/lib/sequences/render";
 import {
   pickVariant,
@@ -219,6 +223,31 @@ export async function POST(request: NextRequest) {
           .eq("id", item.id);
         continue;
       }
+
+      // --- Send-window guard ---
+      // Defense in depth: refuse to send if the current moment is outside the
+      // sequence's configured timezone/day/hour window. The jitter, retry, and
+      // rate-limit deferrals elsewhere in this file set `scheduled_for` purely
+      // by elapsed time, so items can land in the night; without this guard the
+      // cron would happily ship them at any hour. We push the item forward to
+      // the next valid window start and skip it.
+      {
+        const seqSettings = (enrollment.sequences as unknown as {
+          settings?: SequenceSettings | null;
+        })?.settings;
+        if (seqSettings && !isWithinSendWindow(seqSettings)) {
+          const nextWindow = getNextSendTime(seqSettings);
+          await supabase
+            .from("email_queue")
+            .update({
+              status: "scheduled" as const,
+              scheduled_for: nextWindow.toISOString(),
+            })
+            .eq("id", item.id);
+          continue;
+        }
+      }
+      // --- End send-window guard ---
 
       // --- Sequence-level daily caps (total + per-sender) ---
       // Both knobs live on sequence.settings JSON. Either is "off" when 0/undefined.
