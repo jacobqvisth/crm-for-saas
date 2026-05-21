@@ -14,6 +14,25 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-21 — Trace + DNC: kundtjanst@skelleftea.se (Konsument Skellefteå)
+
+- **Trigger:** Jacob spotted a non-workshop email (`kundtjanst@skelleftea.se`) in the CRM and asked how it got there.
+- **Origin trail:**
+  1. Apify Google Maps scrape on **2026-05-05 12:56 UTC** pulled "Konsument Skellefteå" (Skellefteå municipality's consumer-rights office at Trädgårdsgatan 6) into `discovered_shops` (id `dbd71d40…`). Google's category for that POI is literally `Auto repair shop`, so it sailed past the scrape filter. `place_id=ChIJ1_zPMTGVfkYRwqoGtg22GKw`. Email scraped from `skelleftea.se/konsument`. Email validation passed (`mx_ok`) — the check is MX-only, never recipient-quality.
+  2. Promote step ran **2026-05-06 07:48–07:49 UTC**: company `871975c9…` created (industry=Automotive, category="Auto repair shop"), contact `0281b21a…` created with `source='discovery'`, `tag='owner'`.
+  3. Enrolled into the Sverige sequence and emailed once on **2026-05-19 19:50 UTC** as part of that day's flush. One follow-up was queued for 2026-05-26.
+- **Scope check:** scanned all `discovered_shops` for `%kommun%` / `%konsument%` / other `@skelleftea.se` slip-throughs — Konsument Skellefteå is the only non-business entry that reached `status='imported'`. One-off, not a category-wide leak.
+- **Mitigation (direct SQL on prod, all in one tx):**
+  - `companies.871975c9…` → `do_not_contact=true`, `do_not_route=true`, reason `not_a_workshop_municipal_consumer_office`.
+  - `contacts.0281b21a…` → `status='unsubscribed'`.
+  - `sequence_enrollments.61158330…` → `status='unsubscribed'`, completed_at set (allowed CHECK values: `active|completed|unsubscribed|replied|bounced` — no `cancelled`).
+  - `email_queue.95fba676…` (the 2026-05-26 follow-up) → `status='cancelled'`.
+  - `suppressions` row inserted for workspace `d946ea1f…` blocking the email + domain.
+  - `discovered_shops.dbd71d40…` → `status='rejected'` so a re-scrape doesn't re-promote.
+- **Verification:** read all six rows back — every field updated as expected.
+- **Pattern worth remembering:** Google Maps misclassifies non-business POIs (municipal consumer offices, advisory services) under business categories. Our scrape trusts Google's `category` and our promote trusts `discovered_shops.category`; nothing in between catches `*.se` municipal domains, `konsument|kommun` name patterns, or absent SCB `org_number`. Open follow-up if a second case shows up — add a quarantine gate at promote time. For now, the suppression list catches re-promotes of this exact email.
+
+
 ## 2026-05-20 — Activity log shows sender of each email_sent row (PR #270)
 
 Triggered by a screenshot Jacob shared of a contact whose activity log read `Email sent: Email sent: WrenchLane — snabbare diagnos`, with no indication of whether Hans or Magnus had been the rotation sender.
