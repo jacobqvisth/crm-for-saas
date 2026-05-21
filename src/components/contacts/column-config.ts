@@ -22,7 +22,7 @@ export type ColumnId =
   | 'customer_status'
   | 'has_account'
   | 'tags'
-  | 'last_contacted_at'
+  | 'last_emailed_at'
   | 'created_at'
   | 'updated_at';
 
@@ -50,7 +50,7 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'customer_status',   label: 'Customer status',default: false, sortable: false },
   { id: 'has_account',       label: 'App user',       default: false, sortable: false },
   { id: 'tags',              label: 'Tags',           default: false, sortable: false },
-  { id: 'last_contacted_at', label: 'Last contacted', default: false, sortable: false },
+  { id: 'last_emailed_at',   label: 'Last emailed',   default: false, sortable: false },
   { id: 'created_at',        label: 'Created',        default: true,  sortable: true  },
   { id: 'updated_at',        label: 'Updated',        default: false, sortable: false },
 ];

@@ -1322,10 +1322,10 @@ function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
         </div>
       );
     }
-    case 'last_contacted_at':
-      return contact.last_contacted_at ? (
-        <span className="text-xs text-slate-500" title={contact.last_contacted_at}>
-          {formatDistanceToNow(new Date(contact.last_contacted_at), { addSuffix: true })}
+    case 'last_emailed_at':
+      return contact.last_emailed_at ? (
+        <span className="text-xs text-slate-500" title={contact.last_emailed_at}>
+          {formatDistanceToNow(new Date(contact.last_emailed_at), { addSuffix: true })}
         </span>
       ) : <span className="text-slate-400">—</span>;
     case 'created_at':
