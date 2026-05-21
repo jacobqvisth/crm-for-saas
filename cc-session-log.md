@@ -4087,3 +4087,19 @@ Session closed.
 **Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` compiled + TypeScript pass (prerender failed in worktree on missing `.env.local` — known worktree limitation, unrelated to this change). Production smoke: `curl -I https://crm-for-saas.vercel.app` returns 307 → /login after merge.
 
 **Out of scope:** /messages, /sequences/[id] builder, and any other 2-pane views still use fixed widths. Same pattern applies if they need it later — declare `*_WIDTH_KEY` + `_DEFAULT` + `_MIN` + `_MAX`, hydrate from localStorage in the existing prefs `useEffect`, and add a `<div role="separator" onMouseDown=…>` between the panes.
+
+---
+
+## 2026-05-21 — Contacts "Last contacted" column repointed at `last_emailed_at` (PR #282)
+
+**Branch:** fix/last-emailed-col → main (squash merge 2026-05-21T07:59:07Z).
+**Deploy:** live on crm-for-saas.vercel.app (HTTP 307 → /login after merge).
+**Files:**
+- `src/components/contacts/column-config.ts` — `ColumnId` member renamed `last_contacted_at` → `last_emailed_at`; column label "Last contacted" → "Last emailed".
+- `src/components/contacts/contacts-page-client.tsx` — render case + accessor switched to `contact.last_emailed_at`.
+
+**Why:** Jacob noticed the "Last contacted" column was blank for rows that matched the "Has been emailed" engagement filter. The two fields are independent — `last_contacted_at` is written only by the check-replies cron when a contact *replies* (`src/app/api/cron/check-replies/route.ts:182`), while `last_emailed_at` is written by the process-emails cron on outbound sends (`src/app/api/cron/process-emails/route.ts:440`) and is what the engagement filter checks. Repointing the column makes it match the filter wording users combine it with.
+
+**Untouched:** `contacts.last_contacted_at` itself stays in the schema and is still used by check-replies + the list-builder "Last Contacted (replied)" smart-list field (`src/lib/lists/filter-query.ts:46`). Stored column preferences keyed under the old `last_contacted_at` id will silently drop on load (filtered out as invalid) — re-add the column from the Columns menu after deploy.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` compiled successfully in worktree (after `PATH=/opt/homebrew/bin:$PATH` to dodge the Codex.app Node-bindings issue).
