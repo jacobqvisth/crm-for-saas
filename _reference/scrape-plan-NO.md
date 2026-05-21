@@ -181,13 +181,25 @@ Built into `scripts/lib/shop-merger.mjs:20-83`:
 - **Country-wide terms (500-cap each):** `bilverksted`, `bilmekaniker`, `dekkverksted`, `karosseriverksted`, `billakkering`, `elbilverksted` (6 terms). `bilverksted` may need to be split by north/south halves if it caps.
 - **City-grid terms (run per city from Section B):** same 6 terms per city.
 
-### Expected outcome
+### Expected outcome (revised 2026-05-21 after brreg survey)
 
 - **Total unique rows after dedup:** ~7,000–8,500 (brreg's 6,826 underenheter is the floor — anything above comes from GMaps placeIds that brreg missed or that don't have an org number)
 - **Apify credit cost estimate:** ~$50 ($21 country-wide + $28 city grids; assumes ~3,000 effective paid places after dedup)
 - **Estimated duration:** 2–2.5 hours wall-clock including brreg pull + chain-sitemap harvest + Apify + import
-- **Estimated % with email:** **60–70% valid+catch_all** after MillionVerifier (upgraded from 50-60% in v1 thanks to chain-sitemap harvest). brreg supplies first-party emails for ~30% of indies, chain-sitemap supplies branch-unique emails for the ~1,030 MEKO-group branches (~15% of total), GMaps + pattern-MV covers the rest.
-- **Estimated % with phone:** ~80%+ (brreg + GMaps both supply phone reliably for NO)
+- **Estimated % with email (REVISED DOWN):** **~45–55% valid+catch_all** after MillionVerifier. Realistic build-up:
+  - brreg supplies email for **16.5%** of rows (1,127 of 6,826) — much lower than initial 30% estimate. Of those, ~50% are personal mailboxes (gmail/hotmail/online.no/icloud) — ingest separately.
+  - Chain-sitemap supplies branch-unique emails for ~1,150 MEKO-group + Vianor branches (~15% of total)
+  - Apify GM scrapes email for ~30-40% of long-tail indies (~1,500 rows)
+  - Pattern-MV recovers another ~5-10% from websites-yes/email-no rows
+- **Estimated % with phone:** ~80%+ (brreg supplies 32%, GMaps fills the rest)
+- **Brreg survey findings (2026-05-21):**
+  - 6,807/6,826 (99.7%) have `beliggenhetsadresse.kommune` — geo is clean (top cities: Oslo 383, Bergen 257, Trondheim 194, Kristiansand 151, Lillestrøm 128 …)
+  - **Chain-detection via `overordnetEnhet` (parent org) is the canonical signal — NOT name-regex.** Top parents:
+    - Carglass AS (110 branches) → out-of-ICP glass, **exclude at import**
+    - Norsk Scania (47) + Bertel O. Steen LB (14) + Trucknor (12) + Nordic Last of Buss (15) ≈ 88 truck/heavy → **exclude at import**
+    - MEKO Bilverksted AS (30) → tag `meko-group`
+    - NAF AS (28), Snap Drive (31), Team Verksted (21), Werksta (16), Tesla bodyshop (21), Bilia (17), Hedin BMW (11), Nordvik (20) → tag as chain branches
+  - Noise (Jacob's call = accept): vask/wash (108), bilglass (127), billakk (118) ≈ 5%
 
 ### Go / no-go summary
 
