@@ -4028,3 +4028,24 @@ Session closed.
 - E2E CI failed on `CRON_SECRET missing` in the workflow's `.env.local` — pre-existing infra problem unrelated to this PR (auth.setup.ts errors before any test runs)
 
 **Skipped:** bulk actions (delete / change lifecycle / add to list). Easy follow-up if desired.
+
+---
+
+## 2026-05-21 — Persist list filters across back-nav (PR #277)
+
+**Branch:** feat/persist-list-filters → main (squash merge ea04642c).
+**Deploy:** live on Vercel (dpl_3Wn4RopS2EYotYp2b9TR6cAorhVo).
+**Files:**
+- `src/lib/list-state.ts` (new) — `loadListState` / `saveListState` / `clearListState` sessionStorage helpers, workspace-keyed, SSR-safe
+- `src/components/contacts/contacts-page-client.tsx` — hydrate filters/sort/page/scrollY on workspaceId, gate fetch on `hydrated`, save on change, save scrollY on unmount, restore scroll after first load
+- `src/components/companies/companies-page-client.tsx` — same pattern
+
+**Behaviour:**
+- Filter /contacts (or /companies), open a row, hit browser back → same filters + sort + page restored, scroll lands roughly at the row you opened.
+- Tab-scoped via sessionStorage — a second tab is independent; closing the tab clears.
+- prevFiltersRef "filters changed → reset to page 1" effect skips during hydration so a restored page survives the restored filters arriving together.
+- `hydrated` flag prevents the initial fetch from firing with default filters before sessionStorage restore completes.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` 67/67 pages. E2E CI still red on the pre-existing `CRON_SECRET missing` infra issue from yesterday's session (auth.setup.ts errors before any test runs) — unrelated.
+
+**Out of scope:** /deals, /lists, /sequences, /tasks lists weren't touched. If they need the same behaviour later, the same pattern applies — each gets a unique `LIST_STATE_KEY` constant and the four useEffects.
