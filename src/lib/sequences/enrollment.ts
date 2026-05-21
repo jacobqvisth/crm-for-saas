@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "./variables";
@@ -7,7 +8,7 @@ import {
   fetchVariantsByStepId,
   flushSendCountDeltas,
 } from "./variants";
-import type { SequenceSettings, Tables } from "@/lib/database.types";
+import type { Database, SequenceSettings, Tables } from "@/lib/database.types";
 
 type ContactWithCompany = Tables<"contacts"> & {
   companies: Tables<"companies"> | null;
@@ -40,9 +41,12 @@ interface EnrollResult {
   skippedAlreadySequenced: number;
 }
 
-export async function enrollContacts(params: EnrollParams): Promise<EnrollResult> {
+export async function enrollContacts(
+  params: EnrollParams,
+  supabaseClient?: SupabaseClient<Database>,
+): Promise<EnrollResult> {
   const { sequenceId, contactIds, workspaceId, senderAccountId, allowAlreadySequenced = false } = params;
-  const supabase = await createClient();
+  const supabase = supabaseClient ?? (await createClient());
   const result: EnrollResult = { enrolled: 0, skipped: 0, reasons: [], skippedAlreadySequenced: 0 };
 
   // Get the sequence
