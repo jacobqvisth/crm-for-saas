@@ -347,14 +347,28 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Belt-and-suspenders: check contact is not bounced or unsubscribed
+      // Belt-and-suspenders: check contact is not bounced, unsubscribed,
+      // or now a wl-app customer (the company may have signed up between
+      // enrollment time and send time — we don't want to send cold
+      // outreach to existing customers).
       const { data: contactStatus } = await supabase
         .from("contacts")
-        .select("status")
+        .select("status, wl_user_id, companies(wl_workshop_id)")
         .eq("id", item.contact_id)
         .single();
 
       if (contactStatus?.status === "bounced" || contactStatus?.status === "unsubscribed") {
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("id", item.id);
+        continue;
+      }
+
+      const companyWorkshopId =
+        (contactStatus?.companies as { wl_workshop_id?: string | null } | null)
+          ?.wl_workshop_id ?? null;
+      if (contactStatus?.wl_user_id || companyWorkshopId) {
         await supabase
           .from("email_queue")
           .update({ status: "cancelled" as const })
