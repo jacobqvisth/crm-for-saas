@@ -85,6 +85,7 @@ export type Database = {
           deal_id: string | null
           id: string
           metadata: Json | null
+          outcome: string | null
           subject: string | null
           type: string
           user_id: string | null
@@ -98,6 +99,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           metadata?: Json | null
+          outcome?: string | null
           subject?: string | null
           type: string
           user_id?: string | null
@@ -111,6 +113,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           metadata?: Json | null
+          outcome?: string | null
           subject?: string | null
           type?: string
           user_id?: string | null
@@ -384,6 +387,70 @@ export type Database = {
           },
         ]
       }
+      company_merge_candidates: {
+        Row: {
+          candidate_company_id: string
+          created_at: string
+          id: string
+          match_signals: Json
+          primary_company_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          similarity_score: number
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          candidate_company_id: string
+          created_at?: string
+          id?: string
+          match_signals?: Json
+          primary_company_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          similarity_score: number
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          candidate_company_id?: string
+          created_at?: string
+          id?: string
+          match_signals?: Json
+          primary_company_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          similarity_score?: number
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_merge_candidates_candidate_company_id_fkey"
+            columns: ["candidate_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_merge_candidates_primary_company_id_fkey"
+            columns: ["primary_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_merge_candidates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_list_members: {
         Row: {
           added_at: string | null
@@ -465,6 +532,10 @@ export type Database = {
           all_phones: string[] | null
           app_role: string | null
           app_username: string | null
+          attributed_at: string | null
+          attributed_to_send_id: string | null
+          attributed_to_sequence_id: string | null
+          attributed_via: string | null
           city: string | null
           company_id: string | null
           country: string | null
@@ -516,6 +587,10 @@ export type Database = {
           all_phones?: string[] | null
           app_role?: string | null
           app_username?: string | null
+          attributed_at?: string | null
+          attributed_to_send_id?: string | null
+          attributed_to_sequence_id?: string | null
+          attributed_via?: string | null
           city?: string | null
           company_id?: string | null
           country?: string | null
@@ -567,6 +642,10 @@ export type Database = {
           all_phones?: string[] | null
           app_role?: string | null
           app_username?: string | null
+          attributed_at?: string | null
+          attributed_to_send_id?: string | null
+          attributed_to_sequence_id?: string | null
+          attributed_via?: string | null
           city?: string | null
           company_id?: string | null
           country?: string | null
@@ -613,6 +692,20 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_attributed_to_send_id_fkey"
+            columns: ["attributed_to_send_id"]
+            isOneToOne: false
+            referencedRelation: "email_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_attributed_to_sequence_id_fkey"
+            columns: ["attributed_to_sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contacts_company_id_fkey"
             columns: ["company_id"]
@@ -739,6 +832,42 @@ export type Database = {
           section?: string
           snapshot_at?: string
           unit?: string
+        }
+        Relationships: []
+      }
+      dashboard_cta_clicks: {
+        Row: {
+          button_text: string
+          cta_location: string
+          date: string
+          events: number
+          host_name: string
+          id: number
+          page_path: string
+          synced_at: string
+          users: number
+        }
+        Insert: {
+          button_text?: string
+          cta_location?: string
+          date: string
+          events?: number
+          host_name: string
+          id?: number
+          page_path: string
+          synced_at?: string
+          users?: number
+        }
+        Update: {
+          button_text?: string
+          cta_location?: string
+          date?: string
+          events?: number
+          host_name?: string
+          id?: number
+          page_path?: string
+          synced_at?: string
+          users?: number
         }
         Relationships: []
       }
@@ -2903,6 +3032,35 @@ export type Database = {
           },
         ]
       }
+      workspace_ai_knowledge: {
+        Row: {
+          content_md: string
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          content_md: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          content_md?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_ai_knowledge_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_ai_settings: {
         Row: {
           created_at: string
@@ -2937,35 +3095,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_ai_settings_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: true
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_ai_knowledge: {
-        Row: {
-          content_md: string
-          updated_at: string
-          updated_by: string | null
-          workspace_id: string
-        }
-        Insert: {
-          content_md: string
-          updated_at?: string
-          updated_by?: string | null
-          workspace_id: string
-        }
-        Update: {
-          content_md?: string
-          updated_at?: string
-          updated_by?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_ai_knowledge_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: true
             referencedRelation: "workspaces"
@@ -3009,6 +3138,7 @@ export type Database = {
         Row: {
           created_at: string | null
           domain: string | null
+          domain_aliases: string[]
           google_workspace_domain: string | null
           id: string
           name: string
@@ -3019,6 +3149,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           domain?: string | null
+          domain_aliases?: string[]
           google_workspace_domain?: string | null
           id?: string
           name: string
@@ -3029,6 +3160,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           domain?: string | null
+          domain_aliases?: string[]
           google_workspace_domain?: string | null
           id?: string
           name?: string
@@ -3054,6 +3186,38 @@ export type Database = {
       }
     }
     Functions: {
+      find_fuzzy_company_matches: {
+        Args: {
+          p_country_code: string
+          p_limit?: number
+          p_max_sim?: number
+          p_min_sim?: number
+          p_name: string
+          p_workspace_id: string
+        }
+        Returns: {
+          id: string
+          name: string
+          org_number: string
+          similarity: number
+          source: string
+          wl_workshop_id: string
+        }[]
+      }
+      find_strict_company_match: {
+        Args: {
+          p_country_code: string
+          p_min_sim?: number
+          p_name: string
+          p_workspace_id: string
+        }
+        Returns: {
+          id: string
+          name: string
+          similarity: number
+          wl_workshop_id: string
+        }[]
+      }
       get_next_send_time: {
         Args: {
           p_after: string
@@ -3066,6 +3230,7 @@ export type Database = {
       }
       get_sequence_stats: { Args: { p_sequence_id: string }; Returns: Json }
       get_user_workspace_ids: { Args: never; Returns: string[] }
+      immutable_unaccent: { Args: { "": string }; Returns: string }
       increment_variant_sends: {
         Args: { p_delta: number; p_variant_id: string }
         Returns: undefined
@@ -3085,6 +3250,9 @@ export type Database = {
         Returns: undefined
       }
       reset_daily_send_counts: { Args: never; Returns: undefined }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

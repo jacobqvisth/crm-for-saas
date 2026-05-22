@@ -71,6 +71,10 @@ const contact = {
   diagnostics_first_at: null,
   diagnostics_last_at: null,
   diagnostics_last_30d: null,
+  attributed_to_send_id: null,
+  attributed_to_sequence_id: null,
+  attributed_via: null,
+  attributed_at: null,
 } satisfies Contact;
 
 const company: Company = {
