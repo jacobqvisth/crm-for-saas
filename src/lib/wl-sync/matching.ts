@@ -170,6 +170,48 @@ export type OutreachAttribution = {
   sentAt: string;
 };
 
+// Strongest attribution: the contact about to be upgraded to wl-app
+// received an outreach email themselves and then signed up under the
+// same email. Returns their most recent successful send + sequence.
+//
+// Temporal guard: the send must have happened BEFORE the user signed
+// up. `signupAt` should be the earliest wl-app signal we have (typically
+// last_login_at or diagnostics_first_at from the propagator). When
+// signupAt is null we don't know when they signed up, so we use
+// "right now" as a permissive upper bound — that's correct for a
+// brand-new signup arriving via the cron, but the backfill should pass
+// the actual signup timestamp.
+export async function lookupSelfAttribution(
+  supabase: SupabaseClient<Database>,
+  contactId: string,
+  signupAt: string | null = null,
+): Promise<OutreachAttribution | null> {
+  const upperBound = signupAt ?? new Date().toISOString();
+  const { data: sends } = await supabase
+    .from("email_queue")
+    .select("id, enrollment_id, sent_at, status")
+    .eq("contact_id", contactId)
+    .eq("status", "sent")
+    .not("sent_at", "is", null)
+    .lt("sent_at", upperBound)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  const send = sends?.[0];
+  if (!send || !send.sent_at) return null;
+
+  let sequenceId: string | null = null;
+  if (send.enrollment_id) {
+    const { data: enrollment } = await supabase
+      .from("sequence_enrollments")
+      .select("sequence_id")
+      .eq("id", send.enrollment_id)
+      .maybeSingle();
+    sequenceId = enrollment?.sequence_id ?? null;
+  }
+
+  return { sendId: send.id, sequenceId, sentAt: send.sent_at };
+}
+
 // If the matched company already had non-wl-app contacts (SCB / Lemlist /
 // discovery prospects), find the most recent successful outbound send to
 // any of them in the last 90 days and return it. That's the most likely
@@ -178,6 +220,7 @@ export async function lookupOutreachAttribution(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
   companyId: string,
+  signupAt: string | null = null,
 ): Promise<OutreachAttribution | null> {
   const { data: contacts } = await supabase
     .from("contacts")
@@ -193,14 +236,17 @@ export async function lookupOutreachAttribution(
   const ninetyDaysAgo = new Date(
     Date.now() - 90 * 24 * 60 * 60 * 1000,
   ).toISOString();
+  const upperBound = signupAt ?? new Date().toISOString();
 
   // email_queue has no direct sequence_id — join via enrollment.
+  // Temporal guard: send must precede the signup.
   const { data: sends } = await supabase
     .from("email_queue")
     .select("id, enrollment_id, sent_at, status")
     .in("contact_id", contactIds)
     .eq("status", "sent")
     .gte("sent_at", ninetyDaysAgo)
+    .lt("sent_at", upperBound)
     .order("sent_at", { ascending: false })
     .limit(1);
 
