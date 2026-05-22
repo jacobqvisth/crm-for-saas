@@ -26,6 +26,7 @@ import {
   findStrictCompanyMatch,
   logFuzzyMergeCandidates,
   lookupOutreachAttribution,
+  lookupSelfAttribution,
 } from "./matching";
 
 const WORKSPACE_ID = "d946ea1f-74b4-492e-ae6a-d50f59ff04f0"; // wrenchlane.com workspace
@@ -400,12 +401,16 @@ export async function discoverNewWlUsers(
 
     // Attribution: only meaningful when we merged into a row that had
     // prospect contacts already. A net-new INSERT has no prior outreach.
+    // Use workshop_created_at as the signup-time guard so we don't
+    // attribute sends that landed after the workshop was created.
+    const signupAt = meta.workshop_created_at ?? null;
     const attribution =
       !isNewCompany
         ? await lookupOutreachAttribution(
             supabase,
             WORKSPACE_ID,
             companyId,
+            signupAt,
           ).catch(() => null)
         : null;
 
@@ -419,7 +424,7 @@ export async function discoverNewWlUsers(
       // place instead of inserting a duplicate.
       const { data: existing } = await supabase
         .from("contacts")
-        .select("id, wl_user_id")
+        .select("id, wl_user_id, last_login_at, diagnostics_first_at")
         .eq("workspace_id", WORKSPACE_ID)
         .ilike("email", u.email)
         .maybeSingle();
@@ -428,6 +433,18 @@ export async function discoverNewWlUsers(
         // Don't touch existing rows that already have a wl_user_id — those
         // are owned by the propagator.
         if (existing.wl_user_id) continue;
+        // Self-attribution: the prospect we emailed is the same person who
+        // signed up. Strongest possible attribution signal, but only valid
+        // when the send happened BEFORE the signup. Use the earliest known
+        // wl-app signal as the signup-time proxy; fall back to "now" for a
+        // brand-new signup where the propagator hasn't synced yet.
+        const signupAt =
+          existing.last_login_at ?? existing.diagnostics_first_at ?? null;
+        const selfAttr = await lookupSelfAttribution(
+          supabase,
+          existing.id,
+          signupAt,
+        ).catch(() => null);
         const { error: upErr } = await supabase
           .from("contacts")
           .update({
@@ -440,10 +457,18 @@ export async function discoverNewWlUsers(
             country_code: u.country,
             language: u.language,
             phone: u.phone ?? undefined,
+            attributed_to_send_id: selfAttr?.sendId ?? null,
+            attributed_to_sequence_id: selfAttr?.sequenceId ?? null,
+            attributed_via: selfAttr ? "self_email_merge" : null,
+            attributed_at: selfAttr?.sentAt ?? null,
           })
           .eq("id", existing.id);
-        if (upErr) result.errors++;
-        else result.mergedContacts++;
+        if (upErr) {
+          result.errors++;
+        } else {
+          result.mergedContacts++;
+          if (selfAttr) result.attributedSignups++;
+        }
         continue;
       }
 
