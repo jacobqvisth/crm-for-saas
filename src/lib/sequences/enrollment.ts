@@ -184,6 +184,22 @@ export async function enrollContacts(
       continue;
     }
 
+    // Don't enroll existing wl-app users (they're customers, not prospects).
+    // Also covers the case where a colleague at the same shop signed up
+    // (company has wl_workshop_id set even if this contact doesn't).
+    if (contact.wl_user_id) {
+      result.skipped++;
+      result.reasons.push(`${contact.email}: Already a wl-app user`);
+      continue;
+    }
+    if (contact.companies?.wl_workshop_id) {
+      result.skipped++;
+      result.reasons.push(
+        `${contact.email}: Company already has a wl-app workshop`,
+      );
+      continue;
+    }
+
     // Skip contacts who were already sequenced via a prior outreach tool
     // (e.g. lemlist-csv backfill). Bypass with allowAlreadySequenced=true.
     if (!allowAlreadySequenced && contact.tags) {
