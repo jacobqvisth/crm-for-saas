@@ -26,6 +26,7 @@ import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 export type DashboardSectionKey =
   | "usage"
   | "cta-clicks"
+  | "conversions"
   | "dashboard"
   | "pilot-stats"
   | "new-users"
@@ -76,6 +77,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "CTA Clicks",
     description:
       "Live GA4 view of cta_click events. Filter by host (app / marketing / all), break down by section and button label.",
+  },
+  {
+    key: "conversions",
+    label: "Conversions",
+    glyph: "CV",
+    href: "/ceo/conversions",
+    title: "Conversions",
+    description:
+      "Outreach → signup attribution. Per-sequence: sends, unique recipients, attributed signups, conversion rate, and median lag from send to signup. Driven by contacts.attributed_to_sequence_id, populated by the hourly discover-new cron.",
   },
   {
     key: "dashboard",
