@@ -3236,6 +3236,23 @@ export type Database = {
         Returns: undefined
       }
       is_workspace_admin: { Args: { ws_id: string }; Returns: boolean }
+      merge_companies: {
+        Args: {
+          p_candidate_row_id?: string
+          p_drop_id: string
+          p_keep_id: string
+          p_reviewer_id?: string
+        }
+        Returns: {
+          activities_moved: number
+          contacts_moved: number
+          deals_moved: number
+          dropped_company_id: string
+          keep_company_id: string
+          list_memberships_moved: number
+          tags_after: string[]
+        }[]
+      }
       reorder_route_stops: {
         Args: {
           p_estimated_day_seconds: number
