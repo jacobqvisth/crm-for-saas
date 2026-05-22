@@ -121,6 +121,7 @@ export function CompaniesPageClient() {
   const [statsWithDomain, setStatsWithDomain] = useState(0);
   const [statsWithPhone, setStatsWithPhone] = useState(0);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [pendingDuplicates, setPendingDuplicates] = useState(0);
 
   // Filters / sort / page hydrated from sessionStorage so back-nav from a
   // company detail returns to the same filtered view.
@@ -351,6 +352,13 @@ export function CompaniesPageClient() {
       setStatsWithDomain(domainRes.count ?? 0);
       setStatsWithPhone(phoneRes.count ?? 0);
       setLoadingStats(false);
+
+      const { count: dupCount } = await supabase
+        .from('company_merge_candidates')
+        .select('*', { count: 'exact', head: true })
+        .eq('workspace_id', workspaceId!)
+        .eq('status', 'pending');
+      setPendingDuplicates(dupCount ?? 0);
     }
     fetchStats();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -488,6 +496,15 @@ export function CompaniesPageClient() {
               </div>
             )}
             <div className="flex items-center gap-3">
+              {pendingDuplicates > 0 && (
+                <Link
+                  href="/companies/duplicates"
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100"
+                  title="Review fuzzy-matched duplicates"
+                >
+                  Review {pendingDuplicates} duplicate{pendingDuplicates === 1 ? '' : 's'}
+                </Link>
+              )}
               <button
                 onClick={() => setColumnsOpen(true)}
                 className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
