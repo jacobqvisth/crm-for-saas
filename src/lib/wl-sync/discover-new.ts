@@ -20,14 +20,24 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { gunzipSync } from "node:zlib";
 import { createClient as createUntypedClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import {
+  deriveCustomerStatus,
+  deriveLifecycleStage,
+  findStrictCompanyMatch,
+  logFuzzyMergeCandidates,
+  lookupOutreachAttribution,
+} from "./matching";
 
 const WORKSPACE_ID = "d946ea1f-74b4-492e-ae6a-d50f59ff04f0"; // wrenchlane.com workspace
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type DiscoverResult = {
   newCompanies: number;
+  mergedCompanies: number;
   newContacts: number;
   mergedContacts: number;
+  attributedSignups: number;
+  fuzzyCandidatesLogged: number;
   skippedInternalTest: number;
   errors: number;
   s3RowsValid: number;
@@ -48,6 +58,7 @@ type UserStatRow = {
   country: string | null;
   language: string | null;
   subscription_status: string | null;
+  plan_type?: string | null;
   workshop_created_at: string | null;
 };
 
@@ -179,6 +190,7 @@ async function fetchCioNewWlUsers(
       country: a.country ?? null,
       language: a.language ?? null,
       subscription_status: a.subscription_status ?? null,
+      plan_type: a.plan_type ?? null,
       workshop_created_at: null,
     });
   }
@@ -202,8 +214,11 @@ export async function discoverNewWlUsers(
 ): Promise<DiscoverResult> {
   const result: DiscoverResult = {
     newCompanies: 0,
+    mergedCompanies: 0,
     newContacts: 0,
     mergedContacts: 0,
+    attributedSignups: 0,
+    fuzzyCandidatesLogged: 0,
     skippedInternalTest: 0,
     errors: 0,
     s3RowsValid: 0,
@@ -295,8 +310,10 @@ export async function discoverNewWlUsers(
     }
   }
 
-  // 6. For each new workshop, INSERT a company and then its users as contacts
-  //    (with email-merge fallback for existing prospects).
+  // 6. For each new workshop: try to merge into an existing CRM company
+  //    first (org_number or normalized-name match), otherwise INSERT a new
+  //    one. Then attach users as contacts (email-merge fallback for
+  //    existing prospects, attribution stamp for net-new signups).
   for (const [workshopId, w] of workshops) {
     if (existingCompanyByWlId.has(workshopId)) continue;
     if (internalTestIds.has(workshopId)) {
@@ -305,25 +322,92 @@ export async function discoverNewWlUsers(
     }
 
     const { meta } = w;
-    const { data: company, error: coErr } = await supabase
-      .from("companies")
-      .insert({
-        workspace_id: WORKSPACE_ID,
-        wl_workshop_id: workshopId,
-        name: meta.company_name ?? `Workshop ${workshopId.slice(0, 8)}`,
-        country_code: meta.country,
-        source: "wl-app",
-        industry: "Automotive",
-      })
-      .select("id")
-      .single();
+    const planType = meta.plan_type ?? null;
+    const customerStatus = deriveCustomerStatus(meta.subscription_status);
+    const lifecycleStage = deriveLifecycleStage(
+      meta.subscription_status,
+      planType,
+    );
+    const nowIso = new Date().toISOString();
 
-    if (coErr || !company) {
-      result.errors++;
-      continue;
+    const matched = await findStrictCompanyMatch(supabase, {
+      workspaceId: WORKSPACE_ID,
+      countryCode: meta.country,
+      companyName: meta.company_name,
+    }).catch(() => null);
+
+    let companyId: string;
+    let isNewCompany = false;
+
+    if (matched) {
+      // UPDATE existing prospect row. Only write fields that the wl-app
+      // signal authoritatively owns — never overwrite address / phone /
+      // industry that a prospect import already enriched.
+      const update: Record<string, unknown> = {
+        wl_workshop_id: workshopId,
+        source: "wl-app",
+      };
+      if (planType) update.plan = planType;
+      if (customerStatus) update.customer_status = customerStatus;
+      if (lifecycleStage) update.lifecycle_stage = lifecycleStage;
+      update.activated_at = nowIso;
+      const { error: upErr } = await supabase
+        .from("companies")
+        .update(update)
+        .eq("id", matched.companyId);
+      if (upErr) {
+        result.errors++;
+        continue;
+      }
+      result.mergedCompanies++;
+      companyId = matched.companyId;
+    } else {
+      const { data: company, error: coErr } = await supabase
+        .from("companies")
+        .insert({
+          workspace_id: WORKSPACE_ID,
+          wl_workshop_id: workshopId,
+          name: meta.company_name ?? `Workshop ${workshopId.slice(0, 8)}`,
+          country_code: meta.country,
+          source: "wl-app",
+          industry: "Automotive",
+          plan: planType,
+          customer_status: customerStatus,
+          lifecycle_stage: lifecycleStage,
+          activated_at: nowIso,
+        })
+        .select("id")
+        .single();
+
+      if (coErr || !company) {
+        result.errors++;
+        continue;
+      }
+      result.newCompanies++;
+      companyId = company.id;
+      isNewCompany = true;
+
+      if (meta.company_name && meta.country) {
+        const fuzzy = await logFuzzyMergeCandidates(supabase, {
+          workspaceId: WORKSPACE_ID,
+          primaryCompanyId: companyId,
+          companyName: meta.company_name,
+          countryCode: meta.country,
+        }).catch(() => 0);
+        result.fuzzyCandidatesLogged += fuzzy;
+      }
     }
-    result.newCompanies++;
-    const companyId = company.id;
+
+    // Attribution: only meaningful when we merged into a row that had
+    // prospect contacts already. A net-new INSERT has no prior outreach.
+    const attribution =
+      !isNewCompany
+        ? await lookupOutreachAttribution(
+            supabase,
+            WORKSPACE_ID,
+            companyId,
+          ).catch(() => null)
+        : null;
 
     for (const u of w.users) {
       if (!u.email) continue;
@@ -378,9 +462,17 @@ export async function discoverNewWlUsers(
         lead_status: leadStatus,
         status: "active",
         tags: ["owner"],
+        attributed_to_send_id: attribution?.sendId ?? null,
+        attributed_to_sequence_id: attribution?.sequenceId ?? null,
+        attributed_via: attribution ? "company_match" : null,
+        attributed_at: attribution?.sentAt ?? null,
       });
-      if (ctErr) result.errors++;
-      else result.newContacts++;
+      if (ctErr) {
+        result.errors++;
+      } else {
+        result.newContacts++;
+        if (attribution) result.attributedSignups++;
+      }
     }
   }
 
