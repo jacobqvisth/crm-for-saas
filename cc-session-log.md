@@ -14,6 +14,49 @@ updated: 2026-04-22
 
 ---
 
+## 2026-05-25 — Diagnostics aggregates: per-contact + per-company scan rollups (PR #306)
+
+**Branch:** worktree-diagnostics-aggregates → main (squash merge ~13:40 UTC).
+**Deploy:** prod `crm-for-saas-jcr6itfe3-…` Ready ~90s after merge; `curl -I` → 307 (login redirect, expected).
+**Files:**
+- `supabase/migrations/20260525130000_diagnostics_aggregates.sql` (new) — ADDs `diagnostics_total/_first_at/_last_at/_last_30d` to `companies`; CREATES `refresh_diagnostics_aggregates()` SECURITY DEFINER RPC; runs the RPC once as backfill in the same transaction.
+- `src/lib/ceo/sync/propagate-to-crm.ts` — wires `supabase.rpc("refresh_diagnostics_aggregates")` into `propagateDashboardToCrm`; extends `PropagationResult` with `diagnosticsContactsRefreshed` + `diagnosticsCompaniesRefreshed`.
+- `src/lib/database.types.ts` — adds the 4 column types to `companies` (Row/Insert/Update) and registers the `refresh_diagnostics_aggregates` function.
+- `src/lib/sequences/__tests__/variable-interpolation.test.ts` — fills the new fields on the `Company` fixture to satisfy strict typing.
+
+**Why now:**
+- Phase 1 of the per-contact/per-company diagnostics + app-interaction logs feature (Phase 2 = UI, Phase 4 = GA4 app-events ingestion).
+- `dashboard_diagnostics` was already syncing from S3 (via `src/lib/ceo/sync/sources/core-app.ts`) and the join identifiers (`contacts.wl_user_id`, `companies.wl_workshop_id`) were already populated by `propagate-to-crm`. The aggregates were the missing piece blocking UI surface.
+
+**Identity join (text/UUID cast):**
+- `contacts.wl_user_id` (UUID) ↔ `dashboard_diagnostics.internal_user_id` (text)
+- `companies.wl_workshop_id` (UUID) ↔ `dashboard_diagnostics.workshop_id` (text)
+- The RPC uses `c.wl_user_id::text = d.internal_user_id` (and equivalent for workshop) inside `LEFT JOIN`s so contacts/companies with zero scans get `0/NULL` set explicitly instead of being left untouched.
+
+**Backfill (applied via psql in the same session before merge):**
+- 120 contacts updated, 312 companies updated on first apply.
+- 146 contacts have non-zero scans (1,311 total). 125 companies have non-zero scans (1,409 total — higher because workshops include scans from app users not yet linked to CRM contacts).
+- Top scanner: `andreas@bilcentrumuppsala.se` — 142 scans, 40 in trailing 30d.
+- Re-ran the RPC immediately: `{contacts_updated: 0, companies_updated: 0}` → idempotency confirmed.
+
+**RPC design notes:**
+- `SECURITY DEFINER`, `search_path = public`, granted to `service_role` only, revoked from `PUBLIC`. So the CEO sync service-role client can call it; nothing else can.
+- `IS DISTINCT FROM` guards in the `UPDATE … WHERE` clauses skip rows whose aggregates haven't changed — keeps no-op runs cheap and avoids unnecessary `updated_at` bumps (companies/contacts both have the trigger).
+- Uses existing indexes `dashboard_diagnostics (workshop_id, created_at desc)` and `(internal_user_id, created_at desc)` from the original 20260506010000 dashboard schema absorb.
+
+**Verification:**
+- `npx tsc --noEmit` clean (after adding the four `Company` fixture fields).
+- `npm run lint` clean (exit 0, no output).
+- `next build` 67/67 pages green (worktree pattern with `.env.local` symlink).
+
+**Out of scope (deliberately deferred):**
+- Phase 2 — Diagnostics panel/card on contact + company detail pages (separate PR; lift is mostly UI + a route for the full "View all" filtered list).
+- Phase 4 — GA4 `customUser:crm_user_id` → `dashboard_app_events` ingestion (blocked on 24-48h GA4 ingestion lag from the GTM v9 publish; see [[project_ga4-user-id-wiring]] memory).
+
+---
+
+
+
 ## 2026-05-21 — Email-stats audit: OOO reply pollution + 1000-row cap + stat tooltips (PR #284)
 
 - **Trigger:** Jacob asked three questions about the dashboard email stats: do "opened" counts include OOO auto-replies, can users see what each stat means, and why does "Sent" never go over 1000?
