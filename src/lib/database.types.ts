@@ -172,6 +172,10 @@ export type Database = {
           custom_fields: Json | null
           customer_status: string | null
           description: string | null
+          diagnostics_first_at: string | null
+          diagnostics_last_30d: number | null
+          diagnostics_last_at: string | null
+          diagnostics_total: number | null
           do_not_contact: boolean
           do_not_route: boolean
           do_not_route_at: string | null
@@ -245,6 +249,10 @@ export type Database = {
           custom_fields?: Json | null
           customer_status?: string | null
           description?: string | null
+          diagnostics_first_at?: string | null
+          diagnostics_last_30d?: number | null
+          diagnostics_last_at?: string | null
+          diagnostics_total?: number | null
           do_not_contact?: boolean
           do_not_route?: boolean
           do_not_route_at?: string | null
@@ -318,6 +326,10 @@ export type Database = {
           custom_fields?: Json | null
           customer_status?: string | null
           description?: string | null
+          diagnostics_first_at?: string | null
+          diagnostics_last_30d?: number | null
+          diagnostics_last_at?: string | null
+          diagnostics_total?: number | null
           do_not_contact?: boolean
           do_not_route?: boolean
           do_not_route_at?: string | null
@@ -3252,6 +3264,10 @@ export type Database = {
           list_memberships_moved: number
           tags_after: string[]
         }[]
+      }
+      refresh_diagnostics_aggregates: {
+        Args: never
+        Returns: Json
       }
       reorder_route_stops: {
         Args: {

@@ -16,6 +16,8 @@ const UPDATE_BATCH = 50;
 export type PropagationResult = {
   contactsUpdated: number;
   companiesUpdated: number;
+  diagnosticsContactsRefreshed: number;
+  diagnosticsCompaniesRefreshed: number;
 };
 
 export async function propagateDashboardToCrm(
@@ -25,7 +27,36 @@ export async function propagateDashboardToCrm(
     propagateUsersToContacts(supabase),
     propagateWorkshopsToCompanies(supabase),
   ]);
-  return { contactsUpdated, companiesUpdated };
+  const { diagnosticsContactsRefreshed, diagnosticsCompaniesRefreshed } =
+    await refreshDiagnosticsAggregates(supabase);
+  return {
+    contactsUpdated,
+    companiesUpdated,
+    diagnosticsContactsRefreshed,
+    diagnosticsCompaniesRefreshed,
+  };
+}
+
+// Recomputes contacts.diagnostics_* and companies.diagnostics_* from
+// dashboard_diagnostics via the refresh_diagnostics_aggregates() SQL RPC.
+// Runs after the user/workshop propagation so aggregates line up with the
+// latest S3-synced rows.
+async function refreshDiagnosticsAggregates(
+  supabase: SupabaseClient<Database>,
+): Promise<{
+  diagnosticsContactsRefreshed: number;
+  diagnosticsCompaniesRefreshed: number;
+}> {
+  const { data, error } = await supabase.rpc("refresh_diagnostics_aggregates");
+  if (error) throw error;
+  const payload = (data ?? {}) as {
+    contacts_updated?: number;
+    companies_updated?: number;
+  };
+  return {
+    diagnosticsContactsRefreshed: payload.contacts_updated ?? 0,
+    diagnosticsCompaniesRefreshed: payload.companies_updated ?? 0,
+  };
 }
 
 async function propagateUsersToContacts(
