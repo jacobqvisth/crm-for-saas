@@ -696,10 +696,10 @@ function AcquisitionCampaignTable({
             <th><TableHeading label="Campaign" /></th>
             <th><TableHeading label="Spend" /></th>
             <th><TableHeading label="Clicks" /></th>
-            <th><TableHeading label="Conv." info="Conversions attributed in the acquisition reporting rows for the selected window." /></th>
-            <th><TableHeading label="CTR" info="Click-through rate: clicks divided by impressions from acquisition telemetry." /></th>
-            <th><TableHeading label="CPC" info="Cost per click: synced spend divided by synced clicks." /></th>
-            <th><TableHeading label="CVR" info="Conversion rate: conversions divided by clicks." /></th>
+            <th><TableHeading label="Signups" info="Ad-attributed signups (GA4 sign_up event in sessions from this campaign) for the selected window." /></th>
+            <th><TableHeading label="CTR" info="Click-through rate: ad clicks divided by ad impressions." /></th>
+            <th><TableHeading label="CPC" info="Cost per click: ad spend divided by ad clicks." /></th>
+            <th><TableHeading label="Signup rate" info="Signups divided by ad clicks." /></th>
           </tr>
         </thead>
         <tbody>
@@ -1127,7 +1127,7 @@ function AcquisitionSection({ data }: { data: DashboardData }) {
       tone: "growth",
     },
     {
-      label: "Clicks",
+      label: "Ad clicks",
       value: compactNumber(data.marketing.clicks),
       rawValue: data.marketing.clicks,
       hint: `${formatPercent(clickThroughRate)} CTR`,
@@ -1137,14 +1137,14 @@ function AcquisitionSection({ data }: { data: DashboardData }) {
       label: "Conversions",
       value: formatNumber(data.marketing.conversions),
       rawValue: data.marketing.conversions,
-      hint: `${formatPercent(conversionRate)} click-to-conversion`,
+      hint: `${formatPercent(conversionRate)} click-to-signup`,
       tone: "growth",
     },
     {
       label: "CPC",
       value: formatCurrency(data.marketing.cpc),
       rawValue: data.marketing.cpc,
-      hint: "Cost per click",
+      hint: "Cost per ad click",
       tone: "neutral",
     },
     {
@@ -1155,10 +1155,10 @@ function AcquisitionSection({ data }: { data: DashboardData }) {
       tone: data.marketing.cac ? "neutral" : "warning",
     },
     {
-      label: "Cost / conversion",
+      label: "Cost / signup",
       value: costPerConversion ? formatCurrency(costPerConversion) : "Pending",
       rawValue: costPerConversion,
-      hint: "Platform efficiency",
+      hint: "Spend divided by ad-attributed signups",
       tone: costPerConversion ? "neutral" : "warning",
     },
   ];
@@ -1215,7 +1215,7 @@ function AcquisitionSection({ data }: { data: DashboardData }) {
                 value: compactNumber(data.marketing.impressions),
               },
               {
-                label: "Clicks",
+                label: "Ad clicks",
                 value: formatNumber(data.marketing.clicks),
               },
               {
@@ -1223,11 +1223,11 @@ function AcquisitionSection({ data }: { data: DashboardData }) {
                 value: formatCurrency(data.marketing.cpc),
               },
               {
-                label: "Conv. rate",
+                label: "Signup rate",
                 value: formatPercent(conversionRate),
               },
               {
-                label: "Cost / conv.",
+                label: "Cost / signup",
                 value: costPerConversion
                   ? formatCurrency(costPerConversion)
                   : "Pending",
@@ -1282,18 +1282,21 @@ function AcquisitionSection({ data }: { data: DashboardData }) {
           />
           <div className="insight-list">
             <p>
-              CAC matters only when paid workshops are being attributed
-              consistently. Cost per conversion and funnel conversion help
-              separate ad efficiency from onboarding efficiency.
+              A conversion here is one ad-attributed signup — a GA4 sign_up
+              event in a session whose <code>sessionGoogleAdsCampaignId</code>
+              is set. CAC (spend ÷ new paid workshops) measures the same
+              funnel one step deeper, so CAC ÷ Cost per signup is your
+              signup-to-paid efficiency.
             </p>
             <p>
-              Campaign rows come from GA4-linked Google Ads reporting. If a
-              campaign shows conversions with no spend, treat it as attribution
-              context rather than true spend efficiency.
+              Campaign rows come from GA4-linked Google Ads reporting and only
+              include sessions tied to a Google Ads campaign. Unattributed
+              signups (organic / direct) are not counted here — those land in
+              the funnel signup step instead.
             </p>
             <p>
               The most useful CEO pattern is comparing this page with Product:
-              if paid performance is stable but activation falls, the issue is
+              if paid signups are stable but activation falls, the issue is
               likely inside onboarding or diagnostics rather than demand.
             </p>
           </div>
