@@ -66,6 +66,18 @@ const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
   { value: 'churned',  label: 'Churned' },
 ];
 
+const PLAN_OPTIONS: MultiSelectOption[] = [
+  { value: 'free',          label: 'Free' },
+  { value: 'small_monthly', label: 'Small monthly' },
+  { value: 'small_yearly',  label: 'Small yearly' },
+  { value: 'large_monthly', label: 'Large monthly' },
+  { value: 'large_yearly',  label: 'Large yearly' },
+];
+
+const PLAN_LABELS: Record<string, string> = Object.fromEntries(
+  PLAN_OPTIONS.map((o) => [o.value, o.label]),
+);
+
 const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
   { value: 'yes', label: 'App workshop' },
   { value: 'no',  label: 'Prospect (no account)' },
@@ -78,6 +90,7 @@ type LocalFilters = {
   industry: string[];
   lifecycle_stage: string[];
   customer_status: string[];
+  plan: string[];
   has_account: string[];
   tags: string[];
   has_phone: boolean;
@@ -91,6 +104,7 @@ const DEFAULT_FILTERS: LocalFilters = {
   industry: [],
   lifecycle_stage: [],
   customer_status: [],
+  plan: [],
   has_account: [],
   tags: [],
   has_phone: false,
@@ -238,6 +252,9 @@ export function CompaniesPageClient() {
     if (filters.customer_status.length === 1) query = query.eq('customer_status', filters.customer_status[0]);
     else if (filters.customer_status.length > 1) query = query.in('customer_status', filters.customer_status);
 
+    if (filters.plan.length === 1) query = query.eq('plan', filters.plan[0]);
+    else if (filters.plan.length > 1) query = query.in('plan', filters.plan);
+
     if (filters.has_account.length === 1) {
       if (filters.has_account[0] === 'yes') query = query.not('wl_workshop_id', 'is', null);
       else if (filters.has_account[0] === 'no') query = query.is('wl_workshop_id', null);
@@ -323,7 +340,7 @@ export function CompaniesPageClient() {
   }, [
     workspaceId, hydrated, page, debouncedSearch,
     filters.country_code, filters.source, filters.industry,
-    filters.lifecycle_stage, filters.customer_status, filters.has_account,
+    filters.lifecycle_stage, filters.customer_status, filters.plan, filters.has_account,
     filters.tags, filters.has_phone, filters.has_domain, sort,
   ]);
 
@@ -466,6 +483,7 @@ export function CompaniesPageClient() {
     filters.industry.length > 0 ||
     filters.lifecycle_stage.length > 0 ||
     filters.customer_status.length > 0 ||
+    filters.plan.length > 0 ||
     filters.has_account.length > 0 ||
     filters.tags.length > 0 ||
     filters.has_phone || filters.has_domain;
@@ -566,6 +584,12 @@ export function CompaniesPageClient() {
               onChange={(v) => setFilters((f) => ({ ...f, customer_status: v }))}
               options={CUSTOMER_STATUS_OPTIONS}
               allLabel="customer statuses"
+            />
+            <MultiSelect
+              values={filters.plan}
+              onChange={(v) => setFilters((f) => ({ ...f, plan: v }))}
+              options={PLAN_OPTIONS}
+              allLabel="plans"
             />
             <MultiSelect
               values={filters.has_account}
@@ -807,6 +831,19 @@ function renderCell(id: ColumnId, company: Company): React.ReactNode {
       return company.customer_status ? (
         <span className="text-xs text-slate-700 capitalize">{company.customer_status}</span>
       ) : <span className="text-slate-400">—</span>;
+    case 'plan': {
+      const plan = company.plan;
+      if (!plan) return <span className="text-slate-400">—</span>;
+      const label = PLAN_LABELS[plan] ?? plan;
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+          plan === 'free'                                     ? 'bg-slate-100 text-slate-700' :
+          plan === 'small_monthly' || plan === 'small_yearly' ? 'bg-blue-100 text-blue-700' :
+          plan === 'large_monthly' || plan === 'large_yearly' ? 'bg-indigo-100 text-indigo-700' :
+                                                                'bg-slate-100 text-slate-700'
+        }`}>{label}</span>
+      );
+    }
     case 'has_account':
       return company.wl_workshop_id ? (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-violet-100 text-violet-700">

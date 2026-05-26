@@ -5,6 +5,7 @@ export type Contact = Tables<'contacts'> & {
   company_lifecycle_stage?: string | null;
   company_customer_status?: string | null;
   company_wl_workshop_id?: string | null;
+  company_plan?: string | null;
 };
 
 export type ColumnId =
@@ -20,6 +21,7 @@ export type ColumnId =
   | 'source'
   | 'lifecycle'
   | 'customer_status'
+  | 'plan'
   | 'has_account'
   | 'tags'
   | 'last_emailed_at'
@@ -48,6 +50,7 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'source',            label: 'Source',         default: false, sortable: false },
   { id: 'lifecycle',         label: 'Lifecycle',      default: false, sortable: false },
   { id: 'customer_status',   label: 'Customer status',default: false, sortable: false },
+  { id: 'plan',              label: 'Plan',           default: false, sortable: false },
   { id: 'has_account',       label: 'App user',       default: false, sortable: false },
   { id: 'tags',              label: 'Tags',           default: false, sortable: false },
   { id: 'last_emailed_at',   label: 'Last emailed',   default: false, sortable: false },

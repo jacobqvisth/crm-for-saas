@@ -38,6 +38,7 @@ type Contact = Tables<'contacts'> & {
   company_lifecycle_stage?: string | null;
   company_customer_status?: string | null;
   company_wl_workshop_id?: string | null;
+  company_plan?: string | null;
 };
 
 const PAGE_SIZE = 50;
@@ -91,6 +92,18 @@ const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
   { value: 'inactive', label: 'Inactive' },
 ];
 
+const PLAN_OPTIONS: MultiSelectOption[] = [
+  { value: 'free',          label: 'Free' },
+  { value: 'small_monthly', label: 'Small monthly' },
+  { value: 'small_yearly',  label: 'Small yearly' },
+  { value: 'large_monthly', label: 'Large monthly' },
+  { value: 'large_yearly',  label: 'Large yearly' },
+];
+
+const PLAN_LABELS: Record<string, string> = Object.fromEntries(
+  PLAN_OPTIONS.map((o) => [o.value, o.label]),
+);
+
 const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
   { value: 'yes', label: 'App user' },
   { value: 'no',  label: 'Prospect (no account)' },
@@ -110,6 +123,7 @@ type LocalFilters = {
   source: string[];
   lifecycle_stage: string[];
   customer_status: string[];
+  user_plan_type: string[];
   has_account: string[];
   has_phone: boolean;
   tags: string[];
@@ -125,6 +139,7 @@ const DEFAULT_FILTERS: LocalFilters = {
   source: [],
   lifecycle_stage: [],
   customer_status: [],
+  user_plan_type: [],
   has_account: [],
   has_phone: false,
   tags: [],
@@ -263,6 +278,7 @@ export function ContactsPageClient() {
     source:          filters.source.length          ? filters.source          : undefined,
     lifecycle_stage: filters.lifecycle_stage.length ? filters.lifecycle_stage : undefined,
     customer_status: filters.customer_status.length ? filters.customer_status : undefined,
+    user_plan_type:  filters.user_plan_type.length  ? filters.user_plan_type  : undefined,
     has_account: hasAccountValue,
     has_phone: filters.has_phone || undefined,
     tags:            filters.tags.length            ? filters.tags            : undefined,
@@ -287,8 +303,8 @@ export function ContactsPageClient() {
       filters.has_account.length > 0;
 
     const selectExpr = needsCompanyJoin
-      ? '*, companies!inner(name, lifecycle_stage, customer_status, wl_workshop_id)'
-      : '*, companies(name, lifecycle_stage, customer_status, wl_workshop_id)';
+      ? '*, companies!inner(name, lifecycle_stage, customer_status, wl_workshop_id, plan)'
+      : '*, companies(name, lifecycle_stage, customer_status, wl_workshop_id, plan)';
 
     let query = supabase
       .from('contacts')
@@ -334,6 +350,9 @@ export function ContactsPageClient() {
 
     if (filters.customer_status.length === 1) query = query.eq('companies.customer_status', filters.customer_status[0]);
     else if (filters.customer_status.length > 1) query = query.in('companies.customer_status', filters.customer_status);
+
+    if (filters.user_plan_type.length === 1) query = query.eq('user_plan_type', filters.user_plan_type[0]);
+    else if (filters.user_plan_type.length > 1) query = query.in('user_plan_type', filters.user_plan_type);
 
     if (hasAccountValue === 'yes') query = query.not('companies.wl_workshop_id', 'is', null);
     else if (hasAccountValue === 'no') query = query.is('companies.wl_workshop_id', null);
@@ -389,6 +408,7 @@ export function ContactsPageClient() {
         lifecycle_stage: string | null;
         customer_status: string | null;
         wl_workshop_id: string | null;
+        plan: string | null;
       } | null;
       return {
         ...c,
@@ -396,6 +416,7 @@ export function ContactsPageClient() {
         company_lifecycle_stage:    co?.lifecycle_stage ?? null,
         company_customer_status:    co?.customer_status ?? null,
         company_wl_workshop_id:     co?.wl_workshop_id ?? null,
+        company_plan:               co?.plan ?? null,
       };
     }) as Contact[];
 
@@ -408,7 +429,7 @@ export function ContactsPageClient() {
     workspaceId, hydrated, page, debouncedSearch,
     filters.lead_status, filters.status, filters.country_code, filters.email_status,
     filters.has_phone, filters.source,
-    filters.lifecycle_stage, filters.customer_status, filters.has_account,
+    filters.lifecycle_stage, filters.customer_status, filters.user_plan_type, filters.has_account,
     filters.tags, filters.engagement, sort,
   ]);
 
@@ -538,6 +559,7 @@ export function ContactsPageClient() {
     filters.country_code.length > 0 || filters.email_status.length > 0 ||
     filters.source.length > 0 ||
     filters.lifecycle_stage.length > 0 || filters.customer_status.length > 0 ||
+    filters.user_plan_type.length > 0 ||
     filters.has_account.length > 0 || filters.has_phone !== false ||
     filters.tags.length > 0 || filters.engagement.length > 0;
 
@@ -737,6 +759,12 @@ export function ContactsPageClient() {
               onChange={v => setFilters(f => ({ ...f, customer_status: v }))}
               options={CUSTOMER_STATUS_OPTIONS}
               allLabel="customer statuses"
+            />
+            <MultiSelect
+              values={filters.user_plan_type}
+              onChange={v => setFilters(f => ({ ...f, user_plan_type: v }))}
+              options={PLAN_OPTIONS}
+              allLabel="plans"
             />
             <MultiSelect
               values={filters.has_account}
@@ -1301,6 +1329,19 @@ function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
       return contact.company_customer_status ? (
         <span className="text-xs text-slate-700 capitalize">{contact.company_customer_status}</span>
       ) : <span className="text-slate-400">—</span>;
+    case 'plan': {
+      const plan = contact.user_plan_type ?? contact.company_plan;
+      if (!plan) return <span className="text-slate-400">—</span>;
+      const label = PLAN_LABELS[plan] ?? plan;
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+          plan === 'free'                                     ? 'bg-slate-100 text-slate-700' :
+          plan === 'small_monthly' || plan === 'small_yearly' ? 'bg-blue-100 text-blue-700' :
+          plan === 'large_monthly' || plan === 'large_yearly' ? 'bg-indigo-100 text-indigo-700' :
+                                                                'bg-slate-100 text-slate-700'
+        }`}>{label}</span>
+      );
+    }
     case 'has_account':
       return contact.company_wl_workshop_id ? (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-violet-100 text-violet-700">
