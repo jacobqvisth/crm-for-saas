@@ -1,3 +1,9 @@
+// Sync runner for the CEO dashboard. All sources are scheduled hourly via
+// Supabase pg_cron (see supabase/ceo-cron.sql). Cadence as of 2026-05-26:
+//   ga4=H:05, google_ads=H:17, search_console=H:23, core_app=H:25,
+//   customer_io=H:29, stripe=H:41, app_store=H:53.
+// Each route is also manually triggerable via POST /api/ceo-sync/<source>
+// with Bearer SYNC_SECRET (or CRON_SECRET) — useful for backfills and tests.
 import { getRollingWindow } from "@/lib/ceo/dates";
 import { applyInternalTestDomainFlag } from "@/lib/ceo/internal-test/auto-flag";
 import { SOURCE_LABELS, type SourceKey } from "@/lib/ceo/sources";

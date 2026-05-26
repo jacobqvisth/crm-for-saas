@@ -25,22 +25,6 @@
       "schedule": "30 8 * * *"
     },
     {
-      "path": "/api/ceo-sync/ga4",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/ceo-sync/google_ads",
-      "schedule": "5 6 * * *"
-    },
-    {
-      "path": "/api/ceo-sync/search_console",
-      "schedule": "10 6 * * *"
-    },
-    {
-      "path": "/api/ceo-sync/app_store_connect",
-      "schedule": "15 6 * * *"
-    },
-    {
       "path": "/api/cron/sync-cta-clicks",
       "schedule": "30 6 * * *"
     }

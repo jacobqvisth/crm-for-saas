@@ -11,9 +11,13 @@
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
+-- core_app pulls dashboard_users + dashboard_diagnostics from S3. Bumped to
+-- hourly 2026-05-26 because the dashboard was lagging by up to 8 hours behind
+-- reality. AWS-side S3 export is also being moved to hourly; this cron picks
+-- up the fresh file each hour.
 select cron.schedule(
-  'ceo-sync-core-app-twice-daily',
-  '25 2,10 * * *',
+  'ceo-sync-core-app-hourly',
+  '25 * * * *',
   $$
   select net.http_post(
     url := 'https://crm-for-saas.vercel.app/api/ceo-sync/core_app',
@@ -21,6 +25,10 @@ select cron.schedule(
   );
   $$
 );
+
+-- If re-applying this file against a prod where the old twice-daily job exists,
+-- run this once to retire it:
+-- select cron.unschedule('ceo-sync-core-app-twice-daily');
 
 select cron.schedule(
   'ceo-sync-ga4-hourly',
