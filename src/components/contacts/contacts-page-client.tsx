@@ -1331,16 +1331,21 @@ function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
       ) : <span className="text-slate-400">—</span>;
     case 'plan': {
       const plan = contact.user_plan_type ?? contact.company_plan;
-      if (!plan) return <span className="text-slate-400">—</span>;
-      const label = PLAN_LABELS[plan] ?? plan;
-      return (
-        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-          plan === 'free'                                     ? 'bg-slate-100 text-slate-700' :
-          plan === 'small_monthly' || plan === 'small_yearly' ? 'bg-blue-100 text-blue-700' :
-          plan === 'large_monthly' || plan === 'large_yearly' ? 'bg-indigo-100 text-indigo-700' :
-                                                                'bg-slate-100 text-slate-700'
-        }`}>{label}</span>
-      );
+      if (plan) {
+        const label = PLAN_LABELS[plan] ?? plan;
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+            plan === 'free'                                     ? 'bg-slate-100 text-slate-700' :
+            plan === 'small_monthly' || plan === 'small_yearly' ? 'bg-blue-100 text-blue-700' :
+            plan === 'large_monthly' || plan === 'large_yearly' ? 'bg-indigo-100 text-indigo-700' :
+                                                                  'bg-slate-100 text-slate-700'
+          }`}>{label}</span>
+        );
+      }
+      const isAppUser = Boolean(contact.wl_user_id) || Boolean(contact.company_wl_workshop_id);
+      return isAppUser
+        ? <span className="text-xs text-slate-500 italic">No plan</span>
+        : <span className="text-slate-400">—</span>;
     }
     case 'has_account':
       return contact.company_wl_workshop_id ? (
