@@ -344,7 +344,8 @@ export function sourceInfoFromLabel(label: string): SourceInfo {
     normalized.includes("impression") ||
     normalized.includes("cpc") ||
     normalized.includes("cac") ||
-    normalized.includes("conversion")
+    normalized.includes("conversion") ||
+    normalized.includes("signup")
   ) {
     return {
       title: "Acquisition telemetry",
@@ -354,11 +355,11 @@ export function sourceInfoFromLabel(label: string): SourceInfo {
         "metric_key=ad_spend",
         "metric_key=ad_clicks",
         "metric_key=ad_impressions",
-        "metric_key=ad_conversions",
+        "metric_key=ad_signups (GA4 sign_up event, sessions with a Google Ads campaign)",
         "dimensions.campaign",
       ],
       logic:
-        "Rates and cost metrics are calculated from the synced spend, click, impression, and conversion rows in the selected window.",
+        "Rates and cost metrics are calculated from synced spend, ad clicks, ad impressions, and ad-attributed signup rows in the selected window. Signups exclude sessions where sessionGoogleAdsCampaignId is '(not set)'.",
       refresh: REFRESH.metric,
     };
   }

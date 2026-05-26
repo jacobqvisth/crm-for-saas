@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { GA4_EVENT_MAP } from "@/config/ceo/kpi-events";
 import { addUtcDays, parseGa4Date, toIsoDate } from "@/lib/ceo/dates";
 import { getEnv } from "@/lib/ceo/env";
 import { createGoogleAuth } from "@/lib/ceo/sync/google-auth";
@@ -22,6 +23,8 @@ const GA4_AD_METRICS = [
   "keyEvents",
   "eventCount",
 ] as const;
+
+const SIGNUP_EVENT_NAMES = [...GA4_EVENT_MAP.signup];
 
 function periodFromGa4Date(value: string) {
   const start = parseGa4Date(value);
@@ -148,9 +151,77 @@ export const googleAdsConnector: SourceConnector = {
       });
     }
 
+    // Per-campaign signup attribution. GA4 keyEvents conflates every event
+    // marked as a key event (page_view, scroll, etc.) — useless as a
+    // "conversion" KPI. This narrows to eventName ∈ sign_up/signup/user_signup
+    // and emits an ad_signups metric per (date, campaign). Rows with
+    // campaignId="(not set)" are excluded so the metric stays strictly
+    // ads-attributed.
+    const signupResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [
+          { name: "date" },
+          { name: "sessionGoogleAdsCampaignId" },
+          { name: "sessionGoogleAdsCampaignName" },
+        ],
+        metrics: [{ name: "eventCount" }],
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              {
+                filter: {
+                  fieldName: "eventName",
+                  inListFilter: { values: SIGNUP_EVENT_NAMES },
+                },
+              },
+              {
+                notExpression: {
+                  filter: {
+                    fieldName: "sessionGoogleAdsCampaignId",
+                    stringFilter: {
+                      matchType: "EXACT",
+                      value: "(not set)",
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        limit: "10000",
+      },
+    });
+
+    const signupRows = (signupResponse.data.rows ?? []) as Ga4AdsRow[];
+    for (const row of signupRows) {
+      const date = row.dimensionValues?.[0]?.value;
+      if (!date) continue;
+      const signups = numberAt(row, 0);
+      if (signups === 0) continue;
+
+      const campaignId = row.dimensionValues?.[1]?.value ?? "unknown";
+      const campaign = row.dimensionValues?.[2]?.value ?? "Unknown campaign";
+      const period = periodFromGa4Date(date);
+
+      metrics.push({
+        sourceKey: "google_ads",
+        metricKey: "ad_signups",
+        periodStart: period.start,
+        periodEnd: period.end,
+        value: signups,
+        dimensions: {
+          campaign_id: campaignId,
+          campaign,
+          reporting_source: "ga4_linked_google_ads",
+        },
+      });
+    }
+
     return {
       sourceKey: "google_ads",
-      rowsRead: rows.length,
+      rowsRead: rows.length + signupRows.length,
       metrics,
       rawRows,
       metadata: {
@@ -160,6 +231,7 @@ export const googleAdsConnector: SourceConnector = {
         ga4PropertyId: propertyId,
         googleAdsCustomerId: getEnv("GOOGLE_ADS_CUSTOMER_ID") ?? null,
         reportingSource: "ga4_linked_google_ads",
+        signupEventNames: SIGNUP_EVENT_NAMES,
       },
     };
   },

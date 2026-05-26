@@ -374,7 +374,7 @@ function buildAcquisitionTrend(
       ["clicks", metricSeriesByDate(snapshots, "ad_clicks", "google_ads")],
       [
         "conversions",
-        metricSeriesByDate(snapshots, "ad_conversions", "google_ads"),
+        metricSeriesByDate(snapshots, "ad_signups", "google_ads"),
       ],
     ],
     (date) => ({ date, spend: 0, clicks: 0, conversions: 0 }),
@@ -694,7 +694,7 @@ function buildAcquisitionCampaigns(
     if (row.metric_key === "ad_spend") current.spend += value;
     if (row.metric_key === "ad_clicks") current.clicks += value;
     if (row.metric_key === "ad_impressions") current.impressions += value;
-    if (row.metric_key === "ad_conversions") current.conversions += value;
+    if (row.metric_key === "ad_signups") current.conversions += value;
 
     campaignMap.set(key, current);
   }
@@ -1191,7 +1191,7 @@ export function calculateDashboardData({
   const adSpend = sumMetric(snapshots, "ad_spend", "google_ads");
   const clicks = sumMetric(snapshots, "ad_clicks", "google_ads");
   const impressions = sumMetric(snapshots, "ad_impressions", "google_ads");
-  const adConversions = sumMetric(snapshots, "ad_conversions", "google_ads");
+  const adSignups = sumMetric(snapshots, "ad_signups", "google_ads");
   const activeUsers = sumMetric(snapshots, "active_users", "ga4");
   const newUsers = sumMetric(snapshots, "new_users", "ga4");
   const diagnosticsStarted = metricValueOrFallback(
@@ -1345,7 +1345,7 @@ export function calculateDashboardData({
       spend: adSpend,
       clicks,
       impressions,
-      conversions: adConversions,
+      conversions: adSignups,
       cpc: clicks ? adSpend / clicks : 0,
       cac,
     },
@@ -1452,6 +1452,7 @@ export function getDemoDashboardData(
     demoSnapshot("google_ads", "ad_clicks", 1840),
     demoSnapshot("google_ads", "ad_impressions", 126000),
     demoSnapshot("google_ads", "ad_conversions", 93),
+    demoSnapshot("google_ads", "ad_signups", 56),
     demoSnapshot("search_console", "organic_search_clicks", 1440),
     demoSnapshot("search_console", "organic_search_impressions", 83200),
     demoSnapshot("search_console", "organic_search_ctr", 1.73),
@@ -1521,6 +1522,11 @@ export function getDemoDashboardData(
       campaign_id: "ga-us-1",
       reporting_source: "ga4_linked_google_ads",
     }),
+    demoSnapshot("google_ads", "ad_signups", 32, {
+      campaign: "US Generic",
+      campaign_id: "ga-us-1",
+      reporting_source: "ga4_linked_google_ads",
+    }),
     demoSnapshot("google_ads", "ad_spend", 980, {
       campaign: "UK Generic",
       campaign_id: "ga-uk-1",
@@ -1537,6 +1543,11 @@ export function getDemoDashboardData(
       reporting_source: "ga4_linked_google_ads",
     }),
     demoSnapshot("google_ads", "ad_conversions", 34, {
+      campaign: "UK Generic",
+      campaign_id: "ga-uk-1",
+      reporting_source: "ga4_linked_google_ads",
+    }),
+    demoSnapshot("google_ads", "ad_signups", 22, {
       campaign: "UK Generic",
       campaign_id: "ga-uk-1",
       reporting_source: "ga4_linked_google_ads",
