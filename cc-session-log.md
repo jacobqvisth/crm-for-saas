@@ -3,7 +3,7 @@ type: resource
 status: active
 tags: [wrenchlane-crm, cc-log, sessions]
 created: 2026-03-27
-updated: 2026-04-22
+updated: 2026-05-26
 ---
 
 # CC Session Log — Wrenchlane CRM
@@ -11,6 +11,33 @@ updated: 2026-04-22
 > Running log of all Claude Code sessions. Most recent first.
 > CC should append a new entry here at the end of every session.
 > Cowork reads this at session start instead of relying on Jacob pasting summaries.
+
+---
+
+## 2026-05-26 — Acquisition page: Conversions KPI = ad-attributed signups (PR #310)
+
+**Branch:** `worktree-feature+acquisition-signups-as-conversions` → main (squash merge 12:46 UTC).
+**Deploy:** prod build `dpl_3yxTyxHLmj2YzHt5B8u5fLfKxMdU` (sha 9cce2b1) for commit `feat(ceo/acquisition): make Conversions KPI count ad-attributed signups (#310)`. PR build on the worktree branch ERRORed (turbopack on darwin; expected — prod uses webpack via `next build --webpack` ignoreCommand).
+**Files:**
+- `src/lib/ceo/sync/sources/google-ads.ts` — adds per-campaign signup query: GA4 `runReport` with dims `[date, sessionGoogleAdsCampaignId, sessionGoogleAdsCampaignName]`, metric `eventCount`, dimensionFilter `eventName ∈ GA4_EVENT_MAP.signup AND sessionGoogleAdsCampaignId != "(not set)"`. Emits `metricKey: ad_signups` per (date, campaign).
+- `src/lib/ceo/metrics/calculations.ts` — `marketing.conversions` now reads `ad_signups` (was `ad_conversions`); same swap in `buildAcquisitionTrend` and the per-campaign rollup in `buildAcquisitionCampaigns`. Demo snapshots seeded for `ad_signups` (totals + per-campaign US/UK).
+- `src/components/ceo/dashboard-sections.tsx` — KPI relabels: "Clicks" → "Ad clicks", "Cost / conversion" → "Cost / signup", "Conversions" hint "click-to-conversion" → "click-to-signup", "CPC" hint "Cost per click" → "Cost per ad click". Right-hand Paid Efficiency panel: "Clicks" → "Ad clicks", "Conv. rate" → "Signup rate", "Cost / conv." → "Cost / signup". Campaign table column "Conv." → "Signups" + new info text; "CVR" → "Signup rate". Operator Notes rewritten to define the new metric.
+- `src/components/ceo/source-info-data.ts` — Acquisition telemetry info-popover updated: lists `ad_signups` and explains the GA4 `(not set)` filter; matches "signup" keywords too.
+
+**Why now:**
+- Jacob spotted that the page reported 11,090 "conversions" on 3,721 clicks (298% click-to-conversion). Root cause: `ad_conversions` was sourced from GA4's `keyEvents` metric in `sessionGoogleAdsCampaignId`-attributed sessions — every event tagged as a key event (page_view, scroll, view_pricing, etc.) counted, so a single ad click produced multiple "conversions".
+- He wants a conversion to mean a user signing up. The codebase already had `GA4_EVENT_MAP.signup = [sign_up, signup, user_signup]` plumbed into the GA4 connector for the funnel + activation_rate denominator; this PR uses the same event-name list but adds the per-campaign attribution dimension so we can score the Acquisition KPI separately.
+
+**What stays the same:**
+- `ad_conversions` is still emitted by `google-ads.ts` (`metricKey: ad_conversions` from `keyEvents`) — unused on the page now but kept as context in raw rows in case we want a separate keyEvents view later.
+- CAC ($94.42 today = $1,416 ÷ 15 new paid workshops from Stripe) is unchanged — correctly defined already.
+- Clicks (3.7K) and CPC ($0.38) unchanged — they were always Google Ads clicks via GA4 `advertiserAdClicks`, just relabeled "Ad clicks" so the source is unambiguous.
+
+**Expected post-merge behavior on prod:**
+- After the next google_ads sync (the connector runs on the existing CEO sync schedule), `metric_snapshots` will gain `ad_signups` rows scoped per campaign. The KPI card will show 0 until those land.
+- If GA4 isn't actually firing `sign_up`/`signup`/`user_signup` events from ad-attributed sessions, the card will sit at 0 — that's the correct, honest state. Surface as a separate ops thread to wire the signup event in GTM-5JRQVHHS.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` clean in worktree (after `PATH=/opt/homebrew/bin:$PATH`), `npm run test:e2e:smoke` 8/8.
 
 ---
 
