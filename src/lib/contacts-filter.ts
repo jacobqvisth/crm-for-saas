@@ -18,6 +18,8 @@ export type ContactFilters = {
   lifecycle_stage?: string | string[];
   /** Filter by company.customer_status via inner join. */
   customer_status?: string | string[];
+  /** Filter by contact.user_plan_type (direct column, no join). */
+  user_plan_type?: string | string[];
   /**
    * `'yes'` → only contacts whose company has wl_workshop_id set.
    * `'no'`  → only contacts whose company has no wl_workshop_id (or no company).
@@ -112,6 +114,10 @@ export async function resolveContactIdsByFilters(
 
   if (customerStatus.length === 1) query = query.eq('companies.customer_status', customerStatus[0]);
   else if (customerStatus.length > 1) query = query.in('companies.customer_status', customerStatus);
+
+  const userPlan = toArray(filters.user_plan_type);
+  if (userPlan.length === 1) query = query.eq('user_plan_type', userPlan[0]);
+  else if (userPlan.length > 1) query = query.in('user_plan_type', userPlan);
 
   if (hasAccount === 'yes') query = query.not('companies.wl_workshop_id', 'is', null);
   else if (hasAccount === 'no') query = query.is('companies.wl_workshop_id', null);

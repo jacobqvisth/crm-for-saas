@@ -18,6 +18,7 @@ export type ColumnId =
   | 'deals_count'
   | 'lifecycle_stage'
   | 'customer_status'
+  | 'plan'
   | 'has_account'
   | 'source'
   | 'tags'
@@ -45,6 +46,7 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'deals_count',     label: 'Deals',           default: true,  sortable: false },
   { id: 'lifecycle_stage', label: 'Lifecycle',       default: false, sortable: false },
   { id: 'customer_status', label: 'Customer status', default: false, sortable: false },
+  { id: 'plan',            label: 'Plan',            default: false, sortable: false },
   { id: 'has_account',     label: 'App workshop',    default: false, sortable: false },
   { id: 'source',          label: 'Source',          default: false, sortable: false },
   { id: 'tags',            label: 'Tags',            default: false, sortable: false },
