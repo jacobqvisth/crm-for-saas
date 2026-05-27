@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Map as MapIcon, Loader2, ChevronDown, Filter } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { createClient } from "@/lib/supabase/client";
+
+type ListOption = { id: string; name: string };
 
 type RouteRow = {
   id: string;
@@ -125,6 +128,8 @@ export default function RoutesPage() {
   const [generateFor, setGenerateFor] = useState<string | null>(null);
   const [region, setRegion] = useState<Region>("auto");
   const [forDate, setForDate] = useState<string>("");
+  const [lists, setLists] = useState<ListOption[]>([]);
+  const [listId, setListId] = useState<string>("");
   const [filters, setFilters] = useState<Set<FilterKey>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement | null>(null);
@@ -187,6 +192,17 @@ export default function RoutesPage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!workspaceId) return;
+    const supabase = createClient();
+    supabase
+      .from("contact_lists")
+      .select("id, name")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setLists((data as ListOption[]) ?? []));
+  }, [workspaceId]);
+
   async function handleGenerate() {
     if (!workspaceId) {
       toast.error("Workspace not loaded");
@@ -199,6 +215,7 @@ export default function RoutesPage() {
         body.forUserId = generateFor;
       }
       if (forDate) body.forDate = forDate;
+      if (listId) body.listId = listId;
       if (filters.size > 0) body.filters = Array.from(filters);
       const res = await fetch("/api/routes/generate", {
         method: "POST",
@@ -243,6 +260,25 @@ export default function RoutesPage() {
                 </option>
               ))}
             </select>
+          )}
+          {lists.length > 0 && (
+            <label className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+              From list
+              <select
+                value={listId}
+                onChange={(e) => setListId(e.target.value)}
+                className="text-xs border border-slate-200 rounded px-2 py-1.5 text-slate-700 bg-white max-w-[180px]"
+                aria-label="Source list"
+                title="Build the route only from companies in this list. The list is authoritative — customer/revisit/radius filters are skipped."
+              >
+                <option value="">All companies</option>
+                {lists.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
           <label className="text-xs text-slate-500 inline-flex items-center gap-1.5">
             Where?

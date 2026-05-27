@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     forDate?: string;
     forUserId?: string;
     filters?: unknown;
+    listId?: unknown;
     originOverride?: { address: string; lat: number; lng: number };
   };
 
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
   const region: RegionKey = isRegionKey(body.region) ? body.region : "auto";
   const forDate = isIsoDate(body.forDate) ? body.forDate : null;
   const filters = parseFilters(body.filters);
+  const listId = typeof body.listId === "string" && body.listId.length > 0 ? body.listId : null;
 
   const { data: membership } = await supabase
     .from("workspace_members")
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
       region,
       forDate,
       filters,
+      listId,
       supabase: service,
     });
 
