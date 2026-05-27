@@ -16,6 +16,7 @@ import {
 } from "./cluster-rank";
 import { fetchEngagementSignals } from "./engagement";
 import { resolveListContactIds } from "@/lib/lists/filter-query";
+import { geocodeAddressWithMeta, makeGeocodeCache } from "./geocode";
 import { isUnavailable, type UnavailableReason } from "./profile";
 import { optimizeRoute, type LatLng } from "./routes-api";
 import { scoreStops, type CandidateStop, type ScoredStop } from "./stop-score";
@@ -577,6 +578,8 @@ export type GenerateRouteSuccess = {
     poolSize: number;
     cityCoverage: number;
     fellBackToCentroidLabel: boolean;
+    /** How many list companies were geocoded on the fly during this run. */
+    geocodedCount: number;
   };
 };
 
@@ -642,6 +645,7 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
   //    belong to. The list is authoritative — fetchEnrichedPool skips the
   //    not-a-customer / revisit / radius eligibility gates for these IDs.
   let restrictToCompanyIds: string[] | undefined;
+  let geocodedCount = 0;
   if (listId) {
     const listCompanyIds = await fetchListCompanyIds(supabase, workspaceId, listId);
     if (listCompanyIds === null) {
@@ -654,6 +658,9 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
         reason: "The selected list has no contacts linked to a company.",
       };
     }
+    // Auto-geocode list companies that have an address but no coordinates, so a
+    // freshly-imported/manual company becomes routable without a manual step.
+    geocodedCount = await backfillMissingGeocodes(supabase, workspaceId, listCompanyIds);
     restrictToCompanyIds = listCompanyIds;
   }
 
@@ -972,6 +979,7 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
       poolSize: pool.length,
       cityCoverage,
       fellBackToCentroidLabel,
+      geocodedCount,
     },
   };
 }
@@ -1218,6 +1226,108 @@ async function fetchListCompanyIds(
     }
   }
   return Array.from(companyIds);
+}
+
+// Cap how many companies we'll geocode in one generate call, and how many we
+// fire concurrently — keeps us inside the route's maxDuration even for a large
+// list where most rows lack coordinates.
+const GEOCODE_BACKFILL_CAP = 200;
+const GEOCODE_CONCURRENCY = 8;
+
+type GeocodableRow = {
+  id: string;
+  name: string;
+  address: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+};
+
+/**
+ * Geocode list companies that have an address but no lat/lng, persisting the
+ * result back to `companies`. Returns how many rows were geocoded. Best-effort:
+ * a row that can't be resolved is left as-is (it simply won't be routable).
+ */
+async function backfillMissingGeocodes(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  companyIds: string[],
+): Promise<number> {
+  if (companyIds.length === 0) return 0;
+
+  const missing: GeocodableRow[] = [];
+  const CHUNK = 200;
+  for (let i = 0; i < companyIds.length && missing.length < GEOCODE_BACKFILL_CAP; i += CHUNK) {
+    const slice = companyIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("companies")
+      .select("id, name, address, postal_code, city, country")
+      .eq("workspace_id", workspaceId)
+      .in("id", slice)
+      .or("latitude.is.null,longitude.is.null")
+      .limit(slice.length);
+    if (error) throw new Error(`geocode backfill scan failed: ${error.message}`);
+    for (const r of (data ?? []) as GeocodableRow[]) {
+      if (missing.length >= GEOCODE_BACKFILL_CAP) break;
+      missing.push(r);
+    }
+  }
+  if (missing.length === 0) return 0;
+
+  const cache = makeGeocodeCache();
+  let geocoded = 0;
+
+  for (let i = 0; i < missing.length; i += GEOCODE_CONCURRENCY) {
+    const batch = missing.slice(i, i + GEOCODE_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (r) => ({ id: r.id, coords: await geocodeCompanyRow(r, cache) })),
+    );
+    for (const { id, coords } of results) {
+      if (!coords) continue;
+      const { error } = await supabase
+        .from("companies")
+        .update({ latitude: coords.lat, longitude: coords.lng })
+        .eq("id", id)
+        .eq("workspace_id", workspaceId);
+      if (error) {
+        console.error(`[geocode backfill] update failed for ${id}: ${error.message}`);
+        continue;
+      }
+      geocoded++;
+    }
+  }
+  return geocoded;
+}
+
+/**
+ * Resolve one company to coordinates. Prefers the full street address; if that
+ * is missing or doesn't resolve, falls back to "<name>, <city, country>" but
+ * rejects APPROXIMATE matches (locality centroid) — a vague pin is worse than
+ * no pin for driving directions.
+ */
+async function geocodeCompanyRow(
+  r: GeocodableRow,
+  cache: ReturnType<typeof makeGeocodeCache>,
+): Promise<{ lat: number; lng: number } | null> {
+  const street = r.address?.trim();
+  if (street) {
+    const q = [street, r.postal_code, r.city, r.country]
+      .map((s) => s?.trim())
+      .filter(Boolean)
+      .join(", ");
+    const meta = await geocodeAddressWithMeta(q, cache);
+    if (meta) return { lat: meta.lat, lng: meta.lng };
+  }
+
+  const locality = [r.city, r.country]
+    .map((s) => s?.trim())
+    .filter(Boolean)
+    .join(", ");
+  if (r.name && locality) {
+    const meta = await geocodeAddressWithMeta(`${r.name}, ${locality}`, cache);
+    if (meta && meta.precision !== "APPROXIMATE") return { lat: meta.lat, lng: meta.lng };
+  }
+  return null;
 }
 
 /**
