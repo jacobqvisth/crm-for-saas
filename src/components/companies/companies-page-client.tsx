@@ -4,14 +4,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   Search, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Columns3, Building2, Globe, Phone,
+  Columns3, Building2, Globe, Phone, Trash2,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { countryFlag, SUPPORTED_OUTBOUND_COUNTRIES, COUNTRY_NAMES } from '@/lib/countries';
 import { SlideOver } from '@/components/ui/slide-over';
+import { Modal } from '@/components/ui/modal';
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select';
+import type { CompanyFilters } from '@/lib/companies-filter';
 import toast from 'react-hot-toast';
 import {
   COLUMN_BY_ID, DEFAULT_COLUMN_IDS, loadColumnIds, saveColumnIds,
@@ -125,6 +127,13 @@ export function CompaniesPageClient() {
   const [loading, setLoading] = useState(true);
   const [showAddCompany, setShowAddCompany] = useState(false);
 
+  // Bulk action state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [bulkLifecycle, setBulkLifecycle] = useState('');
+  const [bulkCustomerStatus, setBulkCustomerStatus] = useState('');
+
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [industries, setIndustries] = useState<string[]>([]);
@@ -222,6 +231,7 @@ export function CompaniesPageClient() {
   const fetchCompanies = useCallback(async () => {
     if (!workspaceId || !hydrated) return;
     setLoading(true);
+    setSelectAllMatching(false);
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
@@ -488,6 +498,77 @@ export function CompaniesPageClient() {
     filters.tags.length > 0 ||
     filters.has_phone || filters.has_domain;
 
+  const allSelected = companies.length > 0 && selectedIds.size === companies.length;
+  const effectiveCount = selectAllMatching ? totalCount : selectedIds.size;
+
+  // Build filter object for "select all matching" bulk calls — mirrors the
+  // query in fetchCompanies so the server resolves the same set the user sees.
+  const hasAccountValue: CompanyFilters['has_account'] =
+    filters.has_account.length === 1 && (filters.has_account[0] === 'yes' || filters.has_account[0] === 'no')
+      ? filters.has_account[0]
+      : undefined;
+  const currentFilters: CompanyFilters = {
+    search: filters.search || undefined,
+    country_code:    filters.country_code.length    ? filters.country_code    : undefined,
+    source:          filters.source.length          ? filters.source          : undefined,
+    industry:        filters.industry.length        ? filters.industry        : undefined,
+    lifecycle_stage: filters.lifecycle_stage.length ? filters.lifecycle_stage : undefined,
+    customer_status: filters.customer_status.length ? filters.customer_status : undefined,
+    plan:            filters.plan.length            ? filters.plan            : undefined,
+    has_account: hasAccountValue,
+    tags:            filters.tags.length            ? filters.tags            : undefined,
+    has_phone: filters.has_phone || undefined,
+    has_domain: filters.has_domain || undefined,
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectAllMatching(false);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectAllMatching(false);
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(companies.map((c) => c.id)));
+  };
+
+  // ── Bulk actions ─────────────────────────────────────────────────────────────
+
+  const handleBulkFieldUpdate = async (field: 'lifecycle_stage' | 'customer_status', value: string) => {
+    if (!workspaceId || effectiveCount === 0) return;
+    const body = selectAllMatching
+      ? { filters: currentFilters, workspaceId, field, value }
+      : { companyIds: Array.from(selectedIds), workspaceId, field, value };
+    const res = await fetch('/api/companies/bulk-update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error || 'Failed to update companies'); return; }
+    toast.success(`Updated ${data.updated} companies`);
+    setSelectedIds(new Set()); setSelectAllMatching(false);
+    setBulkLifecycle(''); setBulkCustomerStatus('');
+    fetchCompanies();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!workspaceId || effectiveCount === 0) return;
+    const body = selectAllMatching
+      ? { filters: currentFilters, workspaceId }
+      : { companyIds: Array.from(selectedIds), workspaceId };
+    const res = await fetch('/api/companies/bulk-delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error || 'Failed to delete companies'); return; }
+    toast.success(`Deleted ${data.deleted} companies`);
+    setSelectedIds(new Set()); setSelectAllMatching(false); setShowDeleteConfirm(false);
+    fetchCompanies();
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
       {/* Header */}
@@ -653,6 +734,14 @@ export function CompaniesPageClient() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-300"
+                    />
+                  </th>
                   {columnIds.map((id) => {
                     const col = COLUMN_BY_ID[id];
                     if (!col) return null;
@@ -676,9 +765,38 @@ export function CompaniesPageClient() {
                 </tr>
               </thead>
               <tbody>
+                {/* Select-all-matching banner */}
+                {!loading && allSelected && !selectAllMatching && totalCount > companies.length && (
+                  <tr>
+                    <td colSpan={columnIds.length + 1} className="bg-indigo-50 border-b border-indigo-100 text-center py-2.5 text-sm text-slate-600">
+                      All {companies.length} companies on this page are selected.{' '}
+                      <button
+                        onClick={() => setSelectAllMatching(true)}
+                        className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+                      >
+                        Select all {totalCount.toLocaleString()} companies matching current filters
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                {!loading && selectAllMatching && (
+                  <tr>
+                    <td colSpan={columnIds.length + 1} className="bg-indigo-100 border-b border-indigo-200 text-center py-2.5 text-sm text-slate-700">
+                      All {totalCount.toLocaleString()} companies matching current filters are selected.{' '}
+                      <button
+                        onClick={() => { setSelectAllMatching(false); setSelectedIds(new Set()); }}
+                        className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+                      >
+                        Clear selection
+                      </button>
+                    </td>
+                  </tr>
+                )}
+
                 {loading ? (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-b border-slate-100 animate-pulse">
+                      <td className="px-4 py-3"><div className="h-4 w-4 bg-slate-200 rounded" /></td>
                       {columnIds.map((id) => (
                         <td key={id} className="px-4 py-3"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
                       ))}
@@ -686,7 +804,7 @@ export function CompaniesPageClient() {
                   ))
                 ) : companies.length === 0 ? (
                   <tr>
-                    <td colSpan={columnIds.length} className="px-4 py-16 text-center">
+                    <td colSpan={columnIds.length + 1} className="px-4 py-16 text-center">
                       <p className="text-slate-500 font-medium">No companies found</p>
                       <p className="text-slate-400 text-sm mt-1">
                         {hasActiveFilters ? 'Try adjusting your filters' : 'Add your first company to get started'}
@@ -705,6 +823,14 @@ export function CompaniesPageClient() {
                 ) : (
                   companies.map((company) => (
                     <tr key={company.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(company.id)}
+                          onChange={() => toggleSelect(company.id)}
+                          className="rounded border-slate-300"
+                        />
+                      </td>
                       {columnIds.map((id) => (
                         <td key={id} className="px-4 py-3">
                           {renderCell(id, company)}
@@ -744,6 +870,62 @@ export function CompaniesPageClient() {
           )}
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {(selectedIds.size > 0 || selectAllMatching) && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white rounded-xl shadow-2xl px-6 py-3 flex items-center gap-4">
+          <span className="text-sm font-medium">{effectiveCount.toLocaleString()} companies selected</span>
+          <div className="h-5 w-px bg-slate-600" />
+          <select
+            value={bulkLifecycle}
+            onChange={(e) => { if (e.target.value) handleBulkFieldUpdate('lifecycle_stage', e.target.value); }}
+            className="text-sm bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-white"
+          >
+            <option value="">Set Lifecycle Stage</option>
+            {LIFECYCLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <select
+            value={bulkCustomerStatus}
+            onChange={(e) => { if (e.target.value) handleBulkFieldUpdate('customer_status', e.target.value); }}
+            className="text-sm bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-white"
+          >
+            <option value="">Set Customer Status</option>
+            {CUSTOMER_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-600 rounded-lg hover:bg-red-700"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Companies">
+        <p className="text-sm text-slate-600 mb-4">
+          Are you sure you want to delete {effectiveCount.toLocaleString()} compan{effectiveCount === 1 ? 'y' : 'ies'}? This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => setShowDeleteConfirm(false)}
+            className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      </Modal>
 
       <ColumnCustomizer
         open={columnsOpen}
