@@ -15,6 +15,7 @@ import {
   type ScoredCluster,
 } from "./cluster-rank";
 import { fetchEngagementSignals } from "./engagement";
+import { resolveListContactIds } from "@/lib/lists/filter-query";
 import { isUnavailable, type UnavailableReason } from "./profile";
 import { optimizeRoute, type LatLng } from "./routes-api";
 import { scoreStops, type CandidateStop, type ScoredStop } from "./stop-score";
@@ -546,6 +547,14 @@ export type GenerateRouteInput = {
   forDate?: string | null;
   /** Optional candidate-pool filters from the UI dropdown. */
   filters?: CandidateFilterKey[];
+  /**
+   * Optional saved-list ID. When set, the candidate pool is restricted to the
+   * companies whose contacts belong to that list, and the list is treated as
+   * authoritative: the not-a-customer, revisit-window, and Stockholm-radius
+   * eligibility filters are skipped (a geocoded address and `do_not_route=false`
+   * are still required). The "Filter out" candidate filters still compose on top.
+   */
+  listId?: string | null;
   supabase: SupabaseClient<Database>;
 };
 
@@ -611,6 +620,7 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
     region = "auto",
     forDate = null,
     filters = [],
+    listId = null,
     supabase,
   } = input;
 
@@ -628,10 +638,32 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
     }
   }
 
-  // 2. Pull pool with all the signals we'll need downstream.
+  // 2. When a list is selected, resolve it to the companies its contacts
+  //    belong to. The list is authoritative — fetchEnrichedPool skips the
+  //    not-a-customer / revisit / radius eligibility gates for these IDs.
+  let restrictToCompanyIds: string[] | undefined;
+  if (listId) {
+    const listCompanyIds = await fetchListCompanyIds(supabase, workspaceId, listId);
+    if (listCompanyIds === null) {
+      return { ok: false, error: "no_pool", reason: "List not found in this workspace." };
+    }
+    if (listCompanyIds.length === 0) {
+      return {
+        ok: false,
+        error: "no_pool",
+        reason: "The selected list has no contacts linked to a company.",
+      };
+    }
+    restrictToCompanyIds = listCompanyIds;
+  }
+
+  // 3. Pull pool with all the signals we'll need downstream.
   const workspaceDefaultRevisit = await fetchWorkspaceMinRevisit(supabase, workspaceId);
   const pool = await applyCandidateFilters(
-    await fetchEnrichedPool(supabase, workspaceId, workspaceDefaultRevisit),
+    await fetchEnrichedPool(supabase, workspaceId, workspaceDefaultRevisit, {
+      restrictToCompanyIds,
+      authoritative: listId != null,
+    }),
     supabase,
     workspaceId,
     filters,
@@ -640,7 +672,9 @@ export async function generateRoute(input: GenerateRouteInput): Promise<Generate
     return {
       ok: false,
       error: "no_pool",
-      reason: "No eligible companies in workspace after filters.",
+      reason: listId
+        ? "No geocoded companies in the selected list after filters. Add addresses on the companies or pick another list."
+        : "No eligible companies in workspace after filters.",
     };
   }
 
@@ -965,11 +999,31 @@ function describeUnavailable(reason: UnavailableReason, isoDate: string): string
   return `${isoDate} is marked PTO${reason.reason ? `: ${reason.reason}` : ""}.`;
 }
 
+/** Options for {@link fetchEnrichedPool}. */
+type EnrichedPoolOpts = {
+  /**
+   * Restrict the pool to these company IDs (queried in chunks). Used for
+   * list-sourced generation. When omitted, the whole workspace is paginated.
+   */
+  restrictToCompanyIds?: string[];
+  /**
+   * Treat the source as authoritative: skip the not-a-customer, Stockholm-radius,
+   * and revisit-window eligibility gates. A geocoded address and `do_not_route=false`
+   * are still required. Used together with `restrictToCompanyIds` for lists.
+   */
+  authoritative?: boolean;
+};
+
+const COMPANY_POOL_COLUMNS =
+  "id, name, address, latitude, longitude, city, rating, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days, last_visited_at";
+
 async function fetchEnrichedPool(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
   workspaceDefaultRevisitDays: number,
+  opts: EnrichedPoolOpts = {},
 ): Promise<EnrichedCandidate[]> {
+  const { restrictToCompanyIds, authoritative = false } = opts;
   const PAGE_SIZE = 1000;
   type Row = {
     id: string;
@@ -984,29 +1038,50 @@ async function fetchEnrichedPool(
     lastVisitedAt: string | null;
   };
   const rows: Row[] = [];
-  let offset = 0;
 
-  while (true) {
-    const { data, error } = await supabase
+  // base() rebuilds the workspace-scoped query with the geocode + do_not_route
+  // gates that always apply. The not-a-customer gate is skipped in authoritative
+  // mode (lists curate exactly who to visit, customer or not).
+  const base = () => {
+    let q = supabase
       .from("companies")
-      .select(
-        "id, name, address, latitude, longitude, city, rating, subscription_status, customer_status, activated_at, do_not_route, min_revisit_interval_days, last_visited_at",
-      )
+      .select(COMPANY_POOL_COLUMNS)
       .eq("workspace_id", workspaceId)
       .eq("do_not_route", false)
-      .or("subscription_status.is.null,subscription_status.not.in.(active,trialing,past_due)")
-      .or("customer_status.is.null,customer_status.not.in.(active,trialing)")
       .not("latitude", "is", null)
-      .not("longitude", "is", null)
-      .order("id")
-      .range(offset, offset + PAGE_SIZE - 1);
+      .not("longitude", "is", null);
+    if (!authoritative) {
+      q = q
+        .or("subscription_status.is.null,subscription_status.not.in.(active,trialing,past_due)")
+        .or("customer_status.is.null,customer_status.not.in.(active,trialing)");
+    }
+    return q;
+  };
 
-    if (error) throw new Error(`enriched pool query failed: ${error.message}`);
-    if (!data || data.length === 0) break;
+  type CompanyRow = {
+    id: string;
+    name: string;
+    address: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    city: string | null;
+    rating: number | string | null;
+    activated_at: string | null;
+    min_revisit_interval_days: number | null;
+    last_visited_at: string | null;
+  };
 
+  const ingest = (data: CompanyRow[]) => {
     for (const r of data) {
       if (r.latitude == null || r.longitude == null || !r.address) continue;
-      if (haversineKm({ lat: r.latitude, lng: r.longitude }, STOCKHOLM_CENTER) > RADIUS_KM) continue;
+      // Radius gate only applies to the open workspace pool — an authoritative
+      // list may legitimately target shops outside the Stockholm catchment.
+      if (
+        !authoritative &&
+        haversineKm({ lat: r.latitude, lng: r.longitude }, STOCKHOLM_CENTER) > RADIUS_KM
+      ) {
+        continue;
+      }
       rows.push({
         id: r.id,
         name: r.name,
@@ -1020,9 +1095,29 @@ async function fetchEnrichedPool(
         lastVisitedAt: r.last_visited_at ?? null,
       });
     }
+  };
 
-    if (data.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
+  if (restrictToCompanyIds) {
+    // Chunk the .in() list to keep the PostgREST URL short (~200 UUIDs/req).
+    const CHUNK = 200;
+    for (let i = 0; i < restrictToCompanyIds.length; i += CHUNK) {
+      const slice = restrictToCompanyIds.slice(i, i + CHUNK);
+      const { data, error } = await base().in("id", slice).limit(slice.length);
+      if (error) throw new Error(`enriched pool query failed: ${error.message}`);
+      ingest((data ?? []) as CompanyRow[]);
+    }
+  } else {
+    let offset = 0;
+    while (true) {
+      const { data, error } = await base()
+        .order("id")
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (error) throw new Error(`enriched pool query failed: ${error.message}`);
+      if (!data || data.length === 0) break;
+      ingest(data as CompanyRow[]);
+      if (data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
   }
 
   if (rows.length === 0) return [];
@@ -1039,7 +1134,8 @@ async function fetchEnrichedPool(
   for (const r of rows) {
     const intervalDays = r.minRevisit ?? workspaceDefaultRevisitDays;
     const lastVisitedAt = recentVisits.get(r.id) ?? null;
-    if (lastVisitedAt) {
+    // Authoritative (list) pools keep recently-visited shops — the user chose them.
+    if (!authoritative && lastVisitedAt) {
       const ageDays = (now - new Date(lastVisitedAt).getTime()) / 86_400_000;
       if (ageDays < intervalDays) continue;
     }
@@ -1081,6 +1177,47 @@ async function fetchSendableContactCompanies(
     }
   }
   return result;
+}
+
+/**
+ * Resolve a saved contact list to the distinct set of company IDs its contacts
+ * belong to. Returns `null` when the list doesn't exist in this workspace, or an
+ * empty array when no member contact is linked to a company. Dynamic vs static
+ * resolution is delegated to {@link resolveListContactIds}.
+ */
+async function fetchListCompanyIds(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  listId: string,
+): Promise<string[] | null> {
+  const { data: list, error } = await supabase
+    .from("contact_lists")
+    .select("id, workspace_id, is_dynamic, filters")
+    .eq("id", listId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) throw new Error(`list lookup failed: ${error.message}`);
+  if (!list) return null;
+
+  const contactIds = await resolveListContactIds(supabase, list);
+  if (contactIds.length === 0) return [];
+
+  const companyIds = new Set<string>();
+  const CHUNK = 200;
+  for (let i = 0; i < contactIds.length; i += CHUNK) {
+    const slice = contactIds.slice(i, i + CHUNK);
+    const { data, error: cErr } = await supabase
+      .from("contacts")
+      .select("company_id")
+      .eq("workspace_id", workspaceId)
+      .in("id", slice)
+      .not("company_id", "is", null);
+    if (cErr) throw new Error(`list company resolution failed: ${cErr.message}`);
+    for (const row of data ?? []) {
+      if (row.company_id) companyIds.add(row.company_id);
+    }
+  }
+  return Array.from(companyIds);
 }
 
 /**
