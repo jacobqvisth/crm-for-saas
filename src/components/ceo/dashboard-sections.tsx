@@ -34,6 +34,7 @@ export type DashboardSectionKey =
   | "organic-search"
   | "product"
   | "workshops"
+  | "diagnostics"
   | "operations"
   | "lifecycle"
   | "revenue"
@@ -140,6 +141,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Workshop Drilldown",
     description:
       "A deeper account-level view of workshops, members, billing state, activity, and diagnostics usage.",
+  },
+  {
+    key: "diagnostics",
+    label: "Diagnostics",
+    glyph: "DG",
+    href: "/ceo/diagnostics",
+    title: "Diagnostics",
+    description:
+      "Per-diagnostic drilldown. Username, workshop, car, DTCs, symptoms, description, and the full ranked list of AI causes for every session in the selected window.",
   },
   {
     key: "operations",
