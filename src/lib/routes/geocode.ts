@@ -11,7 +11,16 @@ export class MissingApiKeyError extends Error {
 
 export type GeocodeResult = { lat: number; lng: number };
 
-export type GeocodeCache = Map<string, GeocodeResult | null>;
+/** Google's `geometry.location_type` — how precise the match is. */
+export type GeocodePrecision =
+  | "ROOFTOP"
+  | "RANGE_INTERPOLATED"
+  | "GEOMETRIC_CENTER"
+  | "APPROXIMATE";
+
+export type GeocodeResultMeta = GeocodeResult & { precision: GeocodePrecision };
+
+export type GeocodeCache = Map<string, GeocodeResultMeta | null>;
 
 export function makeGeocodeCache(): GeocodeCache {
   return new Map();
@@ -21,10 +30,16 @@ function normalize(address: string): string {
   return address.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-export async function geocodeAddress(
+/**
+ * Geocode a free-text address and return the location plus Google's precision
+ * (`location_type`). Callers that geocode loose queries (e.g. a business name
+ * with no street) can reject `APPROXIMATE` hits, which Google returns as the
+ * locality centroid — useless for driving directions.
+ */
+export async function geocodeAddressWithMeta(
   address: string,
   cache?: GeocodeCache,
-): Promise<GeocodeResult | null> {
+): Promise<GeocodeResultMeta | null> {
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) throw new MissingApiKeyError();
 
@@ -44,7 +59,9 @@ export async function geocodeAddress(
 
   const data = (await res.json()) as {
     status: string;
-    results?: { geometry?: { location?: { lat: number; lng: number } } }[];
+    results?: {
+      geometry?: { location?: { lat: number; lng: number }; location_type?: string };
+    }[];
   };
 
   if (data.status !== "OK" || !data.results?.[0]?.geometry?.location) {
@@ -55,8 +72,20 @@ export async function geocodeAddress(
     return null;
   }
 
-  const loc = data.results[0].geometry.location;
-  const out = { lat: loc.lat, lng: loc.lng };
+  const geom = data.results[0].geometry;
+  const out: GeocodeResultMeta = {
+    lat: geom.location!.lat,
+    lng: geom.location!.lng,
+    precision: (geom.location_type as GeocodePrecision) ?? "APPROXIMATE",
+  };
   cache?.set(norm, out);
   return out;
+}
+
+export async function geocodeAddress(
+  address: string,
+  cache?: GeocodeCache,
+): Promise<GeocodeResult | null> {
+  const meta = await geocodeAddressWithMeta(address, cache);
+  return meta ? { lat: meta.lat, lng: meta.lng } : null;
 }

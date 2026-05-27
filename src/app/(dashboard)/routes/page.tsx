@@ -227,7 +227,12 @@ export default function RoutesPage() {
         toast.error(result.reason ?? result.error ?? "Generation failed");
         return;
       }
-      toast.success(`Generated route: ${result.route.clusterLabel}`);
+      const geocoded = result.diagnostics?.geocodedCount ?? 0;
+      toast.success(
+        geocoded > 0
+          ? `Generated route: ${result.route.clusterLabel} (geocoded ${geocoded} ${geocoded === 1 ? "company" : "companies"})`
+          : `Generated route: ${result.route.clusterLabel}`,
+      );
       fetchRoutes();
     } catch (err) {
       console.error(err);
