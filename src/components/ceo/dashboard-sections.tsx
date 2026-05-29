@@ -40,6 +40,7 @@ export type DashboardSectionKey =
   | "revenue"
   | "data-health"
   | "domain-health"
+  | "reviews"
   | "settings";
 
 type DashboardSectionConfig = {
@@ -195,6 +196,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Domain Health",
     description:
       "Daily DNS auth, blocklist, and send-rate snapshot for wrenchlane.com. Alerts when bounce rate, unsubscribe rate, or send volume signals deliverability risk.",
+  },
+  {
+    key: "reviews",
+    label: "Reviews",
+    glyph: "RV",
+    href: "/ceo/reviews",
+    title: "Reviews",
+    description:
+      "Wrenchlane's rating and review count across every SaaS review platform (Capterra, G2, Trustpilot, Google, and more), with a feed of individual reviews where a platform exposes them. Manual entry today; Google + Trustpilot API sync to follow.",
   },
   {
     key: "settings",
