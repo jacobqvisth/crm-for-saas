@@ -12,4 +12,6 @@ export const TABLES = {
   motorUsage: "dashboard_motor_usage",
   costEntries: "dashboard_cost_entries",
   ctaClicks: "dashboard_cta_clicks",
+  reviewSnapshots: "dashboard_review_snapshots",
+  reviews: "dashboard_reviews",
 } as const;
