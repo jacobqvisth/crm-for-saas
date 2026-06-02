@@ -480,9 +480,17 @@ export function RoadmapClient() {
           </button>
           <button
             onClick={addGroup}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
-            <Plus className="h-4 w-4" /> Add group
+            <Plus className="h-3.5 w-3.5" /> Add group
+          </button>
+          <button
+            onClick={() => board && board.groups.length > 0 && addItem(board.groups[0].id)}
+            disabled={!board || board.groups.length === 0}
+            title="Create a new item"
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" /> New item
           </button>
         </div>
       </div>
