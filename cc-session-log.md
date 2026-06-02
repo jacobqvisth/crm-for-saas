@@ -4265,3 +4265,9 @@ Session closed.
 - **No schema change** — reuses `roadmap_items.status` (pairs with the AI Update button which sets statuses).
 - **Checks:** tsc ✅ · eslint ✅ · `next build` ✅. `e2e/roadmap.spec.ts` extended with a Kanban-toggle test.
 - **Deploy:** Vercel auto-deploy on merge (frontend-only; /roadmap stays healthy).
+
+## 2026-06-02 — Roadmap "New item" header button (PR #329)
+
+- **Branch:** feature/roadmap-add-item-button · **PR:** #329 (squash-merged)
+- **What:** Added a top-level "New item" button to the /roadmap header. Creates an item in the first swimlane (default 1-week dates) and opens the detail panel for immediate title/swimlane editing. Works in Timeline + Kanban; disabled when no groups. "Add group" demoted to a secondary button. Reuses existing `addItem(groupId)`. No schema change.
+- **Checks:** tsc ✅ · eslint ✅ · next build ✅. Deploy: Vercel auto-deploy (frontend-only).
