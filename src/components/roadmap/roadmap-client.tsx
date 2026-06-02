@@ -9,6 +9,8 @@ import {
   CalendarClock,
   Trash2,
   Sparkles,
+  GanttChart,
+  Columns3,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
@@ -23,6 +25,7 @@ import { PX_PER_DAY } from "@/lib/roadmap/types";
 import { COLOR_TOKENS, colorClasses } from "@/lib/roadmap/colors";
 import { computeRange, addDays, toISODate } from "@/lib/roadmap/scale";
 import { GanttTimeline } from "./gantt-timeline";
+import { RoadmapKanban } from "./roadmap-kanban";
 import { ItemDetailPanel } from "./item-detail-panel";
 import { UpdateSuggestionsModal, type AppliedUpdate } from "./update-suggestions-modal";
 import type { SuggestionOut } from "@/app/api/roadmap/suggest-updates/route";
@@ -33,12 +36,16 @@ const ZOOMS: { key: ZoomLevel; label: string }[] = [
   { key: "month", label: "Month" },
 ];
 
+type RoadmapView = "timeline" | "kanban";
+const VIEW_STORAGE_KEY = "roadmap:view";
+
 export function RoadmapClient() {
   const { workspaceId } = useWorkspace();
   const [boards, setBoards] = useState<Roadmap[]>([]);
   const [board, setBoard] = useState<RoadmapBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState<ZoomLevel>("week");
+  const [view, setView] = useState<RoadmapView>("timeline");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
   const [scrollToTodayKey, setScrollToTodayKey] = useState(0);
@@ -85,6 +92,21 @@ export function RoadmapClient() {
   useEffect(() => {
     if (workspaceId) load();
   }, [workspaceId, load]);
+
+  // Remember the last-used view (timeline vs kanban).
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(VIEW_STORAGE_KEY) : null;
+    if (saved === "timeline" || saved === "kanban") setView(saved);
+  }, []);
+
+  const changeView = (v: RoadmapView) => {
+    setView(v);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const range = useMemo(
     () => computeRange(board?.items ?? [], today),
@@ -399,29 +421,55 @@ export function RoadmapClient() {
         </button>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Zoom segmented control */}
+          {/* View toggle: Timeline ↔ Kanban */}
           <div className="flex items-center rounded-lg border border-slate-200 p-0.5">
-            <ChevronsLeftRight className="mx-1 h-3.5 w-3.5 text-slate-400" />
-            {ZOOMS.map((z) => (
-              <button
-                key={z.key}
-                onClick={() => setZoom(z.key)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  zoom === z.key
-                    ? "bg-indigo-600 text-white"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                {z.label}
-              </button>
-            ))}
+            <button
+              onClick={() => changeView("timeline")}
+              title="Timeline view"
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ${
+                view === "timeline" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              <GanttChart className="h-3.5 w-3.5" /> Timeline
+            </button>
+            <button
+              onClick={() => changeView("kanban")}
+              title="Kanban view"
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ${
+                view === "kanban" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              <Columns3 className="h-3.5 w-3.5" /> Kanban
+            </button>
           </div>
-          <button
-            onClick={() => setScrollToTodayKey((k) => k + 1)}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            <CalendarClock className="h-3.5 w-3.5" /> Today
-          </button>
+
+          {/* Zoom + Today are timeline-only */}
+          {view === "timeline" && (
+            <>
+              <div className="flex items-center rounded-lg border border-slate-200 p-0.5">
+                <ChevronsLeftRight className="mx-1 h-3.5 w-3.5 text-slate-400" />
+                {ZOOMS.map((z) => (
+                  <button
+                    key={z.key}
+                    onClick={() => setZoom(z.key)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                      zoom === z.key
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-500 hover:bg-slate-100"
+                    }`}
+                  >
+                    {z.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setScrollToTodayKey((k) => k + 1)}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                <CalendarClock className="h-3.5 w-3.5" /> Today
+              </button>
+            </>
+          )}
           <button
             onClick={runUpdate}
             disabled={updateLoading || !board || board.groups.length === 0}
@@ -439,7 +487,7 @@ export function RoadmapClient() {
         </div>
       </div>
 
-      {/* ===== Timeline ===== */}
+      {/* ===== Board body (timeline or kanban) ===== */}
       {loading || !board ? (
         <div className="flex flex-1 items-center justify-center border-t border-slate-200 text-sm text-slate-400">
           {loading ? "Loading roadmap…" : "No roadmap"}
@@ -454,6 +502,15 @@ export function RoadmapClient() {
             <Plus className="h-4 w-4" /> Add your first group
           </button>
         </div>
+      ) : view === "kanban" ? (
+        <RoadmapKanban
+          board={board}
+          onChangeStatus={(id, status) => saveItem(id, { status })}
+          onSelectItem={(id) => {
+            setSelectedItemId(id);
+            setDetailItemId(id);
+          }}
+        />
       ) : (
         <GanttTimeline
           board={board}
