@@ -4271,3 +4271,7 @@ Session closed.
 - **Branch:** feature/roadmap-add-item-button · **PR:** #329 (squash-merged)
 - **What:** Added a top-level "New item" button to the /roadmap header. Creates an item in the first swimlane (default 1-week dates) and opens the detail panel for immediate title/swimlane editing. Works in Timeline + Kanban; disabled when no groups. "Add group" demoted to a secondary button. Reuses existing `addItem(groupId)`. No schema change.
 - **Checks:** tsc ✅ · eslint ✅ · next build ✅. Deploy: Vercel auto-deploy (frontend-only).
+
+## 2026-06-02 — Roadmap Kanban tweaks (PR #331)
+
+- **PR:** #331 (squash-merged). Removed the "Blocked" column from the Kanban (blocked items fold into Not started; Blocked still selectable in the detail panel) and widened columns w-72 → w-96. Frontend-only. tsc/lint/build ✅.
