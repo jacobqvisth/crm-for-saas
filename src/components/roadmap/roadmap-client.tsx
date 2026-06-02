@@ -8,6 +8,7 @@ import {
   ChevronsLeftRight,
   CalendarClock,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
@@ -23,6 +24,8 @@ import { COLOR_TOKENS, colorClasses } from "@/lib/roadmap/colors";
 import { computeRange, addDays, toISODate } from "@/lib/roadmap/scale";
 import { GanttTimeline } from "./gantt-timeline";
 import { ItemDetailPanel } from "./item-detail-panel";
+import { UpdateSuggestionsModal, type AppliedUpdate } from "./update-suggestions-modal";
+import type { SuggestionOut } from "@/app/api/roadmap/suggest-updates/route";
 
 const ZOOMS: { key: ZoomLevel; label: string }[] = [
   { key: "day", label: "Day" },
@@ -42,6 +45,10 @@ export function RoadmapClient() {
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<SuggestionOut[]>([]);
   const [groupMenu, setGroupMenu] = useState<{
     group: RoadmapGroup;
     x: number;
@@ -115,6 +122,63 @@ export function RoadmapClient() {
     patchItemLocal(id, patch);
     persistItem(id, patch, "Couldn't save changes");
   };
+
+  // ---- AI "Update": infer real progress from internal data -----------------
+  async function runUpdate() {
+    if (!board) return;
+    setUpdateOpen(true);
+    setUpdateLoading(true);
+    setSuggestions([]);
+    try {
+      const res = await fetch("/api/roadmap/suggest-updates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roadmap_id: board.id }),
+      });
+      if (!res.ok) {
+        const { error } = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(error);
+      }
+      const data = (await res.json()) as { suggestions: SuggestionOut[] };
+      setSuggestions(data.suggestions);
+      if (data.suggestions.length === 0) toast("No suggestions found");
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Couldn't analyze progress");
+      setUpdateOpen(false);
+    } finally {
+      setUpdateLoading(false);
+    }
+  }
+
+  async function applyUpdates(updates: AppliedUpdate[]) {
+    if (updates.length === 0) {
+      setUpdateOpen(false);
+      return;
+    }
+    // Optimistic local apply.
+    for (const u of updates) {
+      patchItemLocal(u.id, { status: u.status, progress_note: u.progress_note });
+    }
+    setUpdateOpen(false);
+    const results = await Promise.allSettled(
+      updates.map((u) =>
+        fetch(`/api/roadmap/items/${u.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: u.status, progress_note: u.progress_note }),
+        }).then((r) => {
+          if (!r.ok) throw new Error();
+        })
+      )
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) {
+      toast.error(`${failed} update${failed === 1 ? "" : "s"} failed to save`);
+      load(board?.id);
+    } else {
+      toast.success(`Applied ${updates.length} update${updates.length === 1 ? "" : "s"}`);
+    }
+  }
 
   async function addItem(groupId: string) {
     if (!board) return;
@@ -359,6 +423,14 @@ export function RoadmapClient() {
             <CalendarClock className="h-3.5 w-3.5" /> Today
           </button>
           <button
+            onClick={runUpdate}
+            disabled={updateLoading || !board || board.groups.length === 0}
+            title="Suggest progress updates from your internal data"
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            <Sparkles className="h-3.5 w-3.5" /> {updateLoading ? "Analyzing…" : "Update"}
+          </button>
+          <button
             onClick={addGroup}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
           >
@@ -488,6 +560,15 @@ export function RoadmapClient() {
         onClose={() => setDetailItemId(null)}
         onSave={saveItem}
         onDelete={deleteItem}
+      />
+
+      {/* ===== AI update suggestions ===== */}
+      <UpdateSuggestionsModal
+        open={updateOpen}
+        loading={updateLoading}
+        suggestions={suggestions}
+        onClose={() => setUpdateOpen(false)}
+        onApply={applyUpdates}
       />
     </div>
   );

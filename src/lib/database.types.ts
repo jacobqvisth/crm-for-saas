@@ -2309,6 +2309,8 @@ export type Database = {
           owner: string | null
           phase: string | null
           priority: string | null
+          progress_note: string | null
+          progress_updated_at: string | null
           roadmap_id: string
           sort_order: number
           start_date: string
@@ -2328,6 +2330,8 @@ export type Database = {
           owner?: string | null
           phase?: string | null
           priority?: string | null
+          progress_note?: string | null
+          progress_updated_at?: string | null
           roadmap_id: string
           sort_order?: number
           start_date: string
@@ -2347,6 +2351,8 @@ export type Database = {
           owner?: string | null
           phase?: string | null
           priority?: string | null
+          progress_note?: string | null
+          progress_updated_at?: string | null
           roadmap_id?: string
           sort_order?: number
           start_date?: string

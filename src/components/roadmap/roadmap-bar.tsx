@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { RoadmapItem } from "@/lib/roadmap/types";
 import type { TimelineRange } from "@/lib/roadmap/scale";
 import { barGeometry, parseDay, addDays, toISODate, dayDiff } from "@/lib/roadmap/scale";
-import { colorClasses } from "@/lib/roadmap/colors";
+import { colorClasses, statusStyle } from "@/lib/roadmap/colors";
 
 type DragMode = "move" | "resize-left" | "resize-right";
 
@@ -34,6 +34,7 @@ export function RoadmapBar({
 }: RoadmapBarProps) {
   const { left, width } = barGeometry(item, range, pxPerDay);
   const colors = colorClasses(item.color ?? groupColor);
+  const status = statusStyle(item.status);
 
   // Transient pixel offsets applied while dragging, committed on pointer up.
   const [delta, setDelta] = useState<{ dLeft: number; dWidth: number } | null>(null);
@@ -139,6 +140,12 @@ export function RoadmapBar({
         data-handle="left"
         className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-md opacity-0 group-hover/bar:opacity-100"
       />
+      {status && (
+        <span
+          className={`mr-1.5 h-2 w-2 shrink-0 rounded-full pointer-events-none ${status.dot}`}
+          title={status.label}
+        />
+      )}
       <span className="truncate pointer-events-none">{item.title}</span>
       {/* right resize handle */}
       <span
