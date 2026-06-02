@@ -1,4 +1,6 @@
 import { google } from "googleapis";
+import { unstable_cache } from "next/cache";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
   isInternalTestUserOrWorkshopWith,
   loadInternalTestSets,
@@ -9,7 +11,11 @@ import { createGoogleAuth } from "@/lib/ceo/sync/google-auth";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
-import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
+import {
+  type ResolvedDashboardRange,
+  normalizeDashboardTimeRangeKey,
+  resolveDashboardTimeRange,
+} from "@/lib/ceo/time-ranges";
 
 export const PRODUCT_APP_HOST = "app.wrenchlane.com";
 export const MARKETING_HOSTS = ["wrenchlane.com", "www.wrenchlane.com"] as const;
@@ -482,7 +488,27 @@ function platformDimensionFilter(platform: AppUsagePlatform): GA4Filter {
   }
 }
 
-export async function getAppUsageData(
+// Cache by (range key, platform) — both stable primitives — so the per-page
+// GA4 runReport + diagnostics fetch isn't repeated on every navigation. The
+// Update button busts it via revalidateTag(CEO_CACHE_TAG).
+const getAppUsageDataCached = unstable_cache(
+  (rangeKey: string, platform: AppUsagePlatform) =>
+    getAppUsageDataUncached(
+      resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+      platform,
+    ),
+  ["ceo-app-usage"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getAppUsageData(
+  range: ResolvedDashboardRange,
+  platform: AppUsagePlatform = "all",
+): Promise<AppUsageData> {
+  return getAppUsageDataCached(range.key, platform);
+}
+
+async function getAppUsageDataUncached(
   range: ResolvedDashboardRange,
   platform: AppUsagePlatform = "all",
 ): Promise<AppUsageData> {

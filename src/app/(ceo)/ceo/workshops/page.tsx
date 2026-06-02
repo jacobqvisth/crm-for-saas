@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
+import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { WorkshopListContent } from "@/components/ceo/workshops-content";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getWorkshopDrilldownList } from "@/lib/ceo/data/workshops";
@@ -41,19 +43,19 @@ function asBool(value: string | string[] | undefined) {
   return next === "1" || next === "true" || next === "on";
 }
 
-export default async function WorkshopsDashboardPage({
-  searchParams,
-}: WorkshopsPageProps) {
-  const params = await searchParams;
-  const range = params.range;
-  const rawQuery = asString(params.q).trim();
+async function WorkshopsPanel({
+  rawQuery,
+  status,
+  showInternal,
+}: {
+  rawQuery: string;
+  status: string;
+  showInternal: boolean;
+}) {
   const query = rawQuery.toLowerCase();
-  const status = asString(params.status) || "all";
-  const showInternal = asBool(params.showInternal);
-  const [data, workshops] = await Promise.all([
-    getDashboardData(range),
-    getWorkshopDrilldownList({ includeInternal: showInternal }),
-  ]);
+  const workshops = await getWorkshopDrilldownList({
+    includeInternal: showInternal,
+  });
 
   const filtered = workshops.filter((item) => {
     const haystack = [
@@ -73,13 +75,33 @@ export default async function WorkshopsDashboardPage({
   });
 
   return (
+    <WorkshopListContent
+      items={filtered}
+      query={rawQuery}
+      status={status}
+      showInternal={showInternal}
+    />
+  );
+}
+
+export default async function WorkshopsDashboardPage({
+  searchParams,
+}: WorkshopsPageProps) {
+  const params = await searchParams;
+  const rawQuery = asString(params.q).trim();
+  const status = asString(params.status) || "all";
+  const showInternal = asBool(params.showInternal);
+  const data = await getDashboardData(params.range);
+
+  return (
     <DashboardShell data={data} section="workshops">
-      <WorkshopListContent
-        items={filtered}
-        query={rawQuery}
-        status={status}
-        showInternal={showInternal}
-      />
+      <Suspense fallback={<CeoPanelSkeleton />}>
+        <WorkshopsPanel
+          rawQuery={rawQuery}
+          status={status}
+          showInternal={showInternal}
+        />
+      </Suspense>
     </DashboardShell>
   );
 }

@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
+import { CEO_CACHE_TAG } from "@/lib/ceo/cache";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 
 // All actions in this file mutate the dashboard internal-test exclusion list
@@ -24,7 +25,9 @@ function unwrap<T>(input: FormData, key: string, fallback: T): string | T {
 
 function refreshAffectedPaths() {
   // Every dashboard surface that filters by internal-test exclusions needs to
-  // re-render after a flag flip.
+  // re-render after a flag flip. Bust the shared CEO data cache so the change
+  // is reflected immediately rather than after the 5-minute TTL.
+  updateTag(CEO_CACHE_TAG);
   revalidatePath("/ceo/settings");
   revalidatePath("/ceo/workshops");
   revalidatePath("/ceo/new-users");

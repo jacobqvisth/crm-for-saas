@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { ConversionsContent } from "@/components/ceo/conversions-content";
 import { type DashboardRoutePageProps } from "@/components/ceo/dashboard-page";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
+import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { getConversionsData } from "@/lib/ceo/data/conversions";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
@@ -11,6 +13,11 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+async function ConversionsPanel({ sinceIso }: { sinceIso: string }) {
+  const conversions = await getConversionsData(sinceIso);
+  return <ConversionsContent data={conversions} />;
+}
+
 export default async function ConversionsPage({
   searchParams,
 }: DashboardRoutePageProps) {
@@ -19,14 +26,15 @@ export default async function ConversionsPage({
   const resolvedRange = resolveDashboardTimeRange(rangeKey);
   const sinceIso = (resolvedRange.start ?? new Date(0)).toISOString();
 
-  const [data, conversions] = await Promise.all([
-    getDashboardData(params.range),
-    getConversionsData(sinceIso),
-  ]);
+  // Render the shell from the (cached) shared dashboard data, then stream the
+  // RPC-backed conversions panel so the chrome paints first.
+  const data = await getDashboardData(params.range);
 
   return (
     <DashboardShell data={data} section="conversions">
-      <ConversionsContent data={conversions} />
+      <Suspense fallback={<CeoPanelSkeleton />}>
+        <ConversionsPanel sinceIso={sinceIso} />
+      </Suspense>
     </DashboardShell>
   );
 }

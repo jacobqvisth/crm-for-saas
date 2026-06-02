@@ -1,14 +1,17 @@
+import { Suspense } from "react";
 import {
   AppUsageContent,
   AppUsagePlatformTabs,
 } from "@/components/ceo/app-usage-content";
 import { type DashboardRoutePageProps } from "@/components/ceo/dashboard-page";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
+import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   getAppUsageData,
   normalizeAppUsagePlatform,
+  type AppUsagePlatform,
 } from "@/lib/ceo/data/app-usage";
 import {
   formatStockholmTime,
@@ -27,25 +30,43 @@ import { refreshAppUsageAction } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+async function AppUsagePanel({
+  rangeKey,
+  platform,
+}: {
+  rangeKey: string;
+  platform: AppUsagePlatform;
+}) {
+  const [usage, internalTestUsers, internalTestWorkshops] = await Promise.all([
+    getAppUsageData(
+      resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+      platform,
+    ),
+    listInternalTestUsers(),
+    listInternalTestWorkshops(),
+  ]);
+
+  return (
+    <AppUsageContent
+      usage={usage}
+      internalTestUsers={internalTestUsers}
+      internalTestWorkshops={internalTestWorkshops}
+    />
+  );
+}
+
 export default async function AppUsagePage({
   searchParams,
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
   const platform = normalizeAppUsagePlatform(params.platform);
-  const resolvedRange = resolveDashboardTimeRange(rangeKey);
-  const [
-    data,
-    usage,
-    lastSyncedAt,
-    internalTestUsers,
-    internalTestWorkshops,
-  ] = await Promise.all([
+
+  // Shell + header render from cached/cheap data; the GA4 runReport panel
+  // streams in behind a skeleton.
+  const [data, lastSyncedAt] = await Promise.all([
     getDashboardData(params.range),
-    getAppUsageData(resolvedRange, platform),
     getCoreAppLastSyncedAt(),
-    listInternalTestUsers(),
-    listInternalTestWorkshops(),
   ]);
 
   return (
@@ -53,7 +74,7 @@ export default async function AppUsagePage({
       data={data}
       section="usage"
       headerActions={
-        <AppUsagePlatformTabs rangeKey={rangeKey} active={usage.platform} />
+        <AppUsagePlatformTabs rangeKey={rangeKey} active={platform} />
       }
       headerSubtext={
         <>
@@ -64,11 +85,9 @@ export default async function AppUsagePage({
         </>
       }
     >
-      <AppUsageContent
-        usage={usage}
-        internalTestUsers={internalTestUsers}
-        internalTestWorkshops={internalTestWorkshops}
-      />
+      <Suspense fallback={<CeoPanelSkeleton />}>
+        <AppUsagePanel rangeKey={rangeKey} platform={platform} />
+      </Suspense>
     </DashboardShell>
   );
 }

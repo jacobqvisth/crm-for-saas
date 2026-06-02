@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
   calculateDashboardData,
   getDemoDashboardData,
@@ -62,7 +64,7 @@ function normalizeWorkshop(row: unknown): WarehouseWorkshop {
   };
 }
 
-export async function getDashboardData(
+async function getDashboardDataUncached(
   rangeParam?: string | string[],
 ): Promise<DashboardData> {
   const rangeKey = normalizeDashboardTimeRangeKey(rangeParam);
@@ -176,4 +178,18 @@ export async function getDashboardData(
     console.error("Dashboard data normalization failed", error);
     return getDemoDashboardData(range);
   }
+}
+
+// Cache keyed by the normalized range key (a stable string), tagged so the
+// "Update" refresh actions can bust it via revalidateTag(CEO_CACHE_TAG).
+const getDashboardDataCached = unstable_cache(
+  (rangeKey: string) => getDashboardDataUncached(rangeKey),
+  ["ceo-dashboard-data"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getDashboardData(
+  rangeParam?: string | string[],
+): Promise<DashboardData> {
+  return getDashboardDataCached(normalizeDashboardTimeRangeKey(rangeParam));
 }
