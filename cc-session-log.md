@@ -4245,3 +4245,14 @@ Session closed.
 - **Code:** API `src/app/api/roadmap/**` (boards/groups/items CRUD + Zod + `resolveWorkspace` guard); lib `src/lib/roadmap/{types,colors,scale,seed,server}.ts`; UI `src/app/(dashboard)/roadmap/page.tsx` + `src/components/roadmap/{roadmap-client,gantt-timeline,roadmap-bar,item-detail-panel}.tsx`; sidebar "Roadmap" entry; `/roadmap` added to middleware `protectedRoutes`. Test `e2e/roadmap.spec.ts`.
 - **Checks:** tsc ✅ · eslint ✅ · `next build` ✅ (6 /api/roadmap routes + /roadmap page compiled; Homebrew node on PATH to dodge the Codex.app SWC-bindings issue).
 - **Deploy:** Vercel auto-deploy on merge; `/roadmap` verified live (consistent 307 → /login when unauthenticated = route present + protected).
+
+## 2026-06-02 — Roadmap AI "Update" button (PR #324)
+
+- **Branch:** feature/roadmap-update-button · **PR:** #324 (squash-merged)
+- **What:** Added an "Update" button to the /roadmap header. It reads real internal CRM data and proposes a progress status + note for every plan item; the user reviews them in a modal and applies the ones they want.
+- **Evidence sweep** (`src/lib/roadmap/evidence.ts`, read-only, via the service-role client `createSupabaseServiceClient` — needed because `dashboard_review_snapshots` isn't in the generated types): review-platform snapshots (Google Business/Trustpilot/G2/…), total emails sent, per-country + per-language outreach (`contacts.last_contacted_at` + `country_code`/`language`), `dashboard_source_accounts` integration status, app users + activation counts.
+- **Reasoning:** `POST /api/roadmap/suggest-updates` feeds items+evidence to **Claude Sonnet 4.6** (`claude-sonnet-4-6`, validated against the API; plain-JSON parse like the other `/api/ai/*` routes), returns per-item `{suggested_status, progress_note, confidence}`, validated against the item set + status enum. Grounded only in evidence → social items with no signal stay "Not started".
+- **UI:** Update button (Sparkles) → `update-suggestions-modal.tsx` (current→suggested status, editable note, confidence chip, select/clear, apply). Optimistic apply via item PATCH (`Promise.allSettled`). Bars now show a status dot; detail panel has a Progress note field; `statusStyle()` added to `src/lib/roadmap/colors.ts`.
+- **Schema (migration `20260602114700_roadmap_progress_note.sql`, APPLIED to prod via psql/aws-1 pooler):** `roadmap_items.progress_note` + `progress_updated_at`; item PATCH accepts `progress_note` and stamps `progress_updated_at`.
+- **Checks:** tsc ✅ · eslint ✅ · `next build` ✅ (`/api/roadmap/suggest-updates` compiled). Sonnet model id + ANTHROPIC_API_KEY verified live (HTTP 200).
+- **Deploy:** Vercel auto-deploy on merge; verified live (suggest-updates GET→405 = route present, /roadmap→307).
