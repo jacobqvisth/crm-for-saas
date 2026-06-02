@@ -8,6 +8,7 @@ const protectedRoutes = [
   "/deals",
   "/sequences",
   "/lists",
+  "/roadmap",
   "/templates",
   "/settings",
   "/ceo",

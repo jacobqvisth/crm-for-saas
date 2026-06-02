@@ -2247,6 +2247,174 @@ export type Database = {
           },
         ]
       }
+      roadmap_groups: {
+        Row: {
+          collapsed: boolean
+          color: string
+          created_at: string
+          id: string
+          name: string
+          roadmap_id: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          roadmap_id: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          roadmap_id?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_groups_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_groups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_items: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          end_date: string
+          group_id: string
+          id: string
+          owner: string | null
+          phase: string | null
+          priority: string | null
+          roadmap_id: string
+          sort_order: number
+          start_date: string
+          status: string | null
+          team: string | null
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          end_date: string
+          group_id: string
+          id?: string
+          owner?: string | null
+          phase?: string | null
+          priority?: string | null
+          roadmap_id: string
+          sort_order?: number
+          start_date: string
+          status?: string | null
+          team?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string
+          group_id?: string
+          id?: string
+          owner?: string | null
+          phase?: string | null
+          priority?: string | null
+          roadmap_id?: string
+          sort_order?: number
+          start_date?: string
+          status?: string | null
+          team?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_items_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmaps: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmaps_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_stops: {
         Row: {
           company_id: string | null
