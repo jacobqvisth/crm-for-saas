@@ -10,7 +10,9 @@ import { parseDay } from "@/lib/roadmap/scale";
 
 // Columns are the item statuses. Items with no/unknown status fall into the
 // first column ("Not started") and get an explicit status once dragged.
-const COLUMNS = [...ITEM_STATUSES] as string[];
+// "Blocked" is intentionally not a board column — blocked items fold into
+// "Not started" here (Blocked is still selectable in the detail panel).
+const COLUMNS = (ITEM_STATUSES as readonly string[]).filter((s) => s !== "Blocked");
 const DEFAULT_COLUMN = ITEM_STATUSES[0]; // "Not started"
 
 interface RoadmapKanbanProps {
@@ -62,7 +64,7 @@ export function RoadmapKanban({ board, onChangeStatus, onSelectItem }: RoadmapKa
             return (
               <div
                 key={col}
-                className="flex w-72 shrink-0 flex-col rounded-xl border border-slate-200 bg-white"
+                className="flex w-96 shrink-0 flex-col rounded-xl border border-slate-200 bg-white"
               >
                 <div className="flex items-center gap-2 border-b border-slate-200 p-3">
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${s?.dot ?? "bg-slate-300"}`} />
