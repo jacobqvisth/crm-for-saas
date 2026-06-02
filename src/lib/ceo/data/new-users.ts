@@ -269,8 +269,10 @@ async function getNewUsersDataUncached(
     if (!cur || t < cur) firstDiagByUser.set(d.internal_user_id, t);
   }
 
+  // `range.end` is exclusive (start of the day after the range), so use a
+  // strict `<` — a signup at exactly midnight belongs to the next day.
   const inRange = (date: Date) =>
-    date <= range.end && (!range.start || date >= range.start);
+    date < range.end && (!range.start || date >= range.start);
 
   const signUpsByBucket = new Map<string, number>();
   for (const [, signupAt] of signupAtByUser) {

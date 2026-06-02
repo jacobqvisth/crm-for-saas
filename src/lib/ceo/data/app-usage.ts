@@ -5,7 +5,16 @@ import {
   isInternalTestUserOrWorkshopWith,
   loadInternalTestSets,
 } from "@/lib/ceo/internal-test/loader";
-import { addUtcDays, toIsoDate } from "@/lib/ceo/dates";
+import {
+  addStockholmDays,
+  addStockholmMonths,
+  getStockholmParts,
+  startOfStockholmDay,
+  startOfStockholmIsoWeek,
+  startOfStockholmMonth,
+  stockholmYearWeek,
+  toStockholmIsoDate,
+} from "@/lib/ceo/dates";
 import { getEnv, hasSupabaseConfig } from "@/lib/ceo/env";
 import { createGoogleAuth } from "@/lib/ceo/sync/google-auth";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
@@ -188,12 +197,14 @@ function ga4Dimension(granularity: AppUsageGranularity): string {
   }
 }
 
-// Enumerate every bucket key from `start` to `end` inclusive at the given
-// granularity. Lets callers seed their bucket set with all intervals in the
-// requested range — so days/hours/weeks with literally zero data still
-// render as zero rows on the chart and table instead of silently dropping.
-// Returns an empty array if `start` is null (open-ended ranges like
-// "all time" — caller should keep the union-of-data fallback for those).
+// Enumerate every bucket key in the half-open range [start, end) at the given
+// granularity, with all boundaries anchored to Stockholm civil time. Lets
+// callers seed their bucket set with every interval in the requested range —
+// so days/hours/weeks with literally zero data still render as zero rows on
+// the chart and table instead of silently dropping. `end` is EXCLUSIVE (it is
+// the start of the day after the range), so the boundary day is never drawn.
+// Returns an empty array if `start` is null (open-ended ranges like "all
+// time" — caller should keep the union-of-data fallback for those).
 export function enumerateBuckets(
   start: Date | null | undefined,
   end: Date,
@@ -202,16 +213,35 @@ export function enumerateBuckets(
   if (!start) return [];
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
   if (start.getTime() > end.getTime()) return [];
+  // Degenerate zero-width range → the single bucket the instant falls in.
+  if (start.getTime() === end.getTime()) return [bucketKey(start, granularity)];
 
   const keys: string[] = [];
   const seen = new Set<string>();
-  const cursor = new Date(start.getTime());
+  // Snap the cursor to the start of the period `start` falls in so day/week/
+  // month stepping stays aligned to Stockholm civil boundaries (DST-safe) and
+  // a mid-period `end` never collides with a stepped cursor.
+  let cursor: Date;
+  switch (granularity) {
+    case "day":
+      cursor = startOfStockholmDay(start);
+      break;
+    case "week":
+      cursor = startOfStockholmIsoWeek(start);
+      break;
+    case "month":
+      cursor = startOfStockholmMonth(start);
+      break;
+    default: // hour
+      cursor = new Date(start.getTime());
+  }
 
   // Guard against runaway loops if a caller hands us a 10-year hour range.
   // 10k buckets covers ~13 months of hours / ~27 years of days.
   const MAX_BUCKETS = 10_000;
+  const endMs = end.getTime();
 
-  while (cursor.getTime() <= end.getTime() && keys.length < MAX_BUCKETS) {
+  while (cursor.getTime() < endMs && keys.length < MAX_BUCKETS) {
     const key = bucketKey(cursor, granularity);
     if (!seen.has(key)) {
       seen.add(key);
@@ -219,16 +249,16 @@ export function enumerateBuckets(
     }
     switch (granularity) {
       case "hour":
-        cursor.setUTCHours(cursor.getUTCHours() + 1);
+        cursor = new Date(cursor.getTime() + 3_600_000);
         break;
       case "day":
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        cursor = addStockholmDays(cursor, 1);
         break;
       case "week":
-        cursor.setUTCDate(cursor.getUTCDate() + 7);
+        cursor = addStockholmDays(cursor, 7);
         break;
       case "month":
-        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        cursor = addStockholmMonths(cursor, 1);
         break;
     }
   }
@@ -237,10 +267,11 @@ export function enumerateBuckets(
 }
 
 export function bucketKey(date: Date, granularity: AppUsageGranularity): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  const hour = String(date.getUTCHours()).padStart(2, "0");
+  const p = getStockholmParts(date);
+  const year = p.year;
+  const month = String(p.month).padStart(2, "0");
+  const day = String(p.day).padStart(2, "0");
+  const hour = String(p.hour).padStart(2, "0");
 
   switch (granularity) {
     case "hour":
@@ -248,24 +279,10 @@ export function bucketKey(date: Date, granularity: AppUsageGranularity): string 
     case "day":
       return `${year}${month}${day}`;
     case "week":
-      return yearWeekFromDate(date);
+      return stockholmYearWeek(date);
     case "month":
       return `${year}${month}`;
   }
-}
-
-function yearWeekFromDate(date: Date) {
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const dayOfYear =
-    Math.floor((date.getTime() - yearStart.getTime()) / 86_400_000) + 1;
-  const week =
-    Math.floor((dayOfYear - 1 + yearStart.getUTCDay()) / 7) + 1;
-
-  return `${date.getUTCFullYear()}${String(week).padStart(2, "0")}`;
 }
 
 export function formatBucketLabel(
@@ -293,7 +310,7 @@ export function formatBucketLabel(
       });
       const hourPart = `${String(hour).padStart(2, "0")}:00`;
       return {
-        label: `${dayPart} ${hourPart} UTC`,
+        label: `${dayPart} ${hourPart}`,
         shortLabel: hourPart,
       };
     }
@@ -353,7 +370,7 @@ export function formatBucketLabel(
 
 function getStartDate(range: ResolvedDashboardRange) {
   if (range.start) {
-    return toIsoDate(range.start);
+    return toStockholmIsoDate(range.start);
   }
 
   return "365daysAgo";
@@ -551,7 +568,7 @@ async function getAppUsageDataUncached(
             dateRanges: [
               {
                 startDate: getStartDate(range),
-                endDate: toIsoDate(addUtcDays(range.end, -1)),
+                endDate: toStockholmIsoDate(addStockholmDays(range.end, -1)),
               },
             ],
             dimensions: [{ name: dimension }],

@@ -1,23 +1,30 @@
-import { addUtcDays, startOfUtcDay, toIsoDate } from "@/lib/ceo/dates";
+import {
+  addStockholmDays,
+  addStockholmMonths,
+  startOfStockholmDay,
+  startOfStockholmIsoWeek,
+  startOfStockholmMonth,
+  toStockholmIsoDate,
+} from "@/lib/ceo/dates";
 
 export const DASHBOARD_TIME_RANGES = [
   {
     key: "today",
     label: "Today",
     shortLabel: "Today",
-    description: "Since midnight UTC",
+    description: "Since midnight (Stockholm)",
   },
   {
     key: "yesterday",
     label: "Yesterday",
     shortLabel: "Yesterday",
-    description: "Previous UTC day",
+    description: "Previous day (Stockholm)",
   },
   {
     key: "last_7_days",
     label: "Last 7 days",
     shortLabel: "7D",
-    description: "Rolling week",
+    description: "7 complete days ending yesterday",
   },
   {
     key: "last_week",
@@ -115,19 +122,15 @@ export function resolveDashboardTimeRange(
   key: DashboardTimeRangeKey,
   now = new Date(),
 ): ResolvedDashboardRange {
-  const today = startOfUtcDay(now);
-  const tomorrow = addUtcDays(today, 1);
-  const monthStart = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
-  );
-  const lastMonthStart = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1),
-  );
-  // ISO week boundaries — week starts Monday (Jacob is in Sweden, ISO 8601).
-  // JS getUTCDay() returns 0=Sun..6=Sat; map to Mon-anchored (0..6 where 0=Mon).
-  const daysSinceMonday = (today.getUTCDay() + 6) % 7;
-  const thisWeekMonday = addUtcDays(today, -daysSinceMonday);
-  const lastWeekMonday = addUtcDays(thisWeekMonday, -7);
+  // All boundaries are Stockholm civil-day midnights (see dates.ts). `end` is
+  // always EXCLUSIVE — the half-open interval [start, end).
+  const today = startOfStockholmDay(now);
+  const tomorrow = addStockholmDays(today, 1);
+  const monthStart = startOfStockholmMonth(now);
+  const lastMonthStart = addStockholmMonths(monthStart, -1);
+  // ISO week — Monday-anchored (Jacob is in Sweden, ISO 8601).
+  const thisWeekMonday = startOfStockholmIsoWeek(now);
+  const lastWeekMonday = addStockholmDays(thisWeekMonday, -7);
   const definition = DASHBOARD_TIME_RANGES.find((range) => range.key === key)!;
 
   switch (key) {
@@ -137,15 +140,18 @@ export function resolveDashboardTimeRange(
       return {
         key,
         label: definition.label,
-        start: addUtcDays(today, -1),
+        start: addStockholmDays(today, -1),
         end: today,
       };
+    // Rolling windows are N complete days ending YESTERDAY (end = start of
+    // today, exclusive). Today is intentionally excluded — it's a partial,
+    // still-syncing day; use the "Today" filter to see it on its own.
     case "last_7_days":
       return {
         key,
         label: definition.label,
-        start: addUtcDays(tomorrow, -7),
-        end: tomorrow,
+        start: addStockholmDays(today, -7),
+        end: today,
       };
     case "last_week":
       return {
@@ -167,8 +173,8 @@ export function resolveDashboardTimeRange(
       return {
         key,
         label: definition.label,
-        start: addUtcDays(tomorrow, -90),
-        end: tomorrow,
+        start: addStockholmDays(today, -90),
+        end: today,
       };
     case "all_time":
       return { key, label: definition.label, start: null, end: tomorrow };
@@ -177,8 +183,8 @@ export function resolveDashboardTimeRange(
       return {
         key: "last_30_days",
         label: "Last 30 days",
-        start: addUtcDays(tomorrow, -30),
-        end: tomorrow,
+        start: addStockholmDays(today, -30),
+        end: today,
       };
   }
 }
@@ -189,7 +195,7 @@ export function formatRangeDateSpan(
 ) {
   if (range.key === "all_time") {
     return firstSyncedAt
-      ? `Since ${toIsoDate(new Date(firstSyncedAt))}`
+      ? `Since ${toStockholmIsoDate(new Date(firstSyncedAt))}`
       : "Waiting for first synced metric";
   }
 
@@ -197,11 +203,13 @@ export function formatRangeDateSpan(
     return "All synced history";
   }
 
-  const inclusiveEnd = addUtcDays(range.end, -1);
+  // `end` is exclusive (start of the day after the range) → step back one
+  // Stockholm day to get the last day actually included.
+  const inclusiveEnd = addStockholmDays(range.end, -1);
 
-  if (toIsoDate(range.start) === toIsoDate(inclusiveEnd)) {
-    return toIsoDate(range.start);
+  if (toStockholmIsoDate(range.start) === toStockholmIsoDate(inclusiveEnd)) {
+    return toStockholmIsoDate(range.start);
   }
 
-  return `${toIsoDate(range.start)} to ${toIsoDate(inclusiveEnd)}`;
+  return `${toStockholmIsoDate(range.start)} to ${toStockholmIsoDate(inclusiveEnd)}`;
 }
