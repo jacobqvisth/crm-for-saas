@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
   isInternalTestUserOrWorkshopWith,
   isInternalTestWorkshopIdWith,
@@ -459,7 +461,20 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
   };
 }
 
-export async function getWorkshopDrilldownList(
+const getWorkshopDrilldownListCached = unstable_cache(
+  (includeInternal: boolean) =>
+    getWorkshopDrilldownListUncached({ includeInternal }),
+  ["ceo-workshop-list"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getWorkshopDrilldownList(
+  options: { includeInternal?: boolean } = {},
+) {
+  return getWorkshopDrilldownListCached(options.includeInternal ?? false);
+}
+
+async function getWorkshopDrilldownListUncached(
   options: { includeInternal?: boolean } = {},
 ) {
   const tables = await fetchWarehouseTables(options);
@@ -473,7 +488,23 @@ export async function getWorkshopDrilldownList(
   );
 }
 
-export async function getWorkshopDetail(
+const getWorkshopDetailCached = unstable_cache(
+  (workshopId: string) => getWorkshopDetailUncached(workshopId),
+  ["ceo-workshop-detail"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getWorkshopDetail(
+  workshopId: string,
+  options: { includeInternal?: boolean } = {},
+) {
+  // Detail always loads the workshop regardless of the internal toggle, so the
+  // cache key is just the workshopId.
+  void options;
+  return getWorkshopDetailCached(workshopId);
+}
+
+async function getWorkshopDetailUncached(
   workshopId: string,
   options: { includeInternal?: boolean } = {},
 ) {

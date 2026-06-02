@@ -3,7 +3,9 @@
 // shapes them for rendering. No transformations beyond unpacking the
 // JSONB columns into typed objects so the component layer stays dumb.
 
+import { unstable_cache } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import type { DomainHealthCheck } from "@/lib/domain-health";
 
 // Keep in sync with DEFAULT_DOMAINS in /api/cron/domain-health/route.ts.
@@ -47,7 +49,13 @@ export async function getDomainHealthData(
   return getOneDomain(domain, limit);
 }
 
-export async function getAllDomainHealthData(
+export const getAllDomainHealthData = unstable_cache(
+  getAllDomainHealthDataUncached,
+  ["ceo-domain-health-all"],
+  CEO_CACHE_OPTIONS,
+);
+
+async function getAllDomainHealthDataUncached(
   limit = 30,
 ): Promise<DomainHealthPageData[]> {
   return Promise.all(TRACKED_DOMAINS.map((d) => getOneDomain(d, limit)));

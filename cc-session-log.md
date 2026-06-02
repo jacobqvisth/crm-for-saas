@@ -4224,3 +4224,13 @@ Session closed.
 - **No behaviour change:** URL param key stays `"all"`; existing links unaffected.
 - **Checks:** tsc ✅ · eslint (changed files) ✅ · vitest app-usage.test.ts 7/7 ✅
 - **Deploy:** Vercel auto-deploy on merge to main.
+
+## 2026-06-02 — Speed up all /ceo/* pages (caching + streaming)
+
+- **Branch:** perf/ceo-cache-streaming
+- **Problem:** Every /ceo/* page was `dynamic = "force-dynamic"` with zero caching, so each navigation re-ran the shared `getDashboardData()` (6 parallel Supabase reads, 3 of them unbounded pageAll loops) plus heavy per-page loaders (GA4 runReport, conversions RPC, 5-table workshop scans). Several seconds per page.
+- **Caching:** Wrapped 9 CEO data loaders in `unstable_cache` (5-min TTL, shared `ceo-data` tag) via new `src/lib/ceo/cache.ts`. Range-taking loaders cache by the stable `range.key` string (resolve range inside the cached fn) so keys stay primitive and public signatures are unchanged. Loaders: getDashboardData, getAppUsageData, getConversionsData, getNewUsersData, getWorkshopDrilldownList, getWorkshopDetail, getPilotStatsData, getCtaClicksData, getAllDomainHealthData, getCoreAppLastSyncedAt.
+- **Cache busting:** The 5 refresh server actions (app-usage/new-users/cta-clicks/pilot-stats/settings) now call `updateTag("ceo-data")` so the "Update" button forces fresh data immediately (Next 16's single-arg, server-action-only, read-your-own-writes invalidator — `revalidateTag` now requires a 2nd `profile` arg).
+- **Streaming:** Added route-group `src/app/(ceo)/ceo/loading.tsx` skeleton (instant nav feedback; sidebar persists from layout). Refactored the 8 heavy pages to `await getDashboardData` (cached/fast) → render shell → stream the heavy panel inside `<Suspense fallback={<CeoPanelSkeleton/>}>` (new `src/components/ceo/panel-skeleton.tsx`). Section pages (overview/acquisition/lifecycle/product/operations/revenue/organic-search/data-health) get instant loads from caching alone — no Suspense needed.
+- **No data/behaviour change:** caching/streaming only; numbers unchanged. Decisions: 5-min window + streaming (confirmed with Jacob).
+- **Checks:** tsc ✅ · eslint ✅ · vitest src/lib/ceo/data 18/18 ✅ · next build ✅ (all /ceo routes ƒ dynamic).

@@ -3,6 +3,8 @@
 // by discover-new.ts when a wl-app signup lands at a company that already
 // had prospect contacts.
 
+import { unstable_cache } from "next/cache";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 
 const WRENCHLANE_WORKSPACE_ID = "d946ea1f-74b4-492e-ae6a-d50f59ff04f0";
@@ -26,7 +28,13 @@ export type ConversionsData = {
   rows: ConversionRow[];
 };
 
-export async function getConversionsData(
+export const getConversionsData = unstable_cache(
+  getConversionsDataUncached,
+  ["ceo-conversions"],
+  CEO_CACHE_OPTIONS,
+);
+
+async function getConversionsDataUncached(
   sinceIso: string,
 ): Promise<ConversionsData> {
   const supabase = createSupabaseServiceClient();

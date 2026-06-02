@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { type DashboardRoutePageProps } from "@/components/ceo/dashboard-page";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { NewUsersContent } from "@/components/ceo/new-users-content";
+import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getNewUsersData } from "@/lib/ceo/data/new-users";
@@ -17,15 +19,24 @@ import { refreshNewUsersAction } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+async function NewUsersPanel({ rangeKey }: { rangeKey: string }) {
+  const newUsers = await getNewUsersData(
+    resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+  );
+  return <NewUsersContent data={newUsers} />;
+}
+
 export default async function NewUsersPage({
   searchParams,
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
-  const resolvedRange = resolveDashboardTimeRange(rangeKey);
-  const [data, newUsers, lastSyncedAt] = await Promise.all([
+
+  // getDashboardData + the "last synced" stamp are cached and cheap — await
+  // them so the shell + header render immediately, then stream the heavier
+  // new-users aggregation panel.
+  const [data, lastSyncedAt] = await Promise.all([
     getDashboardData(params.range),
-    getNewUsersData(resolvedRange),
     getCoreAppLastSyncedAt(),
   ]);
 
@@ -42,7 +53,9 @@ export default async function NewUsersPage({
         </>
       }
     >
-      <NewUsersContent data={newUsers} />
+      <Suspense fallback={<CeoPanelSkeleton />}>
+        <NewUsersPanel rangeKey={rangeKey} />
+      </Suspense>
     </DashboardShell>
   );
 }

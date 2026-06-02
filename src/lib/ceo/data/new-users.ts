@@ -9,11 +9,17 @@ import {
   formatBucketLabel,
   granularityFromRange,
 } from "@/lib/ceo/data/app-usage";
+import { unstable_cache } from "next/cache";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
-import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
+import {
+  type ResolvedDashboardRange,
+  normalizeDashboardTimeRangeKey,
+  resolveDashboardTimeRange,
+} from "@/lib/ceo/time-ranges";
 
 export type NewUsersGranularity = AppUsageGranularity;
 
@@ -85,7 +91,25 @@ function emptyData(
   };
 }
 
-export async function getNewUsersData(
+// Cache by the range's stable key string (resolving a fresh range inside the
+// cached fn) so the cache key stays a clean primitive and the public
+// signature is unchanged. Tagged ceo-data so the Update button busts it.
+const getNewUsersDataCached = unstable_cache(
+  (rangeKey: string) =>
+    getNewUsersDataUncached(
+      resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+    ),
+  ["ceo-new-users"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getNewUsersData(
+  range: ResolvedDashboardRange,
+): Promise<NewUsersData> {
+  return getNewUsersDataCached(range.key);
+}
+
+async function getNewUsersDataUncached(
   range: ResolvedDashboardRange,
 ): Promise<NewUsersData> {
   const granularity = granularityFromRange(range);
