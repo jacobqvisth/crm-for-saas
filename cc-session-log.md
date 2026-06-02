@@ -4234,3 +4234,14 @@ Session closed.
 - **Streaming:** Added route-group `src/app/(ceo)/ceo/loading.tsx` skeleton (instant nav feedback; sidebar persists from layout). Refactored the 8 heavy pages to `await getDashboardData` (cached/fast) → render shell → stream the heavy panel inside `<Suspense fallback={<CeoPanelSkeleton/>}>` (new `src/components/ceo/panel-skeleton.tsx`). Section pages (overview/acquisition/lifecycle/product/operations/revenue/organic-search/data-health) get instant loads from caching alone — no Suspense needed.
 - **No data/behaviour change:** caching/streaming only; numbers unchanged. Decisions: 5-min window + streaming (confirmed with Jacob).
 - **Checks:** tsc ✅ · eslint ✅ · vitest src/lib/ceo/data 18/18 ✅ · next build ✅ (all /ceo routes ƒ dynamic).
+
+## 2026-06-02 — New /roadmap page: Miro/Jira-style Gantt timeline (PR #322)
+
+- **Branch:** feature/roadmap-pr1-schema · **PR:** #322 (squash-merged)
+- **What:** Brand-new `/roadmap` page Jacob requested from Miro screenshots — a timeline (Gantt) board with swimlane groups and color-coded date bars you **drag to move** and **drag the edges to resize** (snap to whole days, optimistic persist). Click a bar → slide-over detail panel (Title, Description, Status, Owner, Start/End, Phase, Priority, Team, color). Add/delete items & groups, collapse/rename/recolor swimlanes, Day/Week/Month zoom, Today marker, multiple named boards with picker + inline rename.
+- **Seed:** a default "WL Marketing" board is **lazily seeded on first GET** (Email/Ads/Social Media/Reaction videos/Reviews/Lifecycle) recreating the screenshot — fully editable.
+- **Approach:** custom Gantt on Tailwind + native Pointer Events — **no new deps**, no Gantt lib (@hello-pangea/dnd is list-reorder, not time-axis drag).
+- **Schema (migration `20260602095000_roadmap_tables.sql`, APPLIED to prod):** `roadmaps` / `roadmap_groups` / `roadmap_items`, workspace-scoped RLS (`get_user_workspace_ids()`), indexes, updated_at triggers, `end_date >= start_date` CHECK. Tables hand-added to `database.types.ts`. Applied via psql over the `aws-1-eu-north-1` session pooler with `SUPABASE_DB_PASSWORD`.
+- **Code:** API `src/app/api/roadmap/**` (boards/groups/items CRUD + Zod + `resolveWorkspace` guard); lib `src/lib/roadmap/{types,colors,scale,seed,server}.ts`; UI `src/app/(dashboard)/roadmap/page.tsx` + `src/components/roadmap/{roadmap-client,gantt-timeline,roadmap-bar,item-detail-panel}.tsx`; sidebar "Roadmap" entry; `/roadmap` added to middleware `protectedRoutes`. Test `e2e/roadmap.spec.ts`.
+- **Checks:** tsc ✅ · eslint ✅ · `next build` ✅ (6 /api/roadmap routes + /roadmap page compiled; Homebrew node on PATH to dodge the Codex.app SWC-bindings issue).
+- **Deploy:** Vercel auto-deploy on merge; `/roadmap` verified live (consistent 307 → /login when unauthenticated = route present + protected).
