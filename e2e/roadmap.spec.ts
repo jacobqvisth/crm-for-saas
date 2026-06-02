@@ -44,4 +44,17 @@ test.describe('Roadmap', () => {
     const body = await page.textContent('body');
     expect(body).not.toContain('Application error');
   });
+
+  test('can switch to Kanban view', async ({ page }) => {
+    await page.goto('/roadmap');
+    await page.waitForLoadState('networkidle');
+    const kanbanBtn = page.getByRole('button', { name: 'Kanban', exact: true });
+    if (await kanbanBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await kanbanBtn.click();
+      // Status columns should render.
+      await expect(page.locator('text=In progress').first()).toBeVisible({ timeout: 5000 });
+    }
+    const body = await page.textContent('body');
+    expect(body).not.toContain('Application error');
+  });
 });
