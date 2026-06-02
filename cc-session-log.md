@@ -4256,3 +4256,12 @@ Session closed.
 - **Schema (migration `20260602114700_roadmap_progress_note.sql`, APPLIED to prod via psql/aws-1 pooler):** `roadmap_items.progress_note` + `progress_updated_at`; item PATCH accepts `progress_note` and stamps `progress_updated_at`.
 - **Checks:** tsc ✅ · eslint ✅ · `next build` ✅ (`/api/roadmap/suggest-updates` compiled). Sonnet model id + ANTHROPIC_API_KEY verified live (HTTP 200).
 - **Deploy:** Vercel auto-deploy on merge; verified live (suggest-updates GET→405 = route present, /roadmap→307).
+
+## 2026-06-02 — Roadmap Kanban view toggle (PR #327)
+
+- **Branch:** feature/roadmap-kanban-view · **PR:** #327 (squash-merged)
+- **What:** Added a Timeline ↔ Kanban toggle to the /roadmap header. Kanban shows every plan item as a card in a column per status (Not started / In progress / Done / Blocked); dragging a card to another column updates the item's `status` (optimistic + persisted via item PATCH).
+- **Impl:** `src/components/roadmap/roadmap-kanban.tsx` (columns + cards via `@hello-pangea/dnd`, same pattern as the deals pipeline board). Items with null/unknown status fall into "Not started" and get an explicit status on drag. `roadmap-client.tsx`: `view` state persisted to `localStorage` (`roadmap:view`), header toggle (GanttChart/Columns3), zoom+Today are timeline-only, `onChangeStatus → saveItem(id,{status})`. Cards show swimlane + dates + AI progress note; click opens the shared detail panel.
+- **No schema change** — reuses `roadmap_items.status` (pairs with the AI Update button which sets statuses).
+- **Checks:** tsc ✅ · eslint ✅ · `next build` ✅. `e2e/roadmap.spec.ts` extended with a Kanban-toggle test.
+- **Deploy:** Vercel auto-deploy on merge (frontend-only; /roadmap stays healthy).
