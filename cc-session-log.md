@@ -4214,3 +4214,13 @@ Session closed.
 **Untouched:** `contacts.last_contacted_at` itself stays in the schema and is still used by check-replies + the list-builder "Last Contacted (replied)" smart-list field (`src/lib/lists/filter-query.ts:46`). Stored column preferences keyed under the old `last_contacted_at` id will silently drop on load (filtered out as invalid) — re-add the column from the Columns menu after deploy.
 
 **Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `next build --webpack` compiled successfully in worktree (after `PATH=/opt/homebrew/bin:$PATH` to dodge the Codex.app Node-bindings issue).
+
+## 2026-06-02 — Rename /ceo/app-usage "All" tab → "All apps" (PR #318)
+
+- **Branch:** chore/all-apps-tab-rename
+- **PR:** #318 (squash-merged)
+- **What:** Renamed the app-usage platform tab "All" → "All apps" (label + shortLabel + description in `src/lib/ceo/data/app-usage.ts`, plus the platform-filter tooltip strings in `src/components/ceo/app-usage-content.tsx`).
+- **Why:** "All" is product-only (web app + iOS + Android), deliberately excluding the marketing site. Labelled "All" it read as a grand total, so the Marketing tab (anonymous wrenchlane.com visitors, ~944 users) exceeding "All" (~237 product users) looked like a bug — it wasn't. "All apps" signals the three app surfaces; Marketing stays separate per Jacob's call.
+- **No behaviour change:** URL param key stays `"all"`; existing links unaffected.
+- **Checks:** tsc ✅ · eslint (changed files) ✅ · vitest app-usage.test.ts 7/7 ✅
+- **Deploy:** Vercel auto-deploy on merge to main.
