@@ -119,6 +119,6 @@ export async function updateDomainPortfolioRowAction(
     return { ok: false, error: error.message };
   }
 
-  revalidatePath("/ceo/domain-portfolio");
+  revalidatePath("/domain-portfolio");
   return { ok: true };
 }

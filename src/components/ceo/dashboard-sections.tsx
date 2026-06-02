@@ -39,7 +39,6 @@ export type DashboardSectionKey =
   | "revenue"
   | "data-health"
   | "domain-health"
-  | "domain-portfolio"
   | "settings";
 
 type DashboardSectionConfig = {
@@ -186,15 +185,6 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Domain Health",
     description:
       "Daily DNS auth, blocklist, and send-rate snapshot for wrenchlane.com. Alerts when bounce rate, unsubscribe rate, or send volume signals deliverability risk.",
-  },
-  {
-    key: "domain-portfolio",
-    label: "Domain Portfolio",
-    glyph: "DP",
-    href: "/ceo/domain-portfolio",
-    title: "Domain Portfolio",
-    description:
-      "European TLD recommendations + decision tracker. Pick which ccTLDs to buy per country, mark planning/bought/installed, and link bought rows to /ceo/domain-health.",
   },
   {
     key: "settings",
