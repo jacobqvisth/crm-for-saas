@@ -36,10 +36,10 @@ export type AppUsagePlatformOption = {
 export const APP_USAGE_PLATFORMS: readonly AppUsagePlatformOption[] = [
   {
     key: "all",
-    label: "All",
-    shortLabel: "All",
+    label: "All apps",
+    shortLabel: "All apps",
     description:
-      "Product activity only, summed across web app (app.wrenchlane.com), iOS, and Android. Marketing-site visits to wrenchlane.com are NOT included here — pick the Marketing filter for those. All ≈ Web app + iOS + Android.",
+      "Product activity only, summed across web app (app.wrenchlane.com), iOS, and Android. Marketing-site visits to wrenchlane.com are NOT included here — pick the Marketing filter for those. All apps ≈ Web app + iOS + Android.",
   },
   {
     key: "web",
