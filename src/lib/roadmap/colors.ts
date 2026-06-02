@@ -74,3 +74,23 @@ export function isColorToken(value: string | null | undefined): value is ColorTo
 export function colorClasses(token: string | null | undefined): ColorClasses {
   return isColorToken(token) ? MAP[token] : MAP.blue;
 }
+
+// Visual styling for an item's progress status (used on bars, the detail panel,
+// and the AI-suggestions modal). Keyed by the ITEM_STATUSES labels.
+export interface StatusStyle {
+  dot: string;
+  pill: string;
+  label: string;
+}
+
+const STATUS_STYLES: Record<string, StatusStyle> = {
+  "Done": { dot: "bg-green-500", pill: "bg-green-100 text-green-800", label: "Done" },
+  "In progress": { dot: "bg-blue-500", pill: "bg-blue-100 text-blue-800", label: "In progress" },
+  "Blocked": { dot: "bg-red-500", pill: "bg-red-100 text-red-800", label: "Blocked" },
+  "Not started": { dot: "bg-slate-300", pill: "bg-slate-100 text-slate-600", label: "Not started" },
+};
+
+export function statusStyle(status: string | null | undefined): StatusStyle | null {
+  if (!status) return null;
+  return STATUS_STYLES[status] ?? { dot: "bg-slate-300", pill: "bg-slate-100 text-slate-600", label: status };
+}

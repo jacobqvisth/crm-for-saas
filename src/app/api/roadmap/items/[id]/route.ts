@@ -19,6 +19,7 @@ const patchSchema = z.object({
   priority: z.string().max(100).nullish(),
   team: z.string().max(200).nullish(),
   color: z.enum(COLOR_TOKENS).nullish(),
+  progress_note: z.string().max(280).nullish(),
   sort_order: z.number().int().optional(),
 });
 
@@ -62,9 +63,15 @@ export async function PATCH(
 
   if (patch.title !== undefined) patch.title = patch.title.trim() || "New item";
 
+  // Stamp when a progress note is written/cleared (powers "updated Xd ago").
+  const update: typeof patch & { progress_updated_at?: string } = { ...patch };
+  if ("progress_note" in patch) {
+    update.progress_updated_at = new Date().toISOString();
+  }
+
   const { data: item, error } = await supabase
     .from("roadmap_items")
-    .update(patch)
+    .update(update)
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .select()

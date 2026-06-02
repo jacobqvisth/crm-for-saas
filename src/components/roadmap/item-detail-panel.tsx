@@ -27,6 +27,7 @@ type Form = {
   priority: string;
   team: string;
   color: string; // "" = inherit swimlane
+  progress_note: string;
 };
 
 function toForm(item: RoadmapItem): Form {
@@ -42,6 +43,7 @@ function toForm(item: RoadmapItem): Form {
     priority: item.priority ?? "",
     team: item.team ?? "",
     color: item.color ?? "",
+    progress_note: item.progress_note ?? "",
   };
 }
 
@@ -81,6 +83,7 @@ export function ItemDetailPanel({
       priority: form.priority || null,
       team: form.team || null,
       color: (form.color || null) as RoadmapItem["color"],
+      progress_note: form.progress_note || null,
     });
     onClose();
   }
@@ -111,6 +114,24 @@ export function ItemDetailPanel({
             placeholder="Add a description…"
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className={labelClass}>
+            Progress note
+            {item.progress_updated_at && (
+              <span className="ml-2 font-normal text-slate-400">
+                updated {new Date(item.progress_updated_at).toLocaleDateString()}
+              </span>
+            )}
+          </label>
+          <textarea
+            className={`${inputClass} resize-none`}
+            rows={2}
+            placeholder="What's actually been done so far… (the Update button fills this in)"
+            value={form.progress_note}
+            onChange={(e) => set("progress_note", e.target.value)}
           />
         </div>
 
