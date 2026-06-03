@@ -14,6 +14,20 @@ updated: 2026-05-26
 
 ---
 
+## 2026-06-03 — Active Users page: wider/scrollable table + 11 more per-user columns
+
+**Branch:** `worktree-active-users-columns` → main (squash merge). Follow-up to the page below, per Jacob's request to widen the table, make it side-scrollable, and surface more per-user info.
+
+**UI:** Table is now horizontally scrollable with a **pinned User column** (CSS `.active-users-table` in ceo-legacy.css: `min-width:1680px`, `white-space:nowrap` per cell, `position:sticky;left:0` on `.col-user`, `.col-actions` allowed to wrap within 240–320px). Each column fits on one line now instead of wrapping.
+
+**New columns / data:** Added GA4 `userEngagementDuration` (→ "Engaged" column + a 5th "Engaged time" KPI). Expanded the contacts select and added a company firmographics pass, surfacing: Plan (company.plan ?? user_plan_type), Subscription (user_subscription_status ?? company.customer_status), Lifecycle (company.lifecycle_stage), Location (city, country), Diag. lifetime (diagnostics_total), Logins (login_count), Credits (credits_remaining), Signed up (created_at). Title is fetched into the row data but not yet shown. Null-safe rendering ("—").
+
+**Files:** `src/lib/ceo/data/active-users.ts` (types + queries + mapping), `src/components/ceo/active-users-content.tsx` (columns + duration/date formatters + KPI), `src/app/(ceo)/ceo-legacy.css` (table CSS append).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `next build --webpack` builds `/ceo/active-users` · 8/8 smoke tests pass.
+
+---
+
 ## 2026-06-03 — Active Users page: per-user logged-in activity on app.wrenchlane.com (/ceo/active-users)
 
 **Branch:** `worktree-ceo-active-users` → main (squash merge).
