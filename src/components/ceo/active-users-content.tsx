@@ -66,6 +66,109 @@ function userLabel(row: ActiveUsersData["rows"][number]): {
 
 const NUM = { textAlign: "right" as const };
 
+// Per-column "where it comes from / how it's calculated" copy for the header
+// info hints. Source-of-truth lives here so the table headers stay terse.
+const COLUMN_INFO = {
+  user: {
+    title: "User",
+    body: "The identified app user. Name + email come from the matching CRM contact (joined on contacts.wl_user_id = the Cognito sub). Users seen in GA4 / diagnostics but not yet in the CRM show a shortened crm_user_id and 'Not in CRM yet'.",
+    sources: ["contacts.first_name / last_name / email / wl_user_id"],
+  },
+  company: {
+    title: "Company",
+    body: "The workshop this contact belongs to. From the company linked via contacts.company_id → companies.name.",
+    sources: ["companies.name"],
+  },
+  plan: {
+    title: "Plan",
+    body: "The workshop's plan. Uses the company's plan; if the contact has no company, falls back to the per-user plan type.",
+    sources: ["companies.plan", "contacts.user_plan_type"],
+  },
+  subscription: {
+    title: "Subscription",
+    body: "Billing/subscription state. Uses the contact's user_subscription_status; falls back to the company's customer_status when absent.",
+    sources: ["contacts.user_subscription_status", "companies.customer_status"],
+  },
+  lifecycle: {
+    title: "Lifecycle",
+    body: "Sales/CS funnel stage of the workshop (lead, mql, sql, trial, paying, churned, reactivation).",
+    sources: ["companies.lifecycle_stage"],
+  },
+  role: {
+    title: "Role",
+    body: "The user's role inside their workshop in the app — admin or mechanic.",
+    sources: ["contacts.app_role"],
+  },
+  crmStatus: {
+    title: "CRM status",
+    body: "The contact's lead status in the CRM (new, contacted, engaged, qualified, customer, unqualified, churned). This is the sales-pipeline status, distinct from the billing Subscription column.",
+    sources: ["contacts.lead_status"],
+  },
+  location: {
+    title: "Location",
+    body: "City and country stored on the CRM contact. May be empty for app users we haven't enriched. This is CRM-entered, not GA4 geo-IP.",
+    sources: ["contacts.city", "contacts.country"],
+  },
+  sessions: {
+    title: "Sessions",
+    body: "GA4 sessions this user had on the web app in the selected range. A session is a period of activity; GA4 starts a new one after 30 min idle or at midnight.",
+    sources: [
+      "GA4 metric: sessions",
+      "customUser:crm_user_id, hostName = app.wrenchlane.com",
+    ],
+  },
+  pageViews: {
+    title: "Page views",
+    body: "GA4 screen/page views (screenPageViews) by this user on the web app in range. Counts repeat views.",
+    sources: ["GA4 metric: screenPageViews", "hostName = app.wrenchlane.com"],
+  },
+  events: {
+    title: "Events",
+    body: "Total GA4 events fired by this user on the web app in range — every page_view, session_start, cta_click, scroll, user_identified, etc. counts as one event. The table is sorted by this.",
+    sources: ["GA4 metric: eventCount", "hostName = app.wrenchlane.com"],
+  },
+  engaged: {
+    title: "Engaged time",
+    body: "GA4 user-engagement duration on the web app in range — cumulative time the app tab was focused and active for this user. Shown as s / m / h. Not wall-clock time on the page.",
+    sources: ["GA4 metric: userEngagementDuration"],
+  },
+  diagRange: {
+    title: "Diagnostics (range)",
+    body: "Count of first-party diagnostic records this user created during the selected range. Keyed on dashboard_diagnostics.internal_user_id = the same Cognito sub. Independent of GA4.",
+    sources: ["dashboard_diagnostics (created_at in range)"],
+  },
+  diagLifetime: {
+    title: "Diagnostics (lifetime)",
+    body: "All-time diagnostics total for this user, precomputed on the CRM contact — not limited to the selected range. '—' means the field isn't populated for this contact.",
+    sources: ["contacts.diagnostics_total"],
+  },
+  logins: {
+    title: "Logins",
+    body: "Lifetime login count stored on the CRM contact (cumulative, not range-scoped). '—' if not tracked for this user.",
+    sources: ["contacts.login_count"],
+  },
+  credits: {
+    title: "Credits",
+    body: "Diagnostic credits remaining on the user's account, as last synced to the CRM contact. '—' if not set.",
+    sources: ["contacts.credits_remaining"],
+  },
+  topActions: {
+    title: "Top actions",
+    body: "This user's most frequent GA4 event types in range, each with its count, highest first (up to 5). Built from a per-user × eventName GA4 query on the web app. Shows what they actually did — e.g. cta_click, page_view, scroll_depth, form_submit.",
+    sources: ["GA4: customUser:crm_user_id × eventName, metric eventCount"],
+  },
+  signedUp: {
+    title: "Signed up",
+    body: "When this contact record was created in the CRM — a proxy for account signup date. Shown in Stockholm time.",
+    sources: ["contacts.created_at"],
+  },
+  lastActive: {
+    title: "Last active",
+    body: "Most recent activity timestamp recorded on the CRM contact, in Stockholm time. Synced from app activity; may lag the live GA4 numbers in the other columns.",
+    sources: ["contacts.last_active_at"],
+  },
+};
+
 export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
   const { totals, rows } = data;
 
@@ -194,25 +297,120 @@ export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
             <table className="data-table active-users-table">
               <thead>
                 <tr>
-                  <th className="col-user">User</th>
-                  <th>Company</th>
-                  <th>Plan</th>
-                  <th>Subscription</th>
-                  <th>Lifecycle</th>
-                  <th>Role</th>
-                  <th>CRM status</th>
-                  <th>Location</th>
-                  <th style={NUM}>Sessions</th>
-                  <th style={NUM}>Page views</th>
-                  <th style={NUM}>Events</th>
-                  <th style={NUM}>Engaged</th>
-                  <th style={NUM}>Diag. (range)</th>
-                  <th style={NUM}>Diag. (lifetime)</th>
-                  <th style={NUM}>Logins</th>
-                  <th style={NUM}>Credits</th>
-                  <th className="col-actions">Top actions</th>
-                  <th>Signed up</th>
-                  <th>Last active</th>
+                  <th className="col-user">
+                    <span className="table-heading-info">
+                      User
+                      <InfoHint info={COLUMN_INFO.user} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Company
+                      <InfoHint info={COLUMN_INFO.company} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Plan
+                      <InfoHint info={COLUMN_INFO.plan} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Subscription
+                      <InfoHint info={COLUMN_INFO.subscription} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Lifecycle
+                      <InfoHint info={COLUMN_INFO.lifecycle} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Role
+                      <InfoHint info={COLUMN_INFO.role} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      CRM status
+                      <InfoHint info={COLUMN_INFO.crmStatus} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Location
+                      <InfoHint info={COLUMN_INFO.location} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Sessions
+                      <InfoHint info={COLUMN_INFO.sessions} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Page views
+                      <InfoHint info={COLUMN_INFO.pageViews} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Events
+                      <InfoHint info={COLUMN_INFO.events} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Engaged
+                      <InfoHint info={COLUMN_INFO.engaged} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Diag. (range)
+                      <InfoHint info={COLUMN_INFO.diagRange} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Diag. (lifetime)
+                      <InfoHint info={COLUMN_INFO.diagLifetime} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Logins
+                      <InfoHint info={COLUMN_INFO.logins} />
+                    </span>
+                  </th>
+                  <th style={NUM}>
+                    <span className="table-heading-info">
+                      Credits
+                      <InfoHint info={COLUMN_INFO.credits} />
+                    </span>
+                  </th>
+                  <th className="col-actions">
+                    <span className="table-heading-info">
+                      Top actions
+                      <InfoHint info={COLUMN_INFO.topActions} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Signed up
+                      <InfoHint info={COLUMN_INFO.signedUp} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="table-heading-info">
+                      Last active
+                      <InfoHint info={COLUMN_INFO.lastActive} />
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
