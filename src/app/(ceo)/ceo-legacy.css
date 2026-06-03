@@ -2074,3 +2074,14 @@ a {
 .active-users-table thead th.col-user {
   z-index: 3;
 }
+
+/* Active Users column headers use the shared .table-heading-info (label + info
+   icon) but keep the table's normal casing instead of the uppercase default.
+   Right-aligned numeric headers push the label+icon to the right edge. */
+.active-users-table .table-heading-info {
+  text-transform: none;
+}
+
+.active-users-table th[style*="right"] .table-heading-info {
+  justify-content: flex-end;
+}

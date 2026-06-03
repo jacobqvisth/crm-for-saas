@@ -14,6 +14,18 @@ updated: 2026-05-26
 
 ---
 
+## 2026-06-03 — Active Users page: per-column header info hints
+
+**Branch:** `worktree-active-users-col-info` → main (squash merge). Follow-up to #334: every table column header now has a hover info (ⓘ) explaining the source + how it's calculated.
+
+- Added `COLUMN_INFO` map (title/body/sources) in `active-users-content.tsx`; wrapped all 19 `<th>` labels in `<span className="table-heading-info">…<InfoHint/></span>` (reusing the existing app-usage header pattern + InfoHint popover).
+- CSS: `.active-users-table .table-heading-info { text-transform: none }` (keep normal casing vs the shared uppercase default) and right-align the label+icon on numeric headers.
+- Note: worktree had to be fast-forwarded onto origin/main first — it had branched from a stale local origin/main ref (pre-#334). Verified no other session's work was at risk (checked all worktrees + the Codex worktree; main checkout was merely behind).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `next build --webpack` builds `/ceo/active-users` · 8/8 smoke tests pass.
+
+---
+
 ## 2026-06-03 — Active Users page: wider/scrollable table + 11 more per-user columns
 
 **Branch:** `worktree-active-users-columns` → main (squash merge). Follow-up to the page below, per Jacob's request to widen the table, make it side-scrollable, and surface more per-user info.
