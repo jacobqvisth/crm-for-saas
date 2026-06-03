@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { DEFAULT_TIME_RANGE_KEY } from "@/lib/ceo/time-ranges";
+import {
+  DEFAULT_TIME_RANGE_KEY,
+  type DashboardTimeRangeKey,
+} from "@/lib/ceo/time-ranges";
 import type { DashboardData } from "@/lib/ceo/metrics/types";
 import {
   DASHBOARD_SECTIONS,
@@ -14,10 +17,18 @@ type DashboardShellProps = {
   children: ReactNode;
   headerActions?: ReactNode;
   headerSubtext?: ReactNode;
+  // Per-page default range. The "bare" (no ?range=) URL means this key, so the
+  // time-range pill for it links to the clean URL. Defaults to the
+  // dashboard-wide default (last_30_days).
+  defaultRangeKey?: DashboardTimeRangeKey;
 };
 
-function hrefWithRange(href: string, range: string) {
-  return range === DEFAULT_TIME_RANGE_KEY ? href : `${href}?range=${range}`;
+function hrefWithRange(
+  href: string,
+  range: string,
+  defaultRange: string = DEFAULT_TIME_RANGE_KEY,
+) {
+  return range === defaultRange ? href : `${href}?range=${range}`;
 }
 
 export function DashboardShell({
@@ -26,6 +37,7 @@ export function DashboardShell({
   children,
   headerActions,
   headerSubtext,
+  defaultRangeKey = DEFAULT_TIME_RANGE_KEY,
 }: DashboardShellProps) {
   const page = getDashboardSectionConfig(section);
 
@@ -77,7 +89,7 @@ export function DashboardShell({
         {data.timeRangeOptions.map((option) => (
           <Link
             key={option.key}
-            href={hrefWithRange(page.href, option.key)}
+            href={hrefWithRange(page.href, option.key, defaultRangeKey)}
             aria-current={option.active ? "page" : undefined}
             title={option.description}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
