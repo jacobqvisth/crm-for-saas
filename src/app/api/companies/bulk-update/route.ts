@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCompanyIdsByFilters, type CompanyFilters } from "@/lib/companies-filter";
 
-const VALID_LIFECYCLE_STAGES = ["lead", "mql", "sql", "trial", "paying", "churned", "reactivation"] as const;
+const VALID_LIFECYCLE_STAGES = ["lead", "mql", "sql", "trial", "freemium", "paying", "churned", "reactivation"] as const;
 const VALID_CUSTOMER_STATUSES = ["trialing", "active", "paused", "inactive", "churned"] as const;
 
 const VALID_BY_FIELD: Record<string, readonly string[]> = {

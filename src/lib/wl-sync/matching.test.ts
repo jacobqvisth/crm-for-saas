@@ -128,10 +128,16 @@ describe("deriveLifecycleStage", () => {
     expect(deriveLifecycleStage("trialing", "small_monthly")).toBe("trial");
   });
 
-  it("paying when subscription is active, regardless of plan_type", () => {
-    expect(deriveLifecycleStage("active", "free")).toBe("paying");
+  it("paying when subscription is active on a paid plan", () => {
     expect(deriveLifecycleStage("active", "small_monthly")).toBe("paying");
-    expect(deriveLifecycleStage("active", null)).toBe("paying");
+    expect(deriveLifecycleStage("active", "small_yearly")).toBe("paying");
+    expect(deriveLifecycleStage("active", "large_monthly")).toBe("paying");
+    expect(deriveLifecycleStage("active", "large_yearly")).toBe("paying");
+  });
+
+  it("freemium when subscription is active on the free tier (or unknown plan)", () => {
+    expect(deriveLifecycleStage("active", "free")).toBe("freemium");
+    expect(deriveLifecycleStage("active", null)).toBe("freemium");
   });
 
   it("churned on canceled", () => {

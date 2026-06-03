@@ -293,20 +293,27 @@ export function deriveCustomerStatus(
   }
 }
 
+// A plan_type counts as "paid" if it's set and isn't the free tier.
+// Known paid values: small_monthly, small_yearly, large_monthly, large_yearly.
+function isPaidPlan(planType: string | null): boolean {
+  return planType != null && planType !== "free";
+}
+
 // Map (subscription_status, plan_type) into companies.lifecycle_stage.
-// Mirrors what's already common in the table — most freemium-active users
-// sit at 'paying', trial users at 'trial'.
+// Active users split by plan: paid plans → 'paying', free/unknown plans →
+// 'freemium'. This keeps the lifecycle column consistent with the plan column
+// (an active free user is "Freemium / Free", never the confusing "Paying / Free").
 export function deriveLifecycleStage(
   subStatus: string | null,
   planType: string | null,
-): "lead" | "trial" | "paying" | "churned" | null {
+): "lead" | "trial" | "paying" | "freemium" | "churned" | null {
   if (!subStatus) return null;
   if (subStatus === "trialing") return "trial";
   if (subStatus === "active") {
-    // Free-plan active users still count as 'paying' in our taxonomy —
-    // they've crossed the activation line and may upgrade. 107 such rows
-    // already follow this convention.
-    return "paying";
+    // Active users have crossed the activation line. Paid plans are 'paying';
+    // free-tier (or not-yet-synced) active users are 'freemium' — activated,
+    // not yet revenue-generating, and a clear upgrade target.
+    return isPaidPlan(planType) ? "paying" : "freemium";
   }
   if (subStatus === "canceled" || subStatus === "cancelled") return "churned";
   if (planType === null && subStatus === null) return "lead";

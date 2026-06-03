@@ -81,9 +81,10 @@ const LIFECYCLE_OPTIONS: MultiSelectOption[] = [
   { value: 'lead',    label: 'Lead' },
   { value: 'mql',     label: 'MQL' },
   { value: 'sql',     label: 'SQL' },
-  { value: 'trial',   label: 'Trial' },
-  { value: 'paying',  label: 'Paying' },
-  { value: 'churned', label: 'Churned' },
+  { value: 'trial',    label: 'Trial' },
+  { value: 'freemium', label: 'Freemium' },
+  { value: 'paying',   label: 'Paying' },
+  { value: 'churned',  label: 'Churned' },
 ];
 
 const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
@@ -1319,6 +1320,7 @@ function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
       return contact.company_lifecycle_stage ? (
         <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
           contact.company_lifecycle_stage === 'paying'       ? 'bg-emerald-100 text-emerald-700' :
+          contact.company_lifecycle_stage === 'freemium'     ? 'bg-teal-100 text-teal-700' :
           contact.company_lifecycle_stage === 'trial'        ? 'bg-amber-100 text-amber-700' :
           contact.company_lifecycle_stage === 'churned'      ? 'bg-red-100 text-red-700' :
           contact.company_lifecycle_stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :
