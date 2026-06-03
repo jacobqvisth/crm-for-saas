@@ -12,11 +12,39 @@ const STOCKHOLM_DATETIME = new Intl.DateTimeFormat("sv-SE", {
   timeStyle: "short",
 });
 
+const STOCKHOLM_DATE = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Europe/Stockholm",
+  dateStyle: "short",
+});
+
 function formatLastActive(iso: string | null): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
   return STOCKHOLM_DATETIME.format(date);
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return STOCKHOLM_DATE.format(date);
+}
+
+// Engagement time comes from GA4 in seconds. Show compact: "—", "47s", "12m",
+// "1h 03m".
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function formatMaybeNumber(value: number | null): string {
+  return value == null ? "—" : formatNumber(value);
 }
 
 function userLabel(row: ActiveUsersData["rows"][number]): {
@@ -35,6 +63,8 @@ function userLabel(row: ActiveUsersData["rows"][number]): {
     secondary: "Not in CRM yet",
   };
 }
+
+const NUM = { textAlign: "right" as const };
 
 export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
   const { totals, rows } = data;
@@ -88,7 +118,26 @@ export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
             <strong>{formatNumber(totals.events)}</strong>
           </div>
           <span className="metric-icon">EV</span>
-          <span className="kpi-card-hint">{formatNumber(totals.pageViews)} page views</span>
+          <span className="kpi-card-hint">
+            {formatNumber(totals.pageViews)} page views
+          </span>
+        </article>
+
+        <article className="kpi-card tone-neutral">
+          <div className="kpi-card-main">
+            <p className="label-with-info">
+              <span>Engaged time</span>
+              <InfoHint
+                info={{
+                  title: "Engaged time",
+                  body: "Total GA4 user-engagement duration across these users on the web app — time the app was in focus and active. Summed across the range.",
+                }}
+              />
+            </p>
+            <strong>{formatDuration(totals.engagedSeconds)}</strong>
+          </div>
+          <span className="metric-icon">⏱</span>
+          <span className="kpi-card-hint">active in-app time</span>
         </article>
 
         <article className="kpi-card tone-revenue">
@@ -120,8 +169,9 @@ export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
         </div>
         <p className="panel-description">
           Each row is one identified app user. Engagement columns come from GA4
-          (web app only); diagnostics come from the first-party event stream.
-          Sorted by event volume.
+          (web app only); diagnostics and account fields come from the CRM /
+          first-party data. Sorted by event volume. Scroll sideways to see all
+          columns — the user column stays pinned.
         </p>
 
         {data.note ? (
@@ -141,18 +191,27 @@ export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
           </div>
         ) : (
           <div className="table-wrap">
-            <table className="data-table">
+            <table className="data-table active-users-table">
               <thead>
                 <tr>
-                  <th>User</th>
+                  <th className="col-user">User</th>
                   <th>Company</th>
+                  <th>Plan</th>
+                  <th>Subscription</th>
+                  <th>Lifecycle</th>
                   <th>Role</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: "right" }}>Sessions</th>
-                  <th style={{ textAlign: "right" }}>Page views</th>
-                  <th style={{ textAlign: "right" }}>Events</th>
-                  <th style={{ textAlign: "right" }}>Diagnostics</th>
-                  <th>Top actions</th>
+                  <th>CRM status</th>
+                  <th>Location</th>
+                  <th style={NUM}>Sessions</th>
+                  <th style={NUM}>Page views</th>
+                  <th style={NUM}>Events</th>
+                  <th style={NUM}>Engaged</th>
+                  <th style={NUM}>Diag. (range)</th>
+                  <th style={NUM}>Diag. (lifetime)</th>
+                  <th style={NUM}>Logins</th>
+                  <th style={NUM}>Credits</th>
+                  <th className="col-actions">Top actions</th>
+                  <th>Signed up</th>
                   <th>Last active</th>
                 </tr>
               </thead>
@@ -161,34 +220,41 @@ export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
                   const label = userLabel(row);
                   return (
                     <tr key={row.crmUserId}>
-                      <td>
+                      <td className="col-user">
                         <span className="table-primary">
                           <strong>{label.primary}</strong>
                           <span>{label.secondary}</span>
                         </span>
                       </td>
                       <td>{row.company ?? "—"}</td>
+                      <td>{row.plan ?? "—"}</td>
+                      <td>{row.subscriptionStatus ?? "—"}</td>
+                      <td>{row.lifecycleStage ?? "—"}</td>
                       <td>{row.appRole ?? "—"}</td>
                       <td>{row.leadStatus ?? "—"}</td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatNumber(row.sessions)}
+                      <td>{row.location ?? "—"}</td>
+                      <td style={NUM}>{formatNumber(row.sessions)}</td>
+                      <td style={NUM}>{formatNumber(row.pageViews)}</td>
+                      <td style={NUM}>{formatNumber(row.events)}</td>
+                      <td style={NUM}>{formatDuration(row.engagedSeconds)}</td>
+                      <td style={NUM}>{formatNumber(row.diagnostics)}</td>
+                      <td style={NUM}>
+                        {formatMaybeNumber(row.diagnosticsLifetime)}
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatNumber(row.pageViews)}
+                      <td style={NUM}>{formatMaybeNumber(row.loginCount)}</td>
+                      <td style={NUM}>
+                        {formatMaybeNumber(row.creditsRemaining)}
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatNumber(row.events)}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatNumber(row.diagnostics)}
-                      </td>
-                      <td>
+                      <td className="col-actions">
                         {row.topActions.length === 0
                           ? "—"
                           : row.topActions
-                              .map((a) => `${a.event} ${formatNumber(a.count)}`)
+                              .map(
+                                (a) => `${a.event} ${formatNumber(a.count)}`,
+                              )
                               .join(" · ")}
                       </td>
+                      <td>{formatDate(row.signedUpAt)}</td>
                       <td>{formatLastActive(row.lastActiveAt)}</td>
                     </tr>
                   );

@@ -42,17 +42,27 @@ export type ActiveUserRow = {
   matched: boolean;
   name: string | null;
   email: string | null;
+  title: string | null;
   company: string | null;
+  plan: string | null;
+  subscriptionStatus: string | null;
+  lifecycleStage: string | null;
   appRole: string | null;
   leadStatus: string | null;
+  location: string | null;
   lastActiveAt: string | null;
+  signedUpAt: string | null;
   // GA4 engagement on app.wrenchlane.com
   sessions: number;
   pageViews: number;
   events: number;
+  engagedSeconds: number;
   topActions: ActiveUserAction[];
   // First-party app business events
   diagnostics: number;
+  diagnosticsLifetime: number | null;
+  loginCount: number | null;
+  creditsRemaining: number | null;
 };
 
 export type ActiveUsersData = {
@@ -66,6 +76,7 @@ export type ActiveUsersData = {
     sessions: number;
     pageViews: number;
     events: number;
+    engagedSeconds: number;
     diagnostics: number;
   };
   rows: ActiveUserRow[];
@@ -98,15 +109,25 @@ type Ga4UserTotals = {
   sessions: number;
   pageViews: number;
   events: number;
+  engagedSeconds: number;
 };
 
 type ContactIdentity = {
   name: string | null;
   email: string | null;
+  title: string | null;
   company: string | null;
+  plan: string | null;
+  subscriptionStatus: string | null;
+  lifecycleStage: string | null;
   appRole: string | null;
   leadStatus: string | null;
+  location: string | null;
   lastActiveAt: string | null;
+  signedUpAt: string | null;
+  diagnosticsLifetime: number | null;
+  loginCount: number | null;
+  creditsRemaining: number | null;
 };
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -129,10 +150,19 @@ async function resolveContacts(
     first_name: string | null;
     last_name: string | null;
     email: string | null;
+    title: string | null;
     app_username: string | null;
     app_role: string | null;
     lead_status: string | null;
+    city: string | null;
+    country: string | null;
     last_active_at: string | null;
+    created_at: string | null;
+    login_count: number | null;
+    credits_remaining: number | null;
+    user_plan_type: string | null;
+    user_subscription_status: string | null;
+    diagnostics_total: number | null;
     company_id: string | null;
   };
 
@@ -143,7 +173,7 @@ async function resolveContacts(
     const { data, error } = await supabase
       .from("contacts")
       .select(
-        "wl_user_id, first_name, last_name, email, app_username, app_role, lead_status, last_active_at, company_id",
+        "wl_user_id, first_name, last_name, email, title, app_username, app_role, lead_status, city, country, last_active_at, created_at, login_count, credits_remaining, user_plan_type, user_subscription_status, diagnostics_total, company_id",
       )
       .in("wl_user_id", group);
 
@@ -154,9 +184,15 @@ async function resolveContacts(
     contactRows.push(...((data ?? []) as ContactRow[]));
   }
 
-  // Resolve company names in a second batched pass (avoids relying on a
+  // Resolve company firmographics in a second batched pass (avoids relying on a
   // PostgREST embed that could be ambiguous if contacts ever gains a second FK
   // to companies).
+  type CompanyInfo = {
+    name: string | null;
+    plan: string | null;
+    customer_status: string | null;
+    lifecycle_stage: string | null;
+  };
   const companyIds = [
     ...new Set(
       contactRows
@@ -164,18 +200,23 @@ async function resolveContacts(
         .filter((id): id is string => Boolean(id)),
     ),
   ];
-  const companyNames = new Map<string, string>();
+  const companies = new Map<string, CompanyInfo>();
   for (const group of chunk(companyIds, 100)) {
     const { data, error } = await supabase
       .from("companies")
-      .select("id, name")
+      .select("id, name, plan, customer_status, lifecycle_stage")
       .in("id", group);
     if (error) {
       console.error("Active users company lookup failed", error);
       continue;
     }
-    for (const raw of (data ?? []) as { id: string; name: string | null }[]) {
-      if (raw.name) companyNames.set(raw.id, raw.name);
+    for (const raw of (data ?? []) as ({ id: string } & CompanyInfo)[]) {
+      companies.set(raw.id, {
+        name: raw.name,
+        plan: raw.plan,
+        customer_status: raw.customer_status,
+        lifecycle_stage: raw.lifecycle_stage,
+      });
     }
   }
 
@@ -184,16 +225,29 @@ async function resolveContacts(
     if (!id) continue;
 
     const fullName = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
+    const company = row.company_id ? companies.get(row.company_id) : undefined;
+    const location =
+      [row.city, row.country].filter(Boolean).join(", ") || null;
 
     map.set(id, {
       name: fullName || row.app_username || null,
       email: row.email,
-      company: row.company_id
-        ? (companyNames.get(row.company_id) ?? null)
-        : null,
+      title: row.title,
+      company: company?.name ?? null,
+      // Workshop-level plan/lifecycle wins; fall back to the per-user plan
+      // string when the contact has no company.
+      plan: company?.plan ?? row.user_plan_type ?? null,
+      subscriptionStatus:
+        row.user_subscription_status ?? company?.customer_status ?? null,
+      lifecycleStage: company?.lifecycle_stage ?? null,
       appRole: row.app_role,
       leadStatus: row.lead_status,
+      location,
       lastActiveAt: row.last_active_at,
+      signedUpAt: row.created_at,
+      diagnosticsLifetime: row.diagnostics_total,
+      loginCount: row.login_count,
+      creditsRemaining: row.credits_remaining,
     });
   }
 
@@ -227,6 +281,7 @@ async function getActiveUsersDataUncached(
         { name: "sessions" },
         { name: "screenPageViews" },
         { name: "eventCount" },
+        { name: "userEngagementDuration" },
       ],
       dimensionFilter: hostFilter,
       orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
@@ -240,6 +295,7 @@ async function getActiveUsersDataUncached(
         sessions: Number(row.metricValues?.[0]?.value ?? 0),
         pageViews: Number(row.metricValues?.[1]?.value ?? 0),
         events: Number(row.metricValues?.[2]?.value ?? 0),
+        engagedSeconds: Number(row.metricValues?.[3]?.value ?? 0),
       });
     }
 
@@ -333,15 +389,25 @@ async function getActiveUsersDataUncached(
       matched: Boolean(identity),
       name: identity?.name ?? null,
       email: identity?.email ?? null,
+      title: identity?.title ?? null,
       company: identity?.company ?? null,
+      plan: identity?.plan ?? null,
+      subscriptionStatus: identity?.subscriptionStatus ?? null,
+      lifecycleStage: identity?.lifecycleStage ?? null,
       appRole: identity?.appRole ?? null,
       leadStatus: identity?.leadStatus ?? null,
+      location: identity?.location ?? null,
       lastActiveAt: identity?.lastActiveAt ?? null,
+      signedUpAt: identity?.signedUpAt ?? null,
       sessions: totals?.sessions ?? 0,
       pageViews: totals?.pageViews ?? 0,
       events: totals?.events ?? 0,
+      engagedSeconds: totals?.engagedSeconds ?? 0,
       topActions,
       diagnostics: diagnosticsByUser.get(id) ?? 0,
+      diagnosticsLifetime: identity?.diagnosticsLifetime ?? null,
+      loginCount: identity?.loginCount ?? null,
+      creditsRemaining: identity?.creditsRemaining ?? null,
     };
   });
 
@@ -354,10 +420,18 @@ async function getActiveUsersDataUncached(
       acc.sessions += row.sessions;
       acc.pageViews += row.pageViews;
       acc.events += row.events;
+      acc.engagedSeconds += row.engagedSeconds;
       acc.diagnostics += row.diagnostics;
       return acc;
     },
-    { activeUsers: rows.length, sessions: 0, pageViews: 0, events: 0, diagnostics: 0 },
+    {
+      activeUsers: rows.length,
+      sessions: 0,
+      pageViews: 0,
+      events: 0,
+      engagedSeconds: 0,
+      diagnostics: 0,
+    },
   );
 
   let note: string | null = null;

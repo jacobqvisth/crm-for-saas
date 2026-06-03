@@ -2039,3 +2039,38 @@ a {
   font-size: 0.82rem;
   font-style: italic;
 }
+
+/* Active Users page — wide, side-scrollable per-user table. The table holds
+   ~19 columns, so we give it a generous min-width and let .table-wrap scroll
+   horizontally. Cells stay on one line (each column "fits"), except the
+   free-text "Top actions" column which is allowed to wrap within a cap. The
+   User column is pinned left so it stays visible while scrolling sideways. */
+.active-users-table {
+  min-width: 1680px;
+}
+
+.active-users-table th,
+.active-users-table td {
+  white-space: nowrap;
+}
+
+.active-users-table td.col-actions,
+.active-users-table th.col-actions {
+  white-space: normal;
+  min-width: 240px;
+  max-width: 320px;
+}
+
+.active-users-table th.col-user,
+.active-users-table td.col-user {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--line);
+  min-width: 220px;
+}
+
+.active-users-table thead th.col-user {
+  z-index: 3;
+}
