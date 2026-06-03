@@ -14,6 +14,28 @@ updated: 2026-05-26
 
 ---
 
+## 2026-06-03 — Active Users page: per-user logged-in activity on app.wrenchlane.com (/ceo/active-users)
+
+**Branch:** `worktree-ceo-active-users` → main (squash merge).
+**What:** New `/ceo/active-users` CEO-dashboard section. Lists logged-in users and their actions in a date range (default **yesterday**), unioning two data sources side by side per the ask:
+- **GA4 engagement** — `customUser:crm_user_id` × (`sessions`, `screenPageViews`, `eventCount`) and × `eventName` (top actions), filtered `hostName = app.wrenchlane.com`, dropping `(not set)`/empty ids. Read live each render via `runGa4Report`.
+- **App business events** — diagnostics count per user from `dashboard_diagnostics.internal_user_id` (same Cognito sub).
+
+Merge key is the Cognito sub (`crm_user_id` = `contacts.wl_user_id` = `internal_user_id`). Rows resolve to CRM contacts (name / email / company / app_role / lead_status / last_active_at); unmatched app users show a truncated id + "Not in CRM yet". Internal-test accounts excluded via `loadInternalTestSets()`. Sorted by event volume. KPI cards: Active users, Sessions, Events (+page views), Diagnostics run.
+
+**Files:**
+- `src/lib/ceo/data/active-users.ts` — loader + types; `unstable_cache` (CEO_CACHE_OPTIONS) keyed by range; page default range = `yesterday`. Contacts + companies resolved in two batched `.in()` passes (chunked at 100 to dodge the PostgREST URL limit); diagnostics paged via `pageAll`. GA4 wrapped in try/catch → `ga4Available=false` + note on failure.
+- `src/components/ceo/active-users-content.tsx` — KPI grid + per-user table (ceo-legacy.css classes).
+- `src/app/(ceo)/ceo/active-users/{page.tsx,actions.ts}` — streamed panel behind `CeoPanelSkeleton`; refresh action runs `core_app` sync + busts CEO cache tag.
+- `src/components/ceo/dashboard-sections.tsx` — new `active-users` section key + nav entry (after Usage).
+- `src/components/ceo/dashboard-shell.tsx` — added optional `defaultRangeKey` prop so the time-range pills respect a per-page default (here: yesterday) without breaking the bare-URL convention on other pages.
+
+**Pre-merge validation (this session):** confirmed the GA4 pipe is live — probed the Data API with prod creds: `customUser:crm_user_id` has 258 real Cognito-sub values over 7d, `user_identified` fires daily, and 3/4 sampled ids joined to real contacts. So the page has real data to show (back to 2026-05-25 when the custom dim was registered).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `next build --webpack` (brew Node + webpack per worktree gotcha) built the `/ceo/active-users` route · 8/8 smoke tests pass.
+
+---
+
 ## 2026-05-26 — Acquisition page: Conversions KPI = ad-attributed signups (PR #310)
 
 **Branch:** `worktree-feature+acquisition-signups-as-conversions` → main (squash merge 12:46 UTC).

@@ -25,6 +25,7 @@ import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 
 export type DashboardSectionKey =
   | "usage"
+  | "active-users"
   | "cta-clicks"
   | "conversions"
   | "dashboard"
@@ -61,6 +62,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Usage",
     description:
       "GA4 unique users, sessions, page views, and event volume — bucketed to match the selected range. Filter by platform: web, iOS, Android, or all.",
+  },
+  {
+    key: "active-users",
+    label: "Active Users",
+    glyph: "AU",
+    href: "/ceo/active-users",
+    title: "Active Users",
+    description:
+      "Logged-in users on app.wrenchlane.com and what they did in the selected range (default: yesterday). Joins GA4 engagement (sessions, page views, events) with first-party diagnostics, keyed on crm_user_id = contacts.wl_user_id. Internal-test accounts excluded.",
   },
   {
     key: "new-users",
