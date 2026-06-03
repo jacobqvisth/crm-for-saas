@@ -162,6 +162,7 @@ function Badges({ company, outreachStatus }: { company: Company; outreachStatus:
     const stage = company.lifecycle_stage;
     const cls =
       stage === 'paying'       ? 'bg-emerald-100 text-emerald-700' :
+      stage === 'freemium'     ? 'bg-teal-100 text-teal-700' :
       stage === 'trial'        ? 'bg-amber-100 text-amber-700' :
       stage === 'churned'      ? 'bg-red-100 text-red-700' :
       stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :

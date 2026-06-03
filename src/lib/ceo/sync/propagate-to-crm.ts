@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
+import { deriveLifecycleStage } from "@/lib/wl-sync/matching";
 
 const PAGE_SIZE = 1000;
 const CHUNK_IN = 200;
@@ -171,6 +172,14 @@ async function propagateWorkshopsToCompanies(
           w.core_subscription_status,
           w.activated_at,
         );
+        // Keep lifecycle_stage in sync with the live subscription + plan so it
+        // never drifts from the plan column (active free → 'freemium', active
+        // paid → 'paying', etc.). Only applied when the derivation is
+        // conclusive — past_due / unknown statuses preserve the existing stage.
+        const lifecycleStage = deriveLifecycleStage(
+          w.core_subscription_status,
+          w.plan_key,
+        );
         const memberCount =
           typeof meta.member_count === "number" ? meta.member_count : null;
         const update = {
@@ -183,6 +192,7 @@ async function propagateWorkshopsToCompanies(
           stripe_subscription_id: w.core_stripe_subscription_id,
           customer_status: customerStatus,
           member_count: memberCount,
+          ...(lifecycleStage ? { lifecycle_stage: lifecycleStage } : {}),
         };
         const { error } = await supabase
           .from("companies")
