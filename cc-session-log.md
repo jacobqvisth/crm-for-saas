@@ -4333,3 +4333,17 @@ Session closed.
 - **Untouched:** 2 `paying`+null-plan rows (PBZ AB Uppsala, Mekonomen Södermalm) are `source:manual` with no Stripe link — not wl-linked, so the sync leaves them alone.
 - **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · vitest matching.test.ts 23/23 ✅ (Homebrew node on PATH to dodge the Codex.app native-bindings issue).
 - **Deploy:** Vercel auto-deploy on merge; prod deploy `d042eab` READY. **Verified healed in prod:** 0 `paying`+`free` rows remain; 473 active free users now read `freemium`; `paying` is paid-plans only (+ the 2 manual rows preserved).
+
+## 2026-06-04 — CEO `/ceo/toplists` leaderboard page (top users + top cars)
+
+- **Branch:** feature/ceo-toplists (worktree) · **PR:** (see PR link in session)
+- **What:** New `/ceo/toplists` page under the CEO dashboard with two ranked, sortable leaderboards: (1) **Top users by activity** — diagnoses (first-party), GA4 events / sessions / page views / engaged time, plus each user's most-fired event types ("Top actions" = where car selects, button clicks, etc. surface). (2) **Top cars by diagnoses** — make+model with distinct users/workshops, completion rate, avg AI causes, and top fault codes (DTCs).
+- **Impl (all reuse, minimal new query surface):**
+  - `src/lib/ceo/data/toplists.ts` — loader. Top users **reuse `getActiveUsersData`** (GA4 customUser:crm_user_id × eventName on app.wrenchlane.com, unioned with dashboard_diagnostics, internal-test excluded, already cached). Top cars = own paged query over `dashboard_diagnostics` aggregating by `metadata.car_make` + `car_model` (year = most-common + span; DTCs from `metadata.dtcs`), internal-test filtered via `isInternalTestUserOrWorkshopWith`. Wrapped in `unstable_cache` w/ `CEO_CACHE_OPTIONS`.
+  - `src/components/ceo/toplists-content.tsx` — client component; both tables sortable by clicking any numeric header (re-sorts + re-ranks, medals 🥇🥈🥉 for top 3). 5 KPI cards incl. Top user / Top car.
+  - `src/app/(ceo)/ceo/toplists/{page.tsx,actions.ts}` — mirrors active-users page (Suspense + skeleton + UpdateButton; refresh runs `core_app` sync + `updateTag(ceo-data)`).
+  - `dashboard-sections.tsx` — added `"toplists"` section key + nav entry ("Top Lists", glyph TL) right after Active Users.
+  - `ceo-legacy.css` — `.toplist-sort` / `.toplist-rank` / `.toplist-subtle` styles.
+- **Default range:** `last_30_days` (leaderboard = cumulative window; all ranges incl. all_time selectable).
+- **Design note / limitation:** GA4 events carry **no vehicle dimension**, so per-car *click* counts aren't possible — the cars leaderboard is diagnostics-driven (made explicit in the panel copy). User-level clicks/selects are surfaced via the live per-user eventName breakdown rather than guessed hardcoded event names (the codeoc app only pushes user_identified/sign_up/begin_checkout/purchase as custom dataLayer events; the rest are GA4 auto-collected).
+- **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (route ƒ /ceo/toplists). No schema change.

@@ -26,6 +26,7 @@ import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 export type DashboardSectionKey =
   | "usage"
   | "active-users"
+  | "toplists"
   | "cta-clicks"
   | "conversions"
   | "dashboard"
@@ -71,6 +72,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Active Users",
     description:
       "Logged-in users on app.wrenchlane.com and what they did in the selected range (default: yesterday). Joins GA4 engagement (sessions, page views, events) with first-party diagnostics, keyed on crm_user_id = contacts.wl_user_id. Internal-test accounts excluded.",
+  },
+  {
+    key: "toplists",
+    label: "Top Lists",
+    glyph: "TL",
+    href: "/ceo/toplists",
+    title: "Top Lists",
+    description:
+      "Leaderboards for the selected range (default: last 30 days). Top users by activity (diagnoses, GA4 events, sessions, engaged time, with their most-fired event types) and top cars by diagnoses (distinct users/workshops, completion rate, avg AI causes, top fault codes). Click any numeric column to re-sort.",
   },
   {
     key: "new-users",
