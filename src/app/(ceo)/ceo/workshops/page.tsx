@@ -1,11 +1,26 @@
 import { Suspense } from "react";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
+import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { WorkshopListContent } from "@/components/ceo/workshops-content";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getWorkshopDrilldownList } from "@/lib/ceo/data/workshops";
+import {
+  listInternalTestUsers,
+  listInternalTestWorkshops,
+} from "@/lib/ceo/internal-test/loader";
 
 export const dynamic = "force-dynamic";
+
+const WORKSHOPS_EXCLUSION_DESCRIPTION = (
+  <>
+    This list excludes internal/test workshops (manual list) along with their
+    users and diagnostics, plus any user signed up with an{" "}
+    <code>@wrenchlane.com</code> email (auto-flagged at every core_app sync).
+    Toggle <strong>Show internal</strong> above to include them. Manage the list
+    at <a href="/ceo/settings">/ceo/settings</a>.
+  </>
+);
 
 type WorkshopsPageProps = {
   searchParams: Promise<{
@@ -53,9 +68,12 @@ async function WorkshopsPanel({
   showInternal: boolean;
 }) {
   const query = rawQuery.toLowerCase();
-  const workshops = await getWorkshopDrilldownList({
-    includeInternal: showInternal,
-  });
+  const [workshops, internalTestUsers, internalTestWorkshops] =
+    await Promise.all([
+      getWorkshopDrilldownList({ includeInternal: showInternal }),
+      listInternalTestUsers(),
+      listInternalTestWorkshops(),
+    ]);
 
   const filtered = workshops.filter((item) => {
     const haystack = [
@@ -75,12 +93,21 @@ async function WorkshopsPanel({
   });
 
   return (
-    <WorkshopListContent
-      items={filtered}
-      query={rawQuery}
-      status={status}
-      showInternal={showInternal}
-    />
+    <div className="section-stack">
+      <WorkshopListContent
+        items={filtered}
+        query={rawQuery}
+        status={status}
+        showInternal={showInternal}
+      />
+      {showInternal ? null : (
+        <InternalTestExclusionsPanel
+          users={internalTestUsers}
+          workshops={internalTestWorkshops}
+          description={WORKSHOPS_EXCLUSION_DESCRIPTION}
+        />
+      )}
+    </div>
   );
 }
 
