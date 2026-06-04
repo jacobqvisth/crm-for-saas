@@ -1,13 +1,28 @@
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { DiagnosticsContent } from "@/components/ceo/diagnostics-content";
+import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getDiagnosticsDrilldownList } from "@/lib/ceo/data/diagnostics";
+import {
+  listInternalTestUsers,
+  listInternalTestWorkshops,
+} from "@/lib/ceo/internal-test/loader";
 import {
   normalizeDashboardTimeRangeKey,
   resolveDashboardTimeRange,
 } from "@/lib/ceo/time-ranges";
 
 export const dynamic = "force-dynamic";
+
+const DIAGNOSTICS_EXCLUSION_DESCRIPTION = (
+  <>
+    This list excludes diagnostics from internal/test users (manual list +
+    anyone signed up with an <code>@wrenchlane.com</code> email, auto-flagged at
+    every core_app sync) and any internal/test workshop. Toggle{" "}
+    <strong>Show internal</strong> above to include them. Manage the list at{" "}
+    <a href="/ceo/settings">/ceo/settings</a>.
+  </>
+);
 export const maxDuration = 60;
 
 type DiagnosticsPageProps = {
@@ -41,13 +56,16 @@ export default async function DiagnosticsPage({
   const showInternal = asBool(params.showInternal);
   const selectedDiagnosticId = asString(params.d).trim() || null;
 
-  const [data, diagnostics] = await Promise.all([
-    getDashboardData(params.range),
-    getDiagnosticsDrilldownList({
-      range: resolvedRange,
-      includeInternal: showInternal,
-    }),
-  ]);
+  const [data, diagnostics, internalTestUsers, internalTestWorkshops] =
+    await Promise.all([
+      getDashboardData(params.range),
+      getDiagnosticsDrilldownList({
+        range: resolvedRange,
+        includeInternal: showInternal,
+      }),
+      listInternalTestUsers(),
+      listInternalTestWorkshops(),
+    ]);
 
   const filtered = diagnostics.filter((item) => {
     if (status !== "all" && item.status !== status) {
@@ -77,14 +95,23 @@ export default async function DiagnosticsPage({
 
   return (
     <DashboardShell data={data} section="diagnostics">
-      <DiagnosticsContent
-        items={filtered}
-        selectedDiagnosticId={selectedDiagnosticId}
-        query={rawQuery}
-        status={status}
-        showInternal={showInternal}
-        rangeKey={rangeKey}
-      />
+      <div className="section-stack">
+        <DiagnosticsContent
+          items={filtered}
+          selectedDiagnosticId={selectedDiagnosticId}
+          query={rawQuery}
+          status={status}
+          showInternal={showInternal}
+          rangeKey={rangeKey}
+        />
+        {showInternal ? null : (
+          <InternalTestExclusionsPanel
+            users={internalTestUsers}
+            workshops={internalTestWorkshops}
+            description={DIAGNOSTICS_EXCLUSION_DESCRIPTION}
+          />
+        )}
+      </div>
     </DashboardShell>
   );
 }

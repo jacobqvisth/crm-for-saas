@@ -14,16 +14,47 @@ import {
   normalizeDashboardTimeRangeKey,
   resolveDashboardTimeRange,
 } from "@/lib/ceo/time-ranges";
+import {
+  listInternalTestUsers,
+  listInternalTestWorkshops,
+} from "@/lib/ceo/internal-test/loader";
+import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { refreshNewUsersAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const NEW_USERS_EXCLUSION_DESCRIPTION = (
+  <>
+    Sign-ups, activations, and first-diagnosis counts exclude internal/test
+    users (manual list + anyone signed up with an <code>@wrenchlane.com</code>{" "}
+    email, auto-flagged at every core_app sync) and any internal/test workshop.{" "}
+    <strong>iOS / Android downloads and web first-visits</strong> come from GA4
+    / app-store aggregates that can&apos;t be mapped back to the internal-test
+    list, so they may still include internal traffic. Manage the list at{" "}
+    <a href="/ceo/settings">/ceo/settings</a>.
+  </>
+);
+
 async function NewUsersPanel({ rangeKey }: { rangeKey: string }) {
-  const newUsers = await getNewUsersData(
-    resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+  const [newUsers, internalTestUsers, internalTestWorkshops] =
+    await Promise.all([
+      getNewUsersData(
+        resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+      ),
+      listInternalTestUsers(),
+      listInternalTestWorkshops(),
+    ]);
+  return (
+    <div className="section-stack">
+      <NewUsersContent data={newUsers} />
+      <InternalTestExclusionsPanel
+        users={internalTestUsers}
+        workshops={internalTestWorkshops}
+        description={NEW_USERS_EXCLUSION_DESCRIPTION}
+      />
+    </div>
   );
-  return <NewUsersContent data={newUsers} />;
 }
 
 export default async function NewUsersPage({

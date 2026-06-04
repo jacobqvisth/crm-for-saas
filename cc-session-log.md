@@ -4358,3 +4358,13 @@ Session closed.
   - `toplists/page.tsx` now loads `listInternalTestUsers()` + `listInternalTestWorkshops()` and passes them through.
 - **Note:** other `/ceo/*` pages that filter internal traffic can now drop in `<InternalTestExclusionsPanel>` the same way.
 - **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (ƒ /ceo/toplists, ƒ /ceo/app-usage). No schema change.
+
+## 2026-06-04 — Roll out internal-test exclusions panel to all filtered /ceo pages (follow-up to #339)
+
+- **Branch:** worktree-ceo-exclusions-rollout
+- **What:** Jacob: "yes on all" — add the `InternalTestExclusionsPanel` to every `/ceo/*` page whose numbers exclude internal/test traffic. Mapped all 20 routes; 4 filtered internal users but lacked the panel: **active-users, diagnostics, new-users, workshops** (app-usage + toplists already had it; the 8 getDashboardData-only section pages + cta-clicks/conversions/reviews/etc. don't filter internal users, so left alone).
+- **Impl:** Each page's panel/loader now also `Promise.all`s `listInternalTestUsers()` + `listInternalTestWorkshops()` and wraps `<Content/>` + `<InternalTestExclusionsPanel>` in a `section-stack` div (content components untouched — `.section-stack` is grid+gap so nesting is safe). Per-page accurate copy:
+  - active-users: keyed on crm_user_id → internal accounts dropped from GA4 engagement columns too.
+  - diagnostics + workshops: have a `showInternal` toggle → panel rendered only when `!showInternal`.
+  - new-users: first-party counts filtered; iOS/Android downloads + web first-visits are GA4/app-store aggregates that can't be mapped to the list (noted).
+- **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (ƒ active-users/diagnostics/new-users/workshops). No schema change.

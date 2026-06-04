@@ -14,14 +14,44 @@ import {
   formatStockholmTime,
   getCoreAppLastSyncedAt,
 } from "@/lib/ceo/data/sync-freshness";
+import {
+  listInternalTestUsers,
+  listInternalTestWorkshops,
+} from "@/lib/ceo/internal-test/loader";
+import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { refreshActiveUsersAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const ACTIVE_USERS_EXCLUSION_DESCRIPTION = (
+  <>
+    This list excludes internal/test users (manual list + anyone signed up with
+    an <code>@wrenchlane.com</code> email, auto-flagged at every core_app sync)
+    and everyone inside an internal/test workshop. Because the page is keyed on{" "}
+    <code>crm_user_id</code>, internal accounts are dropped from the GA4
+    engagement columns (sessions, page views, events, engaged time) too — not
+    just diagnostics. Manage the list at{" "}
+    <a href="/ceo/settings">/ceo/settings</a>.
+  </>
+);
+
 async function ActiveUsersPanel({ rangeKey }: { rangeKey: string }) {
-  const data = await getActiveUsersData(rangeKey);
-  return <ActiveUsersContent data={data} />;
+  const [data, internalTestUsers, internalTestWorkshops] = await Promise.all([
+    getActiveUsersData(rangeKey),
+    listInternalTestUsers(),
+    listInternalTestWorkshops(),
+  ]);
+  return (
+    <div className="section-stack">
+      <ActiveUsersContent data={data} />
+      <InternalTestExclusionsPanel
+        users={internalTestUsers}
+        workshops={internalTestWorkshops}
+        description={ACTIVE_USERS_EXCLUSION_DESCRIPTION}
+      />
+    </div>
+  );
 }
 
 export default async function ActiveUsersPage({
