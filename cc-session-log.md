@@ -4347,3 +4347,14 @@ Session closed.
 - **Default range:** `last_30_days` (leaderboard = cumulative window; all ranges incl. all_time selectable).
 - **Design note / limitation:** GA4 events carry **no vehicle dimension**, so per-car *click* counts aren't possible — the cars leaderboard is diagnostics-driven (made explicit in the panel copy). User-level clicks/selects are surfaced via the live per-user eventName breakdown rather than guessed hardcoded event names (the codeoc app only pushes user_identified/sign_up/begin_checkout/purchase as custom dataLayer events; the rest are GA4 auto-collected).
 - **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (route ƒ /ceo/toplists). No schema change.
+
+## 2026-06-04 — Internal-test exclusions panel on /ceo/toplists + shared component (PR follow-up to #338)
+
+- **Branch:** worktree-toplists-exclusions
+- **What:** Jacob asked that the Top Lists page show the "What's filtered out of these numbers" panel at the bottom (like /ceo/app-usage), listing the excluded internal/test workshops + users. Confirmed the toplists page already *filters* internal users from both leaderboards (top cars via `isInternalTestUserOrWorkshopWith`; top users via the reused active-users loader's crm_user_id filter) — it was just missing the visible disclosure panel.
+- **Impl:**
+  - Extracted the inline exclusions panel from `app-usage-content.tsx` into a shared `src/components/ceo/internal-test-exclusions.tsx` (`InternalTestExclusionsPanel`, optional `description` override; default = the GA4-aggregate caveat). app-usage now renders the shared component (no behavior change).
+  - `toplists-content.tsx` renders the panel at the bottom with a toplists-accurate description: Top users is keyed on crm_user_id so internal accounts are dropped from the GA4 engagement columns too (not just diagnoses), and Top cars excludes internal user/workshop diagnoses.
+  - `toplists/page.tsx` now loads `listInternalTestUsers()` + `listInternalTestWorkshops()` and passes them through.
+- **Note:** other `/ceo/*` pages that filter internal traffic can now drop in `<InternalTestExclusionsPanel>` the same way.
+- **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (ƒ /ceo/toplists, ƒ /ceo/app-usage). No schema change.

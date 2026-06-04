@@ -7,10 +7,34 @@ import type {
   TopUserRow,
   TopCarRow,
 } from "@/lib/ceo/data/toplists";
+import type {
+  InternalTestUserRecord,
+  InternalTestWorkshopRecord,
+} from "@/lib/ceo/internal-test/loader";
+import { InternalTestExclusionsPanel } from "./internal-test-exclusions";
 
 type ToplistsContentProps = {
   data: ToplistsData;
+  internalTestUsers: InternalTestUserRecord[];
+  internalTestWorkshops: InternalTestWorkshopRecord[];
 };
+
+// Top Lists keys every figure on crm_user_id / workshop_id, so internal
+// accounts are removed from BOTH leaderboards — including the GA4 engagement
+// columns (unlike the aggregate Usage page, which can't map GA4's pseudonymous
+// counters back to the list).
+const TOPLISTS_EXCLUSION_DESCRIPTION = (
+  <>
+    Both leaderboards exclude internal/test users (manual list + anyone signed
+    up with an <code>@wrenchlane.com</code> email, auto-flagged at every
+    core_app sync) and every user inside an internal/test workshop.{" "}
+    <strong>Top users</strong> is keyed on <code>crm_user_id</code>, so internal
+    accounts are dropped from the GA4 engagement columns (events, sessions, page
+    views, engaged time) too — not just diagnoses. <strong>Top cars</strong>{" "}
+    excludes any diagnosis from an internal user or workshop. Manage the list at{" "}
+    <a href="/ceo/settings">/ceo/settings</a>.
+  </>
+);
 
 type SortDir = "asc" | "desc";
 
@@ -274,7 +298,11 @@ function TopCarsTable({ rows }: { rows: TopCarRow[] }) {
   );
 }
 
-export function ToplistsContent({ data }: ToplistsContentProps) {
+export function ToplistsContent({
+  data,
+  internalTestUsers,
+  internalTestWorkshops,
+}: ToplistsContentProps) {
   const { totals, topUsers, topCars } = data;
   const topUser = topUsers[0];
   const topCar = topCars[0];
@@ -393,6 +421,12 @@ export function ToplistsContent({ data }: ToplistsContentProps) {
         </p>
         <TopCarsTable rows={topCars} />
       </article>
+
+      <InternalTestExclusionsPanel
+        users={internalTestUsers}
+        workshops={internalTestWorkshops}
+        description={TOPLISTS_EXCLUSION_DESCRIPTION}
+      />
     </div>
   );
 }
