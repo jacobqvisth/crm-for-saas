@@ -4323,3 +4323,13 @@ Session closed.
 ## 2026-06-02 — Roadmap Kanban tweaks (PR #331)
 
 - **PR:** #331 (squash-merged). Removed the "Blocked" column from the Kanban (blocked items fold into Not started; Blocked still selectable in the detail panel) and widened columns w-72 → w-96. Frontend-only. tsc/lint/build ✅.
+
+## 2026-06-03 — New `freemium` lifecycle stage: fix "Paying / Free" contradiction (PR #336)
+
+- **Branch:** feature/freemium-lifecycle-stage · **PR:** #336 (squash-merged, commit d042eab)
+- **What:** Jacob spotted Contacts/Companies rows showing **Lifecycle="Paying"** next to **Plan="Free"**. Root cause: `deriveLifecycleStage()` (`src/lib/wl-sync/matching.ts`) mapped *any* `active` subscription to `paying` regardless of plan. Fix splits it: active + paid plan → `paying`; active + free/unknown → new **`freemium`** stage (added `isPaidPlan()` helper).
+- **Key gotcha found:** NO sync path re-derived `lifecycle_stage` for already-linked companies — `discover-new.ts` skips them ("propagator owns them"), and `propagate-to-crm.ts` never wrote the field. So ~357 active+free rows were frozen at `paying`. Fix makes **`propagate-to-crm.ts` maintain `lifecycle_stage` on the hourly ceo-sync**, applied only when the derivation is conclusive (`past_due`/unknown preserve the existing stage). No manual backfill — rows self-heal on the next hourly run.
+- **UI:** `freemium` added to lifecycle filter dropdowns (`contacts-page-client.tsx` + `companies-page-client.tsx`), the company-detail status editor (`statuses-tab.tsx`), and the badge color ladders (`hero.tsx` + both tables) — teal, distinct from paying-emerald / trial-amber. Allowlist in `api/companies/bulk-update/route.ts` + `matching.test.ts` updated.
+- **Untouched:** 2 `paying`+null-plan rows (PBZ AB Uppsala, Mekonomen Södermalm) are `source:manual` with no Stripe link — not wl-linked, so the sync leaves them alone.
+- **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · vitest matching.test.ts 23/23 ✅ (Homebrew node on PATH to dodge the Codex.app native-bindings issue).
+- **Deploy:** Vercel auto-deploy on merge; prod deploy `d042eab` READY. **Verified healed in prod:** 0 `paying`+`free` rows remain; 473 active free users now read `freemium`; `paying` is paid-plans only (+ the 2 manual rows preserved).
