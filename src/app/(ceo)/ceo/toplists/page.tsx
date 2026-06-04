@@ -14,14 +14,28 @@ import {
   formatStockholmTime,
   getCoreAppLastSyncedAt,
 } from "@/lib/ceo/data/sync-freshness";
+import {
+  listInternalTestUsers,
+  listInternalTestWorkshops,
+} from "@/lib/ceo/internal-test/loader";
 import { refreshToplistsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 async function ToplistsPanel({ rangeKey }: { rangeKey: string }) {
-  const data = await getToplistsData(rangeKey);
-  return <ToplistsContent data={data} />;
+  const [data, internalTestUsers, internalTestWorkshops] = await Promise.all([
+    getToplistsData(rangeKey),
+    listInternalTestUsers(),
+    listInternalTestWorkshops(),
+  ]);
+  return (
+    <ToplistsContent
+      data={data}
+      internalTestUsers={internalTestUsers}
+      internalTestWorkshops={internalTestWorkshops}
+    />
+  );
 }
 
 export default async function ToplistsPage({
