@@ -32,7 +32,7 @@ const ACTIVE_USERS_EXCLUSION_DESCRIPTION = (
     <code>crm_user_id</code>, internal accounts are dropped from the GA4
     engagement columns (sessions, page views, events, engaged time) too — not
     just diagnostics. Manage the list at{" "}
-    <a href="/ceo/settings">/ceo/settings</a>.
+    <a href="/dashboard/settings">/dashboard/settings</a>.
   </>
 );
 

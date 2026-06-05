@@ -7,5 +7,5 @@ import { runSourceSync } from "@/lib/ceo/sync/runner";
 export async function refreshAppUsageAction() {
   await runSourceSync("core_app");
   updateTag(CEO_CACHE_TAG);
-  revalidatePath("/ceo/app-usage");
+  revalidatePath("/dashboard/app-usage");
 }

@@ -71,7 +71,7 @@ export default async function SettingsPage({
               <h2>Manage which users, workshops, and patterns are filtered out</h2>
               <p className="panel-description">
                 Anything flagged here gets excluded from the production-facing
-                metrics on /ceo/new-users, /ceo/workshops, /ceo/app-usage, and
+                metrics on /dashboard/new-users, /dashboard/workshops, /dashboard/app-usage, and
                 the core_app sync. Use the user-level <em>Exempt</em> flag to
                 count an individual user inside an otherwise-internal workshop
                 (e.g. a real customer who happens to live in CodeOC).
@@ -97,13 +97,13 @@ function SettingsTopNav({ active }: { active: "playbook" | "internal" }) {
   return (
     <nav className="settings-tab-bar" style={{ marginBottom: 16 }}>
       <Link
-        href="/ceo/settings"
+        href="/dashboard/settings"
         className={active === "playbook" ? "active" : ""}
       >
         Playbook
       </Link>
       <Link
-        href="/ceo/settings?tab=internal"
+        href="/dashboard/settings?tab=internal"
         className={active === "internal" ? "active" : ""}
       >
         Internal-test exclusions

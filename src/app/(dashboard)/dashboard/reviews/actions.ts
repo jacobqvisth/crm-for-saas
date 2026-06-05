@@ -92,7 +92,7 @@ export async function addReviewSnapshotAction(
   );
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/ceo/reviews");
+  revalidatePath("/dashboard/reviews");
   return { ok: true };
 }
 
@@ -152,6 +152,6 @@ export async function addIndividualReviewAction(
   );
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/ceo/reviews");
+  revalidatePath("/dashboard/reviews");
   return { ok: true };
 }

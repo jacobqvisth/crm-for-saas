@@ -32,7 +32,7 @@ const NEW_USERS_EXCLUSION_DESCRIPTION = (
     <strong>iOS / Android downloads and web first-visits</strong> come from GA4
     / app-store aggregates that can&apos;t be mapped back to the internal-test
     list, so they may still include internal traffic. Manage the list at{" "}
-    <a href="/ceo/settings">/ceo/settings</a>.
+    <a href="/dashboard/settings">/dashboard/settings</a>.
   </>
 );
 

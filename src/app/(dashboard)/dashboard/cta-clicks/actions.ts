@@ -8,5 +8,5 @@ export async function refreshCtaClicksAction() {
   // action exists so the standard UpdateButton can force a refetch by
   // busting the CEO data cache for this route.
   updateTag(CEO_CACHE_TAG);
-  revalidatePath("/ceo/cta-clicks");
+  revalidatePath("/dashboard/cta-clicks");
 }

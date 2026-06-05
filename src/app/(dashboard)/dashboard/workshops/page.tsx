@@ -18,7 +18,7 @@ const WORKSHOPS_EXCLUSION_DESCRIPTION = (
     users and diagnostics, plus any user signed up with an{" "}
     <code>@wrenchlane.com</code> email (auto-flagged at every core_app sync).
     Toggle <strong>Show internal</strong> above to include them. Manage the list
-    at <a href="/ceo/settings">/ceo/settings</a>.
+    at <a href="/dashboard/settings">/dashboard/settings</a>.
   </>
 );
 

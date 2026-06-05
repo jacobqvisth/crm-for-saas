@@ -20,7 +20,7 @@ const DIAGNOSTICS_EXCLUSION_DESCRIPTION = (
     anyone signed up with an <code>@wrenchlane.com</code> email, auto-flagged at
     every core_app sync) and any internal/test workshop. Toggle{" "}
     <strong>Show internal</strong> above to include them. Manage the list at{" "}
-    <a href="/ceo/settings">/ceo/settings</a>.
+    <a href="/dashboard/settings">/dashboard/settings</a>.
   </>
 );
 export const maxDuration = 60;

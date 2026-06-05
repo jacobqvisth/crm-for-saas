@@ -35,7 +35,7 @@ function buildPlatformHref(
     params.set("platform", platformKey);
   }
   const query = params.toString();
-  return query ? `/ceo/app-usage?${query}` : "/ceo/app-usage";
+  return query ? `/dashboard/app-usage?${query}` : "/dashboard/app-usage";
 }
 
 const PLATFORM_FILTERS_INFO: SourceInfo = {

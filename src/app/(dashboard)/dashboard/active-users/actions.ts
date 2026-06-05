@@ -10,5 +10,5 @@ export async function refreshActiveUsersAction() {
   // meaningful refresh here.
   await runSourceSync("core_app");
   updateTag(CEO_CACHE_TAG);
-  revalidatePath("/ceo/active-users");
+  revalidatePath("/dashboard/active-users");
 }

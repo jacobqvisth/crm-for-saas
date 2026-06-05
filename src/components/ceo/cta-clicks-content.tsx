@@ -75,7 +75,7 @@ export function CtaHostTabs({
       aria-label="Filter CTA clicks by host"
     >
       {(["app", "marketing", "all"] as CtaClicksHostFilter[]).map((host) => {
-        const href = `/ceo/cta-clicks?host=${host}${rangePart}`;
+        const href = `/dashboard/cta-clicks?host=${host}${rangePart}`;
         const isActive = host === active;
         return (
           <Link
