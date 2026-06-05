@@ -24,6 +24,7 @@ import {
 import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 
 export type DashboardSectionKey =
+  | "email-campaigns"
   | "usage"
   | "active-users"
   | "toplists"
@@ -55,6 +56,15 @@ type DashboardSectionConfig = {
 };
 
 export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
+  {
+    key: "email-campaigns",
+    label: "Email Campaigns",
+    glyph: "EC",
+    href: "/dashboard/email-campaigns",
+    title: "Email Campaigns",
+    description:
+      "CRM outreach performance: total contacts, active sequences, emails sent, open and reply rates, pipeline value, sequence performance, and deliverability.",
+  },
   {
     key: "usage",
     label: "Usage",
