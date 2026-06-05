@@ -28,10 +28,10 @@ function refreshAffectedPaths() {
   // re-render after a flag flip. Bust the shared CEO data cache so the change
   // is reflected immediately rather than after the 5-minute TTL.
   updateTag(CEO_CACHE_TAG);
-  revalidatePath("/ceo/settings");
-  revalidatePath("/ceo/workshops");
-  revalidatePath("/ceo/new-users");
-  revalidatePath("/ceo/app-usage");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/workshops");
+  revalidatePath("/dashboard/new-users");
+  revalidatePath("/dashboard/app-usage");
 }
 
 export async function setUserInternalAction(formData: FormData) {

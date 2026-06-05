@@ -103,7 +103,7 @@ export function DashboardClient() {
     (newRange: RangeKey) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set("range", newRange);
-      router.push(`/dashboard?${params.toString()}`);
+      router.push(`/dashboard/email-campaigns?${params.toString()}`);
     },
     [router, searchParams]
   );

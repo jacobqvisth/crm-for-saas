@@ -1,13 +1,17 @@
-import { Suspense } from "react";
-import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
+import { redirect } from "next/navigation";
+import { type DashboardRoutePageProps } from "@/components/ceo/dashboard-page";
 
-export default function DashboardPage() {
-  return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardClient />
-      </Suspense>
-    </div>
-  );
+// Temporary: until the unified overview lands (PR 2), /dashboard forwards to
+// the first analytics page, preserving any selected range.
+export const dynamic = "force-dynamic";
+
+export default async function DashboardIndex({
+  searchParams,
+}: DashboardRoutePageProps) {
+  const params = await searchParams;
+  const range = Array.isArray(params.range) ? params.range[0] : params.range;
+  const target = range
+    ? `/dashboard/app-usage?range=${encodeURIComponent(range)}`
+    : "/dashboard/app-usage";
+  redirect(target);
 }

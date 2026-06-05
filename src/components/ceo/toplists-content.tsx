@@ -32,7 +32,7 @@ const TOPLISTS_EXCLUSION_DESCRIPTION = (
     accounts are dropped from the GA4 engagement columns (events, sessions, page
     views, engaged time) too — not just diagnoses. <strong>Top cars</strong>{" "}
     excludes any diagnosis from an internal user or workshop. Manage the list at{" "}
-    <a href="/ceo/settings">/ceo/settings</a>.
+    <a href="/dashboard/settings">/dashboard/settings</a>.
   </>
 );
 

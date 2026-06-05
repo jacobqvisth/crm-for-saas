@@ -59,7 +59,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "usage",
     label: "Usage",
     glyph: "US",
-    href: "/ceo/app-usage",
+    href: "/dashboard/app-usage",
     title: "Usage",
     description:
       "GA4 unique users, sessions, page views, and event volume — bucketed to match the selected range. Filter by platform: web, iOS, Android, or all.",
@@ -68,7 +68,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "active-users",
     label: "Active Users",
     glyph: "AU",
-    href: "/ceo/active-users",
+    href: "/dashboard/active-users",
     title: "Active Users",
     description:
       "Logged-in users on app.wrenchlane.com and what they did in the selected range (default: yesterday). Joins GA4 engagement (sessions, page views, events) with first-party diagnostics, keyed on crm_user_id = contacts.wl_user_id. Internal-test accounts excluded.",
@@ -77,7 +77,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "toplists",
     label: "Top Lists",
     glyph: "TL",
-    href: "/ceo/toplists",
+    href: "/dashboard/toplists",
     title: "Top Lists",
     description:
       "Leaderboards for the selected range (default: last 30 days). Top users by activity (diagnoses, GA4 events, sessions, engaged time, with their most-fired event types) and top cars by diagnoses (distinct users/workshops, completion rate, avg AI causes, top fault codes). Click any numeric column to re-sort.",
@@ -86,7 +86,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "new-users",
     label: "New Users",
     glyph: "NU",
-    href: "/ceo/new-users",
+    href: "/dashboard/new-users",
     title: "New Users",
     description:
       "Top of the funnel. iOS / Android downloads, sign-ups, first diagnoses, and average days from sign-up to first diagnosis.",
@@ -95,7 +95,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "cta-clicks",
     label: "CTA Clicks",
     glyph: "CT",
-    href: "/ceo/cta-clicks",
+    href: "/dashboard/cta-clicks",
     title: "CTA Clicks",
     description:
       "Live GA4 view of cta_click events. Filter by host (app / marketing / all), break down by section and button label.",
@@ -104,7 +104,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "conversions",
     label: "Conversions",
     glyph: "CV",
-    href: "/ceo/conversions",
+    href: "/dashboard/conversions",
     title: "Conversions",
     description:
       "Outreach → signup attribution. Per-sequence: sends, unique recipients, attributed signups, conversion rate, and median lag from send to signup. Driven by contacts.attributed_to_sequence_id, populated by the hourly discover-new cron.",
@@ -113,7 +113,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "dashboard",
     label: "Overview - test",
     glyph: "OV",
-    href: "/ceo/overview",
+    href: "/dashboard/overview",
     title: "Command Center",
     description:
       "One place to read the company: growth, activation, revenue, operations, and trust in the numbers.",
@@ -122,7 +122,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "pilot-stats",
     label: "Pilot Stats - test",
     glyph: "PS",
-    href: "/ceo/pilot-stats",
+    href: "/dashboard/pilot-stats",
     title: "Pilot Stats",
     description:
       "Mirror of the legacy Streamlit overview. Total users, workshops, diagnostics, AI cost, activity, and per-workshop volume.",
@@ -131,7 +131,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "acquisition",
     label: "Acquisition - test",
     glyph: "AQ",
-    href: "/ceo/acquisition",
+    href: "/dashboard/acquisition",
     title: "Acquisition",
     description:
       "Paid demand, campaign efficiency, funnel handoff, and where traffic is producing real activation.",
@@ -140,7 +140,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "organic-search",
     label: "Organic Search - test",
     glyph: "OS",
-    href: "/ceo/organic-search",
+    href: "/dashboard/organic-search",
     title: "Organic Search",
     description:
       "Search Console clicks, impressions, top queries, top pages, and how organic discovery is trending.",
@@ -149,7 +149,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "product",
     label: "Product - test",
     glyph: "PD",
-    href: "/ceo/product",
+    href: "/dashboard/product",
     title: "Product",
     description:
       "Usage, diagnostics throughput, platform mix, and workshop movement from signup into value.",
@@ -158,7 +158,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "workshops",
     label: "Workshops - test",
     glyph: "WS",
-    href: "/ceo/workshops",
+    href: "/dashboard/workshops",
     title: "Workshop Drilldown",
     description:
       "A deeper account-level view of workshops, members, billing state, activity, and diagnostics usage.",
@@ -167,7 +167,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "diagnostics",
     label: "Diagnostics",
     glyph: "DG",
-    href: "/ceo/diagnostics",
+    href: "/dashboard/diagnostics",
     title: "Diagnostics",
     description:
       "Per-diagnostic drilldown. Username, workshop, car, DTCs, symptoms, description, and the full ranked list of AI causes for every session in the selected window.",
@@ -176,7 +176,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "operations",
     label: "Operations - test",
     glyph: "OP",
-    href: "/ceo/operations",
+    href: "/dashboard/operations",
     title: "Operations",
     description:
       "Diagnostics engine throughput, AI cost, Motor database usage, and efficiency of the product machinery.",
@@ -185,7 +185,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "lifecycle",
     label: "Lifecycle - test",
     glyph: "LC",
-    href: "/ceo/lifecycle",
+    href: "/dashboard/lifecycle",
     title: "Lifecycle",
     description:
       "Customer.io campaign performance, messaging quality, and retention-touch effectiveness.",
@@ -194,7 +194,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "revenue",
     label: "Revenue - test",
     glyph: "RV",
-    href: "/ceo/revenue",
+    href: "/dashboard/revenue",
     title: "Revenue",
     description:
       "Stripe-backed subscription health, plan mix, paid growth, and workshop billing posture.",
@@ -203,7 +203,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "data-health",
     label: "Data Health - test",
     glyph: "DH",
-    href: "/ceo/data-health",
+    href: "/dashboard/data-health",
     title: "Data Health",
     description:
       "Freshness, recent sync runs, canonical coverage, and how much confidence to place in every view.",
@@ -212,7 +212,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "domain-health",
     label: "Domain Health",
     glyph: "DM",
-    href: "/ceo/domain-health",
+    href: "/dashboard/domain-health",
     title: "Domain Health",
     description:
       "Daily DNS auth, blocklist, and send-rate snapshot for wrenchlane.com. Alerts when bounce rate, unsubscribe rate, or send volume signals deliverability risk.",
@@ -221,7 +221,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "reviews",
     label: "Reviews",
     glyph: "RV",
-    href: "/ceo/reviews",
+    href: "/dashboard/reviews",
     title: "Reviews",
     description:
       "Wrenchlane's rating and review count across every SaaS review platform (Capterra, G2, Trustpilot, Google, and more), with a feed of individual reviews where a platform exposes them. Manual entry today; Google + Trustpilot API sync to follow.",
@@ -230,7 +230,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "settings",
     label: "Playbook - test",
     glyph: "PB",
-    href: "/ceo/settings",
+    href: "/dashboard/settings",
     title: "Playbook",
     description:
       "Source priorities, dashboard operating rules, and how the CEO should read this system.",

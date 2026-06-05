@@ -105,7 +105,7 @@ function buildHref(
     }
   }
   const query = next.toString();
-  return query ? `/ceo/diagnostics?${query}` : "/ceo/diagnostics";
+  return query ? `/dashboard/diagnostics?${query}` : "/dashboard/diagnostics";
 }
 
 export function DiagnosticsContent({
@@ -228,8 +228,8 @@ export function DiagnosticsContent({
               className="button"
               href={
                 rangeKey && rangeKey !== "last_30_days"
-                  ? `/ceo/diagnostics?range=${rangeKey}`
-                  : "/ceo/diagnostics"
+                  ? `/dashboard/diagnostics?range=${rangeKey}`
+                  : "/dashboard/diagnostics"
               }
             >
               Clear
@@ -312,7 +312,7 @@ export function DiagnosticsContent({
                     <td>
                       <div className="table-primary">
                         {item.workshopId ? (
-                          <Link href={`/ceo/workshops/${item.workshopId}`}>
+                          <Link href={`/dashboard/workshops/${item.workshopId}`}>
                             <strong>{item.workshopName ?? "—"}</strong>
                           </Link>
                         ) : (

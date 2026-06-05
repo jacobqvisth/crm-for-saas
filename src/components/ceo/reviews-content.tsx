@@ -260,7 +260,7 @@ function ReviewFeed({
     if (selectedRange) params.set("range", selectedRange);
     if (slug !== "all") params.set("platform", slug);
     const qs = params.toString();
-    return qs ? `/ceo/reviews?${qs}` : "/ceo/reviews";
+    return qs ? `/dashboard/reviews?${qs}` : "/dashboard/reviews";
   }
 
   return (

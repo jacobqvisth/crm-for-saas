@@ -25,7 +25,7 @@ const DEFAULT_DESCRIPTION = (
     send a user_id (or an <code>is_internal_test</code> user_property) to
     GA4/Firebase. Once the app starts emitting either, we can add a GA4{" "}
     <code>dimensionFilter</code> here. Manage the list at{" "}
-    <a href="/ceo/settings">/ceo/settings</a>.
+    <a href="/dashboard/settings">/dashboard/settings</a>.
   </>
 );
 

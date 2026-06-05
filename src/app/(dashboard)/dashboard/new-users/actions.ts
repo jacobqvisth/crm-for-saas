@@ -9,5 +9,5 @@ export async function refreshNewUsersAction() {
   await runSourceSync("app_store_connect");
   await runSourceSync("ga4");
   updateTag(CEO_CACHE_TAG);
-  revalidatePath("/ceo/new-users");
+  revalidatePath("/dashboard/new-users");
 }

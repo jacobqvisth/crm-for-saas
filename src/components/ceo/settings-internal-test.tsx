@@ -5,7 +5,7 @@ import {
   setUserExemptAction,
   setUserInternalAction,
   setWorkshopInternalAction,
-} from "@/app/(ceo)/ceo/settings/actions";
+} from "@/app/(dashboard)/dashboard/settings/actions";
 import type {
   InternalTestPatternRecord,
   SettingsUserSearchRow,
@@ -25,7 +25,7 @@ function tabHref(kind: InternalTestKind, query: string) {
   params.set("tab", "internal");
   params.set("kind", kind);
   if (query) params.set("q", query);
-  return `/ceo/settings?${params.toString()}`;
+  return `/dashboard/settings?${params.toString()}`;
 }
 
 function statusLabel(row: SettingsUserSearchRow) {

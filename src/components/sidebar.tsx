@@ -20,24 +20,9 @@ import {
   Inbox,
   CheckSquare,
   MapPin,
-  LineChart,
   Map as MapIcon,
   GanttChart,
 } from "lucide-react";
-
-const CEO_ALLOWED_EMAILS = (process.env.NEXT_PUBLIC_CEO_ALLOWED_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-
-function isCeoUser(email?: string | null): boolean {
-  if (!email) return false;
-  if (CEO_ALLOWED_EMAILS.length === 0) return false;
-  const normalized = email.toLowerCase();
-  return CEO_ALLOWED_EMAILS.some((entry) =>
-    entry.startsWith("@") ? normalized.endsWith(entry) : normalized === entry,
-  );
-}
 
 type NavItem = {
   href: string;
@@ -126,12 +111,7 @@ export function Sidebar() {
     router.push("/login");
   };
 
-  const allNavItems: Omit<NavItem, "badge">[] = isCeoUser(currentUser?.email)
-    ? [
-        ...staticNavItems,
-        { href: "/ceo/overview", label: "CEO Dashboard", icon: LineChart },
-      ]
-    : staticNavItems;
+  const allNavItems: Omit<NavItem, "badge">[] = staticNavItems;
 
   const navItems: NavItem[] = allNavItems.map((item) => ({
     ...item,

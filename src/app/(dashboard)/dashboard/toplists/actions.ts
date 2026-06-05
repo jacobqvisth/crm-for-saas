@@ -9,5 +9,5 @@ export async function refreshToplistsAction() {
   // read live each render, so a core_app sync is the meaningful refresh here.
   await runSourceSync("core_app");
   updateTag(CEO_CACHE_TAG);
-  revalidatePath("/ceo/toplists");
+  revalidatePath("/dashboard/toplists");
 }

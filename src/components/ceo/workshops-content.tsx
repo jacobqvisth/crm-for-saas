@@ -167,7 +167,7 @@ export function WorkshopListContent({
             Apply
           </button>
           {(query || status !== "all" || showInternal) && (
-            <Link className="button" href="/ceo/workshops">
+            <Link className="button" href="/dashboard/workshops">
               Clear
             </Link>
           )}
@@ -210,7 +210,7 @@ export function WorkshopListContent({
                   <td>
                     <div className="table-primary">
                       <span className="table-primary-name">
-                        <Link href={`/ceo/workshops/${item.workshopId}`}>
+                        <Link href={`/dashboard/workshops/${item.workshopId}`}>
                           <strong>{item.name}</strong>
                         </Link>
                         {item.isInternal ? (
@@ -328,7 +328,7 @@ export function WorkshopDetailContent({
       <section className="panel">
         <div className="hero-grid">
           <div className="hero-copy">
-            <Link className="meta-pill" href="/ceo/workshops">
+            <Link className="meta-pill" href="/dashboard/workshops">
               Back to workshops
             </Link>
             <p className="eyebrow">Workshop Detail</p>
