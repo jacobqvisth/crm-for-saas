@@ -7,7 +7,13 @@ import type { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 //
 // The per-user exempt flag (dashboard_users.is_internal_test_exempt) overrides
 // this, so individual customers inside a flagged domain stay counted.
-export const INTERNAL_TEST_EMAIL_DOMAINS = ["wrenchlane.com"] as const;
+//
+// codeoc.ai is CodeOC, the dev company behind Wrenchlane — every account on
+// that domain is an internal team member, not a customer.
+export const INTERNAL_TEST_EMAIL_DOMAINS = [
+  "wrenchlane.com",
+  "codeoc.ai",
+] as const;
 
 type ServiceClient = NonNullable<ReturnType<typeof createSupabaseServiceClient>>;
 
