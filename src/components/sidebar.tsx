@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -130,13 +131,28 @@ export function Sidebar() {
       }`}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-200">
-        <div className="flex-shrink-0 w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">C</span>
-        </div>
-        {!collapsed && (
-          <span className="font-semibold text-slate-900 text-lg">CRM</span>
-        )}
+      <div className="flex items-center px-4 h-16 border-b border-slate-200">
+        <Link href="/dashboard" className="flex items-center">
+          {collapsed ? (
+            <Image
+              src="/wrenchlane-mark.png"
+              alt="Wrenchlane"
+              width={32}
+              height={32}
+              priority
+              className="flex-shrink-0 w-8 h-8 rounded-lg"
+            />
+          ) : (
+            <Image
+              src="/wrenchlane-wordmark.png"
+              alt="Wrenchlane — AI-Driven Car Diagnostics"
+              width={1200}
+              height={300}
+              priority
+              className="h-9 w-auto"
+            />
+          )}
+        </Link>
       </div>
 
       {/* Nav */}
