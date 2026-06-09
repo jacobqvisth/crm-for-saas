@@ -79,6 +79,9 @@ export async function POST(
     subject: replySubject,
     htmlBody,
     replyToMessageId: inboxMessage.gmail_message_id,
+    // Manual replies are human-paced — exempt from the per-account
+    // min_send_interval_seconds throttle that governs sequence sends.
+    bypassSendInterval: true,
   });
 
   if (!result.success) {
