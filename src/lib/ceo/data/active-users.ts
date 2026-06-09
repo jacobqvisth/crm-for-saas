@@ -37,9 +37,22 @@ export type ActiveUserAction = {
   count: number;
 };
 
+// How we identified this user:
+//  - "contact": matched a CRM contact on contacts.wl_user_id (full record).
+//  - "app":     no contact, but the Cognito sub exists in dashboard_users, so
+//               we still know their app username + workshop (a sub-user of a
+//               workshop that hasn't been propagated to its own contact row).
+//  - "none":    only a bare GA4/diagnostics sub — nothing else known.
+export type IdentitySource = "contact" | "app" | "none";
+
 export type ActiveUserRow = {
   crmUserId: string;
   matched: boolean;
+  identitySource: IdentitySource;
+  appUsername: string | null;
+  // wl_workshop_id of the user's workshop, when known — used to link the
+  // company cell to /dashboard/workshops/{workshopId}.
+  workshopId: string | null;
   name: string | null;
   email: string | null;
   title: string | null;
@@ -114,6 +127,8 @@ type Ga4UserTotals = {
 
 type ContactIdentity = {
   name: string | null;
+  appUsername: string | null;
+  workshopId: string | null;
   email: string | null;
   title: string | null;
   company: string | null;
@@ -192,6 +207,7 @@ async function resolveContacts(
     plan: string | null;
     customer_status: string | null;
     lifecycle_stage: string | null;
+    wl_workshop_id: string | null;
   };
   const companyIds = [
     ...new Set(
@@ -204,7 +220,7 @@ async function resolveContacts(
   for (const group of chunk(companyIds, 100)) {
     const { data, error } = await supabase
       .from("companies")
-      .select("id, name, plan, customer_status, lifecycle_stage")
+      .select("id, name, plan, customer_status, lifecycle_stage, wl_workshop_id")
       .in("id", group);
     if (error) {
       console.error("Active users company lookup failed", error);
@@ -216,6 +232,7 @@ async function resolveContacts(
         plan: raw.plan,
         customer_status: raw.customer_status,
         lifecycle_stage: raw.lifecycle_stage,
+        wl_workshop_id: raw.wl_workshop_id,
       });
     }
   }
@@ -231,6 +248,8 @@ async function resolveContacts(
 
     map.set(id, {
       name: fullName || row.app_username || null,
+      appUsername: row.app_username,
+      workshopId: company?.wl_workshop_id ?? null,
       email: row.email,
       title: row.title,
       company: company?.name ?? null,
@@ -249,6 +268,78 @@ async function resolveContacts(
       loginCount: row.login_count,
       creditsRemaining: row.credits_remaining,
     });
+  }
+
+  return map;
+}
+
+// Second-tier identity for subs with no CRM contact. dashboard_users carries
+// the Cognito sub (internal_user_id) plus a metadata bag with the app username,
+// workshop name and role — so a sub-user of a workshop that was only propagated
+// as a single shared-inbox contact still resolves to "username @ workshop"
+// instead of a bare hex id. workshop_id here is the wl_workshop_id, so it links
+// straight to the CEO workshop detail page.
+type AppUserIdentity = {
+  appUsername: string | null;
+  company: string | null;
+  workshopId: string | null;
+  appRole: string | null;
+  plan: string | null;
+  signedUpAt: string | null;
+  lastActiveAt: string | null;
+  loginCount: number | null;
+  creditsRemaining: number | null;
+};
+
+async function resolveAppUsers(
+  ids: string[],
+): Promise<Map<string, AppUserIdentity>> {
+  const map = new Map<string, AppUserIdentity>();
+  const supabase = createSupabaseServiceClient();
+  if (!supabase || ids.length === 0) return map;
+
+  type AppUserRow = {
+    internal_user_id: string;
+    workshop_id: string | null;
+    signed_up_at: string | null;
+    last_seen_at: string | null;
+    metadata: Record<string, unknown> | null;
+  };
+
+  const asStr = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v : null;
+  const asNum = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+
+  for (const group of chunk(ids, 100)) {
+    const { data, error } = await supabase
+      .from("dashboard_users")
+      .select(
+        "internal_user_id, workshop_id, signed_up_at, last_seen_at, metadata",
+      )
+      .in("internal_user_id", group);
+
+    if (error) {
+      console.error("Active users app-user lookup failed", error);
+      continue;
+    }
+
+    for (const row of (data ?? []) as AppUserRow[]) {
+      const id = row.internal_user_id ? String(row.internal_user_id) : null;
+      if (!id) continue;
+      const meta = row.metadata ?? {};
+      map.set(id, {
+        appUsername: asStr(meta.username),
+        company: asStr(meta.company_name),
+        workshopId: row.workshop_id ? String(row.workshop_id) : null,
+        appRole: asStr(meta.user_role),
+        plan: asStr(meta.plan_type),
+        signedUpAt: row.signed_up_at,
+        lastActiveAt: row.last_seen_at,
+        loginCount: asNum(meta.login_count),
+        creditsRemaining: asNum(meta.credits_remaining),
+      });
+    }
   }
 
   return map;
@@ -372,6 +463,10 @@ async function getActiveUsersDataUncached(
   );
 
   const contacts = await resolveContacts(ids);
+  // For everyone without a CRM contact, fall back to dashboard_users so we can
+  // still show "username @ workshop" instead of a bare Cognito sub.
+  const unmatchedIds = ids.filter((id) => !contacts.has(id));
+  const appUsers = await resolveAppUsers(unmatchedIds);
 
   const rows: ActiveUserRow[] = ids.map((id) => {
     const totals = userTotals.get(id);
@@ -383,22 +478,31 @@ async function getActiveUsersDataUncached(
           .slice(0, TOP_ACTIONS_PER_USER)
       : [];
     const identity = contacts.get(id);
+    const appUser = identity ? undefined : appUsers.get(id);
+    const identitySource: IdentitySource = identity
+      ? "contact"
+      : appUser
+        ? "app"
+        : "none";
 
     return {
       crmUserId: id,
       matched: Boolean(identity),
+      identitySource,
+      appUsername: identity?.appUsername ?? appUser?.appUsername ?? null,
+      workshopId: identity?.workshopId ?? appUser?.workshopId ?? null,
       name: identity?.name ?? null,
       email: identity?.email ?? null,
       title: identity?.title ?? null,
-      company: identity?.company ?? null,
-      plan: identity?.plan ?? null,
+      company: identity?.company ?? appUser?.company ?? null,
+      plan: identity?.plan ?? appUser?.plan ?? null,
       subscriptionStatus: identity?.subscriptionStatus ?? null,
       lifecycleStage: identity?.lifecycleStage ?? null,
-      appRole: identity?.appRole ?? null,
+      appRole: identity?.appRole ?? appUser?.appRole ?? null,
       leadStatus: identity?.leadStatus ?? null,
       location: identity?.location ?? null,
-      lastActiveAt: identity?.lastActiveAt ?? null,
-      signedUpAt: identity?.signedUpAt ?? null,
+      lastActiveAt: identity?.lastActiveAt ?? appUser?.lastActiveAt ?? null,
+      signedUpAt: identity?.signedUpAt ?? appUser?.signedUpAt ?? null,
       sessions: totals?.sessions ?? 0,
       pageViews: totals?.pageViews ?? 0,
       events: totals?.events ?? 0,
@@ -406,8 +510,9 @@ async function getActiveUsersDataUncached(
       topActions,
       diagnostics: diagnosticsByUser.get(id) ?? 0,
       diagnosticsLifetime: identity?.diagnosticsLifetime ?? null,
-      loginCount: identity?.loginCount ?? null,
-      creditsRemaining: identity?.creditsRemaining ?? null,
+      loginCount: identity?.loginCount ?? appUser?.loginCount ?? null,
+      creditsRemaining:
+        identity?.creditsRemaining ?? appUser?.creditsRemaining ?? null,
     };
   });
 

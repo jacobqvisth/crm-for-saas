@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatNumber } from "@/lib/ceo/format";
 import type { ActiveUsersData } from "@/lib/ceo/data/active-users";
 import { InfoHint } from "./source-info";
@@ -5,6 +6,20 @@ import { InfoHint } from "./source-info";
 type ActiveUsersContentProps = {
   data: ActiveUsersData;
 };
+
+// The company/workshop cell, linked to the CEO workshop detail page when we
+// know the workshop. Shared by matched contacts and app-user-only rows.
+function CompanyCell({
+  company,
+  workshopId,
+}: {
+  company: string | null;
+  workshopId: string | null;
+}) {
+  if (!company) return <>—</>;
+  if (!workshopId) return <>{company}</>;
+  return <Link href={`/dashboard/workshops/${workshopId}`}>{company}</Link>;
+}
 
 const STOCKHOLM_DATETIME = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Europe/Stockholm",
@@ -57,7 +72,15 @@ function userLabel(row: ActiveUsersData["rows"][number]): {
   if (row.email) {
     return { primary: row.email, secondary: row.crmUserId };
   }
-  // Unmatched app user (in GA4 / diagnostics but not yet a CRM contact).
+  // No CRM contact, but the sub exists in dashboard_users — show the app
+  // username + role so a workshop sub-user reads as a person, not a hex id.
+  if (row.identitySource === "app") {
+    return {
+      primary: row.appUsername ?? `${row.crmUserId.slice(0, 8)}…`,
+      secondary: row.appRole ? `App user · ${row.appRole}` : "App user",
+    };
+  }
+  // Bare GA4 / diagnostics sub — nothing else known.
   return {
     primary: `${row.crmUserId.slice(0, 8)}…`,
     secondary: "Not in CRM yet",
@@ -71,13 +94,16 @@ const NUM = { textAlign: "right" as const };
 const COLUMN_INFO = {
   user: {
     title: "User",
-    body: "The identified app user. Name + email come from the matching CRM contact (joined on contacts.wl_user_id = the Cognito sub). Users seen in GA4 / diagnostics but not yet in the CRM show a shortened crm_user_id and 'Not in CRM yet'.",
-    sources: ["contacts.first_name / last_name / email / wl_user_id"],
+    body: "The identified app user. Name + email come from the matching CRM contact (joined on contacts.wl_user_id = the Cognito sub). If there's no contact yet, we fall back to dashboard_users and show the app username + role (e.g. a workshop sub-user). Only when the sub is unknown there too does it show a shortened crm_user_id and 'Not in CRM yet'.",
+    sources: [
+      "contacts.first_name / last_name / email / wl_user_id",
+      "dashboard_users.metadata.username / user_role",
+    ],
   },
   company: {
     title: "Company",
-    body: "The workshop this contact belongs to. From the company linked via contacts.company_id → companies.name.",
-    sources: ["companies.name"],
+    body: "The workshop the user belongs to. For CRM contacts: company linked via contacts.company_id → companies.name. For app-only users: dashboard_users.metadata.company_name. Links to the workshop detail page when the workshop is known.",
+    sources: ["companies.name", "dashboard_users.metadata.company_name"],
   },
   plan: {
     title: "Plan",
@@ -424,7 +450,12 @@ export function ActiveUsersContent({ data }: ActiveUsersContentProps) {
                           <span>{label.secondary}</span>
                         </span>
                       </td>
-                      <td>{row.company ?? "—"}</td>
+                      <td>
+                        <CompanyCell
+                          company={row.company}
+                          workshopId={row.workshopId}
+                        />
+                      </td>
                       <td>{row.plan ?? "—"}</td>
                       <td>{row.subscriptionStatus ?? "—"}</td>
                       <td>{row.lifecycleStage ?? "—"}</td>

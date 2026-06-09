@@ -3,6 +3,7 @@ import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
   getActiveUsersData,
   type ActiveUserAction,
+  type IdentitySource,
 } from "@/lib/ceo/data/active-users";
 import {
   isInternalTestUserOrWorkshopWith,
@@ -41,6 +42,10 @@ export function normalizeToplistsRangeKey(
 export type TopUserRow = {
   crmUserId: string;
   matched: boolean;
+  identitySource: IdentitySource;
+  appUsername: string | null;
+  workshopId: string | null;
+  appRole: string | null;
   name: string | null;
   email: string | null;
   company: string | null;
@@ -128,6 +133,10 @@ async function buildTopUsers(rangeKey: DashboardTimeRangeKey): Promise<{
   const rows: TopUserRow[] = active.rows.map((row) => ({
     crmUserId: row.crmUserId,
     matched: row.matched,
+    identitySource: row.identitySource,
+    appUsername: row.appUsername,
+    workshopId: row.workshopId,
+    appRole: row.appRole,
     name: row.name,
     email: row.email,
     company: row.company,

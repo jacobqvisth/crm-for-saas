@@ -4368,3 +4368,17 @@ Session closed.
   - diagnostics + workshops: have a `showInternal` toggle → panel rendered only when `!showInternal`.
   - new-users: first-party counts filtered; iOS/Android downloads + web first-visits are GA4/app-store aggregates that can't be mapped to the list (noted).
 - **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (ƒ active-users/diagnostics/new-users/workshops). No schema change.
+
+## CEO active-users / toplists — app-user identity fallback (2026-06-09)
+
+- **Branch:** worktree-ceo-app-user-identity → PR TBD
+- **Why:** CEO asked "who is doing what" — active app users with no CRM contact (e.g. workshop sub-users) rendered as a bare `crm_user_id` hex + "Not in CRM yet", hiding the person and their workshop.
+- **What:** Added a 3-tier identity resolution to the active-users loader (reused by Top Lists):
+  1. `contact` — matched `contacts.wl_user_id` (unchanged).
+  2. `app` (NEW) — no contact, but the Cognito sub exists in `dashboard_users`; surface `metadata.username` + `user_role` + `company_name`, keyed to `workshop_id`.
+  3. `none` — bare sub, still "Not in CRM yet".
+  - New `resolveAppUsers()` in `active-users.ts`; new row fields `identitySource`, `appUsername`, `workshopId` (also on `TopUserRow`).
+  - UI: `userLabel` shows `username` / "App user · {role}"; Company cell now links to `/dashboard/workshops/{workshopId}` for both contacts and app-only users.
+  - Coverage: 774/776 active users have a `company_name`, 684/685 workshops resolve — so nearly every active row now shows a person + linked workshop.
+- **No schema change.** Two batched `.in()` reads (dashboard_users + existing companies), same paging pattern.
+- **Checks:** `tsc --noEmit` ✅, `eslint` (changed files) ✅, `next build --webpack` ✅ (Homebrew node — Codex node can't dlopen swc).
