@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatNumber, formatPercent } from "@/lib/ceo/format";
 import type {
@@ -59,10 +60,27 @@ function formatDuration(seconds: number): string {
 function userLabel(row: TopUserRow): { primary: string; secondary: string } {
   if (row.name) return { primary: row.name, secondary: row.email ?? row.crmUserId };
   if (row.email) return { primary: row.email, secondary: row.crmUserId };
+  // No CRM contact, but the sub exists in dashboard_users — show the app
+  // username + role instead of a bare hex id (e.g. a workshop sub-user).
+  if (row.identitySource === "app") {
+    return {
+      primary: row.appUsername ?? `${row.crmUserId.slice(0, 8)}…`,
+      secondary: row.appRole ? `App user · ${row.appRole}` : "App user",
+    };
+  }
   return {
     primary: `${row.crmUserId.slice(0, 8)}…`,
     secondary: "Not in CRM yet",
   };
+}
+
+// Company/workshop cell, linked to the CEO workshop detail page when known.
+function CompanyCell({ row }: { row: TopUserRow }) {
+  if (!row.company) return <>—</>;
+  if (!row.workshopId) return <>{row.company}</>;
+  return (
+    <Link href={`/dashboard/workshops/${row.workshopId}`}>{row.company}</Link>
+  );
 }
 
 // A sortable numeric column header. Clicking re-sorts; clicking the active
@@ -191,7 +209,9 @@ function TopUsersTable({ rows }: { rows: TopUserRow[] }) {
                     <span>{label.secondary}</span>
                   </span>
                 </td>
-                <td>{row.company ?? "—"}</td>
+                <td>
+                  <CompanyCell row={row} />
+                </td>
                 <td style={NUM}>{formatNumber(row.diagnostics)}</td>
                 <td style={NUM}>{formatNumber(row.events)}</td>
                 <td style={NUM}>{formatNumber(row.sessions)}</td>
