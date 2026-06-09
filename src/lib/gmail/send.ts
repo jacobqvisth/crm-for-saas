@@ -19,6 +19,13 @@ interface SendEmailParams {
    * stack inside an existing thread.
    */
   includeSignature?: boolean;
+  /**
+   * When true, skip the per-account min_send_interval_seconds rate limit
+   * (the "minimum N seconds between sends" guard). Used for manual inbox
+   * replies, which are human-paced and shouldn't be throttled like automated
+   * sequence sends. The daily send cap (max_daily_sends) still applies.
+   */
+  bypassSendInterval?: boolean;
 }
 
 interface SendEmailResult {
@@ -154,7 +161,9 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
 
   // Check minimum send interval (per-account, configurable; default 60s).
-  if (account.updated_at) {
+  // Skipped for manual inbox replies (bypassSendInterval) — those are
+  // human-paced; only automated sequence sends need this throttle.
+  if (account.updated_at && !params.bypassSendInterval) {
     const intervalSeconds = account.min_send_interval_seconds ?? DEFAULT_MIN_SEND_INTERVAL_SECONDS;
     const intervalMs = intervalSeconds * 1000;
     const lastActivity = new Date(account.updated_at).getTime();
