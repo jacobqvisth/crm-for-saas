@@ -9,6 +9,7 @@ const protectedRoutes = [
   "/sequences",
   "/lists",
   "/roadmap",
+  "/activation",
   "/templates",
   "/settings",
 ];

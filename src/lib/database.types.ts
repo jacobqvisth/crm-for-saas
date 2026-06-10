@@ -76,6 +76,174 @@ export type Database = {
         }
         Relationships: []
       }
+      activation_plan_groups: {
+        Row: {
+          collapsed: boolean
+          color: string
+          created_at: string
+          id: string
+          name: string
+          plan_id: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          plan_id: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          plan_id?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plan_groups_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_groups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activation_plan_items: {
+        Row: {
+          anchor_event: string | null
+          cio_campaign_id: string | null
+          color: string | null
+          created_at: string
+          day_end: number
+          day_start: number
+          description: string | null
+          group_id: string
+          id: string
+          link_url: string | null
+          plan_id: string
+          sort_order: number
+          status: string | null
+          title: string
+          trigger_type: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          anchor_event?: string | null
+          cio_campaign_id?: string | null
+          color?: string | null
+          created_at?: string
+          day_end?: number
+          day_start?: number
+          description?: string | null
+          group_id: string
+          id?: string
+          link_url?: string | null
+          plan_id: string
+          sort_order?: number
+          status?: string | null
+          title?: string
+          trigger_type?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          anchor_event?: string | null
+          cio_campaign_id?: string | null
+          color?: string | null
+          created_at?: string
+          day_end?: number
+          day_start?: number
+          description?: string | null
+          group_id?: string
+          id?: string
+          link_url?: string | null
+          plan_id?: string
+          sort_order?: number
+          status?: string | null
+          title?: string
+          trigger_type?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plan_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plan_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activation_plans: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plans_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activities: {
         Row: {
           body: string | null
