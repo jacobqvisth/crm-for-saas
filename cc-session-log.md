@@ -4382,3 +4382,14 @@ Session closed.
   - Coverage: 774/776 active users have a `company_name`, 684/685 workshops resolve — so nearly every active row now shows a person + linked workshop.
 - **No schema change.** Two batched `.in()` reads (dashboard_users + existing companies), same paging pattern.
 - **Checks:** `tsc --noEmit` ✅, `eslint` (changed files) ✅, `next build --webpack` ✅ (Homebrew node — Codex node can't dlopen swc).
+
+## Activation Plan page /activation (2026-06-10)
+
+- **Branch:** feature/activation-plan → PR #348 (merged), migration applied to prod, deploy verified
+- **What:** New sidebar page "Activation Plan" — roadmap-style Gantt on a relative **days-since-signup** axis (day 0 = signup) mapping every post-signup touchpoint, so free→paying activation work is visible and editable in one place.
+- **Schema:** `activation_plans` / `activation_plan_groups` / `activation_plan_items` (mirrors roadmap trio; RLS + updated_at triggers). Items: `day_start`/`day_end` ints (inclusive, CHECK ≥0 and ordered), `trigger_type` `day_offset`|`event`, `anchor_event`, `status`, `cio_campaign_id`, `link_url`. Migration `20260610100000_activation_plan_tables.sql` applied via Management API.
+- **API:** `/api/activation` (+`[id]`, `groups`, `groups/[id]`, `items`, `items/[id]`) — same resolveWorkspace + Zod pattern as `/api/roadmap/*`. GET lazy-seeds a "User Activation" board.
+- **UI:** `src/components/activation/*` cloned-and-adapted from roadmap (decision: clone, don't refactor shared lib — zero regression risk on /roadmap). Day-offset scale lib `src/lib/activation/scale.ts`; drag/resize clamped at day 0; event-triggered items dashed + ⚡; statuses Live/Planned/Idea/Paused with header legend; reuses roadmap color tokens + SlideOver.
+- **Seed:** audited inventory (codeoc-web-form + Customer.io + backend research): 5 channels / 17 touchpoints incl. gaps marked Idea — notably **no review-ask prompt exists in the app today**.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node). `/activation` live on prod (307→login unauthenticated).
+- **Next (PR 2):** Customer.io campaign import + per-item metrics from `dashboard_metric_snapshots`, drift flag for paused/deleted campaigns. Optional PR 3: behavioral overlay (median days-to-first-diagnosis, trial-end markers).
