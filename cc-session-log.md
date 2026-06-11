@@ -4501,3 +4501,12 @@ Session closed.
   - `src/app/api/inbox/[id]/reply/route.ts` — the only manual-send call site; now passes `bypassSendInterval: true`.
 - **Note:** `sendEmail()` has exactly two callers (inbox reply + process-emails cron), so the flag cleanly partitions manual vs automated. A manual reply still bumps `daily_sends_count`/`updated_at`, so it pushes the next *sequence* send out by the interval — pre-existing behavior, left alone.
 - **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · deploy verified live. No schema change.
+
+## Activation Plan — Check Customer.io reconciliation + campaign metrics (2026-06-11)
+
+- **Branch:** feature/activation-cio-verify → PR #373 (merged). No schema changes.
+- **Why:** Jacob linked "Trial-ending reminder" (marked Idea/doesn't-exist by the audit) to a RUNNING Customer.io campaign — the audit could read app code but not Customer.io, so email-side statuses were assumptions. The board now verifies itself.
+- **Verify route:** read-only `GET /api/activation/cio/verify?plan_id=` — linked items: campaign state vs board status (running→Live, draft→Planned, stopped/archived→Paused); unlinked email items: best-match suggestion via token-prefix scoring (`src/lib/activation/cio-verify.ts`, ≥0.3 threshold, suggestions never auto-applied); flags no-counterpart items + campaigns absent from the board.
+- **UI:** "Check Customer.io" header button → results modal (`activation-cio-check.tsx`): Fix / Link+fix-status / Add-to-board per row + Apply-all; fixes stamp source_note "Verified in Customer.io on <date>: campaign X is <state>"; imports land day 0 with a placement reminder. All writes via existing item CRUD.
+- **Metrics:** linked touchpoint modal shows sent/delivered/open%/click%/converted (last 90 days) aggregated from dashboard_metric_snapshots (RLS allows authenticated read — verified).
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅.
