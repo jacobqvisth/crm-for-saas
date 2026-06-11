@@ -108,11 +108,12 @@ describe("writeUsers", () => {
   });
 
   it("re-stamps user_created_at_source when preserving created_at across an export gap", async () => {
-    // Regression for the 2026-06-11 wipe: the export dropped the legacy
-    // created_at alias, the incoming metadata stamped
-    // user_created_at_source=null, and the NEXT sync treated the preserved
-    // created_at as non-canonical and cleared it. The merged row must carry
-    // the canonical stamp so the preservation survives repeated syncs.
+    // Defensive: if the export stops shipping user_created_at, the incoming
+    // metadata stamps user_created_at_source=null and the NEXT sync would
+    // treat the preserved created_at as non-canonical and clear it. The
+    // merged row must carry the canonical stamp so the preservation survives
+    // repeated syncs. (Raw-payload history shows this has never fired in
+    // prod — the guard exists so it never can.)
     const stub = createSupabaseStub([
       {
         internal_user_id: "user-1",

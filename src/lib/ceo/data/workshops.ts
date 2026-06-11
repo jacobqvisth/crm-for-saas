@@ -204,7 +204,9 @@ function mapMember(
     role: asString(user.metadata?.user_role),
     companyName: asString(user.metadata?.company_name),
     emailDomain: asString(user.metadata?.email_domain),
-    // signed_up_at survived the 2026-06-11 export change; created_at did not.
+    // signed_up_at covers ~100% of users (fallback chain incl. workshop
+    // creation); created_at only the ~8% whose export row carries
+    // user_created_at. Prefer the field that actually has data.
     createdAt: user.signed_up_at ?? user.created_at,
     lastSeenAt: user.last_seen_at,
     customerIoId: user.customer_io_id,
