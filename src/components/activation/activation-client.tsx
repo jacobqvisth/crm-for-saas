@@ -26,8 +26,8 @@ import { PX_PER_DAY, ITEM_STATUSES } from "@/lib/activation/types";
 import { computeRange } from "@/lib/activation/scale";
 import { statusStyle } from "@/lib/activation/status";
 import { COLOR_TOKENS, colorClasses } from "@/lib/roadmap/colors";
-import { ActivationTimeline } from "./activation-timeline";
-import { ActivationItemPanel } from "./activation-item-panel";
+import { ActivationCanvas } from "./activation-canvas";
+import { ActivationItemModal } from "./activation-item-modal";
 
 const ZOOMS: { key: ZoomLevel; label: string }[] = [
   { key: "day", label: "Day" },
@@ -41,7 +41,6 @@ export function ActivationClient() {
   const [board, setBoard] = useState<ActivationBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState<ZoomLevel>("day");
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
   const [scrollToStartKey, setScrollToStartKey] = useState(0);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
@@ -138,11 +137,6 @@ export function ActivationClient() {
   }
 
   // ---- item ops ------------------------------------------------------------
-  const changeItemDays = (id: string, dayStart: number, dayEnd: number) => {
-    patchItemLocal(id, { day_start: dayStart, day_end: dayEnd });
-    persistItem(id, { day_start: dayStart, day_end: dayEnd }, "Couldn't move touchpoint");
-  };
-
   const saveItem = (id: string, patch: Partial<ActivationItem>) => {
     patchItemLocal(id, patch);
     persistItem(id, patch, "Couldn't save changes");
@@ -169,7 +163,6 @@ export function ActivationClient() {
       if (!res.ok) throw new Error();
       const { item } = (await res.json()) as { item: ActivationItem };
       setBoard((b) => (b ? { ...b, items: [...b.items, item] } : b));
-      setSelectedItemId(item.id);
       setDetailItemId(item.id);
     } catch {
       toast.error("Couldn't add touchpoint");
@@ -180,7 +173,6 @@ export function ActivationClient() {
     const prev = board;
     setBoard((b) => (b ? { ...b, items: b.items.filter((it) => it.id !== id) } : b));
     setDetailItemId(null);
-    setSelectedItemId(null);
     try {
       const res = await fetch(`/api/activation/items/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
@@ -481,12 +473,6 @@ export function ActivationClient() {
             <LogIn className="h-3.5 w-3.5" /> Day 0
           </button>
           <button
-            onClick={addGroup}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add channel
-          </button>
-          <button
             onClick={() => board && board.groups.length > 0 && addItem(board.groups[0].id)}
             disabled={!board || board.groups.length === 0}
             title="Create a new touchpoint"
@@ -555,6 +541,33 @@ export function ActivationClient() {
             >
               <Plus className="h-3 w-3" /> Scenario
             </button>
+
+            {/* channels legend (click a chip to rename/recolor/delete) */}
+            <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-4">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                Channels
+              </span>
+              {board.groups.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={(e) =>
+                    setGroupMenu({ group: g, x: e.clientX, y: e.clientY, renaming: false, draft: g.name })
+                  }
+                  title={`${g.name} — click to edit`}
+                  className="flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                >
+                  <span className={`h-2 w-2 rounded-full ${colorClasses(g.color).dot}`} />
+                  {g.name}
+                </button>
+              ))}
+              <button
+                onClick={addGroup}
+                title="Add channel"
+                className="rounded-full border border-dashed border-slate-300 p-0.5 text-slate-400 hover:bg-slate-50"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </span>
           </div>
           {activeScenario?.description && (
             <p className="pl-6 text-xs text-slate-500">
@@ -594,23 +607,13 @@ export function ActivationClient() {
           </p>
         </div>
       ) : (
-        <ActivationTimeline
+        <ActivationCanvas
           board={visibleBoard}
           range={range}
           pxPerDay={pxPerDay}
-          selectedItemId={selectedItemId}
           scrollToStartKey={scrollToStartKey}
           stepNumbers={stepNumbers}
-          onChangeItemDays={changeItemDays}
-          onSelectItem={(id) => {
-            setSelectedItemId(id);
-            setDetailItemId(id);
-          }}
-          onAddItem={addItem}
-          onToggleCollapse={(g) => updateGroup(g.id, { collapsed: !g.collapsed })}
-          onGroupMenu={(g, anchor) =>
-            setGroupMenu({ group: g, x: anchor.x, y: anchor.y, renaming: false, draft: g.name })
-          }
+          onSelectItem={setDetailItemId}
         />
       )}
 
@@ -768,8 +771,8 @@ export function ActivationClient() {
         </>
       )}
 
-      {/* ===== Detail panel ===== */}
-      <ActivationItemPanel
+      {/* ===== Detail modal ===== */}
+      <ActivationItemModal
         item={detailItem}
         groups={board?.groups ?? []}
         scenarios={board?.scenarios ?? []}
