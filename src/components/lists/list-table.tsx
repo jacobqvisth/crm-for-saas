@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, Plus, Copy, Trash2, Users, Filter, MoreHorizontal } from 'lucide-react';
+import { Search, X, Plus, Copy, Trash2, Users, Filter, MoreHorizontal, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
@@ -277,6 +277,12 @@ export function ListTable() {
                         {list.is_dynamic === true ? <Filter className="w-3 h-3" /> : <Users className="w-3 h-3" />}
                         {list.is_dynamic === true ? 'Dynamic' : 'Static'}
                       </span>
+                      {list.purpose === 'calling' && (
+                        <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                          <Phone className="w-3 h-3" />
+                          Call list
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-500 max-w-xs truncate">
                       {list.description || '—'}
