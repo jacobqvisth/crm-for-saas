@@ -4510,3 +4510,10 @@ Session closed.
 - **UI:** "Check Customer.io" header button → results modal (`activation-cio-check.tsx`): Fix / Link+fix-status / Add-to-board per row + Apply-all; fixes stamp source_note "Verified in Customer.io on <date>: campaign X is <state>"; imports land day 0 with a placement reminder. All writes via existing item CRUD.
 - **Metrics:** linked touchpoint modal shows sent/delivered/open%/click%/converted (last 90 days) aggregated from dashboard_metric_snapshots (RLS allows authenticated read — verified).
 - **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅.
+
+## Activation Plan — auto-apply Customer.io fixes + subject matching (2026-06-11)
+
+- **Branch:** feature/activation-auto-link → PR #375 (merged). No schema changes.
+- **Why:** Check Customer.io was suggest-only; Jacob: "why have you not linked them?" — the check should fix, not assign homework.
+- **What:** running the check now auto-applies state mismatches + link suggestions scoring ≥ AUTO_APPLY_SCORE (0.45), toasts "Auto-applied N fixes", pre-marks them done in the modal ("N auto-fixed · M to review"); matching upgraded to also score against each unclaimed campaign's live email subject lines (getCampaignEmails, ~5 min cache) so code-named campaigns ("P1") match via subject.
+- **Checks:** tsc ✅ · eslint ✅ · build ✅.
