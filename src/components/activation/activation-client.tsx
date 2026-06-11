@@ -9,6 +9,8 @@ import {
   Trash2,
   Zap,
   LogIn,
+  MoreHorizontal,
+  Route,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
@@ -17,6 +19,7 @@ import type {
   ActivationBoard,
   ActivationGroup,
   ActivationItem,
+  ActivationScenario,
   ZoomLevel,
 } from "@/lib/activation/types";
 import { PX_PER_DAY, ITEM_STATUSES } from "@/lib/activation/types";
@@ -41,6 +44,7 @@ export function ActivationClient() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
   const [scrollToStartKey, setScrollToStartKey] = useState(0);
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -51,6 +55,14 @@ export function ActivationClient() {
     y: number;
     renaming: boolean;
     draft: string;
+  } | null>(null);
+
+  const [scenarioMenu, setScenarioMenu] = useState<{
+    scenario: ActivationScenario;
+    x: number;
+    y: number;
+    nameDraft: string;
+    descDraft: string;
   } | null>(null);
 
   const load = useCallback(
@@ -64,6 +76,7 @@ export function ActivationClient() {
         const data = (await res.json()) as { boards: ActivationPlan[]; board: ActivationBoard };
         setBoards(data.boards);
         setBoard(data.board);
+        setActiveScenarioId(null);
       } catch {
         toast.error("Failed to load activation plan");
       } finally {
@@ -77,7 +90,31 @@ export function ActivationClient() {
     if (workspaceId) load();
   }, [workspaceId, load]);
 
-  const range = useMemo(() => computeRange(board?.items ?? []), [board?.items]);
+  // ---- scenario filtering ----------------------------------------------------
+  const activeScenario = useMemo(
+    () => board?.scenarios.find((s) => s.id === activeScenarioId) ?? null,
+    [board?.scenarios, activeScenarioId]
+  );
+
+  /** Board narrowed to the active scenario: only member items, only non-empty lanes. */
+  const visibleBoard: ActivationBoard | null = useMemo(() => {
+    if (!board) return null;
+    if (!activeScenario) return board;
+    const items = board.items.filter((it) => (it.scenario_ids ?? []).includes(activeScenario.id));
+    const usedGroupIds = new Set(items.map((it) => it.group_id));
+    return { ...board, items, groups: board.groups.filter((g) => usedGroupIds.has(g.id)) };
+  }, [board, activeScenario]);
+
+  /** Journey step numbers (1-based, day order) for the active scenario. */
+  const stepNumbers = useMemo(() => {
+    if (!activeScenario || !visibleBoard) return undefined;
+    const ordered = [...visibleBoard.items].sort(
+      (a, b) => a.day_start - b.day_start || a.day_end - b.day_end || a.sort_order - b.sort_order
+    );
+    return new Map(ordered.map((it, i) => [it.id, i + 1]));
+  }, [activeScenario, visibleBoard]);
+
+  const range = useMemo(() => computeRange(visibleBoard?.items ?? []), [visibleBoard?.items]);
   const pxPerDay = PX_PER_DAY[zoom];
 
   // ---- helpers -------------------------------------------------------------
@@ -124,6 +161,9 @@ export function ActivationClient() {
           day_start: 0,
           day_end: 0,
           status: "Idea",
+          // A touchpoint created while a journey is open belongs to it,
+          // otherwise it would be filtered out the moment it's created.
+          scenario_ids: activeScenarioId ? [activeScenarioId] : [],
         }),
       });
       if (!res.ok) throw new Error();
@@ -212,6 +252,77 @@ export function ActivationClient() {
     }
   }
 
+  // ---- scenario ops ----------------------------------------------------------
+  async function addScenario() {
+    if (!board) return;
+    const color = COLOR_TOKENS[board.scenarios.length % COLOR_TOKENS.length];
+    try {
+      const res = await fetch("/api/activation/scenarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: board.id, name: "New scenario", color }),
+      });
+      if (!res.ok) throw new Error();
+      const { scenario } = (await res.json()) as { scenario: ActivationScenario };
+      setBoard((b) => (b ? { ...b, scenarios: [...b.scenarios, scenario] } : b));
+      setActiveScenarioId(scenario.id);
+      setScenarioMenu({
+        scenario,
+        x: window.innerWidth / 2 - 140,
+        y: 140,
+        nameDraft: scenario.name,
+        descDraft: "",
+      });
+    } catch {
+      toast.error("Couldn't add scenario");
+    }
+  }
+
+  async function updateScenario(id: string, patch: Partial<ActivationScenario>) {
+    setBoard((b) =>
+      b
+        ? { ...b, scenarios: b.scenarios.map((s) => (s.id === id ? { ...s, ...patch } : s)) }
+        : b
+    );
+    try {
+      const res = await fetch(`/api/activation/scenarios/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error("Couldn't update scenario");
+      load(board?.id);
+    }
+  }
+
+  async function deleteScenario(id: string) {
+    const prev = board;
+    setBoard((b) =>
+      b
+        ? {
+            ...b,
+            scenarios: b.scenarios.filter((s) => s.id !== id),
+            items: b.items.map((it) => ({
+              ...it,
+              scenario_ids: (it.scenario_ids ?? []).filter((sid) => sid !== id),
+            })),
+          }
+        : b
+    );
+    if (activeScenarioId === id) setActiveScenarioId(null);
+    setScenarioMenu(null);
+    try {
+      const res = await fetch(`/api/activation/scenarios/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Scenario deleted");
+    } catch {
+      toast.error("Couldn't delete scenario");
+      setBoard(prev);
+    }
+  }
+
   // ---- board ops -----------------------------------------------------------
   async function createBoard() {
     try {
@@ -224,6 +335,7 @@ export function ActivationClient() {
       const { board: nb } = (await res.json()) as { board: ActivationBoard };
       setBoards((bs) => [...bs, nb]);
       setBoard(nb);
+      setActiveScenarioId(null);
       setEditingTitle(true);
       setTitleDraft(nb.name);
     } catch {
@@ -257,7 +369,7 @@ export function ActivationClient() {
     [board?.items, detailItemId]
   );
 
-  // close the group menu on any outside click
+  // close popover menus on any outside click
   const menuRef = useRef<HTMLDivElement>(null);
 
   if (!workspaceId) {
@@ -329,7 +441,7 @@ export function ActivationClient() {
         </button>
 
         {/* Status legend */}
-        <div className="ml-2 hidden items-center gap-3 lg:flex">
+        <div className="ml-2 hidden items-center gap-3 xl:flex">
           {ITEM_STATUSES.map((s) => {
             const st = statusStyle(s);
             if (!st) return null;
@@ -385,8 +497,81 @@ export function ActivationClient() {
         </div>
       </div>
 
+      {/* ===== Scenario simulation bar ===== */}
+      {board && (
+        <div className="flex flex-col gap-1 border-t border-slate-100 px-4 py-2">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <Route className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <button
+              onClick={() => setActiveScenarioId(null)}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                activeScenarioId === null
+                  ? "bg-slate-800 text-white"
+                  : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              All touchpoints
+            </button>
+            {board.scenarios.map((sc) => {
+              const active = activeScenarioId === sc.id;
+              const colors = colorClasses(sc.color);
+              return (
+                <span key={sc.id} className="flex shrink-0 items-center">
+                  <button
+                    onClick={() => setActiveScenarioId(active ? null : sc.id)}
+                    title={sc.description ?? sc.name}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+                      active
+                        ? "bg-indigo-600 text-white"
+                        : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${colors.dot}`} />
+                    {sc.name}
+                  </button>
+                  {active && (
+                    <button
+                      onClick={(e) =>
+                        setScenarioMenu({
+                          scenario: sc,
+                          x: e.clientX,
+                          y: e.clientY,
+                          nameDraft: sc.name,
+                          descDraft: sc.description ?? "",
+                        })
+                      }
+                      title="Scenario options"
+                      className="ml-0.5 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </span>
+              );
+            })}
+            <button
+              onClick={addScenario}
+              className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs text-slate-500 hover:bg-slate-50"
+            >
+              <Plus className="h-3 w-3" /> Scenario
+            </button>
+          </div>
+          {activeScenario?.description && (
+            <p className="pl-6 text-xs text-slate-500">
+              {activeScenario.description}
+              {stepNumbers && (
+                <span className="ml-1 text-slate-400">
+                  · {stepNumbers.size} step{stepNumbers.size === 1 ? "" : "s"}, numbered in day
+                  order
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ===== Board body ===== */}
-      {loading || !board ? (
+      {loading || !board || !visibleBoard ? (
         <div className="flex flex-1 items-center justify-center border-t border-slate-200 text-sm text-slate-400">
           {loading ? "Loading activation plan…" : "No plan"}
         </div>
@@ -400,13 +585,22 @@ export function ActivationClient() {
             <Plus className="h-4 w-4" /> Add your first channel
           </button>
         </div>
+      ) : visibleBoard.items.length === 0 && activeScenario ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 border-t border-slate-200 text-sm text-slate-500">
+          <p>No touchpoints in “{activeScenario.name}” yet.</p>
+          <p className="text-xs text-slate-400">
+            Open a touchpoint and tick this scenario under “Scenarios”, or add a new touchpoint
+            while this scenario is selected.
+          </p>
+        </div>
       ) : (
         <ActivationTimeline
-          board={board}
+          board={visibleBoard}
           range={range}
           pxPerDay={pxPerDay}
           selectedItemId={selectedItemId}
           scrollToStartKey={scrollToStartKey}
+          stepNumbers={stepNumbers}
           onChangeItemDays={changeItemDays}
           onSelectItem={(id) => {
             setSelectedItemId(id);
@@ -498,10 +692,87 @@ export function ActivationClient() {
         </>
       )}
 
+      {/* ===== Scenario options popover ===== */}
+      {scenarioMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setScenarioMenu(null)} />
+          <div
+            className="fixed z-50 w-72 rounded-lg border border-slate-200 bg-white p-3 shadow-xl"
+            style={{
+              left: Math.min(scenarioMenu.x, window.innerWidth - 300),
+              top: Math.min(scenarioMenu.y + 8, window.innerHeight - 320),
+            }}
+          >
+            <label className="mb-1 block text-xs font-medium text-slate-500">Name</label>
+            <input
+              autoFocus
+              value={scenarioMenu.nameDraft}
+              onChange={(e) =>
+                setScenarioMenu((m) => (m ? { ...m, nameDraft: e.target.value } : m))
+              }
+              className="mb-2 w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <label className="mb-1 block text-xs font-medium text-slate-500">Description</label>
+            <textarea
+              rows={3}
+              value={scenarioMenu.descDraft}
+              onChange={(e) =>
+                setScenarioMenu((m) => (m ? { ...m, descDraft: e.target.value } : m))
+              }
+              placeholder="What happens to the user in this journey…"
+              className="mb-2 w-full resize-none rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <p className="mb-1 text-xs text-slate-400">Color</p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {COLOR_TOKENS.map((token) => (
+                <button
+                  key={token}
+                  onClick={() => {
+                    updateScenario(scenarioMenu.scenario.id, { color: token });
+                    setScenarioMenu((m) =>
+                      m ? { ...m, scenario: { ...m.scenario, color: token } } : m
+                    );
+                  }}
+                  title={token}
+                  className={`h-5 w-5 rounded-full ${colorClasses(token).dot} ${
+                    scenarioMenu.scenario.color === token
+                      ? "ring-2 ring-indigo-500 ring-offset-1"
+                      : ""
+                  }`}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-2 border-t border-slate-100 pt-2">
+              <button
+                onClick={() => {
+                  if (scenarioMenu.nameDraft.trim()) {
+                    updateScenario(scenarioMenu.scenario.id, {
+                      name: scenarioMenu.nameDraft.trim(),
+                      description: scenarioMenu.descDraft.trim() || null,
+                    });
+                  }
+                  setScenarioMenu(null);
+                }}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => deleteScenario(scenarioMenu.scenario.id)}
+                className="ml-auto flex items-center gap-1 rounded px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ===== Detail panel ===== */}
       <ActivationItemPanel
         item={detailItem}
         groups={board?.groups ?? []}
+        scenarios={board?.scenarios ?? []}
         onClose={() => setDetailItemId(null)}
         onSave={saveItem}
         onDelete={deleteItem}
