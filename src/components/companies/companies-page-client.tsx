@@ -306,33 +306,19 @@ export function CompaniesPageClient() {
       return;
     }
 
-    // Fetch contact and deal counts for this page
+    // Fetch contact counts for this page
     const companyIds = (data || []).map((c) => c.id);
     let contactCounts: Record<string, number> = {};
-    let dealCounts: Record<string, number> = {};
 
     if (companyIds.length > 0) {
-      const [{ data: contacts }, { data: deals }] = await Promise.all([
-        supabase
-          .from('contacts')
-          .select('company_id')
-          .eq('workspace_id', workspaceId)
-          .in('company_id', companyIds),
-        supabase
-          .from('deals')
-          .select('company_id')
-          .eq('workspace_id', workspaceId)
-          .in('company_id', companyIds),
-      ]);
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('company_id')
+        .eq('workspace_id', workspaceId)
+        .in('company_id', companyIds);
       if (contacts) {
         contactCounts = contacts.reduce((acc, c) => {
           if (c.company_id) acc[c.company_id] = (acc[c.company_id] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-      }
-      if (deals) {
-        dealCounts = deals.reduce((acc, d) => {
-          if (d.company_id) acc[d.company_id] = (acc[d.company_id] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
       }
@@ -341,7 +327,6 @@ export function CompaniesPageClient() {
     const mapped: Company[] = (data || []).map((c) => ({
       ...c,
       contacts_count: contactCounts[c.id] || 0,
-      deals_count: dealCounts[c.id] || 0,
     }));
 
     setCompanies(mapped);
@@ -998,8 +983,6 @@ function renderCell(id: ColumnId, company: Company): React.ReactNode {
       ) : <span className="text-slate-400">—</span>;
     case 'contacts_count':
       return <span className="text-slate-600">{company.contacts_count}</span>;
-    case 'deals_count':
-      return <span className="text-slate-600">{company.deals_count}</span>;
     case 'lifecycle_stage':
       return company.lifecycle_stage ? (
         <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${

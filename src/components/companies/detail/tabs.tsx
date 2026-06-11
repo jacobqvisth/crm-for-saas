@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Activity as ActivityIcon } from 'lucide-react';
-import { LeadStatusBadge, DealStageBadge } from '@/components/ui/badge';
+import { LeadStatusBadge } from '@/components/ui/badge';
 import { StatusesTab } from './statuses-tab';
 import type { OutreachStatus } from './status';
 import type {
-  Activity, Company, Contact, DealRow, Subscription, UsageEvent, TabId,
+  Activity, Company, Contact, Subscription, UsageEvent, TabId,
 } from './types';
 
 type TabSpec = { id: TabId; label: string; count?: number; show: boolean };
@@ -18,7 +18,6 @@ interface TabsProps {
   company: Company;
   outreachStatus: OutreachStatus;
   contacts: Contact[];
-  deals: DealRow[];
   activities: Activity[];
   subscriptions: Subscription[];
   usageEvents: UsageEvent[];
@@ -26,12 +25,11 @@ interface TabsProps {
 
 export function CompanyTabs({
   activeTab, onChangeTab, company, outreachStatus,
-  contacts, deals, activities, subscriptions, usageEvents,
+  contacts, activities, subscriptions, usageEvents,
 }: TabsProps) {
   const tabs: TabSpec[] = [
     { id: 'activity',      label: 'Activity',      count: activities.length || undefined,    show: true },
     { id: 'contacts',      label: 'Contacts',      count: contacts.length,                   show: true },
-    { id: 'deals',         label: 'Deals',         count: deals.length,                      show: true },
     { id: 'statuses',      label: 'Statuses',      show: true },
     { id: 'subscriptions', label: 'Subscriptions', count: subscriptions.length,              show: subscriptions.length > 0 },
     { id: 'usage',         label: 'App usage',     count: usageEvents.length,                show: usageEvents.length > 0 },
@@ -58,7 +56,6 @@ export function CompanyTabs({
       <div className="p-4">
         {activeTab === 'activity' && <ActivityTab activities={activities} />}
         {activeTab === 'contacts' && <ContactsTab contacts={contacts} />}
-        {activeTab === 'deals' && <DealsTab deals={deals} />}
         {activeTab === 'statuses' && <StatusesTab company={company} outreachStatus={outreachStatus} />}
         {activeTab === 'subscriptions' && <SubscriptionsTab subscriptions={subscriptions} />}
         {activeTab === 'usage' && <UsageTab usageEvents={usageEvents} contacts={contacts} />}
@@ -128,38 +125,6 @@ function ContactsTab({ contacts }: { contacts: Contact[] }) {
               <td className="px-3 py-2"><LeadStatusBadge status={c.lead_status ?? 'new'} /></td>
               <td className="px-3 py-2 text-slate-500">
                 {c.created_at ? format(new Date(c.created_at), 'MMM d, yyyy') : '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function DealsTab({ deals }: { deals: DealRow[] }) {
-  if (deals.length === 0) {
-    return <p className="text-sm text-slate-400 py-8 text-center">No deals for this company</p>;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200">
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Name</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Amount</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Stage</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Expected close</th>
-          </tr>
-        </thead>
-        <tbody>
-          {deals.map((d) => (
-            <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
-              <td className="px-3 py-2 font-medium text-slate-900">{d.name}</td>
-              <td className="px-3 py-2 text-slate-600">{d.amount ? `$${d.amount.toLocaleString()}` : '—'}</td>
-              <td className="px-3 py-2"><DealStageBadge stage={d.stage} /></td>
-              <td className="px-3 py-2 text-slate-500">
-                {d.expected_close_date ? format(new Date(d.expected_close_date), 'MMM d, yyyy') : '—'}
               </td>
             </tr>
           ))}

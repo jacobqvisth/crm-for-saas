@@ -13,13 +13,12 @@ interface HeroProps {
   outreachStatus: OutreachStatus;
   onUpdate: (field: keyof Company, value: string | null) => void;
   onAddContact: () => void;
-  onAddDeal: () => void;
   onLogActivity: () => void;
   onDelete: () => void;
 }
 
 export function CompanyHero({
-  company, outreachStatus, onUpdate, onAddContact, onAddDeal, onLogActivity, onDelete,
+  company, outreachStatus, onUpdate, onAddContact, onLogActivity, onDelete,
 }: HeroProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const faviconUrl = company.domain
@@ -93,13 +92,6 @@ export function CompanyHero({
           >
             <Pencil className="w-3.5 h-3.5" />
             Log activity
-          </button>
-          <button
-            onClick={onAddDeal}
-            className="hidden md:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Deal
           </button>
           <button
             onClick={onAddContact}

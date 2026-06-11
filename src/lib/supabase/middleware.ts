@@ -5,7 +5,6 @@ const protectedRoutes = [
   "/dashboard",
   "/contacts",
   "/companies",
-  "/deals",
   "/sequences",
   "/lists",
   "/roadmap",

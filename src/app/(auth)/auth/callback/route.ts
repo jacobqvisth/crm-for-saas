@@ -63,11 +63,11 @@ export async function GET(request: Request) {
 
           // Onboarding writes were silently swallowed before this hardening.
           // A failure on any of them put the user into a broken state:
-          // signed in but with no workspace membership, no owner record,
-          // or no default pipeline. The user would see an empty dashboard
-          // with no obvious error. Now each insert is checked and any
-          // failure short-circuits to /login?error=onboarding so the user
-          // gets feedback + can retry instead of landing in limbo.
+          // signed in but with no workspace membership or no owner record.
+          // The user would see an empty dashboard with no obvious error.
+          // Now each insert is checked and any failure short-circuits to
+          // /login?error=onboarding so the user gets feedback + can retry
+          // instead of landing in limbo.
           if (targetWorkspaceId) {
             const { error: joinError } = await serviceClient
               .from("workspace_members")
@@ -126,33 +126,6 @@ export async function GET(request: Request) {
               return NextResponse.redirect(
                 `${origin}/login?error=onboarding`,
               );
-            }
-
-            // Create a default pipeline. A failure here is less catastrophic
-            // than the membership writes — the user can still use the app,
-            // they'd just hit an empty kanban — but it's still worth
-            // surfacing in logs so we can investigate.
-            const { error: pipelineError } = await serviceClient
-              .from("pipelines")
-              .insert({
-                workspace_id: workspace.id,
-                name: "Sales Pipeline",
-                stages: [
-                  { name: "Lead", order: 0, probability: 10, color: "#6366f1" },
-                  { name: "Qualified", order: 1, probability: 25, color: "#8b5cf6" },
-                  { name: "Proposal", order: 2, probability: 50, color: "#a855f7" },
-                  { name: "Negotiation", order: 3, probability: 75, color: "#d946ef" },
-                  { name: "Closed Won", order: 4, probability: 100, color: "#22c55e" },
-                  { name: "Closed Lost", order: 5, probability: 0, color: "#ef4444" },
-                ],
-              });
-            if (pipelineError) {
-              console.error(
-                `[auth/callback] create default pipeline for workspace ${workspace.id}:`,
-                pipelineError,
-              );
-              // Don't redirect to error here — the user can still use the app,
-              // they'd just hit an empty kanban.
             }
           }
         }
