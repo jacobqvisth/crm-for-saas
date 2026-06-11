@@ -13,6 +13,16 @@ export interface CioCampaignSummary {
   type: string | null;
 }
 
+/** Full campaign detail incl. what starts the journey. */
+export interface CioCampaignDetail extends CioCampaignSummary {
+  /** For event-triggered campaigns: the event name that starts the journey. */
+  event_name: string | null;
+  trigger_segment_ids: number[];
+  first_started: number | null; // unix seconds
+  created: number | null;
+  updated: number | null;
+}
+
 export interface CioEmail {
   id: number;
   name: string | null;
@@ -70,14 +80,14 @@ export async function listCampaigns(): Promise<CioCampaignSummary[]> {
 export async function getCampaignEmails(
   campaignId: number,
   maxEmails = 5
-): Promise<{ campaign: CioCampaignSummary | null; emails: CioEmail[] }> {
+): Promise<{ campaign: CioCampaignDetail | null; emails: CioEmail[] }> {
   const [campaignPayload, actionsPayload] = await Promise.all([
     cioGet(`/campaigns/${campaignId}`).catch(() => null),
     cioGet(`/campaigns/${campaignId}/actions`),
   ]);
 
   const campaignRec = (campaignPayload?.campaign ?? null) as Record<string, unknown> | null;
-  const campaign: CioCampaignSummary | null = campaignRec
+  const campaign: CioCampaignDetail | null = campaignRec
     ? {
         id: Number(campaignRec.id ?? campaignId),
         name: String(campaignRec.name ?? `Campaign ${campaignId}`),
@@ -88,6 +98,22 @@ export async function getCampaignEmails(
               ? "running"
               : null,
         type: campaignRec.type != null ? String(campaignRec.type) : null,
+        event_name: campaignRec.event_name != null ? String(campaignRec.event_name) : null,
+        trigger_segment_ids: Array.isArray(campaignRec.trigger_segment_ids)
+          ? campaignRec.trigger_segment_ids.map(Number).filter(Number.isFinite)
+          : [],
+        first_started:
+          campaignRec.first_started != null && Number(campaignRec.first_started) > 0
+            ? Number(campaignRec.first_started)
+            : null,
+        created:
+          campaignRec.created != null && Number(campaignRec.created) > 0
+            ? Number(campaignRec.created)
+            : null,
+        updated:
+          campaignRec.updated != null && Number(campaignRec.updated) > 0
+            ? Number(campaignRec.updated)
+            : null,
       }
     : null;
 
