@@ -18,6 +18,8 @@ interface CioCheckModalProps {
   error: string | null;
   findings: VerifyFinding[];
   importable: CioCampaignSummary[];
+  /** Item ids whose fixes were applied automatically when the check ran. */
+  autoApplied: string[];
   onClose: () => void;
   /** Apply a correction/link to an existing touchpoint. */
   onApply: (itemId: string, patch: Partial<ActivationItem>) => void;
@@ -39,6 +41,7 @@ export function CioCheckModal({
   error,
   findings,
   importable,
+  autoApplied,
   onClose,
   onApply,
   onImport,
@@ -46,8 +49,9 @@ export function CioCheckModal({
   const [done, setDone] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (open) setDone(new Set());
-  }, [open]);
+    if (open) setDone(new Set(autoApplied));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoApplied.join(",")]);
 
   if (!open) return null;
 
@@ -83,8 +87,8 @@ export function CioCheckModal({
           <h2 className="text-lg font-semibold text-slate-900">Customer.io check</h2>
           {!loading && !error && (
             <span className="text-xs text-slate-400">
-              {ok.length} in sync · {mismatches.length + suggestions.length} fixable ·{" "}
-              {importable.length} not on the board
+              {ok.length} in sync · {autoApplied.length} auto-fixed ·{" "}
+              {actionable.length} to review · {importable.length} not on the board
             </span>
           )}
           <button
@@ -116,7 +120,7 @@ export function CioCheckModal({
             {mismatches.length > 0 && (
               <section>
                 <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Wrong status — campaign state says otherwise
+                  Wrong status — corrected from the campaign state
                 </h3>
                 <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                   {mismatches.map((f) => (

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveWorkspace } from "@/lib/roadmap/server";
-import { cioConfigured, listCampaigns, type CioCampaignSummary } from "@/lib/activation/cio";
-import { bestMatch, stateToStatus, verifiedNote } from "@/lib/activation/cio-verify";
+import { cioConfigured, getCampaignEmails, listCampaigns, type CioCampaignSummary } from "@/lib/activation/cio";
+import { bestMatch, stateToStatus, verifiedNote, type MatchCandidate } from "@/lib/activation/cio-verify";
 
 // GET /api/activation/cio/verify?plan_id=<uuid>
 //
@@ -92,10 +92,33 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Subjects of unclaimed campaigns sharpen the matching (cached ~5 min by
+  // the cio helpers, so repeat checks are cheap).
+  const unlinkedExists = relevant.some((it) => !it.cio_campaign_id);
+  const subjectsById = new Map<string, string[]>();
+  if (unlinkedExists) {
+    const unclaimedAll = campaigns.filter((c) => !claimedIds.has(String(c.id)));
+    await Promise.all(
+      unclaimedAll.map(async (c) => {
+        try {
+          const { emails } = await getCampaignEmails(c.id, 3);
+          subjectsById.set(
+            String(c.id),
+            emails.flatMap((e) => (e.subject ? [e.subject] : []))
+          );
+        } catch {
+          subjectsById.set(String(c.id), []);
+        }
+      })
+    );
+  }
+
   for (const it of relevant) {
     if (it.cio_campaign_id) continue;
-    const unclaimed = campaigns.filter((c) => !claimedIds.has(String(c.id)));
-    const match = bestMatch(it.title, unclaimed);
+    const candidates: MatchCandidate[] = campaigns
+      .filter((c) => !claimedIds.has(String(c.id)))
+      .map((c) => ({ campaign: c, texts: subjectsById.get(String(c.id)) ?? [] }));
+    const match = bestMatch(it.title, candidates);
     if (match) {
       claimedIds.add(String(match.campaign.id));
       findings.push({
