@@ -4517,3 +4517,11 @@ Session closed.
 - **Why:** Check Customer.io was suggest-only; Jacob: "why have you not linked them?" — the check should fix, not assign homework.
 - **What:** running the check now auto-applies state mismatches + link suggestions scoring ≥ AUTO_APPLY_SCORE (0.45), toasts "Auto-applied N fixes", pre-marks them done in the modal ("N auto-fixed · M to review"); matching upgraded to also score against each unclaimed campaign's live email subject lines (getCampaignEmails, ~5 min cache) so code-named campaigns ("P1") match via subject.
 - **Checks:** tsc ✅ · eslint ✅ · build ✅.
+
+## Activation Plan — re-audit on latest app code + fact corrections (2026-06-11)
+
+- **Why:** Jacob asked whether the in-app audit used latest GitHub code — it didn't: local codeoc-web-form clone was 125 commits / 4 weeks stale (HEAD 2026-05-12). Clone fast-forwarded to origin/main (2026-06-10, read-only fetch/ff).
+- **Re-audit verdict:** board essentially correct — paywalls, quotas core, trial redirect, GA4 events, InfoPro dialog unchanged; still NO review prompt (gap confirmed on latest code). New since audit: PostHog analytics (consent-gated autocapture, diagnostic_started/analyzed events, session replay) — analytics layer, no new touchpoint card.
+- **Corrections (Jacob approved, applied to prod rows + this seed fix):** Get Started dialog 6→10 sections; free quotas +20 AI searches/day; onboarding carousel 5→6 steps; source notes restamped "re-checked 2026-06-11 against latest GitHub main".
+- **Branch:** fix/activation-seed-reaudit → PR #377 (seed text + log).
+- **Process memory saved:** always fetch + compare local clones vs origin before code audits; stamp findings with audited commit.

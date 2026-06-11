@@ -103,24 +103,24 @@ export const SEED_GROUPS: SeedGroup[] = [
     items: [
       {
         title: "Onboarding carousel (5 steps)",
-        description: "First-login tutorial: welcome, vehicle selection, AI diagnostics, TSBs/docs, workshop data.",
+        description: "First-login tutorial, 6 steps: welcome, vehicle selection, AI diagnostics, TSBs/docs, workshop data, tutorial video.",
         day_start: 0,
         day_end: 0,
         trigger_type: "event",
         anchor_event: "signup",
         status: "Live",
         source_note:
-          "Verified in app code: codeoc-web-form src/components/onboarding/ — 5-step inline tutorial on first login. Accurate as of 2026-06-10.",
+          "Verified in app code (latest GitHub main, re-checked 2026-06-11): codeoc-web-form src/components/onboarding/onboardingSteps.tsx — 6-step inline tutorial on first login.",
       },
       {
         title: "Get Started dialog",
-        description: "Help-menu guide: getting started, diagnostics, service, TSB search, pictures, garage, feedback.",
+        description: "Help-menu guide: getting started, diagnostics, service & maintenance, manuals, electronics, OEM info, TSB search, images & diagrams, garage, feedback.",
         day_start: 0,
         day_end: 7,
         trigger_type: "day_offset",
         status: "Live",
         source_note:
-          "Verified in app code: codeoc-web-form GetStartedDialog.tsx — help-menu guide with 6 sections. Accurate as of 2026-06-10.",
+          "Verified in app code (latest GitHub main, re-checked 2026-06-11): codeoc-web-form GetStartedDialog.tsx — help-menu guide with 10 sections.",
       },
       {
         title: "Upgrade prompts on gated features",
@@ -134,14 +134,14 @@ export const SEED_GROUPS: SeedGroup[] = [
       },
       {
         title: "Daily quota banners (free plan)",
-        description: "3 diagnoses/day + 3 chat messages/day + 10 VRM lookups/day on Free; 429 banner with countdown.",
+        description: "3 diagnoses/day + 3 chat messages/day + 20 AI searches/day + 10 VRM lookups/day on Free; 429 banner with countdown.",
         day_start: 0,
         day_end: 30,
         trigger_type: "event",
         anchor_event: "quota_hit",
         status: "Live",
         source_note:
-          "Verified in app code: codeoc-web-form useSubscription.ts + quotaErrors.ts — Free plan: 3 diagnoses/day, 3 chat messages/day, 10 VRM lookups/day; 429 errors render a countdown banner.",
+          "Verified in app code (latest GitHub main, re-checked 2026-06-11): codeoc-web-form useSubscription.ts + quotaErrors.ts — Free plan: 3 diagnoses/day, 3 chats/day, 20 AI searches/day, 10 VRM lookups/day; 429 errors render a countdown banner.",
       },
       {
         title: "InfoPro trial feedback dialog",
