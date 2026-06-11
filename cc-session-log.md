@@ -4491,3 +4491,13 @@ Session closed.
 - **Fit-to-width:** ActivationCanvas measures its scroll container (ResizeObserver); effective px/day = max(zoom preset, containerWidth/rangeDays) so the 4-week window always fills the viewport — fixes the left-cramped timeline Jacob screenshotted. Zoom presets now act as a minimum density.
 - **Customer.io visibility fix:** the modal's Customer.io section only rendered when cio_campaign_id was already set — nothing was linked, so Jacob never saw it. Email-channel touchpoints (group name matches /email|customer/i) now render the section unlinked with an **inline campaign picker in the read view**; selecting saves cio_campaign_id immediately and the live subject/body + deep link load in place. Campaign list fetch now triggers on edit-mode OR unlinked-email read view; amber hint when the API is unavailable.
 - **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅.
+
+## 2026-06-09 — Manual inbox replies exempt from send-interval rate limit (PR #344)
+
+- **Branch:** fix/inbox-reply-bypass-send-interval · **PR:** #344 (merged + deployed)
+- **What:** Jacob's manual replies from the inbox were hitting "Send rate limit: minimum 600 seconds between sends" — the per-account `min_send_interval_seconds` throttle in `sendEmail()` applied to every send path. Sequences should keep the throttle; human-paced replies shouldn't.
+- **Impl:**
+  - `src/lib/gmail/send.ts` — new opt-in `bypassSendInterval?: boolean` on `SendEmailParams` (default false ⇒ sequence sends unchanged); the interval guard is skipped when set. Daily cap (`max_daily_sends`) still applies to all sends.
+  - `src/app/api/inbox/[id]/reply/route.ts` — the only manual-send call site; now passes `bypassSendInterval: true`.
+- **Note:** `sendEmail()` has exactly two callers (inbox reply + process-emails cron), so the flag cleanly partitions manual vs automated. A manual reply still bumps `daily_sends_count`/`updated_at`, so it pushes the next *sequence* send out by the interval — pre-existing behavior, left alone.
+- **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · deploy verified live. No schema change.
