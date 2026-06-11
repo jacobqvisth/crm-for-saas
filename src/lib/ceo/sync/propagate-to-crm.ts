@@ -83,7 +83,7 @@ async function propagateUsersToContacts(
     const { data, error } = await supabase
       .from("dashboard_users")
       .select(
-        "internal_user_id, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+        "internal_user_id, last_seen_at, signed_up_at, name, phone, core_stripe_customer_id, metadata",
       )
       .in("internal_user_id", slice);
     if (error) throw error;
@@ -106,6 +106,8 @@ async function propagateUsersToContacts(
           app_username: meta.username,
           app_role: normalizeAppRole(meta.user_role),
           last_active_at: u.last_seen_at,
+          // signup date is stable — never null it out on a sparse payload
+          ...(u.signed_up_at ? { signed_up_at: u.signed_up_at } : {}),
           login_count: meta.login_count,
           credits_remaining: meta.credits_remaining,
           user_plan_type: meta.plan_type,
@@ -216,6 +218,7 @@ async function propagateWorkshopsToCompanies(
 type DashboardUserShape = {
   internal_user_id: string | null;
   last_seen_at: string | null;
+  signed_up_at: string | null;
   name: string | null;
   phone: string | null;
   core_stripe_customer_id: string | null;

@@ -11,7 +11,17 @@ import {
   STATUS_OPTIONS,
   LEAD_STATUS_OPTIONS,
   EMAIL_STATUS_OPTIONS,
+  PLAN_TYPE_OPTIONS,
+  PLAN_TYPE_LABELS,
+  SUBSCRIPTION_STATUS_OPTIONS,
 } from '@/lib/lists/filter-query';
+
+const NUMERIC_FIELDS: FilterField[] = [
+  'diagnostics_total',
+  'diagnostics_last_30d',
+  'login_count',
+  'credits_remaining',
+];
 
 const EMAIL_STATUS_LABELS: Record<string, string> = {
   valid: 'Valid (deliverable)',
@@ -195,7 +205,64 @@ export function FilterRow({ filter, onChange, onRemove, companies, countries }: 
       );
     }
 
-    if (filter.field === 'created_at' || filter.field === 'last_contacted_at' || filter.field === 'last_emailed_at') {
+    if (filter.field === 'user_plan_type' || filter.field === 'user_subscription_status') {
+      const options: readonly string[] =
+        filter.field === 'user_plan_type' ? PLAN_TYPE_OPTIONS : SUBSCRIPTION_STATUS_OPTIONS;
+      const labelFor = (s: string) =>
+        filter.field === 'user_plan_type'
+          ? PLAN_TYPE_LABELS[s] ?? s
+          : s.charAt(0).toUpperCase() + s.slice(1);
+      if (filter.operator === 'in') {
+        const selected = Array.isArray(filter.value) ? filter.value : [];
+        return (
+          <div className="flex flex-wrap gap-1.5">
+            {options.map(s => (
+              <label key={s} className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(s)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? [...selected, s]
+                      : selected.filter(x => x !== s);
+                    onChange({ ...filter, value: next });
+                  }}
+                  className="rounded border-slate-300 text-indigo-600"
+                />
+                {labelFor(s)}
+              </label>
+            ))}
+          </div>
+        );
+      }
+      return (
+        <select
+          value={(filter.value as string) || ''}
+          onChange={(e) => onChange({ ...filter, value: e.target.value })}
+          className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Select...</option>
+          {options.map(s => (
+            <option key={s} value={s}>{labelFor(s)}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (NUMERIC_FIELDS.includes(filter.field)) {
+      return (
+        <input
+          type="number"
+          min={0}
+          placeholder="Number"
+          value={(filter.value as number) ?? ''}
+          onChange={(e) => onChange({ ...filter, value: e.target.value === '' ? 0 : parseInt(e.target.value) })}
+          className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      );
+    }
+
+    if (filter.field === 'created_at' || filter.field === 'last_contacted_at' || filter.field === 'last_emailed_at' || filter.field === 'signed_up_at' || filter.field === 'last_active_at') {
       if (filter.operator === 'older_than_days' || filter.operator === 'within_last_days') {
         return (
           <input
