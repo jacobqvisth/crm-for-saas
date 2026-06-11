@@ -27,6 +27,7 @@ export type DashboardSectionKey =
   | "email-campaigns"
   | "usage"
   | "active-users"
+  | "feature-usage"
   | "toplists"
   | "cta-clicks"
   | "conversions"
@@ -82,6 +83,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Active Users",
     description:
       "Logged-in users on app.wrenchlane.com and what they did in the selected range (default: yesterday). Joins GA4 engagement (sessions, page views, events) with first-party diagnostics, keyed on crm_user_id = contacts.wl_user_id. Internal-test accounts excluded.",
+  },
+  {
+    key: "feature-usage",
+    label: "Feature Usage",
+    glyph: "FU",
+    href: "/dashboard/feature-usage",
+    title: "Feature Usage",
+    description:
+      "Per-feature adoption from first-party app data: diagnostics, chat, AI search, VRM lookups, InfoPro and Motor vehicle lookups, plus real app logins (login-history backfill reaches ~14 months). Feature counters accumulate from the hourly core_app sync starting 2026-06-11.",
   },
   {
     key: "toplists",

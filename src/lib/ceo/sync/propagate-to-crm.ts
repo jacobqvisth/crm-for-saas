@@ -149,7 +149,7 @@ async function propagateWorkshopsToCompanies(
     const { data, error } = await supabase
       .from("dashboard_workshops")
       .select(
-        "workshop_id, name, country, activated_at, plan_key, core_subscription_status, payment_status, trial_end, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+        "workshop_id, name, country, activated_at, churned_at, plan_key, core_subscription_status, payment_status, trial_end, core_stripe_customer_id, core_stripe_subscription_id, metadata",
       )
       .in("workshop_id", slice);
     if (error) throw error;
@@ -184,6 +184,11 @@ async function propagateWorkshopsToCompanies(
           typeof meta.member_count === "number" ? meta.member_count : null;
         const update = {
           activated_at: w.activated_at,
+          // churned_at is the owner's churn timestamp from the core_app
+          // export — a historical fact, kept even if the workshop later
+          // reactivates (lifecycle_stage reflects the current state). This
+          // is what feeds the Field Routes lapsed pool.
+          churned_at: w.churned_at,
           subscription_status: w.core_subscription_status,
           payment_status: w.payment_status,
           trial_ends_at: w.trial_end,
@@ -222,6 +227,7 @@ type DashboardWorkshopShape = {
   name: string | null;
   country: string | null;
   activated_at: string | null;
+  churned_at: string | null;
   plan_key: string | null;
   core_subscription_status: string | null;
   payment_status: string | null;

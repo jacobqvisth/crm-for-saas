@@ -204,7 +204,8 @@ function mapMember(
     role: asString(user.metadata?.user_role),
     companyName: asString(user.metadata?.company_name),
     emailDomain: asString(user.metadata?.email_domain),
-    createdAt: user.created_at,
+    // signed_up_at survived the 2026-06-11 export change; created_at did not.
+    createdAt: user.signed_up_at ?? user.created_at,
     lastSeenAt: user.last_seen_at,
     customerIoId: user.customer_io_id,
     subscriptionStatus: asString(user.metadata?.subscription_status),
@@ -391,7 +392,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
         supabase
           .from(TABLES.users)
           .select(
-            "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+            "internal_user_id, workshop_id, customer_io_id, created_at, signed_up_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
           )
           .order("internal_user_id", { ascending: true })
           .range(from, to),

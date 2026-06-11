@@ -53,10 +53,24 @@ export type UserRow = {
   created_at: string | null;
   signed_up_at: string | null;
   last_seen_at: string | null;
+  churned_at: string | null;
   name: string | null;
   phone: string | null;
   core_stripe_customer_id: string | null;
   metadata: Record<string, unknown>;
+};
+
+export type UserLoginRow = {
+  internal_user_id: string;
+  logged_in_at: string;
+};
+
+export type FeatureUsageRow = {
+  internal_user_id: string;
+  feature_key: string;
+  granularity: "day" | "month";
+  period_start: string;
+  usage_count: number;
 };
 
 export type WorkshopRow = {
@@ -66,6 +80,7 @@ export type WorkshopRow = {
   country: string | null;
   plan_key: string | null;
   activated_at: string | null;
+  churned_at: string | null;
   created_at: string | null;
   language: string | null;
   core_subscription_status: string | null;
@@ -144,6 +159,8 @@ export type SourceSyncResult = {
   rawRows?: RawMetricRow[];
   subscriptions?: SubscriptionRow[];
   users?: UserRow[];
+  userLogins?: UserLoginRow[];
+  featureUsage?: FeatureUsageRow[];
   workshops?: WorkshopRow[];
   diagnostics?: DiagnosticRow[];
   diagnosticChats?: DiagnosticChatRow[];

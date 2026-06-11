@@ -5,6 +5,8 @@ export const TABLES = {
   metricSnapshots: "dashboard_metric_snapshots",
   funnelSnapshots: "dashboard_funnel_snapshots",
   users: "dashboard_users",
+  userLogins: "dashboard_user_logins",
+  featureUsage: "dashboard_feature_usage",
   workshops: "dashboard_workshops",
   subscriptions: "dashboard_subscriptions",
   diagnostics: "dashboard_diagnostics",

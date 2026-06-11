@@ -27,11 +27,13 @@ import type {
   CostEntryRow,
   DiagnosticChatRow,
   DiagnosticRow,
+  FeatureUsageRow,
   MetricPoint,
   MotorUsageRow,
   RawMetricRow,
   SourceConnector,
   SourceSyncWindow,
+  UserLoginRow,
   UserRow,
   WorkshopRow,
 } from "../types";
@@ -49,10 +51,16 @@ type UserStatsRecord = {
   last_active?: string | null;
   last_login?: string | null;
   login_count?: number | string | null;
+  // Last ~30 login timestamps per user. Added to the export 2026-06-11;
+  // accumulated into dashboard_user_logins so history grows past the cap.
+  login_history?: unknown;
   plan_type?: string | null;
   subscription_status?: string | null;
   payment_status?: string | null;
   trial_end?: string | null;
+  churned_at?: string | null;
+  has_used_trial?: boolean | string | null;
+  organization_number?: string | null;
   created_by_agent?: boolean | string | null;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
@@ -62,6 +70,23 @@ type UserStatsRecord = {
   workshop_activated_at?: string | null;
   workshop_created_at?: string | null;
   workshop_id?: number | string | null;
+  // Per-feature activity counters, added 2026-06-11. Each *_count is the
+  // count on its companion date (the user's last active day/month for that
+  // feature) — a snapshot, NOT a lifetime total. See buildFeatureUsageRows.
+  diagnostics_today_count?: number | string | null;
+  diagnostics_count_date?: string | null;
+  chat_today_count?: number | string | null;
+  chat_count_date?: string | null;
+  ai_search_today_count?: number | string | null;
+  ai_search_count_date?: string | null;
+  vrm_lookups_today_count?: number | string | null;
+  vrm_lookups_count_date?: string | null;
+  infopro_vehicles_today_count?: number | string | null;
+  infopro_vehicles_today_date?: string | null;
+  infopro_vehicles_month_count?: number | string | null;
+  infopro_vehicles_month?: string | null;
+  motor_vehicles_month_count?: number | string | null;
+  motor_vehicles_month?: string | null;
 };
 
 type DiagnosticRecord = {
@@ -1149,6 +1174,7 @@ export function buildUserRows(
       created_at: canonicalCreatedAt,
       signed_up_at: signedUpAt.at,
       last_seen_at: toNullableIso(lastSeenAt),
+      churned_at: toNullableIso(parseIso(row.churned_at)),
       name: asString(row.name),
       phone: asString(row.phone),
       core_stripe_customer_id: coreStripeCustomerId,
@@ -1164,6 +1190,7 @@ export function buildUserRows(
           customerIoEnrichment?.subscriptionStatus,
         customer_io_workshop_id: customerIoEnrichment?.customerIoWorkshopId,
         email_domain: emailDomain(row.email),
+        has_used_trial: asBoolean(row.has_used_trial),
         login_count: asInteger(row.login_count),
         plan_type: asString(row.plan_type),
         signed_up_at_source: signedUpAt.source,
@@ -1186,6 +1213,103 @@ export function buildUserRows(
   });
 
   return mappedRows.filter((row): row is UserRow => row !== null);
+}
+
+// One row per (user, login timestamp) from user_stats.login_history. The
+// export only carries each user's last ~30 logins; the writer insert-ignores
+// into dashboard_user_logins so the accumulated history outgrows the cap.
+export function buildUserLoginRows(rows: UserStatsRecord[]): UserLoginRow[] {
+  const seen = new Set<string>();
+  const logins: UserLoginRow[] = [];
+
+  for (const row of rows) {
+    const internalUserId = asString(row.user_id);
+    if (!internalUserId || !Array.isArray(row.login_history)) continue;
+
+    for (const entry of row.login_history) {
+      const loggedInAt = toNullableIso(parseIso(entry));
+      if (!loggedInAt) continue;
+      const key = `${internalUserId} ${loggedInAt}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      logins.push({ internal_user_id: internalUserId, logged_in_at: loggedInAt });
+    }
+  }
+
+  return logins;
+}
+
+const DAY_FEATURE_COUNTERS: Array<{
+  featureKey: string;
+  count: keyof UserStatsRecord;
+  date: keyof UserStatsRecord;
+}> = [
+  { featureKey: "diagnostics", count: "diagnostics_today_count", date: "diagnostics_count_date" },
+  { featureKey: "chat", count: "chat_today_count", date: "chat_count_date" },
+  { featureKey: "ai_search", count: "ai_search_today_count", date: "ai_search_count_date" },
+  { featureKey: "vrm_lookups", count: "vrm_lookups_today_count", date: "vrm_lookups_count_date" },
+  { featureKey: "infopro_vehicles", count: "infopro_vehicles_today_count", date: "infopro_vehicles_today_date" },
+];
+
+const MONTH_FEATURE_COUNTERS: Array<{
+  featureKey: string;
+  count: keyof UserStatsRecord;
+  month: keyof UserStatsRecord;
+}> = [
+  { featureKey: "infopro_vehicles", count: "infopro_vehicles_month_count", month: "infopro_vehicles_month" },
+  { featureKey: "motor_vehicles", count: "motor_vehicles_month_count", month: "motor_vehicles_month" },
+];
+
+// Turns the per-feature snapshot counters into dashboard_feature_usage rows.
+// Each counter is "count on its companion date" — the user's most recent
+// active day (or month) for that feature. The counter grows during the day,
+// so within one period the hourly sync's last-write-wins upsert converges on
+// the day's final total; days the export has already rotated past are kept
+// because the primary key includes period_start. Zero-count rows are skipped
+// (a zero only means "no activity yet on the new day", not a data point).
+export function buildFeatureUsageRows(rows: UserStatsRecord[]): FeatureUsageRow[] {
+  const usage = new Map<string, FeatureUsageRow>();
+
+  const record = (
+    internalUserId: string,
+    featureKey: string,
+    granularity: "day" | "month",
+    periodStart: string,
+    count: number,
+  ) => {
+    const key = `${internalUserId} ${featureKey} ${granularity} ${periodStart}`;
+    const existing = usage.get(key);
+    if (existing && existing.usage_count >= count) return;
+    usage.set(key, {
+      internal_user_id: internalUserId,
+      feature_key: featureKey,
+      granularity,
+      period_start: periodStart,
+      usage_count: count,
+    });
+  };
+
+  for (const row of rows) {
+    const internalUserId = asString(row.user_id);
+    if (!internalUserId) continue;
+
+    for (const counter of DAY_FEATURE_COUNTERS) {
+      const count = asInteger(row[counter.count]);
+      const day = asString(row[counter.date]);
+      if (count <= 0 || !day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      record(internalUserId, counter.featureKey, "day", day, count);
+    }
+
+    for (const counter of MONTH_FEATURE_COUNTERS) {
+      const count = asInteger(row[counter.count]);
+      // normalizeMonth maps "2026-05" → "2026-05-01" (a full date string).
+      const monthStart = normalizeMonth(asString(row[counter.month]));
+      if (count <= 0 || !monthStart) continue;
+      record(internalUserId, counter.featureKey, "month", monthStart, count);
+    }
+  }
+
+  return [...usage.values()];
 }
 
 export function buildWorkshopRows(
@@ -1270,6 +1394,9 @@ export function buildWorkshopRows(
     const coreStripeSubscriptionId = firstDefined((m) =>
       asString(m.stripe_subscription_id),
     );
+    // Owner-only: a mechanic's churned_at must not mark the whole workshop
+    // churned while the owner is still active, so no member fallback here.
+    const churnedAt = parseIso(owner.churned_at);
 
     return {
       workshop_id: workshopId,
@@ -1278,6 +1405,7 @@ export function buildWorkshopRows(
       country: canonicalCountry.value,
       plan_key: asString(owner.plan_type),
       activated_at: toNullableIso(canonicalActivatedAt),
+      churned_at: toNullableIso(churnedAt),
       created_at: toNullableIso(canonicalCreatedAt),
       language: canonicalLanguage.value,
       core_subscription_status: coreSubscriptionStatus,
@@ -1791,6 +1919,8 @@ export const coreAppConnector: SourceConnector = {
       customerIoEnrichment.workshopsByWorkshopId,
       stripeEnrichment.workshopsByWorkshopId,
     );
+    const userLogins = buildUserLoginRows(userStatsFile.body);
+    const featureUsage = buildFeatureUsageRows(userStatsFile.body);
     const diagnostics = buildDiagnosticsRows(
       diagnosticsFile.body,
       workshopIdByUserId,
@@ -1867,6 +1997,8 @@ export const coreAppConnector: SourceConnector = {
       metrics,
       rawRows,
       users,
+      userLogins,
+      featureUsage,
       workshops,
       diagnostics,
       diagnosticChats,
