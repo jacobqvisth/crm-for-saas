@@ -26,7 +26,6 @@ test.describe('Dashboard', () => {
     const navLinks = [
       { text: 'Contacts', url: '/contacts' },
       { text: 'Companies', url: '/companies' },
-      { text: 'Deals', url: '/deals' },
       { text: 'Sequences', url: '/sequences' },
       { text: 'Lists', url: '/lists' },
     ];
@@ -46,7 +45,6 @@ test.describe('All Pages Load Without Crashes', () => {
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Contacts', path: '/contacts' },
     { name: 'Companies', path: '/companies' },
-    { name: 'Deals', path: '/deals' },
     { name: 'Sequences', path: '/sequences' },
     { name: 'Lists', path: '/lists' },
     { name: 'Templates', path: '/templates' },

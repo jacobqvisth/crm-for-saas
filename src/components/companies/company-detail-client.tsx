@@ -16,12 +16,11 @@ import { AboutPanel } from './detail/about-panel';
 import { EditDrawer } from './detail/edit-drawer';
 import { CompanyTabs } from './detail/tabs';
 import { AddContactModal } from './detail/add-contact-modal';
-import { AddDealModal } from './detail/add-deal-modal';
 import { LogActivityModal } from './detail/log-activity-modal';
 import { deriveOutreachStatus } from './detail/status';
 import type {
   Company, Contact, Activity, Subscription, UsageEvent, DiscoveredShop,
-  DealRow, CompanyRef, TabId,
+  CompanyRef, TabId,
 } from './detail/types';
 
 export function CompanyDetailClient({ companyId }: { companyId: string }) {
@@ -31,7 +30,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
 
   const [company, setCompany] = useState<Company | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [deals, setDeals] = useState<DealRow[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [allCompanies, setAllCompanies] = useState<CompanyRef[]>([]);
   const [childCompanies, setChildCompanies] = useState<CompanyRef[]>([]);
@@ -43,7 +41,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
-  const [addDealOpen, setAddDealOpen] = useState(false);
   const [logActivityOpen, setLogActivityOpen] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
@@ -72,7 +69,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       setCustomFields((companyData.custom_fields as Record<string, string>) || {});
 
       const [
-        companiesRes, childRes, contactsRes, dealsRes,
+        companiesRes, childRes, contactsRes,
         subsRes, usageRes, shopRes,
       ] = await Promise.all([
         supabase.from('companies').select('id, name')
@@ -80,8 +77,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
         supabase.from('companies').select('id, name')
           .eq('workspace_id', workspaceId!).eq('parent_company_id', companyId).order('name'),
         supabase.from('contacts').select('*')
-          .eq('workspace_id', workspaceId!).eq('company_id', companyId).order('created_at', { ascending: false }),
-        supabase.from('deals').select('id, name, amount, stage, owner_id, expected_close_date')
           .eq('workspace_id', workspaceId!).eq('company_id', companyId).order('created_at', { ascending: false }),
         supabase.from('subscriptions').select('*')
           .eq('workspace_id', workspaceId!).eq('company_id', companyId).order('created_at', { ascending: false }),
@@ -97,7 +92,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       if (childRes.data) setChildCompanies(childRes.data);
       const contactsData = contactsRes.data ?? [];
       setContacts(contactsData);
-      if (dealsRes.data) setDeals(dealsRes.data);
       if (subsRes.data) setSubscriptions(subsRes.data);
       if (usageRes.data) setUsageEvents(usageRes.data);
       if (shopRes.data) setDiscoveredShop(shopRes.data);
@@ -224,17 +218,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     return next;
   };
 
-  const refetchDeals = async () => {
-    if (!workspaceId) return;
-    const { data } = await supabase
-      .from('deals')
-      .select('id, name, amount, stage, owner_id, expected_close_date')
-      .eq('workspace_id', workspaceId)
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    if (data) setDeals(data);
-  };
-
   const refetchActivities = async (latestContacts?: Contact[]) => {
     if (!workspaceId) return;
     const cs = latestContacts ?? contacts;
@@ -256,12 +239,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     const next = await refetchContacts();
     await refetchActivities(next);
     setActiveTab('contacts');
-  };
-
-  const handleDealCreated = async () => {
-    await refetchDeals();
-    await refetchActivities();
-    setActiveTab('deals');
   };
 
   const handleActivityLogged = async () => {
@@ -293,7 +270,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
         outreachStatus={outreachStatus}
         onUpdate={updateField}
         onAddContact={() => setAddContactOpen(true)}
-        onAddDeal={() => setAddDealOpen(true)}
         onLogActivity={() => setLogActivityOpen(true)}
         onDelete={() => setShowDeleteConfirm(true)}
       />
@@ -323,7 +299,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             company={company}
             outreachStatus={outreachStatus}
             contacts={contacts}
-            deals={deals}
             activities={activities}
             subscriptions={subscriptions}
             usageEvents={usageEvents}
@@ -350,14 +325,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             companyName={company.name}
             workspaceId={workspaceId}
             onCreated={handleContactCreated}
-          />
-          <AddDealModal
-            open={addDealOpen}
-            onClose={() => setAddDealOpen(false)}
-            companyId={company.id}
-            companyName={company.name}
-            workspaceId={workspaceId}
-            onCreated={handleDealCreated}
           />
           <LogActivityModal
             open={logActivityOpen}

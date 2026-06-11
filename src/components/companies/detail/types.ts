@@ -7,18 +7,9 @@ export type Subscription = Tables<'subscriptions'>;
 export type UsageEvent = Tables<'usage_events'>;
 export type DiscoveredShop = Tables<'discovered_shops'>;
 
-export type DealRow = {
-  id: string;
-  name: string;
-  amount: number | null;
-  stage: string;
-  owner_id: string | null;
-  expected_close_date: string | null;
-};
-
 export type CompanyRef = { id: string; name: string };
 
-export type TabId = 'activity' | 'contacts' | 'deals' | 'statuses' | 'subscriptions' | 'usage';
+export type TabId = 'activity' | 'contacts' | 'statuses' | 'subscriptions' | 'usage';
 
 export const INDUSTRIES = [
   'Technology', 'Healthcare', 'Finance', 'Education', 'Manufacturing',

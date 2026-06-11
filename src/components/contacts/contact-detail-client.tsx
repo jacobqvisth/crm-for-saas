@@ -11,7 +11,7 @@ import {
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
-import { LeadStatusBadge, ContactStatusBadge, DealStageBadge } from '@/components/ui/badge';
+import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
@@ -90,7 +90,6 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [hasMoreActivities, setHasMoreActivities] = useState(false);
   const [activitiesPage, setActivitiesPage] = useState(0);
-  const [deals, setDeals] = useState<{ id: string; name: string; amount: number | null; stage: string }[]>([]);
   const [contactLists, setContactLists] = useState<{ id: string; name: string }[]>([]);
   const [sequences, setSequences] = useState<{ id: string; name: string; status: string; current_step: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,20 +168,6 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
       // Fetch activities
       await fetchActivities(0);
-
-      // Fetch deals via junction table
-      const { data: dealContacts } = await supabase
-        .from('deal_contacts')
-        .select('deal_id')
-        .eq('contact_id', contactId);
-      if (dealContacts && dealContacts.length > 0) {
-        const dealIds = dealContacts.map(dc => dc.deal_id);
-        const { data: dealsData } = await supabase
-          .from('deals')
-          .select('id, name, amount, stage')
-          .in('id', dealIds);
-        if (dealsData) setDeals(dealsData);
-      }
 
       // Fetch lists
       const { data: listMembers } = await supabase
@@ -1006,26 +991,6 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               </Link>
             ) : (
               <p className="text-sm text-slate-400">No company linked</p>
-            )}
-          </div>
-
-          {/* Deals */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Deals</h3>
-            {deals.length === 0 ? (
-              <p className="text-sm text-slate-400">No deals</p>
-            ) : (
-              <div className="space-y-2">
-                {deals.map(deal => (
-                  <div key={deal.id} className="p-2 rounded-lg bg-slate-50">
-                    <p className="text-sm font-medium text-slate-900">{deal.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {deal.amount && <span className="text-xs text-slate-600">${deal.amount.toLocaleString()}</span>}
-                      <DealStageBadge stage={deal.stage} />
-                    </div>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
 

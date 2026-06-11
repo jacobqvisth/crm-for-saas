@@ -23,7 +23,7 @@ test.describe('Smoke Tests — Public Pages', () => {
   });
 
   test('protected routes all redirect to /login', async ({ page }) => {
-    const routes = ['/contacts', '/companies', '/deals', '/sequences', '/lists', '/settings'];
+    const routes = ['/contacts', '/companies', '/sequences', '/lists', '/settings'];
     for (const route of routes) {
       await page.goto(route);
       await page.waitForURL('**/login**', { timeout: 10_000 });

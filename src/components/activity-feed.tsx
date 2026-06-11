@@ -7,7 +7,6 @@ import {
   Phone,
   MessageSquare,
   UserPlus,
-  DollarSign,
   FileText,
   Activity,
 } from "lucide-react";
@@ -20,18 +19,15 @@ const iconMap: Record<string, typeof Activity> = {
   call: Phone,
   note: MessageSquare,
   contact_created: UserPlus,
-  deal_created: DollarSign,
-  deal_updated: DollarSign,
   task: FileText,
 };
 
-type FilterTab = "all" | "email" | "call" | "deal" | "note";
+type FilterTab = "all" | "email" | "call" | "note";
 
 const filterTabs: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "email", label: "Emails" },
   { key: "call", label: "Calls" },
-  { key: "deal", label: "Deals" },
   { key: "note", label: "Notes" },
 ];
 
@@ -39,7 +35,6 @@ const filterMap: Record<FilterTab, string[]> = {
   all: [],
   email: ["email"],
   call: ["call"],
-  deal: ["deal_created", "deal_updated"],
   note: ["note"],
 };
 
