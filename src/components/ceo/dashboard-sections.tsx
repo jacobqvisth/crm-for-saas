@@ -58,15 +58,6 @@ type DashboardSectionConfig = {
 
 export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
   {
-    key: "email-campaigns",
-    label: "Email Campaigns",
-    glyph: "EC",
-    href: "/dashboard/email-campaigns",
-    title: "Email Campaigns",
-    description:
-      "CRM outreach performance: total contacts, active sequences, emails sent, open and reply rates, pipeline value, sequence performance, and deliverability.",
-  },
-  {
     key: "usage",
     label: "Usage",
     glyph: "US",
@@ -254,6 +245,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Playbook",
     description:
       "Source priorities, dashboard operating rules, and how the CEO should read this system.",
+  },
+  {
+    key: "email-campaigns",
+    label: "Email Campaigns",
+    glyph: "EC",
+    href: "/dashboard/email-campaigns",
+    title: "Email Campaigns",
+    description:
+      "CRM outreach performance: total contacts, active sequences, emails sent, open and reply rates, pipeline value, sequence performance, and deliverability.",
   },
 ];
 
