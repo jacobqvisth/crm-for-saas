@@ -11,6 +11,7 @@ import {
   LogIn,
   MoreHorizontal,
   Route,
+  RefreshCw,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
@@ -28,6 +29,9 @@ import { statusStyle } from "@/lib/activation/status";
 import { COLOR_TOKENS, colorClasses } from "@/lib/roadmap/colors";
 import { ActivationCanvas } from "./activation-canvas";
 import { ActivationItemModal } from "./activation-item-modal";
+import { CioCheckModal } from "./activation-cio-check";
+import type { CioCampaignSummary } from "@/lib/activation/cio";
+import type { VerifyFinding } from "@/app/api/activation/cio/verify/route";
 
 const ZOOMS: { key: ZoomLevel; label: string }[] = [
   { key: "day", label: "Day" },
@@ -55,6 +59,14 @@ export function ActivationClient() {
     renaming: boolean;
     draft: string;
   } | null>(null);
+
+  const [cioCheck, setCioCheck] = useState<{
+    open: boolean;
+    loading: boolean;
+    error: string | null;
+    findings: VerifyFinding[];
+    importable: CioCampaignSummary[];
+  }>({ open: false, loading: false, error: null, findings: [], importable: [] });
 
   const [scenarioMenu, setScenarioMenu] = useState<{
     scenario: ActivationScenario;
@@ -315,6 +327,74 @@ export function ActivationClient() {
     }
   }
 
+  // ---- Customer.io check -----------------------------------------------------
+  async function runCioCheck() {
+    if (!board) return;
+    setCioCheck({ open: true, loading: true, error: null, findings: [], importable: [] });
+    try {
+      const res = await fetch(`/api/activation/cio/verify?plan_id=${board.id}`);
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        findings?: VerifyFinding[];
+        importable?: CioCampaignSummary[];
+      };
+      if (!res.ok) throw new Error(data.error ?? "Check failed");
+      setCioCheck({
+        open: true,
+        loading: false,
+        error: null,
+        findings: data.findings ?? [],
+        importable: data.importable ?? [],
+      });
+    } catch (e) {
+      setCioCheck({
+        open: true,
+        loading: false,
+        error: e instanceof Error ? e.message : "Check failed",
+        findings: [],
+        importable: [],
+      });
+    }
+  }
+
+  async function importCampaign(campaign: CioCampaignSummary): Promise<boolean> {
+    if (!board) return false;
+    const stateStatus =
+      (campaign.state ?? "").toLowerCase() === "running"
+        ? "Live"
+        : (campaign.state ?? "").toLowerCase() === "draft"
+          ? "Planned"
+          : "Paused";
+    const group =
+      board.groups.find((g) => /email|customer/i.test(g.name)) ?? board.groups[0];
+    if (!group) return false;
+    try {
+      const res = await fetch("/api/activation/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_id: board.id,
+          group_id: group.id,
+          title: campaign.name,
+          day_start: 0,
+          day_end: 0,
+          trigger_type: "event",
+          status: stateStatus,
+          cio_campaign_id: String(campaign.id),
+          source_note: `Imported from Customer.io on ${new Date().toISOString().slice(0, 10)}: campaign id ${campaign.id} (${campaign.state ?? "unknown state"}). Day placement is a default — set the real day.`,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const { item } = (await res.json()) as { item: ActivationItem };
+      setBoard((b) => (b ? { ...b, items: [...b.items, item] } : b));
+      toast.success(`Added "${campaign.name}"`);
+      return true;
+    } catch {
+      toast.error("Couldn't import campaign");
+      return false;
+    }
+  }
+
   // ---- board ops -----------------------------------------------------------
   async function createBoard() {
     try {
@@ -471,6 +551,14 @@ export function ActivationClient() {
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
           >
             <LogIn className="h-3.5 w-3.5" /> Day 0
+          </button>
+          <button
+            onClick={runCioCheck}
+            disabled={!board}
+            title="Compare the board against live Customer.io campaigns"
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Check Customer.io
           </button>
           <button
             onClick={() => board && board.groups.length > 0 && addItem(board.groups[0].id)}
@@ -770,6 +858,18 @@ export function ActivationClient() {
           </div>
         </>
       )}
+
+      {/* ===== Customer.io check results ===== */}
+      <CioCheckModal
+        open={cioCheck.open}
+        loading={cioCheck.loading}
+        error={cioCheck.error}
+        findings={cioCheck.findings}
+        importable={cioCheck.importable}
+        onClose={() => setCioCheck((c) => ({ ...c, open: false }))}
+        onApply={saveItem}
+        onImport={importCampaign}
+      />
 
       {/* ===== Detail modal ===== */}
       <ActivationItemModal

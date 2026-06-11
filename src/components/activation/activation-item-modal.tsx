@@ -39,6 +39,7 @@ interface CioContentState {
   campaign: CioCampaignOut | null;
   emails: CioEmailOut[];
   dashboardUrl: string | null;
+  metrics: Record<string, number> | null;
 }
 
 type Form = {
@@ -121,7 +122,7 @@ export function ActivationItemModal({
       return;
     }
     let cancelled = false;
-    setCioContent({ loading: true, error: null, campaign: null, emails: [], dashboardUrl: null });
+    setCioContent({ loading: true, error: null, campaign: null, emails: [], dashboardUrl: null, metrics: null });
     fetch(`/api/activation/cio/campaigns/${cioId}`)
       .then(async (r) => {
         const data = (await r.json().catch(() => ({}))) as {
@@ -129,6 +130,7 @@ export function ActivationItemModal({
           campaign?: CioCampaignOut | null;
           emails?: CioEmailOut[];
           dashboard_url?: string;
+          metrics?: Record<string, number>;
         };
         if (!r.ok) throw new Error(data.error ?? "Couldn't load from Customer.io");
         if (!cancelled)
@@ -138,11 +140,12 @@ export function ActivationItemModal({
             campaign: data.campaign ?? null,
             emails: data.emails ?? [],
             dashboardUrl: data.dashboard_url ?? null,
+            metrics: data.metrics ?? null,
           });
       })
       .catch((e: Error) => {
         if (!cancelled)
-          setCioContent({ loading: false, error: e.message, campaign: null, emails: [], dashboardUrl: null });
+          setCioContent({ loading: false, error: e.message, campaign: null, emails: [], dashboardUrl: null, metrics: null });
       });
     return () => {
       cancelled = true;
@@ -317,6 +320,35 @@ export function ActivationItemModal({
                           </span>
                         )}
                       </p>
+                    )}
+                    {cioContent.metrics && (cioContent.metrics.cio_sent ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 rounded bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        {(() => {
+                          const m = cioContent.metrics;
+                          const sent = m.cio_sent ?? 0;
+                          const pct = (n: number) => (sent > 0 ? `${Math.round((n / sent) * 100)}%` : "—");
+                          return (
+                            <>
+                              <span>
+                                <span className="font-semibold text-slate-800">{sent}</span> sent
+                              </span>
+                              <span>
+                                <span className="font-semibold text-slate-800">{m.cio_delivered ?? 0}</span> delivered
+                              </span>
+                              <span>
+                                <span className="font-semibold text-slate-800">{pct(m.cio_opened ?? 0)}</span> opened
+                              </span>
+                              <span>
+                                <span className="font-semibold text-slate-800">{pct(m.cio_clicked ?? 0)}</span> clicked
+                              </span>
+                              <span>
+                                <span className="font-semibold text-slate-800">{m.cio_converted ?? 0}</span> converted
+                              </span>
+                              <span className="text-slate-400">last 90 days</span>
+                            </>
+                          );
+                        })()}
+                      </div>
                     )}
                     {cioContent.emails.length === 0 ? (
                       <p className="text-xs text-slate-400">
