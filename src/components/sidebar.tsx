@@ -24,6 +24,7 @@ import {
   Map as MapIcon,
   GanttChart,
   Rocket,
+  Phone,
 } from "lucide-react";
 
 type NavItem = {
@@ -42,6 +43,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/discovery", label: "Discovery", icon: MapPin },
   { href: "/routes", label: "Field routes", icon: MapIcon },
+  { href: "/calls", label: "Calls", icon: Phone },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/roadmap", label: "Roadmap", icon: GanttChart },

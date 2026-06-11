@@ -372,6 +372,83 @@ export type Database = {
           },
         ]
       }
+      call_feedback: {
+        Row: {
+          activity_id: string | null
+          body: string
+          category: string
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          severity: string | null
+          status: string
+          title: string | null
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          body: string
+          category: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          severity?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          body?: string
+          category?: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          severity?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_feedback_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           account_owner_id: string | null
@@ -726,6 +803,7 @@ export type Database = {
           id: string
           is_dynamic: boolean | null
           name: string
+          purpose: string
           updated_at: string | null
           workspace_id: string
         }
@@ -736,6 +814,7 @@ export type Database = {
           id?: string
           is_dynamic?: boolean | null
           name: string
+          purpose?: string
           updated_at?: string | null
           workspace_id: string
         }
@@ -746,6 +825,7 @@ export type Database = {
           id?: string
           is_dynamic?: boolean | null
           name?: string
+          purpose?: string
           updated_at?: string | null
           workspace_id?: string
         }
