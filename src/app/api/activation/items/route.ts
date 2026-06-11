@@ -20,6 +20,7 @@ const createSchema = z
     color: z.enum(COLOR_TOKENS).nullish(),
     cio_campaign_id: z.string().max(100).nullish(),
     scenario_ids: z.array(z.string().uuid()).max(50).optional(),
+    source_note: z.string().max(2000).nullish(),
     link_url: z.string().url().max(2000).nullish(),
     sort_order: z.number().int().optional(),
   })
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
       color: body.color ?? null,
       cio_campaign_id: body.cio_campaign_id ?? null,
       scenario_ids: body.scenario_ids ?? [],
+      source_note: body.source_note ?? null,
       link_url: body.link_url ?? null,
       sort_order: order,
     })

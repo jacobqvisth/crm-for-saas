@@ -36,6 +36,8 @@ interface PlacedSpan {
   left: number;
   width: number;
   row: number;
+  /** True when the span runs past the visible range and was cut off. */
+  clipped: boolean;
 }
 
 interface ActivationCanvasProps {
@@ -120,7 +122,10 @@ export function ActivationCanvas({
     const rowEnds: number[] = [];
     const placedSpans: PlacedSpan[] = spans.map((item) => {
       const left = xForDay(item.day_start, pxPerDay);
-      const w = Math.max((item.day_end - item.day_start + 1) * pxPerDay, pxPerDay);
+      // Clip at the visible range so a long background span doesn't stretch
+      // the axis; a "continues" marker is rendered on clipped bands.
+      const visibleEnd = Math.min(item.day_end, range.end);
+      const w = Math.max((visibleEnd - item.day_start + 1) * pxPerDay, pxPerDay);
       let row = rowEnds.findIndex((end) => end + 8 <= left);
       if (row === -1) {
         row = rowEnds.length;
@@ -128,7 +133,7 @@ export function ActivationCanvas({
       } else {
         rowEnds[row] = left + w;
       }
-      return { item, left, width: w, row };
+      return { item, left, width: w, row, clipped: item.day_end > range.end };
     });
 
     return {
@@ -138,7 +143,7 @@ export function ActivationCanvas({
       maxBelow: Math.max(0, ...belowLevels),
       bandRows: rowEnds.length,
     };
-  }, [board.items, pxPerDay, width]);
+  }, [board.items, pxPerDay, width, range.end]);
 
   const axisY = 16 + (maxAbove > 0 ? BASE_STEM + maxAbove * LEVEL_H : 24);
   const belowZoneH = maxBelow > 0 ? maxBelow * LEVEL_H + 12 : 8;
@@ -306,6 +311,11 @@ export function ActivationCanvas({
               )}
               {isEvent && <Zap className="h-3 w-3 shrink-0 opacity-70" />}
               <span className="truncate text-[11px] font-medium">{s.item.title}</span>
+              {s.clipped && (
+                <span className="ml-auto shrink-0 pl-1 text-[10px] font-semibold opacity-70">
+                  → day {s.item.day_end}
+                </span>
+              )}
             </button>
           );
         })}

@@ -142,6 +142,7 @@ export type Database = {
           plan_id: string
           scenario_ids: string[]
           sort_order: number
+          source_note: string | null
           status: string | null
           title: string
           trigger_type: string
@@ -162,6 +163,7 @@ export type Database = {
           plan_id: string
           scenario_ids?: string[]
           sort_order?: number
+          source_note?: string | null
           status?: string | null
           title?: string
           trigger_type?: string
@@ -182,6 +184,7 @@ export type Database = {
           plan_id?: string
           scenario_ids?: string[]
           sort_order?: number
+          source_note?: string | null
           status?: string | null
           title?: string
           trigger_type?: string
