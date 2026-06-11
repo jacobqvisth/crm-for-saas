@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Phone, Plus, X, ListChecks, MessageSquare } from "lucide-react";
+import { Phone, Plus, ListChecks, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
+import { NewCallListModal } from "@/components/calls/new-call-list-modal";
 
 type Stats = {
   callsToday: number;
@@ -191,79 +192,6 @@ export default function CallsOverviewPage() {
       </div>
 
       {showNew && <NewCallListModal onClose={() => setShowNew(false)} onCreated={(id) => router.push(`/calls/lists/${id}`)} />}
-    </div>
-  );
-}
-
-function NewCallListModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const create = async () => {
-    if (!name.trim()) {
-      toast.error("Name is required");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/calls/lists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() || null, isDynamic: false }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to create list");
-      toast.success("Call list created");
-      onCreated(json.list.id);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create list");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900">New call list</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="mt-4 space-y-3">
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="List name"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Description (optional)"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-          <p className="text-xs text-slate-500">
-            Creates an empty list — add contacts from the list page, or build a dynamic list from Lists.
-          </p>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-2 text-sm text-slate-600 hover:text-slate-800">
-            Cancel
-          </button>
-          <button
-            onClick={create}
-            disabled={saving}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {saving ? "Creating…" : "Create"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

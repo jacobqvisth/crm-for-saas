@@ -886,6 +886,7 @@ export type Database = {
           phone: string | null
           postal_code: string | null
           seniority: string | null
+          signed_up_at: string | null
           source: string | null
           status: string | null
           tags: string[] | null
@@ -941,6 +942,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           seniority?: string | null
+          signed_up_at?: string | null
           source?: string | null
           status?: string | null
           tags?: string[] | null
@@ -996,6 +998,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           seniority?: string | null
+          signed_up_at?: string | null
           source?: string | null
           status?: string | null
           tags?: string[] | null

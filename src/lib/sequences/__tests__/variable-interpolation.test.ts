@@ -41,6 +41,7 @@ const contact = {
   email_status: "verified",
   email_verified_at: null,
   seniority: null,
+  signed_up_at: null,
   linkedin_url: null,
   instagram_url: null,
   facebook_url: null,

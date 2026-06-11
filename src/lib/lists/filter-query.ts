@@ -11,6 +11,8 @@ export type FilterOperator =
   | 'between'
   | 'older_than_days'
   | 'within_last_days'
+  | 'gte'
+  | 'lte'
   | 'is_null'
   | 'is_not_null';
 
@@ -26,7 +28,18 @@ export type FilterField =
   | 'email_status'
   | 'first_name'
   | 'last_name'
-  | 'custom_fields';
+  | 'phone'
+  | 'custom_fields'
+  // Wrenchlane-app user fields (synced hourly from dashboard_users)
+  | 'wl_user_id'
+  | 'signed_up_at'
+  | 'user_plan_type'
+  | 'user_subscription_status'
+  | 'diagnostics_total'
+  | 'diagnostics_last_30d'
+  | 'login_count'
+  | 'credits_remaining'
+  | 'last_active_at';
 
 export interface ListFilter {
   field: FilterField;
@@ -47,7 +60,17 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'email', label: 'Email' },
   { value: 'first_name', label: 'First Name' },
   { value: 'last_name', label: 'Last Name' },
+  { value: 'phone', label: 'Phone Number' },
   { value: 'custom_fields', label: 'Custom Field' },
+  { value: 'wl_user_id', label: 'App: Is App User' },
+  { value: 'signed_up_at', label: 'App: Signed Up' },
+  { value: 'user_plan_type', label: 'App: Plan' },
+  { value: 'user_subscription_status', label: 'App: Subscription Status' },
+  { value: 'diagnostics_total', label: 'App: Diagnoses (total)' },
+  { value: 'diagnostics_last_30d', label: 'App: Diagnoses (last 30d)' },
+  { value: 'login_count', label: 'App: Login Count' },
+  { value: 'credits_remaining', label: 'App: Credits Remaining' },
+  { value: 'last_active_at', label: 'App: Last Active' },
 ];
 
 export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; label: string }[]> = {
@@ -113,11 +136,91 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'equals', label: 'equals' },
     { value: 'contains', label: 'contains' },
   ],
+  phone: [
+    { value: 'is_not_null', label: 'has a phone number' },
+    { value: 'is_null', label: 'has no phone number' },
+    { value: 'contains', label: 'contains' },
+  ],
   custom_fields: [
     { value: 'equals', label: 'equals' },
     { value: 'contains', label: 'contains' },
   ],
+  wl_user_id: [
+    { value: 'is_not_null', label: 'is an app user' },
+    { value: 'is_null', label: 'is not an app user' },
+  ],
+  signed_up_at: [
+    { value: 'within_last_days', label: 'within last N days' },
+    { value: 'older_than_days', label: 'more than N days ago' },
+    { value: 'before', label: 'before' },
+    { value: 'after', label: 'after' },
+    { value: 'is_not_null', label: 'has a signup date' },
+    { value: 'is_null', label: 'has no signup date' },
+  ],
+  user_plan_type: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'in', label: 'is any of' },
+    { value: 'is_null', label: 'has no plan' },
+  ],
+  user_subscription_status: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'in', label: 'is any of' },
+    { value: 'is_null', label: 'has no subscription' },
+  ],
+  diagnostics_total: [
+    { value: 'gte', label: 'at least' },
+    { value: 'lte', label: 'at most' },
+    { value: 'equals', label: 'exactly' },
+  ],
+  diagnostics_last_30d: [
+    { value: 'gte', label: 'at least' },
+    { value: 'lte', label: 'at most' },
+    { value: 'equals', label: 'exactly' },
+  ],
+  login_count: [
+    { value: 'gte', label: 'at least' },
+    { value: 'lte', label: 'at most' },
+    { value: 'equals', label: 'exactly' },
+  ],
+  credits_remaining: [
+    { value: 'gte', label: 'at least' },
+    { value: 'lte', label: 'at most' },
+    { value: 'equals', label: 'exactly' },
+  ],
+  last_active_at: [
+    { value: 'within_last_days', label: 'within last N days' },
+    { value: 'older_than_days', label: 'more than N days ago' },
+    { value: 'is_null', label: 'never active' },
+    { value: 'is_not_null', label: 'has been active' },
+  ],
 };
+
+// Grounded in prod values as of 2026-06-11 (contacts.user_plan_type /
+// user_subscription_status distinct values).
+export const PLAN_TYPE_OPTIONS = [
+  'free',
+  'one_monthly',
+  'small_monthly',
+  'small_yearly',
+  'large_monthly',
+  'large_yearly',
+] as const;
+export const PLAN_TYPE_LABELS: Record<string, string> = {
+  free: 'Free',
+  one_monthly: 'One (monthly)',
+  small_monthly: 'Small (monthly)',
+  small_yearly: 'Small (yearly)',
+  large_monthly: 'Large (monthly)',
+  large_yearly: 'Large (yearly)',
+};
+export const SUBSCRIPTION_STATUS_OPTIONS = [
+  'trialing',
+  'active',
+  'paused',
+  'canceled',
+] as const;
 
 export const STATUS_OPTIONS = ['active', 'bounced', 'unsubscribed'] as const;
 export const LEAD_STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
@@ -183,6 +286,12 @@ export function buildFilterQuery(
         break;
       case 'within_last_days':
         query = query.gte(field, daysAgo(value as number));
+        break;
+      case 'gte':
+        query = query.gte(field, value as number);
+        break;
+      case 'lte':
+        query = query.lte(field, value as number);
         break;
       case 'is_null':
         query = query.is(field, null);
@@ -274,6 +383,17 @@ export function describeFilter(filter: ListFilter, companyName?: string): string
   }
 
   if (filter.field === 'country_code') {
+    return `${fieldLabel} ${opLabel} ${filter.value}`;
+  }
+
+  if (filter.field === 'user_plan_type') {
+    const pretty = Array.isArray(filter.value)
+      ? filter.value.map((v) => PLAN_TYPE_LABELS[v] ?? v).join(', ')
+      : PLAN_TYPE_LABELS[String(filter.value)] ?? String(filter.value);
+    return `${fieldLabel} ${opLabel} ${pretty}`;
+  }
+
+  if (filter.operator === 'gte' || filter.operator === 'lte') {
     return `${fieldLabel} ${opLabel} ${filter.value}`;
   }
 
