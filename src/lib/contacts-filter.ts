@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyListFilters, type ListFilter } from "@/lib/lists/filter-query";
 
 /**
  * Filter shape for contacts list / bulk-action endpoints.
@@ -36,6 +37,13 @@ export type ContactFilters = {
    * undefined → no filter.
    */
   engagement?: 'never_emailed' | 'emailed';
+  /**
+   * Restrict to members of a single contact list (by id). Resolved against
+   * the same dynamic/static semantics as `resolveListContactIds`:
+   * dynamic lists apply their stored filters, static lists inner-join
+   * contact_list_members. undefined → no list constraint.
+   */
+  list_id?: string;
 };
 
 function toArray(v: string | string[] | undefined): string[] {
@@ -59,15 +67,41 @@ export async function resolveContactIdsByFilters(
   const hasAccount = filters.has_account;
   const needsCompanyJoin = lifecycle.length > 0 || customerStatus.length > 0 || hasAccount != null;
 
+  // When a list is selected, resolve how it constrains the query. Mirror the
+  // /contacts page: dynamic lists layer their stored filters onto this query;
+  // static lists inner-join contact_list_members. Done as a join (not an
+  // `.in(id, …)`) so 10k+ member lists don't blow the request URL length.
+  let listRow: { is_dynamic: boolean | null; filters: unknown } | null = null;
+  if (filters.list_id) {
+    const { data } = await supabase
+      .from('contact_lists')
+      .select('is_dynamic, filters')
+      .eq('id', filters.list_id)
+      .eq('workspace_id', workspaceId)
+      .single();
+    listRow = data ?? null;
+  }
+  const needsStaticListJoin = listRow != null && listRow.is_dynamic !== true;
+
   // Use !inner join only when company-side filters apply, so contacts without
   // a company are not silently dropped from unrelated queries.
-  const selectExpr = needsCompanyJoin ? 'id, companies!inner(id)' : 'id';
+  const joins = ['id'];
+  if (needsCompanyJoin) joins.push('companies!inner(id)');
+  if (needsStaticListJoin) joins.push('contact_list_members!inner(list_id)');
+  const selectExpr = joins.join(', ');
 
   let query = supabase
     .from('contacts')
     .select(selectExpr)
     .eq('workspace_id', workspaceId)
     .limit(cap);
+
+  if (needsStaticListJoin) {
+    query = query.eq('contact_list_members.list_id', filters.list_id!);
+  } else if (listRow != null) {
+    // Dynamic list — apply its stored filter rules.
+    query = applyListFilters(query, (listRow.filters as ListFilter[] | null) ?? []);
+  }
 
   if (filters.search) {
     query = query.or(

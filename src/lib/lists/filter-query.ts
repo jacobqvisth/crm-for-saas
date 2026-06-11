@@ -232,6 +232,71 @@ function daysAgo(days: number): string {
   return d.toISOString();
 }
 
+/**
+ * Apply a list's stored filter rules onto an existing PostgREST query builder.
+ *
+ * Extracted from `buildFilterQuery` so the same dynamic-list semantics can be
+ * layered onto another query — e.g. the /contacts page applying a selected
+ * dynamic list as one more filter alongside its own dropdowns.
+ */
+export function applyListFilters<Q>(query: Q, filters: ListFilter[]): Q {
+  let q: any = query;
+  for (const filter of filters) {
+    const { field, operator, value } = filter;
+
+    if (field === 'custom_fields') {
+      const key = filter.customFieldKey;
+      if (!key) continue;
+      if (operator === 'equals') {
+        q = q.contains('custom_fields', { [key]: value });
+      } else if (operator === 'contains' && typeof value === 'string') {
+        q = q.ilike(`custom_fields->>` + key, `%${value}%`);
+      }
+      continue;
+    }
+
+    switch (operator) {
+      case 'equals':
+        q = q.eq(field, value as string);
+        break;
+      case 'not_equals':
+        q = q.neq(field, value as string);
+        break;
+      case 'contains':
+        q = q.ilike(field, `%${value}%`);
+        break;
+      case 'in':
+        q = q.in(field, value as string[]);
+        break;
+      case 'before':
+        q = q.lt(field, value as string);
+        break;
+      case 'after':
+        q = q.gt(field, value as string);
+        break;
+      case 'older_than_days':
+        q = q.lte(field, daysAgo(value as number));
+        break;
+      case 'within_last_days':
+        q = q.gte(field, daysAgo(value as number));
+        break;
+      case 'gte':
+        q = q.gte(field, value as number);
+        break;
+      case 'lte':
+        q = q.lte(field, value as number);
+        break;
+      case 'is_null':
+        q = q.is(field, null);
+        break;
+      case 'is_not_null':
+        q = q.not(field, 'is', null);
+        break;
+    }
+  }
+  return q as Q;
+}
+
 export function buildFilterQuery(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
@@ -248,59 +313,7 @@ export function buildFilterQuery(
     .select(selectClause, Object.keys(selectOpts).length > 0 ? selectOpts : undefined)
     .eq('workspace_id', workspaceId);
 
-  for (const filter of filters) {
-    const { field, operator, value } = filter;
-
-    if (field === 'custom_fields') {
-      const key = filter.customFieldKey;
-      if (!key) continue;
-      if (operator === 'equals') {
-        query = query.contains('custom_fields', { [key]: value });
-      } else if (operator === 'contains' && typeof value === 'string') {
-        query = query.ilike(`custom_fields->>` + key, `%${value}%`);
-      }
-      continue;
-    }
-
-    switch (operator) {
-      case 'equals':
-        query = query.eq(field, value as string);
-        break;
-      case 'not_equals':
-        query = query.neq(field, value as string);
-        break;
-      case 'contains':
-        query = query.ilike(field, `%${value}%`);
-        break;
-      case 'in':
-        query = query.in(field, value as string[]);
-        break;
-      case 'before':
-        query = query.lt(field, value as string);
-        break;
-      case 'after':
-        query = query.gt(field, value as string);
-        break;
-      case 'older_than_days':
-        query = query.lte(field, daysAgo(value as number));
-        break;
-      case 'within_last_days':
-        query = query.gte(field, daysAgo(value as number));
-        break;
-      case 'gte':
-        query = query.gte(field, value as number);
-        break;
-      case 'lte':
-        query = query.lte(field, value as number);
-        break;
-      case 'is_null':
-        query = query.is(field, null);
-        break;
-      case 'is_not_null':
-        query = query.not(field, 'is', null);
-        break;
-    }
-  }
+  query = applyListFilters(query, filters);
 
   if (opts?.range) {
     query = query.range(opts.range[0], opts.range[1]);
