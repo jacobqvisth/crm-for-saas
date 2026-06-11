@@ -56,18 +56,34 @@ export function matchScore(itemTitle: string, campaignName: string): number {
   return union > 0 ? inter / union : 0;
 }
 
-/** Best campaign candidate for an unlinked touchpoint title. */
+/**
+ * Best campaign candidate for an unlinked touchpoint title. Each candidate is
+ * scored against its campaign name AND its email subject lines (a campaign
+ * named "P1" still matches a "Welcome email" card via its subject).
+ */
+export interface MatchCandidate {
+  campaign: CioCampaignSummary;
+  /** Extra text to match against, e.g. the campaign's email subjects. */
+  texts: string[];
+}
+
 export function bestMatch(
   title: string,
-  campaigns: CioCampaignSummary[]
+  candidates: MatchCandidate[]
 ): { campaign: CioCampaignSummary; score: number } | null {
   let best: { campaign: CioCampaignSummary; score: number } | null = null;
-  for (const c of campaigns) {
-    const score = matchScore(title, c.name);
-    if (score > 0 && (!best || score > best.score)) best = { campaign: c, score };
+  for (const cand of candidates) {
+    const score = Math.max(
+      matchScore(title, cand.campaign.name),
+      ...cand.texts.map((t) => matchScore(title, t))
+    );
+    if (score > 0 && (!best || score > best.score)) best = { campaign: cand.campaign, score };
   }
   return best && best.score >= 0.3 ? best : null;
 }
+
+/** Suggestions at or above this score are applied automatically. */
+export const AUTO_APPLY_SCORE = 0.45;
 
 /** Map a Customer.io campaign state onto the board's status taxonomy. */
 export function stateToStatus(state: string | null): "Live" | "Planned" | "Paused" {

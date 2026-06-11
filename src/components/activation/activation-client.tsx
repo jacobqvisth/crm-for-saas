@@ -32,6 +32,7 @@ import { ActivationItemModal } from "./activation-item-modal";
 import { CioCheckModal } from "./activation-cio-check";
 import type { CioCampaignSummary } from "@/lib/activation/cio";
 import type { VerifyFinding } from "@/app/api/activation/cio/verify/route";
+import { AUTO_APPLY_SCORE } from "@/lib/activation/cio-verify";
 
 const ZOOMS: { key: ZoomLevel; label: string }[] = [
   { key: "day", label: "Day" },
@@ -66,7 +67,8 @@ export function ActivationClient() {
     error: string | null;
     findings: VerifyFinding[];
     importable: CioCampaignSummary[];
-  }>({ open: false, loading: false, error: null, findings: [], importable: [] });
+    autoApplied: string[];
+  }>({ open: false, loading: false, error: null, findings: [], importable: [], autoApplied: [] });
 
   const [scenarioMenu, setScenarioMenu] = useState<{
     scenario: ActivationScenario;
@@ -330,7 +332,7 @@ export function ActivationClient() {
   // ---- Customer.io check -----------------------------------------------------
   async function runCioCheck() {
     if (!board) return;
-    setCioCheck({ open: true, loading: true, error: null, findings: [], importable: [] });
+    setCioCheck({ open: true, loading: true, error: null, findings: [], importable: [], autoApplied: [] });
     try {
       const res = await fetch(`/api/activation/cio/verify?plan_id=${board.id}`);
       const data = (await res.json().catch(() => ({}))) as {
@@ -339,12 +341,34 @@ export function ActivationClient() {
         importable?: CioCampaignSummary[];
       };
       if (!res.ok) throw new Error(data.error ?? "Check failed");
+      const findings = data.findings ?? [];
+
+      // Apply the unambiguous fixes immediately: linked items whose campaign
+      // state disagrees with the board, and confident link suggestions.
+      // Ambiguous matches stay as one-click suggestions in the modal.
+      const autos = findings.filter(
+        (f) =>
+          f.verdict === "state_mismatch" ||
+          (f.verdict === "unlinked_match" && (f.score ?? 0) >= AUTO_APPLY_SCORE)
+      );
+      for (const f of autos) {
+        const patch: Partial<ActivationItem> = {};
+        if (f.verdict === "unlinked_match" && f.campaign)
+          patch.cio_campaign_id = String(f.campaign.id);
+        if (f.suggested_status) patch.status = f.suggested_status;
+        if (f.suggested_note) patch.source_note = f.suggested_note;
+        saveItem(f.item_id, patch);
+      }
+      if (autos.length > 0)
+        toast.success(`Auto-applied ${autos.length} fix${autos.length === 1 ? "" : "es"}`);
+
       setCioCheck({
         open: true,
         loading: false,
         error: null,
-        findings: data.findings ?? [],
+        findings,
         importable: data.importable ?? [],
+        autoApplied: autos.map((f) => f.item_id),
       });
     } catch (e) {
       setCioCheck({
@@ -353,6 +377,7 @@ export function ActivationClient() {
         error: e instanceof Error ? e.message : "Check failed",
         findings: [],
         importable: [],
+        autoApplied: [],
       });
     }
   }
@@ -866,6 +891,7 @@ export function ActivationClient() {
         error={cioCheck.error}
         findings={cioCheck.findings}
         importable={cioCheck.importable}
+        autoApplied={cioCheck.autoApplied}
         onClose={() => setCioCheck((c) => ({ ...c, open: false }))}
         onApply={saveItem}
         onImport={importCampaign}
