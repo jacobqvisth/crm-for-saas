@@ -4414,3 +4414,13 @@ Session closed.
 - **Semantics caveat (by construction):** export counters are "count on the user's last active day per feature" — hourly syncs capture effectively every active day going forward, but **feature history starts 2026-06-11**; logins backfill ~14 months.
 - **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · vitest 85/85 ✅. Deploy verified + manual core_app sync triggered via the pg_cron job command.
 - **For the CTO:** `user_created_at` is now only 8% populated (same 67 rows that have name/phone/trial_end — looks like a partial join in the new export); ask to populate it for all users. `symptoms` still 0%. `organization_number` is dirty (contains phone numbers). `email_verified` + signup IP still not exported.
+
+## Activation Plan — Miro-style timeline redesign (2026-06-11)
+
+- **Branch:** feature/activation-timeline-redesign → PR #354 (merged). UI-only, no schema/API changes.
+- **Why:** Jacob: the Gantt/swimlane layout read like a planning tool; /activation is an as-is overview of actions actually firing at users. Reference: Miro timeline template screenshot.
+- **What:** New `ActivationCanvas` replaces the Gantt — one central days-since-signup axis; single-day touchpoints = cards floating above/below the axis, stem-connected to colored dots on their day (greedy alternating-side level packing, no overlaps); multi-day touchpoints = phase bands in a strip under the axis (row packing). "Day 0 · Signup" origin marked. Drag-editing removed entirely — day edits via modal only.
+- **Modal:** clicking any card/band opens a **centered modal** (`ActivationItemModal`) replacing the right slide-over: read view (title, channel chip, status pill, day, trigger w/ anchor event, description, member scenarios, cio id, link) with Edit behind a button; brand-new touchpoints open straight in edit mode; Escape closes.
+- **Channels:** moved to a legend cluster in the scenario strip — chips open the existing rename/recolor/delete popover; per-lane add buttons + "Add channel" header button gone. Scenario chips/step numbers/zoom/Day 0 unchanged.
+- **Removed:** activation-timeline.tsx, activation-bar.tsx, activation-item-panel.tsx.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node).
