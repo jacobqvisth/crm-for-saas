@@ -4467,3 +4467,9 @@ Session closed.
 - **Kept deliberately:** DB tables `deals` / `pipelines` / `deal_contacts` untouched (no data loss, feature restorable from git). `tasks.deal_id` column + GDPR-forget `deal_contacts` cleanup stay (tables still exist). `merge_companies` RPC still moves deals rows (applied migration left alone). Historic `deal_stage_change` activities still render readable titles.
 - **Merge-race note:** PR #356 (Calls page) landed on main between branch-off and merge; squash 3-way merged cleanly — verified main has Calls nav AND no Deals.
 - **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (route list confirms /deals + /settings/pipelines gone) · prod smoke: /deals → 404, /contacts → 307 login redirect.
+
+## "Call list" badge on /lists (2026-06-11)
+
+- **Branch:** feature/call-list-badge → PR #365 (merged). Tiny UI follow-up to PR #362 after Jacob confirmed call lists should be reusable from /lists for sequences (they already are — same contact_lists table, /lists doesn't filter purpose).
+- Emerald "Call list" chip (Phone icon) next to Dynamic/Static: on the lists table rows, and on the list detail header where it links to the calling worklist `/calls/lists/[id]`.
+- **Checks:** `next build` ✅ · tsc ✅ · eslint ✅.
