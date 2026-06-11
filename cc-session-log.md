@@ -4393,3 +4393,12 @@ Session closed.
 - **Seed:** audited inventory (codeoc-web-form + Customer.io + backend research): 5 channels / 17 touchpoints incl. gaps marked Idea — notably **no review-ask prompt exists in the app today**.
 - **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node). `/activation` live on prod (307→login unauthenticated).
 - **Next (PR 2):** Customer.io campaign import + per-item metrics from `dashboard_metric_snapshots`, drift flag for paused/deleted campaigns. Optional PR 3: behavioral overlay (median days-to-first-diagnosis, trial-end markers).
+
+## Activation Plan — journey scenario simulations (2026-06-11)
+
+- **Branch:** feature/activation-scenarios → PR #350 (merged), migration applied to prod, deploy verified
+- **What:** Scenario chips above the /activation timeline filter the board to one user journey with **step numbers in day order** (bars + left column), so a journey reads 1→2→3. Six seeded journeys: Happy path free→paying · Abandoned checkout · Signs up never activates · Power free user hits limits · Trial ends without converting · Paying user→advocate.
+- **Schema:** `activation_plan_scenarios` (name/description/color/sort, RLS) + `activation_plan_items.scenario_ids UUID[]` — membership array, not FK; scenario DELETE prunes ids from items. Migration `20260611090000_activation_plan_scenarios.sql` applied via Management API (Jacob approved in chat).
+- **API:** `/api/activation/scenarios` (+`[id]`); items accept `scenario_ids`; GET lazy-seeds the 6 defaults per plan when it has items but no scenarios — tags items by seed title, and inserts 3 journey touchpoints missing from the board: Checkout started (Live), Abandoned-checkout recovery email (Idea — gap), Trial-ending reminder email (Idea — gap). Deleting every scenario resets to defaults on next load (documented behavior).
+- **UI:** chip bar with description + step count; active journey hides empty lanes + re-fits range; scenario ⋯ menu (rename/description/color/delete); membership checkboxes in touchpoint panel; touchpoints created while a journey is open are auto-tagged to it.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node). Deploy verified via 405 on GET /api/activation/scenarios (route exists only in new build).
