@@ -4484,3 +4484,10 @@ Session closed.
   - `contacts-filter.ts` — added `list_id` to `ContactFilters`; `resolveContactIdsByFilters` fetches the list row and mirrors the same static-join / dynamic-filter constraint, so bulk "select all matching" stays consistent with the visible set.
 - **Decision:** single-select (one list at a time) — combining multiple dynamic lists' stored filters is ambiguous (AND vs OR).
 - **Checks:** tsc ✅ · eslint ✅ · GH Actions Build & Lint ✅. Local `next build` couldn't run (sandbox native-binary signing issue — Turbopack SWC / lightningcss); Vercel **Preview** check failed on the pre-existing project-wide `/calls/feedback` prerender error (Supabase env vars are Production-scoped, so every preview deploy errors) — unrelated to this diff; **Production** build is healthy and was verified post-merge.
+
+## Activation Plan — full-width canvas + inline Customer.io picker (2026-06-11)
+
+- **Branch:** feature/activation-fit-width → PR #369 (merged). UI-only.
+- **Fit-to-width:** ActivationCanvas measures its scroll container (ResizeObserver); effective px/day = max(zoom preset, containerWidth/rangeDays) so the 4-week window always fills the viewport — fixes the left-cramped timeline Jacob screenshotted. Zoom presets now act as a minimum density.
+- **Customer.io visibility fix:** the modal's Customer.io section only rendered when cio_campaign_id was already set — nothing was linked, so Jacob never saw it. Email-channel touchpoints (group name matches /email|customer/i) now render the section unlinked with an **inline campaign picker in the read view**; selecting saves cio_campaign_id immediately and the live subject/body + deep link load in place. Campaign list fetch now triggers on edit-mode OR unlinked-email read view; amber hint when the API is unavailable.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅.
