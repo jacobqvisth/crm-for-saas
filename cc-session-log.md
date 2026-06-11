@@ -4473,3 +4473,14 @@ Session closed.
 - **Branch:** feature/call-list-badge → PR #365 (merged). Tiny UI follow-up to PR #362 after Jacob confirmed call lists should be reusable from /lists for sequences (they already are — same contact_lists table, /lists doesn't filter purpose).
 - Emerald "Call list" chip (Phone icon) next to Dynamic/Static: on the lists table rows, and on the list detail header where it links to the calling worklist `/calls/lists/[id]`.
 - **Checks:** `next build` ✅ · tsc ✅ · eslint ✅.
+
+## List filter dropdown on /contacts (2026-06-11)
+
+- **Branch:** feature/contacts-list-filter → PR #367 (squash-merged) · prod deploy verified.
+- **What:** Jacob wanted to scope the Contacts table by any contact list. Added a single-select **"All lists"** MultiSelect at the front of the `/contacts` filter row; picking a list narrows the table + count to that list's members, AND-combined with the other dropdowns.
+- **Impl (handles 10k+ member lists — no `.in(id,…)` URL blowup):**
+  - `lists/filter-query.ts` — extracted `applyListFilters(query, filters)` out of `buildFilterQuery` (pure refactor; buildFilterQuery now calls it) so the same dynamic-list semantics can layer onto any query.
+  - `contacts-page-client.tsx` — new `list_id: string[]` filter (single via `.slice(-1)`). In `fetchContacts`: **static** lists inner-join `contact_list_members!inner(list_id)` + `.eq(...)`; **dynamic** lists apply `applyListFilters` with the list's stored filters. Threaded into `currentFilters`, `hasActiveFilters`, deps (`filters.list_id`, `lists`). Had to keep `selectExpr` as string-literal branches (template literal widens to `string` and breaks Supabase's `.select()` row-shape inference) + cast `data` via `unknown` (the optional embed defeats the compile-time parser).
+  - `contacts-filter.ts` — added `list_id` to `ContactFilters`; `resolveContactIdsByFilters` fetches the list row and mirrors the same static-join / dynamic-filter constraint, so bulk "select all matching" stays consistent with the visible set.
+- **Decision:** single-select (one list at a time) — combining multiple dynamic lists' stored filters is ambiguous (AND vs OR).
+- **Checks:** tsc ✅ · eslint ✅ · GH Actions Build & Lint ✅. Local `next build` couldn't run (sandbox native-binary signing issue — Turbopack SWC / lightningcss); Vercel **Preview** check failed on the pre-existing project-wide `/calls/feedback` prerender error (Supabase env vars are Production-scoped, so every preview deploy errors) — unrelated to this diff; **Production** build is healthy and was verified post-merge.
