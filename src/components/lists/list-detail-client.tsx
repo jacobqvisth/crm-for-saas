@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, Users, Filter, Pencil, Trash2, Plus, Send, ChevronLeft, ChevronRight, Check, X,
+  ArrowLeft, Users, Filter, Pencil, Trash2, Plus, Send, ChevronLeft, ChevronRight, Check, X, Phone,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -303,6 +303,16 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
               {isDynamic ? <Filter className="w-3 h-3" /> : <Users className="w-3 h-3" />}
               {isDynamic ? 'Dynamic' : 'Static'}
             </span>
+            {list?.purpose === 'calling' && (
+              <Link
+                href={`/calls/lists/${listId}`}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                title="Open the calling worklist"
+              >
+                <Phone className="w-3 h-3" />
+                Call list
+              </Link>
+            )}
           </div>
 
           {editingDesc ? (
