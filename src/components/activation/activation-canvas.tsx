@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Zap } from "lucide-react";
 import type { ActivationBoard, ActivationItem } from "@/lib/activation/types";
 import type { OffsetRange } from "@/lib/activation/scale";
@@ -80,9 +80,24 @@ export function ActivationCanvas({
 }: ActivationCanvasProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const width = totalWidth(range, pxPerDay);
-  const weeks = useMemo(() => weekTicks(range, pxPerDay), [range, pxPerDay]);
-  const days = useMemo(() => dayTicks(range, pxPerDay), [range, pxPerDay]);
+  // Fit-to-width: never render narrower than the visible container — the
+  // zoom presets act as a minimum density, and the scale stretches so the
+  // 4-week window always fills the whole page.
+  const [containerW, setContainerW] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setContainerW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const effPx = containerW > 0 ? Math.max(pxPerDay, (containerW - 16) / range.days) : pxPerDay;
+
+  const width = totalWidth(range, effPx);
+  const weeks = useMemo(() => weekTicks(range, effPx), [range, effPx]);
+  const days = useMemo(() => dayTicks(range, effPx), [range, effPx]);
 
   const groupById = useMemo(() => new Map(board.groups.map((g) => [g.id, g])), [board.groups]);
 
@@ -99,7 +114,7 @@ export function ActivationCanvas({
     const above: { item: ActivationItem; x: number }[] = [];
     const below: { item: ActivationItem; x: number }[] = [];
     points.forEach((item, i) => {
-      const x = xForDay(item.day_start, pxPerDay) + pxPerDay / 2;
+      const x = xForDay(item.day_start, effPx) + effPx / 2;
       (i % 2 === 0 ? above : below).push({ item, x });
     });
     const aboveLevels = packLevels(above, CARD_W, CARD_GAP);
@@ -121,11 +136,11 @@ export function ActivationCanvas({
     // Pack spans into rows for the bottom strip.
     const rowEnds: number[] = [];
     const placedSpans: PlacedSpan[] = spans.map((item) => {
-      const left = xForDay(item.day_start, pxPerDay);
+      const left = xForDay(item.day_start, effPx);
       // Clip at the visible range so a long background span doesn't stretch
       // the axis; a "continues" marker is rendered on clipped bands.
       const visibleEnd = Math.min(item.day_end, range.end);
-      const w = Math.max((visibleEnd - item.day_start + 1) * pxPerDay, pxPerDay);
+      const w = Math.max((visibleEnd - item.day_start + 1) * effPx, effPx);
       let row = rowEnds.findIndex((end) => end + 8 <= left);
       if (row === -1) {
         row = rowEnds.length;
@@ -143,7 +158,7 @@ export function ActivationCanvas({
       maxBelow: Math.max(0, ...belowLevels),
       bandRows: rowEnds.length,
     };
-  }, [board.items, pxPerDay, width, range.end]);
+  }, [board.items, effPx, width, range.end]);
 
   const axisY = 16 + (maxAbove > 0 ? BASE_STEM + maxAbove * LEVEL_H : 24);
   const belowZoneH = maxBelow > 0 ? maxBelow * LEVEL_H + 12 : 8;

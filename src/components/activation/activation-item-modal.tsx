@@ -149,16 +149,21 @@ export function ActivationItemModal({
     };
   }, [cioId]);
 
-  // Campaign list for the picker, fetched once when edit mode first opens.
+  // Campaign list for the pickers: fetched once when edit mode opens, or when
+  // an email touchpoint without a linked campaign is viewed (inline picker).
+  const groupName = groups.find((g) => g.id === item?.group_id)?.name ?? "";
+  const emailish = /email|customer/i.test(groupName);
+  const needsInlinePicker = Boolean(item) && emailish && !item?.cio_campaign_id;
   useEffect(() => {
-    if (!editing || cioCampaigns !== null) return;
+    if (cioCampaigns !== null) return;
+    if (!editing && !needsInlinePicker) return;
     fetch("/api/activation/cio/campaigns")
       .then((r) => r.json())
       .then((d: { available?: boolean; campaigns?: CioCampaignOut[] }) =>
         setCioCampaigns(d.available ? (d.campaigns ?? []) : [])
       )
       .catch(() => setCioCampaigns([]));
-  }, [editing, cioCampaigns]);
+  }, [editing, needsInlinePicker, cioCampaigns]);
 
   if (!item || !form) return null;
 
@@ -341,6 +346,45 @@ export function ActivationItemModal({
                         </div>
                       ))
                     )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!item.cio_campaign_id && emailish && (
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <Mail className="h-3.5 w-3.5" /> Email content (live from Customer.io)
+                </p>
+                {cioCampaigns === null ? (
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading campaigns…
+                  </p>
+                ) : cioCampaigns.length === 0 ? (
+                  <p className="text-xs text-amber-600">
+                    Customer.io API not available — you can still set a campaign ID via Edit.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-slate-500">
+                      Not linked to a campaign yet — pick the campaign that sends this email and
+                      its live content will show here:
+                    </p>
+                    <select
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) onSave(item.id, { cio_campaign_id: e.target.value });
+                      }}
+                    >
+                      <option value="">Select a Customer.io campaign…</option>
+                      {cioCampaigns.map((c) => (
+                        <option key={c.id} value={String(c.id)}>
+                          {c.name}
+                          {c.state ? ` · ${c.state}` : ""}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
