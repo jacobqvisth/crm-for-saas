@@ -46,8 +46,9 @@ export type WarehouseUser = {
   customer_io_id: string | null;
   created_at: string | null;
   // Canonical signup timestamp (deriveSignedUpAt chain). Prefer this over
-  // created_at for display: the 2026-06-11 export change left created_at
-  // null for ~92% of users, while signed_up_at was preserved.
+  // created_at for display: created_at is only populated for the ~8% of
+  // users whose export row carries user_created_at, while signed_up_at
+  // falls back through workshop/Customer.io/Stripe timestamps.
   signed_up_at: string | null;
   last_seen_at: string | null;
   name: string | null;

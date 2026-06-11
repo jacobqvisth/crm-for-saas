@@ -4424,3 +4424,10 @@ Session closed.
 - **Channels:** moved to a legend cluster in the scenario strip — chips open the existing rename/recolor/delete popover; per-lane add buttons + "Add channel" header button gone. Scenario chips/step numbers/zoom/Day 0 unchanged.
 - **Removed:** activation-timeline.tsx, activation-bar.tsx, activation-item-panel.tsx.
 - **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node).
+
+## 2026-06-11 — CORRECTION to the PR #352 entry (created_at "wipe" never happened)
+
+- Jacob's CTO disputed the "export removed created_at" claim. Verified against `dashboard_raw_metric_rows` (raw user_stats payloads captured every hourly sync since 2026-04-24): **`created_at` and `workshop_activated_at` were NEVER present in the export** — 0 payloads carry either key in the entire recorded history. They are legacy optional fields in the CRM's own `UserStatsRecord` type, not fields the CTO removed.
+- Consequently **no wipe occurred**: `dashboard_users.created_at` at 67/818 is its steady state, exactly tracking `user_created_at`'s sparse population (0 in April → ~50 from May 4 → 67 now). The "751/818 users wiped" claim in the PR #352 description/commit message is wrong; misleading code comments corrected in this PR.
+- Also corrected: the CTO's expansion (login_history + feature counters) first appears in payloads on **2026-06-10**, not 06-11.
+- Everything else in the PR #352 entry stands: new tables + page + sync verified with real data; the merge-hardening stays as a defensive guard (the two-sync stamp-clobber wipe is mechanically real if a source field ever vanishes — it just never has); the workshops member list switch to `signed_up_at` is an improvement over a column that was always ~92% empty, not a regression fix.
