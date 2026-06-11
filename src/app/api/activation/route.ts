@@ -163,6 +163,7 @@ async function seedDefaultBoard(
       trigger_type: it.trigger_type,
       anchor_event: it.anchor_event ?? null,
       status: it.status,
+      source_note: it.source_note ?? null,
       sort_order: i,
     }));
     const { error: itemsErr } = await supabase.from("activation_plan_items").insert(rows);
@@ -207,6 +208,7 @@ async function seedScenarios(
         trigger_type: extra.trigger_type,
         anchor_event: extra.anchor_event ?? null,
         status: extra.status,
+        source_note: extra.source_note ?? null,
         sort_order: items.filter((it) => it.group_id === group.id).length,
       })
       .select()

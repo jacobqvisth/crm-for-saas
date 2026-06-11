@@ -10,15 +10,20 @@ export interface OffsetRange {
 
 /**
  * Compute the visible window from the items, padded and snapped to whole
- * weeks. Always starts at day 0 and shows at least ~6 weeks so a sparse plan
- * still reads as a timeline.
+ * weeks. Always starts at day 0 and defaults to 4 weeks. Only point
+ * touchpoints (and span *starts*) widen the window — a long background span
+ * (e.g. "quota banners, day 0-30") is clipped by the canvas instead of
+ * stretching the axis with empty weeks.
  */
 export function computeRange(
   items: { day_start: number; day_end: number }[],
-  padDays = 7
+  padDays = 3
 ): OffsetRange {
-  const maxDay = items.reduce((acc, it) => Math.max(acc, it.day_end), 0);
-  const padded = Math.max(maxDay + padDays, 41); // >= 6 weeks
+  const anchorDay = items.reduce(
+    (acc, it) => Math.max(acc, it.day_start === it.day_end ? it.day_end : it.day_start),
+    0
+  );
+  const padded = Math.max(anchorDay + padDays, 27); // >= 4 weeks
   const end = Math.ceil((padded + 1) / 7) * 7 - 1; // snap to whole weeks
   return { start: 0, end, days: end + 1 };
 }

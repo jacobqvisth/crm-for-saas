@@ -29,6 +29,7 @@ export interface SeedExtraItem {
   trigger_type: "day_offset" | "event";
   anchor_event?: string;
   status: "Live" | "Planned" | "Idea" | "Paused";
+  source_note?: string;
 }
 
 export const EXTRA_ITEMS: SeedExtraItem[] = [
@@ -42,6 +43,8 @@ export const EXTRA_ITEMS: SeedExtraItem[] = [
     trigger_type: "event",
     anchor_event: "begin_checkout",
     status: "Live",
+    source_note:
+      "Verified in app code: codeoc-web-form PricingPage.tsx fires the GA4 begin_checkout event when a user clicks upgrade and is sent to Stripe Checkout.",
   },
   {
     title: "Abandoned-checkout recovery email",
@@ -53,6 +56,8 @@ export const EXTRA_ITEMS: SeedExtraItem[] = [
     trigger_type: "event",
     anchor_event: "checkout_abandoned",
     status: "Idea",
+    source_note:
+      "Suggested by Claude (2026-06-11) — does not exist today. begin_checkout fires to GA4 but nothing follows up an abandoned Stripe session.",
   },
   {
     title: "Trial-ending reminder email",
@@ -64,6 +69,8 @@ export const EXTRA_ITEMS: SeedExtraItem[] = [
     trigger_type: "event",
     anchor_event: "trial_end",
     status: "Idea",
+    source_note:
+      "Suggested by Claude (2026-06-11) — does not exist today. The app only redirects at trial end; nothing warns the user beforehand.",
   },
 ];
 

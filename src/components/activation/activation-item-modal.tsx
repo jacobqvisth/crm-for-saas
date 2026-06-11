@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, ExternalLink, Pencil, Trash2, X, Zap } from "lucide-react";
+import { CalendarClock, ExternalLink, Info, Loader2, Mail, Pencil, Trash2, X, Zap } from "lucide-react";
 import type { ActivationItem, ActivationGroup, ActivationScenario } from "@/lib/activation/types";
 import { ITEM_STATUSES, ANCHOR_EVENTS } from "@/lib/activation/types";
 import { COLOR_TOKENS, colorClasses } from "@/lib/roadmap/colors";
@@ -19,6 +19,28 @@ interface ActivationItemModalProps {
   onDelete: (id: string) => void;
 }
 
+interface CioCampaignOut {
+  id: number;
+  name: string;
+  state: string | null;
+}
+
+interface CioEmailOut {
+  id: number;
+  name: string | null;
+  subject: string | null;
+  from: string | null;
+  body: string | null;
+}
+
+interface CioContentState {
+  loading: boolean;
+  error: string | null;
+  campaign: CioCampaignOut | null;
+  emails: CioEmailOut[];
+  dashboardUrl: string | null;
+}
+
 type Form = {
   title: string;
   description: string;
@@ -32,6 +54,7 @@ type Form = {
   cio_campaign_id: string;
   link_url: string;
   scenario_ids: string[];
+  source_note: string;
 };
 
 function toForm(item: ActivationItem): Form {
@@ -48,6 +71,7 @@ function toForm(item: ActivationItem): Form {
     cio_campaign_id: item.cio_campaign_id ?? "",
     link_url: item.link_url ?? "",
     scenario_ids: item.scenario_ids ?? [],
+    source_note: item.source_note ?? "",
   };
 }
 
@@ -68,6 +92,9 @@ export function ActivationItemModal({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Form | null>(item ? toForm(item) : null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [cioContent, setCioContent] = useState<CioContentState | null>(null);
+  // null = not fetched yet; [] = unavailable (no key / API error) → text input fallback.
+  const [cioCampaigns, setCioCampaigns] = useState<CioCampaignOut[] | null>(null);
 
   useEffect(() => {
     setForm(item ? toForm(item) : null);
@@ -85,6 +112,53 @@ export function ActivationItemModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [item, onClose]);
+
+  // Live email content from Customer.io for linked touchpoints (read view).
+  const cioId = item?.cio_campaign_id ?? null;
+  useEffect(() => {
+    if (!cioId || !/^\d+$/.test(cioId)) {
+      setCioContent(null);
+      return;
+    }
+    let cancelled = false;
+    setCioContent({ loading: true, error: null, campaign: null, emails: [], dashboardUrl: null });
+    fetch(`/api/activation/cio/campaigns/${cioId}`)
+      .then(async (r) => {
+        const data = (await r.json().catch(() => ({}))) as {
+          error?: string;
+          campaign?: CioCampaignOut | null;
+          emails?: CioEmailOut[];
+          dashboard_url?: string;
+        };
+        if (!r.ok) throw new Error(data.error ?? "Couldn't load from Customer.io");
+        if (!cancelled)
+          setCioContent({
+            loading: false,
+            error: null,
+            campaign: data.campaign ?? null,
+            emails: data.emails ?? [],
+            dashboardUrl: data.dashboard_url ?? null,
+          });
+      })
+      .catch((e: Error) => {
+        if (!cancelled)
+          setCioContent({ loading: false, error: e.message, campaign: null, emails: [], dashboardUrl: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cioId]);
+
+  // Campaign list for the picker, fetched once when edit mode first opens.
+  useEffect(() => {
+    if (!editing || cioCampaigns !== null) return;
+    fetch("/api/activation/cio/campaigns")
+      .then((r) => r.json())
+      .then((d: { available?: boolean; campaigns?: CioCampaignOut[] }) =>
+        setCioCampaigns(d.available ? (d.campaigns ?? []) : [])
+      )
+      .catch(() => setCioCampaigns([]));
+  }, [editing, cioCampaigns]);
 
   if (!item || !form) return null;
 
@@ -125,6 +199,7 @@ export function ActivationItemModal({
       cio_campaign_id: form.cio_campaign_id.trim() || null,
       link_url: form.link_url.trim() || null,
       scenario_ids: form.scenario_ids,
+      source_note: form.source_note.trim() || null,
     });
     setEditing(false);
   }
@@ -192,6 +267,83 @@ export function ActivationItemModal({
               </p>
             ) : (
               <p className="text-sm italic text-slate-400">No description yet.</p>
+            )}
+
+            {item.source_note && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <Info className="h-3.5 w-3.5" /> Where this info comes from
+                </p>
+                <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-600">
+                  {item.source_note}
+                </p>
+              </div>
+            )}
+
+            {cioContent && (
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <Mail className="h-3.5 w-3.5" /> Email content (live from Customer.io)
+                  {cioContent.dashboardUrl && (
+                    <a
+                      href={cioContent.dashboardUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-auto inline-flex items-center gap-1 font-normal text-indigo-600 hover:underline"
+                    >
+                      Open in Customer.io <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </p>
+                {cioContent.loading ? (
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading campaign…
+                  </p>
+                ) : cioContent.error ? (
+                  <p className="text-xs text-amber-600">{cioContent.error}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {cioContent.campaign && (
+                      <p className="text-sm text-slate-700">
+                        <span className="font-medium">{cioContent.campaign.name}</span>
+                        {cioContent.campaign.state && (
+                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                            {cioContent.campaign.state}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {cioContent.emails.length === 0 ? (
+                      <p className="text-xs text-slate-400">
+                        No email actions found in this campaign.
+                      </p>
+                    ) : (
+                      cioContent.emails.map((em) => (
+                        <div key={em.id} className="rounded border border-slate-200">
+                          <div className="border-b border-slate-100 px-3 py-2">
+                            <p className="text-sm font-medium text-slate-800">
+                              {em.subject ?? em.name ?? `Email ${em.id}`}
+                            </p>
+                            {em.from && <p className="text-xs text-slate-400">From: {em.from}</p>}
+                          </div>
+                          {em.body ? (
+                            <iframe
+                              sandbox=""
+                              srcDoc={em.body}
+                              title={em.subject ?? `Email ${em.id}`}
+                              className="h-72 w-full rounded-b bg-white"
+                            />
+                          ) : (
+                            <p className="px-3 py-2 text-xs italic text-slate-400">
+                              Body not available via the API.
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {memberScenarios.length > 0 && (
@@ -296,6 +448,17 @@ export function ActivationItemModal({
                 placeholder="What the user receives/sees, and why…"
                 value={form.description}
                 onChange={(e) => set("description", e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Source / accuracy note</label>
+              <textarea
+                className={`${inputClass} resize-none`}
+                rows={2}
+                placeholder="Where does this info come from? How was it verified?"
+                value={form.source_note}
+                onChange={(e) => set("source_note", e.target.value)}
               />
             </div>
 
@@ -442,13 +605,38 @@ export function ActivationItemModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Customer.io campaign ID</label>
-                <input
-                  className={inputClass}
-                  placeholder="cio campaign id"
-                  value={form.cio_campaign_id}
-                  onChange={(e) => set("cio_campaign_id", e.target.value)}
-                />
+                <label className={labelClass}>Customer.io campaign</label>
+                {cioCampaigns && cioCampaigns.length > 0 ? (
+                  <select
+                    className={inputClass}
+                    value={form.cio_campaign_id}
+                    onChange={(e) => set("cio_campaign_id", e.target.value)}
+                  >
+                    <option value="">— not linked —</option>
+                    {/* keep an unknown manually-entered id selectable */}
+                    {form.cio_campaign_id &&
+                      !cioCampaigns.some((c) => String(c.id) === form.cio_campaign_id) && (
+                        <option value={form.cio_campaign_id}>
+                          {form.cio_campaign_id} (manual)
+                        </option>
+                      )}
+                    {cioCampaigns.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {c.state ? ` · ${c.state}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={inputClass}
+                    placeholder={
+                      cioCampaigns === null ? "Loading campaigns…" : "campaign id (API unavailable)"
+                    }
+                    value={form.cio_campaign_id}
+                    onChange={(e) => set("cio_campaign_id", e.target.value)}
+                  />
+                )}
               </div>
               <div>
                 <label className={labelClass}>Link</label>
