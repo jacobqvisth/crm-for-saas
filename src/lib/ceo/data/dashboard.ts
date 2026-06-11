@@ -120,7 +120,7 @@ async function getDashboardDataUncached(
         supabase
           .from(TABLES.users)
           .select(
-            "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+            "internal_user_id, workshop_id, customer_io_id, created_at, signed_up_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
           )
           .order("internal_user_id", { ascending: true })
           .range(from, to),

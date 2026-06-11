@@ -6,6 +6,7 @@ import type { MetricPoint, UserRow } from "./types";
 type ExistingUserRow = {
   internal_user_id: string;
   created_at: string | null;
+  signed_up_at?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -54,6 +55,7 @@ function makeUserRow(overrides: Partial<UserRow> = {}): UserRow {
     created_at: "2026-02-01T00:00:00.000Z",
     signed_up_at: "2026-02-01T00:00:00.000Z",
     last_seen_at: "2026-02-05T00:00:00.000Z",
+    churned_at: null,
     name: null,
     phone: null,
     core_stripe_customer_id: null,
@@ -101,6 +103,69 @@ describe("writeUsers", () => {
       expect.objectContaining({
         internal_user_id: "user-1",
         created_at: "2026-01-10T00:00:00.000Z",
+      }),
+    ]);
+  });
+
+  it("re-stamps user_created_at_source when preserving created_at across an export gap", async () => {
+    // Regression for the 2026-06-11 wipe: the export dropped the legacy
+    // created_at alias, the incoming metadata stamped
+    // user_created_at_source=null, and the NEXT sync treated the preserved
+    // created_at as non-canonical and cleared it. The merged row must carry
+    // the canonical stamp so the preservation survives repeated syncs.
+    const stub = createSupabaseStub([
+      {
+        internal_user_id: "user-1",
+        created_at: "2026-01-10T00:00:00.000Z",
+        metadata: {
+          user_created_at_source: "core_app",
+        },
+      },
+    ]);
+
+    await writeUsers(stub.supabase, [
+      makeUserRow({
+        created_at: null,
+        metadata: { user_created_at_source: null },
+      }),
+    ]);
+
+    expect(stub.getUpsertedRows()).toEqual([
+      expect.objectContaining({
+        created_at: "2026-01-10T00:00:00.000Z",
+        metadata: expect.objectContaining({
+          user_created_at_source: "core_app",
+        }),
+      }),
+    ]);
+  });
+
+  it("keeps the existing signed_up_at_source label when the preserved timestamp wins", async () => {
+    const stub = createSupabaseStub([
+      {
+        internal_user_id: "user-1",
+        created_at: null,
+        signed_up_at: "2026-01-10T00:00:00.000Z",
+        metadata: {
+          signed_up_at_source: "core_app_user",
+        },
+      },
+    ]);
+
+    await writeUsers(stub.supabase, [
+      makeUserRow({
+        created_at: null,
+        signed_up_at: "2026-02-01T00:00:00.000Z",
+        metadata: { signed_up_at_source: "core_app_workshop" },
+      }),
+    ]);
+
+    expect(stub.getUpsertedRows()).toEqual([
+      expect.objectContaining({
+        signed_up_at: "2026-01-10T00:00:00.000Z",
+        metadata: expect.objectContaining({
+          signed_up_at_source: "core_app_user",
+        }),
       }),
     ]);
   });

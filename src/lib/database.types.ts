@@ -1246,6 +1246,33 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_feature_usage: {
+        Row: {
+          collected_at: string
+          feature_key: string
+          granularity: string
+          internal_user_id: string
+          period_start: string
+          usage_count: number
+        }
+        Insert: {
+          collected_at?: string
+          feature_key: string
+          granularity?: string
+          internal_user_id: string
+          period_start: string
+          usage_count?: number
+        }
+        Update: {
+          collected_at?: string
+          feature_key?: string
+          granularity?: string
+          internal_user_id?: string
+          period_start?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
       dashboard_funnel_snapshots: {
         Row: {
           collected_at: string
@@ -1545,8 +1572,27 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_user_logins: {
+        Row: {
+          collected_at: string
+          internal_user_id: string
+          logged_in_at: string
+        }
+        Insert: {
+          collected_at?: string
+          internal_user_id: string
+          logged_in_at: string
+        }
+        Update: {
+          collected_at?: string
+          internal_user_id?: string
+          logged_in_at?: string
+        }
+        Relationships: []
+      }
       dashboard_users: {
         Row: {
+          churned_at: string | null
           core_stripe_customer_id: string | null
           created_at: string | null
           customer_io_id: string | null
@@ -1566,6 +1612,7 @@ export type Database = {
           workshop_id: string | null
         }
         Insert: {
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           created_at?: string | null
           customer_io_id?: string | null
@@ -1585,6 +1632,7 @@ export type Database = {
           workshop_id?: string | null
         }
         Update: {
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           created_at?: string | null
           customer_io_id?: string | null
@@ -1608,6 +1656,7 @@ export type Database = {
       dashboard_workshops: {
         Row: {
           activated_at: string | null
+          churned_at: string | null
           core_stripe_customer_id: string | null
           core_stripe_subscription_id: string | null
           core_subscription_status: string | null
@@ -1629,6 +1678,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           core_stripe_subscription_id?: string | null
           core_subscription_status?: string | null
@@ -1650,6 +1700,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           core_stripe_subscription_id?: string | null
           core_subscription_status?: string | null

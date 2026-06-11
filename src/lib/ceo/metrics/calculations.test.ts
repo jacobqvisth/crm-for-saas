@@ -96,6 +96,7 @@ const users: WarehouseUser[] = [
     workshop_id: "w-1",
     customer_io_id: "cio-1",
     created_at: "2026-04-01T00:00:00.000Z",
+    signed_up_at: "2026-04-01T00:00:00.000Z",
     last_seen_at: "2026-04-20T00:00:00.000Z",
     name: null,
     phone: null,
