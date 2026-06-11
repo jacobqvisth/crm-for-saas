@@ -4525,3 +4525,10 @@ Session closed.
 - **Corrections (Jacob approved, applied to prod rows + this seed fix):** Get Started dialog 6→10 sections; free quotas +20 AI searches/day; onboarding carousel 5→6 steps; source notes restamped "re-checked 2026-06-11 against latest GitHub main".
 - **Branch:** fix/activation-seed-reaudit → PR #377 (seed text + log).
 - **Process memory saved:** always fetch + compare local clones vs origin before code audits; stamp findings with audited commit.
+
+## Activation Plan — campaign trigger info in modal (2026-06-11)
+
+- **Branch:** feature/activation-cio-trigger → PR #378. No schema changes.
+- **Why:** Jacob asked whether "Trial ended, back to Free" (campaign 44) is configured in Customer.io to send after the 14-day trial — the modal showed content but not the trigger.
+- **What:** `getCampaignEmails` now returns `CioCampaignDetail` (event_name, trigger_segment_ids, first_started, created/updated from GET /v1/campaigns/{id}); modal renders "Starts when the app sends the event `X`" (or trigger segments), first-started date, and an explicit caveat that in-journey delays aren't exposed by the API (deep link is source of truth for timing).
+- **Checks:** tsc ✅ · eslint ✅ · build ✅.

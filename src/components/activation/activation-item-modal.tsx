@@ -23,6 +23,10 @@ interface CioCampaignOut {
   id: number;
   name: string;
   state: string | null;
+  type?: string | null;
+  event_name?: string | null;
+  trigger_segment_ids?: number[];
+  first_started?: number | null;
 }
 
 interface CioEmailOut {
@@ -312,14 +316,43 @@ export function ActivationItemModal({
                 ) : (
                   <div className="space-y-3">
                     {cioContent.campaign && (
-                      <p className="text-sm text-slate-700">
-                        <span className="font-medium">{cioContent.campaign.name}</span>
-                        {cioContent.campaign.state && (
-                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                            {cioContent.campaign.state}
+                      <div>
+                        <p className="text-sm text-slate-700">
+                          <span className="font-medium">{cioContent.campaign.name}</span>
+                          {cioContent.campaign.state && (
+                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                              {cioContent.campaign.state}
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {cioContent.campaign.event_name ? (
+                            <>
+                              Starts when the app sends the event{" "}
+                              <code className="rounded bg-slate-100 px-1 py-0.5">
+                                {cioContent.campaign.event_name}
+                              </code>
+                            </>
+                          ) : (cioContent.campaign.trigger_segment_ids?.length ?? 0) > 0 ? (
+                            <>
+                              Starts when a user enters segment
+                              {(cioContent.campaign.trigger_segment_ids?.length ?? 0) > 1 ? "s" : ""}{" "}
+                              {cioContent.campaign.trigger_segment_ids?.join(", ")}
+                            </>
+                          ) : (
+                            <>Trigger type: {cioContent.campaign.type ?? "unknown"}</>
+                          )}
+                          {cioContent.campaign.first_started && (
+                            <span className="text-slate-400">
+                              {" "}· first started{" "}
+                              {new Date(cioContent.campaign.first_started * 1000).toLocaleDateString()}
+                            </span>
+                          )}
+                          <span className="text-slate-400">
+                            {" "}· in-journey delays aren&apos;t exposed by the API — see Open in Customer.io
                           </span>
-                        )}
-                      </p>
+                        </p>
+                      </div>
                     )}
                     {cioContent.metrics && (cioContent.metrics.cio_sent ?? 0) > 0 && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1 rounded bg-slate-50 px-3 py-2 text-xs text-slate-600">
