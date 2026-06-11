@@ -4440,3 +4440,11 @@ Session closed.
 - **Rebase note:** ~40 PRs behind; only conflict was lucide imports in sidebar.tsx. database.types.ts auto-merged.
 - **Behavior note:** enroll-on-outcome only fires if `workspace.settings.calls.sequence_by_outcome` is configured; otherwise calls just log + bump status. Deferred (future PR): `call_sessions` + VoIP webhook (logCall reserves metadata.provider/provider_call_id/recording_url).
 - **Checks:** `next build` ✅ · tsc ✅ · eslint ✅ · vitest 20/20 ✅ · `/calls` HTTP 200 on prod.
+
+## Activation Plan — 4-week view, provenance notes, Customer.io email content (2026-06-11)
+
+- **Branch:** feature/activation-source-and-cio → PR #360 (merged), migration applied to prod (backfill verified: 20/20 items noted), deploy verified
+- **4-week view:** computeRange anchors on point touchpoints + span starts, 4-week minimum (was 6); long spans clipped at the visible edge with a "→ day N" marker instead of stretching the axis.
+- **Provenance:** new `activation_plan_items.source_note` (migration `20260611130000_activation_item_source_note.sql` + title-matched backfill, NULL-guarded). Modal shows "Where this info comes from"; editable in edit mode; seeds carry notes for fresh workspaces. Categories: verified-in-app-code (file refs) / verified data milestone / inferred backend / assumed Customer.io journey / Suggested-by-Claude (all Planned+Idea items are explicit Claude proposals from the 2026-06-10 audit).
+- **Customer.io content:** read-only App API helpers `src/lib/activation/cio.ts` (reuses CUSTOMER_IO_APP_API_KEY/_REGION from the metrics sync) + routes `/api/activation/cio/campaigns` (list) and `/[id]` (email actions w/ subject/from/body + fly.customer.io deep link via /workspaces). Modal: edit mode has a campaign picker (text fallback when API unavailable); read view renders live subject + sandboxed-iframe body + "Open in Customer.io". Never writes to Customer.io.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅. Deploy verified via 401 on the new-only /api/activation/cio/campaigns route.
