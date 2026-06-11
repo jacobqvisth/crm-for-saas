@@ -3,11 +3,13 @@ import type { Tables } from "@/lib/database.types";
 export type ActivationPlan = Tables<"activation_plans">;
 export type ActivationGroup = Tables<"activation_plan_groups">;
 export type ActivationItem = Tables<"activation_plan_items">;
+export type ActivationScenario = Tables<"activation_plan_scenarios">;
 
-/** A plan with its channel swimlanes and touchpoints nested, as returned by GET /api/activation?id=. */
+/** A plan with its channel swimlanes, touchpoints and scenarios nested, as returned by GET /api/activation?id=. */
 export interface ActivationBoard extends ActivationPlan {
   groups: ActivationGroup[];
   items: ActivationItem[];
+  scenarios: ActivationScenario[];
 }
 
 /** Zoom levels for the timeline — controls pixels-per-day density. */

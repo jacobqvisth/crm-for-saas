@@ -19,6 +19,7 @@ const patchSchema = z.object({
   status: z.string().max(100).nullish(),
   color: z.enum(COLOR_TOKENS).nullish(),
   cio_campaign_id: z.string().max(100).nullish(),
+  scenario_ids: z.array(z.string().uuid()).max(50).optional(),
   link_url: z.string().url().max(2000).nullish(),
   sort_order: z.number().int().optional(),
 });

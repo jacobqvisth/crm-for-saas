@@ -15,6 +15,8 @@ interface ActivationBarProps {
   /** Color token inherited from the swimlane, unless the item overrides it. */
   groupColor: string;
   selected: boolean;
+  /** 1-based position within the active scenario's journey (day order). */
+  stepNumber?: number;
   /** Commit new inclusive day offsets after a drag/resize. */
   onChangeDays: (id: string, dayStart: number, dayEnd: number) => void;
   /** Click without dragging → open the detail panel. */
@@ -28,6 +30,7 @@ export function ActivationBar({
   pxPerDay,
   groupColor,
   selected,
+  stepNumber,
   onChangeDays,
   onSelect,
 }: ActivationBarProps) {
@@ -141,6 +144,11 @@ export function ActivationBar({
         data-handle="left"
         className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-md opacity-0 group-hover/bar:opacity-100"
       />
+      {stepNumber !== undefined && (
+        <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-semibold text-white pointer-events-none">
+          {stepNumber}
+        </span>
+      )}
       {status && (
         <span
           className={`mr-1.5 h-2 w-2 shrink-0 rounded-full pointer-events-none ${status.dot}`}

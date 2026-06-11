@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Trash2 } from "lucide-react";
 import { SlideOver } from "@/components/ui/slide-over";
-import type { ActivationItem, ActivationGroup } from "@/lib/activation/types";
+import type { ActivationItem, ActivationGroup, ActivationScenario } from "@/lib/activation/types";
 import { ITEM_STATUSES, ANCHOR_EVENTS } from "@/lib/activation/types";
 import { COLOR_TOKENS, colorClasses } from "@/lib/roadmap/colors";
 
 interface ActivationItemPanelProps {
   item: ActivationItem | null;
   groups: ActivationGroup[];
+  scenarios: ActivationScenario[];
   onClose: () => void;
   onSave: (id: string, patch: Partial<ActivationItem>) => void;
   onDelete: (id: string) => void;
@@ -27,6 +28,7 @@ type Form = {
   color: string; // "" = inherit swimlane
   cio_campaign_id: string;
   link_url: string;
+  scenario_ids: string[];
 };
 
 function toForm(item: ActivationItem): Form {
@@ -42,6 +44,7 @@ function toForm(item: ActivationItem): Form {
     color: item.color ?? "",
     cio_campaign_id: item.cio_campaign_id ?? "",
     link_url: item.link_url ?? "",
+    scenario_ids: item.scenario_ids ?? [],
   };
 }
 
@@ -54,6 +57,7 @@ function parseDayField(s: string): number | null {
 export function ActivationItemPanel({
   item,
   groups,
+  scenarios,
   onClose,
   onSave,
   onDelete,
@@ -95,6 +99,7 @@ export function ActivationItemPanel({
       color: (form.color || null) as ActivationItem["color"],
       cio_campaign_id: form.cio_campaign_id.trim() || null,
       link_url: form.link_url.trim() || null,
+      scenario_ids: form.scenario_ids,
     });
     onClose();
   }
@@ -235,6 +240,36 @@ export function ActivationItemPanel({
             ))}
           </select>
         </div>
+
+        {scenarios.length > 0 && (
+          <div>
+            <label className={labelClass}>Scenarios</label>
+            <div className="space-y-1.5 rounded border border-slate-200 p-2.5">
+              {scenarios.map((sc) => {
+                const checked = form.scenario_ids.includes(sc.id);
+                return (
+                  <label key={sc.id} className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        set(
+                          "scenario_ids",
+                          checked
+                            ? form.scenario_ids.filter((id) => id !== sc.id)
+                            : [...form.scenario_ids, sc.id]
+                        )
+                      }
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-300"
+                    />
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${colorClasses(sc.color).dot}`} />
+                    <span className="truncate">{sc.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div>
           <label className={labelClass}>Customer.io campaign ID</label>

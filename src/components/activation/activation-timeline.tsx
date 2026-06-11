@@ -19,6 +19,8 @@ interface ActivationTimelineProps {
   pxPerDay: number;
   selectedItemId: string | null;
   scrollToStartKey: number;
+  /** When a scenario is active: item id → 1-based journey step number. */
+  stepNumbers?: Map<string, number>;
   onChangeItemDays: (id: string, dayStart: number, dayEnd: number) => void;
   onSelectItem: (id: string) => void;
   onAddItem: (groupId: string) => void;
@@ -36,6 +38,7 @@ export function ActivationTimeline({
   pxPerDay,
   selectedItemId,
   scrollToStartKey,
+  stepNumbers,
   onChangeItemDays,
   onSelectItem,
   onAddItem,
@@ -194,6 +197,11 @@ export function ActivationTimeline({
                   }`}
                   style={{ height: ROW_H }}
                 >
+                  {stepNumbers?.has(row.item.id) && (
+                    <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-semibold text-white">
+                      {stepNumbers.get(row.item.id)}
+                    </span>
+                  )}
                   <span className="truncate">{row.item.title}</span>
                 </button>
               );
@@ -247,6 +255,7 @@ export function ActivationTimeline({
                       pxPerDay={pxPerDay}
                       groupColor={row.group.color}
                       selected={selectedItemId === row.item.id}
+                      stepNumber={stepNumbers?.get(row.item.id)}
                       onChangeDays={onChangeItemDays}
                       onSelect={onSelectItem}
                     />

@@ -140,6 +140,7 @@ export type Database = {
           id: string
           link_url: string | null
           plan_id: string
+          scenario_ids: string[]
           sort_order: number
           status: string | null
           title: string
@@ -159,6 +160,7 @@ export type Database = {
           id?: string
           link_url?: string | null
           plan_id: string
+          scenario_ids?: string[]
           sort_order?: number
           status?: string | null
           title?: string
@@ -178,6 +180,7 @@ export type Database = {
           id?: string
           link_url?: string | null
           plan_id?: string
+          scenario_ids?: string[]
           sort_order?: number
           status?: string | null
           title?: string
@@ -202,6 +205,57 @@ export type Database = {
           },
           {
             foreignKeyName: "activation_plan_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activation_plan_scenarios: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          plan_id: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          plan_id: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          plan_id?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plan_scenarios_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_scenarios_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
