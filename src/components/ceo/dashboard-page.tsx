@@ -9,6 +9,7 @@ export type DashboardRoutePageProps = {
   searchParams: Promise<{
     range?: string | string[];
     platform?: string | string[];
+    country?: string | string[];
   }>;
 };
 

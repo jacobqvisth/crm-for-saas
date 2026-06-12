@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
+import { loadCountryFilterSets } from "@/lib/ceo/countries";
 import { toStockholmIsoDate } from "@/lib/ceo/dates";
 import {
   enumerateBuckets,
@@ -127,6 +128,7 @@ function metaString(
 
 async function getFeatureUsageDataUncached(
   rangeKey: DashboardTimeRangeKey,
+  country: string | null,
 ): Promise<FeatureUsageData> {
   const range = resolveDashboardTimeRange(rangeKey);
   // Feature counters are daily — hourly buckets would just be empty noise.
@@ -156,7 +158,10 @@ async function getFeatureUsageDataUncached(
       monthly: [],
     };
   }
-  const sets = await loadInternalTestSets();
+  const [sets, countrySets] = await Promise.all([
+    loadInternalTestSets(),
+    loadCountryFilterSets(country),
+  ]);
 
   const startDate = range.start ? toStockholmIsoDate(range.start) : null;
   const endDate = toStockholmIsoDate(range.end);
@@ -220,6 +225,14 @@ async function getFeatureUsageDataUncached(
   let loginRows = loginRowsResult.data.filter(
     (row) => !isFlaggedUser(row.internal_user_id),
   );
+
+  // Country filter: user-keyed rows are scoped via the workshop-country map.
+  if (countrySets) {
+    const inCountry = (userId: string) => countrySets.userIds.has(userId);
+    dayRows = dayRows.filter((row) => inCountry(row.internal_user_id));
+    monthRows = monthRows.filter((row) => inCountry(row.internal_user_id));
+    loginRows = loginRows.filter((row) => inCountry(row.internal_user_id));
+  }
 
   // ---- Identity enrichment for every user we're about to show ------------
   const userIds = [
@@ -494,14 +507,18 @@ async function getFeatureUsageDataUncached(
 }
 
 const getFeatureUsageDataCached = unstable_cache(
-  (rangeKey: string) =>
-    getFeatureUsageDataUncached(rangeKey as DashboardTimeRangeKey),
+  (rangeKey: string, country: string | null) =>
+    getFeatureUsageDataUncached(rangeKey as DashboardTimeRangeKey, country),
   ["ceo-feature-usage-data"],
   CEO_CACHE_OPTIONS,
 );
 
 export function getFeatureUsageData(
   rangeParam?: string | string[],
+  country: string | null = null,
 ): Promise<FeatureUsageData> {
-  return getFeatureUsageDataCached(normalizeFeatureUsageRangeKey(rangeParam));
+  return getFeatureUsageDataCached(
+    normalizeFeatureUsageRangeKey(rangeParam),
+    country,
+  );
 }

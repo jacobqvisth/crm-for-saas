@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { NewUsersContent } from "@/components/ceo/new-users-content";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getNewUsersData } from "@/lib/ceo/data/new-users";
 import {
@@ -36,11 +37,18 @@ const NEW_USERS_EXCLUSION_DESCRIPTION = (
   </>
 );
 
-async function NewUsersPanel({ rangeKey }: { rangeKey: string }) {
+async function NewUsersPanel({
+  rangeKey,
+  country,
+}: {
+  rangeKey: string;
+  country: string | null;
+}) {
   const [newUsers, internalTestUsers, internalTestWorkshops] =
     await Promise.all([
       getNewUsersData(
         resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+        country,
       ),
       listInternalTestUsers(),
       listInternalTestWorkshops(),
@@ -62,6 +70,7 @@ export default async function NewUsersPage({
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
+  const country = normalizeDashboardCountry(params.country);
 
   // getDashboardData + the "last synced" stamp are cached and cheap — await
   // them so the shell + header render immediately, then stream the heavier
@@ -85,7 +94,7 @@ export default async function NewUsersPage({
       }
     >
       <Suspense fallback={<CeoPanelSkeleton />}>
-        <NewUsersPanel rangeKey={rangeKey} />
+        <NewUsersPanel rangeKey={rangeKey} country={country} />
       </Suspense>
     </DashboardShell>
   );

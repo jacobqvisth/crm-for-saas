@@ -9,6 +9,7 @@ import {
   getFeatureUsageData,
   normalizeFeatureUsageRangeKey,
 } from "@/lib/ceo/data/feature-usage";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   formatStockholmTime,
@@ -19,8 +20,14 @@ import { refreshFeatureUsageAction } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function FeatureUsagePanel({ rangeKey }: { rangeKey: string }) {
-  const data = await getFeatureUsageData(rangeKey);
+async function FeatureUsagePanel({
+  rangeKey,
+  country,
+}: {
+  rangeKey: string;
+  country: string | null;
+}) {
+  const data = await getFeatureUsageData(rangeKey, country);
   return <FeatureUsageContent data={data} />;
 }
 
@@ -29,6 +36,7 @@ export default async function FeatureUsagePage({
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeFeatureUsageRangeKey(params.range);
+  const country = normalizeDashboardCountry(params.country);
 
   const [data, lastSyncedAt] = await Promise.all([
     getDashboardData(rangeKey),
@@ -52,7 +60,7 @@ export default async function FeatureUsagePage({
       }
     >
       <Suspense fallback={<CeoPanelSkeleton />}>
-        <FeatureUsagePanel rangeKey={rangeKey} />
+        <FeatureUsagePanel rangeKey={rangeKey} country={country} />
       </Suspense>
     </DashboardShell>
   );

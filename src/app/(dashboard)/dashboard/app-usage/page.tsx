@@ -7,6 +7,7 @@ import { type DashboardRoutePageProps } from "@/components/ceo/dashboard-page";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   getAppUsageData,
@@ -33,14 +34,17 @@ export const maxDuration = 60;
 async function AppUsagePanel({
   rangeKey,
   platform,
+  country,
 }: {
   rangeKey: string;
   platform: AppUsagePlatform;
+  country: string | null;
 }) {
   const [usage, internalTestUsers, internalTestWorkshops] = await Promise.all([
     getAppUsageData(
       resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
       platform,
+      country,
     ),
     listInternalTestUsers(),
     listInternalTestWorkshops(),
@@ -61,6 +65,7 @@ export default async function AppUsagePage({
   const params = await searchParams;
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
   const platform = normalizeAppUsagePlatform(params.platform);
+  const country = normalizeDashboardCountry(params.country);
 
   // Shell + header render from cached/cheap data; the GA4 runReport panel
   // streams in behind a skeleton.
@@ -86,7 +91,7 @@ export default async function AppUsagePage({
       }
     >
       <Suspense fallback={<CeoPanelSkeleton />}>
-        <AppUsagePanel rangeKey={rangeKey} platform={platform} />
+        <AppUsagePanel rangeKey={rangeKey} platform={platform} country={country} />
       </Suspense>
     </DashboardShell>
   );

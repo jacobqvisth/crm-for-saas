@@ -6,6 +6,10 @@ import {
   type IdentitySource,
 } from "@/lib/ceo/data/active-users";
 import {
+  inCountryWith,
+  loadCountryFilterSets,
+} from "@/lib/ceo/countries";
+import {
   isInternalTestUserOrWorkshopWith,
   loadInternalTestSets,
 } from "@/lib/ceo/internal-test/loader";
@@ -122,13 +126,16 @@ function asStringArray(value: unknown): string[] {
 // Reuses the active-users loader: GA4 per-user engagement (keyed on
 // customUser:crm_user_id, web-app host only) unioned with first-party
 // diagnostics, internal-test accounts already excluded.
-async function buildTopUsers(rangeKey: DashboardTimeRangeKey): Promise<{
+async function buildTopUsers(
+  rangeKey: DashboardTimeRangeKey,
+  country: string | null,
+): Promise<{
   rows: TopUserRow[];
   totals: { activeUsers: number; diagnostics: number };
   ga4Available: boolean;
   note: string | null;
 }> {
-  const active = await getActiveUsersData(rangeKey);
+  const active = await getActiveUsersData(rangeKey, country);
 
   const rows: TopUserRow[] = active.rows.map((row) => ({
     crmUserId: row.crmUserId,
@@ -193,7 +200,10 @@ type CarAccumulator = {
   dtcs: Map<string, number>;
 };
 
-async function buildTopCars(rangeKey: DashboardTimeRangeKey): Promise<{
+async function buildTopCars(
+  rangeKey: DashboardTimeRangeKey,
+  country: string | null,
+): Promise<{
   rows: TopCarRow[];
   distinctCars: number;
 }> {
@@ -203,7 +213,10 @@ async function buildTopCars(rangeKey: DashboardTimeRangeKey): Promise<{
   const range = resolveDashboardTimeRange(rangeKey);
   const startIso = range.start?.toISOString();
   const endIso = range.end.toISOString();
-  const sets = await loadInternalTestSets();
+  const [sets, countrySets] = await Promise.all([
+    loadInternalTestSets(),
+    loadCountryFilterSets(country),
+  ]);
 
   const result = await pageAll<CarDiagnosticRow>(({ from, to }) => {
     let q = supabase
@@ -232,6 +245,12 @@ async function buildTopCars(rangeKey: DashboardTimeRangeKey): Promise<{
         row.internal_user_id,
         row.workshop_id,
       )
+    ) {
+      continue;
+    }
+    if (
+      countrySets &&
+      !inCountryWith(countrySets, row.internal_user_id, row.workshop_id)
     ) {
       continue;
     }
@@ -324,13 +343,14 @@ async function buildTopCars(rangeKey: DashboardTimeRangeKey): Promise<{
 
 async function getToplistsDataUncached(
   rangeKey: DashboardTimeRangeKey,
+  country: string | null,
 ): Promise<ToplistsData> {
   const range = resolveDashboardTimeRange(rangeKey);
   const rangeSpan = formatRangeDateSpan(range);
 
   const [users, cars] = await Promise.all([
-    buildTopUsers(rangeKey),
-    buildTopCars(rangeKey),
+    buildTopUsers(rangeKey, country),
+    buildTopCars(rangeKey, country),
   ]);
 
   return {
@@ -350,14 +370,15 @@ async function getToplistsDataUncached(
 }
 
 const getToplistsDataCached = unstable_cache(
-  (rangeKey: string) =>
-    getToplistsDataUncached(rangeKey as DashboardTimeRangeKey),
+  (rangeKey: string, country: string | null) =>
+    getToplistsDataUncached(rangeKey as DashboardTimeRangeKey, country),
   ["ceo-toplists-data"],
   CEO_CACHE_OPTIONS,
 );
 
 export function getToplistsData(
   rangeParam?: string | string[],
+  country: string | null = null,
 ): Promise<ToplistsData> {
-  return getToplistsDataCached(normalizeToplistsRangeKey(rangeParam));
+  return getToplistsDataCached(normalizeToplistsRangeKey(rangeParam), country);
 }

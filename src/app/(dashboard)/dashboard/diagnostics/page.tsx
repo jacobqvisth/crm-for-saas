@@ -1,6 +1,7 @@
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { DiagnosticsContent } from "@/components/ceo/diagnostics-content";
 import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getDiagnosticsDrilldownList } from "@/lib/ceo/data/diagnostics";
 import {
@@ -28,6 +29,7 @@ export const maxDuration = 60;
 type DiagnosticsPageProps = {
   searchParams: Promise<{
     range?: string | string[];
+    country?: string | string[];
     q?: string | string[];
     status?: string | string[];
     showInternal?: string | string[];
@@ -50,6 +52,7 @@ export default async function DiagnosticsPage({
   const params = await searchParams;
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
   const resolvedRange = resolveDashboardTimeRange(rangeKey);
+  const country = normalizeDashboardCountry(params.country);
   const rawQuery = asString(params.q).trim();
   const query = rawQuery.toLowerCase();
   const status = asString(params.status) || "all";
@@ -69,6 +72,11 @@ export default async function DiagnosticsPage({
 
   const filtered = diagnostics.filter((item) => {
     if (status !== "all" && item.status !== status) {
+      return false;
+    }
+    // Each item carries its workshop's country (ISO-2) — rows with no
+    // resolvable country are hidden while a country filter is active.
+    if (country && (item.country ?? "").trim().toUpperCase() !== country) {
       return false;
     }
     if (!query) {
