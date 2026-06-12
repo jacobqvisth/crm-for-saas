@@ -1,15 +1,31 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import {
   DEFAULT_TIME_RANGE_KEY,
   type DashboardTimeRangeKey,
 } from "@/lib/ceo/time-ranges";
+import { getDashboardCountryOptions } from "@/lib/ceo/countries";
 import type { DashboardData } from "@/lib/ceo/metrics/types";
 import {
   DASHBOARD_SECTIONS,
   getDashboardSectionConfig,
   type DashboardSectionKey,
 } from "./dashboard-sections";
+import { DashboardShellNav } from "./dashboard-shell-nav";
+
+// Sections whose loaders honor the ?country= filter. Everything else shows
+// the dropdown disabled (the selection still travels in the URL so it's
+// intact when you navigate back to a supported tab).
+const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
+  DashboardSectionKey
+>([
+  "usage",
+  "active-users",
+  "feature-usage",
+  "toplists",
+  "new-users",
+  "diagnostics",
+  "workshops",
+]);
 
 type DashboardShellProps = {
   data: DashboardData;
@@ -23,15 +39,7 @@ type DashboardShellProps = {
   defaultRangeKey?: DashboardTimeRangeKey;
 };
 
-function hrefWithRange(
-  href: string,
-  range: string,
-  defaultRange: string = DEFAULT_TIME_RANGE_KEY,
-) {
-  return range === defaultRange ? href : `${href}?range=${range}`;
-}
-
-export function DashboardShell({
+export async function DashboardShell({
   data,
   section,
   children,
@@ -40,6 +48,7 @@ export function DashboardShell({
   defaultRangeKey = DEFAULT_TIME_RANGE_KEY,
 }: DashboardShellProps) {
   const page = getDashboardSectionConfig(section);
+  const countryOptions = await getDashboardCountryOptions();
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -59,49 +68,25 @@ export function DashboardShell({
         </div>
       </header>
 
-      <nav
-        className="mb-6 flex flex-wrap gap-1 border-b border-slate-200"
-        aria-label="Dashboard sections"
-      >
-        {DASHBOARD_SECTIONS.map((item) => {
-          const isActive = item.key === section;
-          return (
-            <Link
-              key={item.key}
-              href={hrefWithRange(item.href, data.selectedRange)}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                isActive
-                  ? "border-indigo-600 text-indigo-700"
-                  : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div
-        className="mb-6 flex flex-wrap gap-1"
-        role="tablist"
-        aria-label="Choose time frame"
-      >
-        {data.timeRangeOptions.map((option) => (
-          <Link
-            key={option.key}
-            href={hrefWithRange(page.href, option.key, defaultRangeKey)}
-            aria-current={option.active ? "page" : undefined}
-            title={option.description}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              option.active
-                ? "bg-indigo-600 text-white"
-                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            {option.label}
-          </Link>
-        ))}
-      </div>
+      <DashboardShellNav
+        tabs={DASHBOARD_SECTIONS.map((item) => ({
+          key: item.key,
+          label: item.label,
+          href: item.href,
+        }))}
+        activeTabKey={section}
+        pageHref={page.href}
+        selectedRange={data.selectedRange}
+        defaultRangeKey={defaultRangeKey}
+        rangePills={data.timeRangeOptions.map((option) => ({
+          key: option.key,
+          label: option.label,
+          description: option.description,
+          active: option.active,
+        }))}
+        countryOptions={countryOptions}
+        supportsCountry={COUNTRY_FILTER_SECTIONS.has(section)}
+      />
 
       {data.setupMode ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

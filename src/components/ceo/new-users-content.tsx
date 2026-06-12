@@ -152,7 +152,10 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
 
   const totals = data.rows.reduce(
     (acc, row) => ({
-      iosDownloads: acc.iosDownloads + row.iosDownloads,
+      iosDownloads:
+        row.iosDownloads !== null
+          ? (acc.iosDownloads ?? 0) + row.iosDownloads
+          : acc.iosDownloads,
       androidDownloads:
         row.androidDownloads !== null
           ? (acc.androidDownloads ?? 0) + row.androidDownloads
@@ -173,7 +176,7 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
         (row.avgDaysToActivate !== null ? row.activated : 0),
     }),
     {
-      iosDownloads: 0,
+      iosDownloads: null as number | null,
       androidDownloads: null as number | null,
       webFirstVisits: null as number | null,
       signUps: 0,
@@ -284,7 +287,11 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
                   </span>
                 </td>
                 <td>
-                  <strong>{formatNumber(totals.iosDownloads)}</strong>
+                  <strong>
+                    {totals.iosDownloads === null
+                      ? "—"
+                      : formatNumber(totals.iosDownloads)}
+                  </strong>
                 </td>
                 <td>
                   <strong>
@@ -318,7 +325,11 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
                       <span>{row.bucket}</span>
                     </span>
                   </td>
-                  <td>{formatNumber(row.iosDownloads)}</td>
+                  <td>
+                    {row.iosDownloads === null
+                      ? "—"
+                      : formatNumber(row.iosDownloads)}
+                  </td>
                   <td>
                     {row.androidDownloads === null
                       ? "—"

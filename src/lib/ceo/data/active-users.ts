@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
+import { loadCountryFilterSets } from "@/lib/ceo/countries";
 import { addStockholmDays, toStockholmIsoDate } from "@/lib/ceo/dates";
 import { loadInternalTestSets } from "@/lib/ceo/internal-test/loader";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
@@ -347,6 +348,7 @@ async function resolveAppUsers(
 
 async function getActiveUsersDataUncached(
   rangeKey: DashboardTimeRangeKey,
+  country: string | null,
 ): Promise<ActiveUsersData> {
   const range = resolveDashboardTimeRange(rangeKey);
   const rangeSpan = formatRangeDateSpan(range);
@@ -451,15 +453,20 @@ async function getActiveUsersDataUncached(
   }
 
   // Union of everyone who showed engagement OR ran a diagnostic in the window,
-  // minus internal-test accounts (unless explicitly exempted).
-  const internalTest = await loadInternalTestSets();
+  // minus internal-test accounts (unless explicitly exempted), scoped to the
+  // selected country (workshop country via dashboard_users) when one is set.
+  const [internalTest, countrySets] = await Promise.all([
+    loadInternalTestSets(),
+    loadCountryFilterSets(country),
+  ]);
   const candidateIds = new Set<string>([
     ...userTotals.keys(),
     ...diagnosticsByUser.keys(),
   ]);
   const ids = [...candidateIds].filter(
     (id) =>
-      internalTest.exemptUserIds.has(id) || !internalTest.userIds.has(id),
+      (internalTest.exemptUserIds.has(id) || !internalTest.userIds.has(id)) &&
+      (!countrySets || countrySets.userIds.has(id)),
   );
 
   const contacts = await resolveContacts(ids);
@@ -557,14 +564,18 @@ async function getActiveUsersDataUncached(
 }
 
 const getActiveUsersDataCached = unstable_cache(
-  (rangeKey: string) =>
-    getActiveUsersDataUncached(rangeKey as DashboardTimeRangeKey),
+  (rangeKey: string, country: string | null) =>
+    getActiveUsersDataUncached(rangeKey as DashboardTimeRangeKey, country),
   ["ceo-active-users-data"],
   CEO_CACHE_OPTIONS,
 );
 
 export function getActiveUsersData(
   rangeParam?: string | string[],
+  country: string | null = null,
 ): Promise<ActiveUsersData> {
-  return getActiveUsersDataCached(normalizeActiveUsersRangeKey(rangeParam));
+  return getActiveUsersDataCached(
+    normalizeActiveUsersRangeKey(rangeParam),
+    country,
+  );
 }

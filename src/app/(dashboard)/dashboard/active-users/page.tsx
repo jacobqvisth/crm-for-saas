@@ -9,6 +9,7 @@ import {
   getActiveUsersData,
   normalizeActiveUsersRangeKey,
 } from "@/lib/ceo/data/active-users";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   formatStockholmTime,
@@ -36,9 +37,15 @@ const ACTIVE_USERS_EXCLUSION_DESCRIPTION = (
   </>
 );
 
-async function ActiveUsersPanel({ rangeKey }: { rangeKey: string }) {
+async function ActiveUsersPanel({
+  rangeKey,
+  country,
+}: {
+  rangeKey: string;
+  country: string | null;
+}) {
   const [data, internalTestUsers, internalTestWorkshops] = await Promise.all([
-    getActiveUsersData(rangeKey),
+    getActiveUsersData(rangeKey, country),
     listInternalTestUsers(),
     listInternalTestWorkshops(),
   ]);
@@ -59,6 +66,7 @@ export default async function ActiveUsersPage({
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeActiveUsersRangeKey(params.range);
+  const country = normalizeDashboardCountry(params.country);
 
   // Shell + header render from cached/cheap data; the GA4 + diagnostics panel
   // streams in behind a skeleton. Pass the resolved key (default: yesterday)
@@ -85,7 +93,7 @@ export default async function ActiveUsersPage({
       }
     >
       <Suspense fallback={<CeoPanelSkeleton />}>
-        <ActiveUsersPanel rangeKey={rangeKey} />
+        <ActiveUsersPanel rangeKey={rangeKey} country={country} />
       </Suspense>
     </DashboardShell>
   );

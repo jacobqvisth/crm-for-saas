@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { ToplistsContent } from "@/components/ceo/toplists-content";
 import { UpdateButton } from "@/components/ceo/update-button";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   TOPLISTS_DEFAULT_RANGE_KEY,
@@ -23,9 +24,15 @@ import { refreshToplistsAction } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function ToplistsPanel({ rangeKey }: { rangeKey: string }) {
+async function ToplistsPanel({
+  rangeKey,
+  country,
+}: {
+  rangeKey: string;
+  country: string | null;
+}) {
   const [data, internalTestUsers, internalTestWorkshops] = await Promise.all([
-    getToplistsData(rangeKey),
+    getToplistsData(rangeKey, country),
     listInternalTestUsers(),
     listInternalTestWorkshops(),
   ]);
@@ -43,6 +50,7 @@ export default async function ToplistsPage({
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeToplistsRangeKey(params.range);
+  const country = normalizeDashboardCountry(params.country);
 
   // Shell + header render from cached/cheap data; the leaderboard panels stream
   // in behind a skeleton. Pass the resolved key (default: last_30_days) into
@@ -69,7 +77,7 @@ export default async function ToplistsPage({
       }
     >
       <Suspense fallback={<CeoPanelSkeleton />}>
-        <ToplistsPanel rangeKey={rangeKey} />
+        <ToplistsPanel rangeKey={rangeKey} country={country} />
       </Suspense>
     </DashboardShell>
   );

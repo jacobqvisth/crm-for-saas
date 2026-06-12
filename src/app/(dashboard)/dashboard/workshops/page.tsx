@@ -3,6 +3,7 @@ import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { WorkshopListContent } from "@/components/ceo/workshops-content";
+import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getWorkshopDrilldownList } from "@/lib/ceo/data/workshops";
 import {
@@ -25,6 +26,7 @@ const WORKSHOPS_EXCLUSION_DESCRIPTION = (
 type WorkshopsPageProps = {
   searchParams: Promise<{
     range?: string | string[];
+    country?: string | string[];
     q?: string | string[];
     status?: string | string[];
     showInternal?: string | string[];
@@ -62,10 +64,12 @@ async function WorkshopsPanel({
   rawQuery,
   status,
   showInternal,
+  country,
 }: {
   rawQuery: string;
   status: string;
   showInternal: boolean;
+  country: string | null;
 }) {
   const query = rawQuery.toLowerCase();
   const [workshops, internalTestUsers, internalTestWorkshops] =
@@ -88,6 +92,10 @@ async function WorkshopsPanel({
     ]
       .join(" ")
       .toLowerCase();
+
+    if (country && (item.country ?? "").trim().toUpperCase() !== country) {
+      return false;
+    }
 
     return (!query || haystack.includes(query)) && matchesStatus(item.status, status);
   });
@@ -118,6 +126,7 @@ export default async function WorkshopsDashboardPage({
   const rawQuery = asString(params.q).trim();
   const status = asString(params.status) || "all";
   const showInternal = asBool(params.showInternal);
+  const country = normalizeDashboardCountry(params.country);
   const data = await getDashboardData(params.range);
 
   return (
@@ -127,6 +136,7 @@ export default async function WorkshopsDashboardPage({
           rawQuery={rawQuery}
           status={status}
           showInternal={showInternal}
+          country={country}
         />
       </Suspense>
     </DashboardShell>

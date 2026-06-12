@@ -2,6 +2,10 @@ import { google } from "googleapis";
 import { unstable_cache } from "next/cache";
 import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
+  inCountryWith,
+  loadCountryFilterSets,
+} from "@/lib/ceo/countries";
+import {
   isInternalTestUserOrWorkshopWith,
   loadInternalTestSets,
 } from "@/lib/ceo/internal-test/loader";
@@ -379,6 +383,7 @@ function getStartDate(range: ResolvedDashboardRange) {
 async function getDiagnosisCountsByBucket(
   range: ResolvedDashboardRange,
   granularity: AppUsageGranularity,
+  country: string | null,
 ) {
   const counts = new Map<string, number>();
 
@@ -391,7 +396,10 @@ async function getDiagnosisCountsByBucket(
     return counts;
   }
 
-  const internalTestSets = await loadInternalTestSets();
+  const [internalTestSets, countrySets] = await Promise.all([
+    loadInternalTestSets(),
+    loadCountryFilterSets(country),
+  ]);
 
   const { data, error } = await pageAll<DiagnosticRow>(({ from, to }) => {
     let query = supabase
@@ -419,6 +427,12 @@ async function getDiagnosisCountsByBucket(
         row.internal_user_id,
         row.workshop_id,
       )
+    ) {
+      continue;
+    }
+    if (
+      countrySets &&
+      !inCountryWith(countrySets, row.internal_user_id, row.workshop_id)
     ) {
       continue;
     }
@@ -505,14 +519,15 @@ function platformDimensionFilter(platform: AppUsagePlatform): GA4Filter {
   }
 }
 
-// Cache by (range key, platform) — both stable primitives — so the per-page
-// GA4 runReport + diagnostics fetch isn't repeated on every navigation. The
-// Update button busts it via revalidateTag(CEO_CACHE_TAG).
+// Cache by (range key, platform, country) — all stable primitives — so the
+// per-page GA4 runReport + diagnostics fetch isn't repeated on every
+// navigation. The Update button busts it via revalidateTag(CEO_CACHE_TAG).
 const getAppUsageDataCached = unstable_cache(
-  (rangeKey: string, platform: AppUsagePlatform) =>
+  (rangeKey: string, platform: AppUsagePlatform, country: string | null) =>
     getAppUsageDataUncached(
       resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
       platform,
+      country,
     ),
   ["ceo-app-usage"],
   CEO_CACHE_OPTIONS,
@@ -521,13 +536,15 @@ const getAppUsageDataCached = unstable_cache(
 export function getAppUsageData(
   range: ResolvedDashboardRange,
   platform: AppUsagePlatform = "all",
+  country: string | null = null,
 ): Promise<AppUsageData> {
-  return getAppUsageDataCached(range.key, platform);
+  return getAppUsageDataCached(range.key, platform, country);
 }
 
 async function getAppUsageDataUncached(
   range: ResolvedDashboardRange,
   platform: AppUsagePlatform = "all",
+  country: string | null = null,
 ): Promise<AppUsageData> {
   const granularity = granularityFromRange(range);
   const propertyId = getEnv("GA4_PROPERTY_ID") ?? null;
@@ -554,7 +571,7 @@ async function getAppUsageDataUncached(
       // because diagnostic rows have no platform attribution.
       platform === "marketing"
         ? Promise.resolve(new Map<string, number>())
-        : getDiagnosisCountsByBucket(range, granularity),
+        : getDiagnosisCountsByBucket(range, granularity, country),
       (async () => {
         const auth = await createGoogleAuth([
           "https://www.googleapis.com/auth/analytics.readonly",
@@ -578,7 +595,25 @@ async function getAppUsageDataUncached(
               { name: "screenPageViews" },
               { name: "eventCount" },
             ],
-            dimensionFilter: platformDimensionFilter(platform),
+            // GA4 traffic has no workshop identity, so country here is GA4's
+            // own IP-geo countryId (ISO-2 — same codes the dropdown uses).
+            // Diagnostics counts use workshop country instead; the two can
+            // differ for travelers/VPNs but agree in practice.
+            dimensionFilter: country
+              ? {
+                  andGroup: {
+                    expressions: [
+                      platformDimensionFilter(platform),
+                      {
+                        filter: {
+                          fieldName: "countryId",
+                          stringFilter: { matchType: "EXACT", value: country },
+                        },
+                      },
+                    ],
+                  },
+                }
+              : platformDimensionFilter(platform),
             orderBys: [{ dimension: { dimensionName: dimension }, desc: false }],
             limit: "5000",
           },
