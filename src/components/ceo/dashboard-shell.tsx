@@ -21,6 +21,7 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "usage",
   "active-users",
   "feature-usage",
+  "plan-stats",
   "toplists",
   "new-users",
   "diagnostics",
