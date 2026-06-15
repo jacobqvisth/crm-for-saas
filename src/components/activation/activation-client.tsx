@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Route,
   RefreshCw,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
@@ -49,6 +50,22 @@ export function ActivationClient() {
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
   const [scrollToStartKey, setScrollToStartKey] = useState(0);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+
+  // ---- legend filter (click a status / "event-triggered" chip to narrow) ----
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [triggerFilter, setTriggerFilter] = useState(false);
+  const anyFilter = statusFilter.size > 0 || triggerFilter;
+  const toggleStatus = (s: string) =>
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  const clearFilters = () => {
+    setStatusFilter(new Set());
+    setTriggerFilter(false);
+  };
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -109,14 +126,23 @@ export function ActivationClient() {
     [board?.scenarios, activeScenarioId]
   );
 
-  /** Board narrowed to the active scenario: only member items, only non-empty lanes. */
+  /**
+   * Board narrowed to the active scenario (only member items, only non-empty
+   * lanes) and to the legend status/trigger filter (click the chips up top).
+   */
   const visibleBoard: ActivationBoard | null = useMemo(() => {
     if (!board) return null;
-    if (!activeScenario) return board;
-    const items = board.items.filter((it) => (it.scenario_ids ?? []).includes(activeScenario.id));
-    const usedGroupIds = new Set(items.map((it) => it.group_id));
-    return { ...board, items, groups: board.groups.filter((g) => usedGroupIds.has(g.id)) };
-  }, [board, activeScenario]);
+    let items = board.items;
+    let groups = board.groups;
+    if (activeScenario) {
+      items = items.filter((it) => (it.scenario_ids ?? []).includes(activeScenario.id));
+      const usedGroupIds = new Set(items.map((it) => it.group_id));
+      groups = groups.filter((g) => usedGroupIds.has(g.id));
+    }
+    if (statusFilter.size > 0) items = items.filter((it) => statusFilter.has(it.status ?? ""));
+    if (triggerFilter) items = items.filter((it) => it.trigger_type === "event");
+    return { ...board, items, groups };
+  }, [board, activeScenario, statusFilter, triggerFilter]);
 
   /** Journey step numbers (1-based, day order) for the active scenario. */
   const stepNumbers = useMemo(() => {
@@ -537,20 +563,51 @@ export function ActivationClient() {
           <Plus className="h-3.5 w-3.5" /> New
         </button>
 
-        {/* Status legend */}
-        <div className="ml-2 hidden items-center gap-3 xl:flex">
+        {/* Status legend — click a chip to filter the board to that status */}
+        <div className="ml-2 hidden items-center gap-1.5 xl:flex">
           {ITEM_STATUSES.map((s) => {
             const st = statusStyle(s);
             if (!st) return null;
+            const active = statusFilter.has(s);
             return (
-              <span key={s} className="flex items-center gap-1 text-xs text-slate-500">
+              <button
+                key={s}
+                onClick={() => toggleStatus(s)}
+                title={active ? `Showing only ${s} — click to clear` : `Show only ${s} touchpoints`}
+                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition ${
+                  active
+                    ? "bg-slate-800 text-white"
+                    : `text-slate-500 hover:bg-slate-100 ${anyFilter ? "opacity-40" : ""}`
+                }`}
+              >
                 <span className={`h-2 w-2 rounded-full ${st.dot}`} /> {s}
-              </span>
+              </button>
             );
           })}
-          <span className="flex items-center gap-1 text-xs text-slate-500">
+          <button
+            onClick={() => setTriggerFilter((v) => !v)}
+            title={
+              triggerFilter
+                ? "Showing only event-triggered — click to clear"
+                : "Show only event-triggered touchpoints"
+            }
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition ${
+              triggerFilter
+                ? "bg-slate-800 text-white"
+                : `text-slate-500 hover:bg-slate-100 ${anyFilter ? "opacity-40" : ""}`
+            }`}
+          >
             <Zap className="h-3 w-3" /> event-triggered
-          </span>
+          </button>
+          {anyFilter && (
+            <button
+              onClick={clearFilters}
+              title="Clear filter"
+              className="rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -709,6 +766,13 @@ export function ActivationClient() {
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
             <Plus className="h-4 w-4" /> Add your first channel
+          </button>
+        </div>
+      ) : visibleBoard.items.length === 0 && anyFilter ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 border-t border-slate-200 text-sm text-slate-500">
+          <p>No touchpoints match the current filter.</p>
+          <button onClick={clearFilters} className="text-xs text-indigo-600 hover:underline">
+            Clear filter
           </button>
         </div>
       ) : visibleBoard.items.length === 0 && activeScenario ? (
