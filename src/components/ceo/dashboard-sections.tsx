@@ -28,6 +28,7 @@ export type DashboardSectionKey =
   | "usage"
   | "active-users"
   | "feature-usage"
+  | "plan-stats"
   | "toplists"
   | "cta-clicks"
   | "conversions"
@@ -83,6 +84,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Feature Usage",
     description:
       "Per-feature adoption from first-party app data: diagnostics, chat, AI search, VRM lookups, InfoPro and Motor vehicle lookups, plus real app logins (login-history backfill reaches ~14 months). Feature counters accumulate from the hourly core_app sync starting 2026-06-11.",
+  },
+  {
+    key: "plan-stats",
+    label: "Plan Stats",
+    glyph: "PS",
+    href: "/dashboard/plan-stats",
+    title: "Plan Stats",
+    description:
+      "The public pricing page brought to life: every plan (Free / One / Small / Large) with how many users and workshops are on it, how many are active in the range, and the real feature-event counts behind each listed feature. Expand a card for the full per-feature breakdown. Feature counters exist from 2026-06-11 onward.",
   },
   {
     key: "toplists",
