@@ -182,9 +182,12 @@ async function getDashboardDataUncached(
 
 // Cache keyed by the normalized range key (a stable string), tagged so the
 // "Update" refresh actions can bust it via revalidateTag(CEO_CACHE_TAG).
+// The key suffix is a shape version: bump it whenever DashboardData's shape
+// changes so entries written by the previous deploy (which the new components
+// would read with the wrong shape) are abandoned instead of crashing render.
 const getDashboardDataCached = unstable_cache(
   (rangeKey: string) => getDashboardDataUncached(rangeKey),
-  ["ceo-dashboard-data"],
+  ["ceo-dashboard-data-v2-revenue"],
   CEO_CACHE_OPTIONS,
 );
 
