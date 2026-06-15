@@ -3,6 +3,7 @@ import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { loadCountryFilterSets } from "@/lib/ceo/countries";
 import { toStockholmIsoDate } from "@/lib/ceo/dates";
 import { loadInternalTestSets } from "@/lib/ceo/internal-test/loader";
+import { getActiveUsersData } from "@/lib/ceo/data/active-users";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { TABLES } from "@/lib/ceo/tables";
 import { pageAll } from "@/lib/supabase-paging";
@@ -32,15 +33,23 @@ import {
 // Recreates the public pricing page (Free / One / Small / Large) and overlays
 // the real first-party usage numbers onto each plan:
 //   * how many app users and workshops are on the plan,
-//   * how many are active (logged in) in the selected range,
+//   * how many are ACTIVE in the selected range (see below),
 //   * and how many events each tracked feature counter has, per plan.
 //
 // The plan a user belongs to comes from their workshop's clean plan_key on
 // dashboard_workshops ("free" / "one_monthly" / "small_yearly" / ...), which
-// planTierFromKey() collapses to one of the four canonical tiers. Feature and
-// login rows are the same first-party tables the Feature Usage page reads, so
-// the data-availability caveats are identical (logins backfill ~14 months;
-// feature counters only exist from 2026-06-11 onward).
+// planTierFromKey() collapses to one of the four canonical tiers.
+//
+// "Active" is behaviour-based, NOT login-based. App sessions are long-lived
+// (users rarely re-authenticate), so a login event is a poor activity signal:
+// ~a third of users who used a feature in a given week had no login that week.
+// Instead a user counts as active in the range if they did anything in the
+// app: a GA4 engagement event on app.wrenchlane.com OR a diagnostic
+// (both via getActiveUsersData) OR any tracked feature counter (which also
+// catches mobile-only users that GA4's web-host filter would miss).
+//
+// Feature counters only exist from 2026-06-11 onward; GA4 engagement and
+// diagnostics carry real history, so "Active" is reliable across longer ranges.
 
 const FEATURE_KEYS = FEATURE_USAGE_FEATURE_KEYS;
 
@@ -70,11 +79,6 @@ type FeatureUsageDbRow = {
   usage_count: number;
 };
 
-type UserLoginDbRow = {
-  internal_user_id: string;
-  logged_in_at: string;
-};
-
 type DashboardUserDbRow = {
   internal_user_id: string;
   workshop_id: string | null;
@@ -91,7 +95,6 @@ function emptyPlanRow(tier: PlanTier): PlanStatRow {
     users: 0,
     workshops: 0,
     activeUsers: 0,
-    logins: 0,
     featureEvents: 0,
     features: FEATURE_USAGE_FEATURES.map((feature) => ({
       key: feature.key,
@@ -122,9 +125,12 @@ function emptyData(
 
 const PLAN_STATS_NOTE =
   "A user's plan comes from their workshop's plan_key on dashboard_workshops " +
-  "(Stripe-synced). Users with no plan (unassigned workshops) are excluded. " +
-  "Logins backfill ~14 months; feature counters only exist from 2026-06-11 " +
-  "onward, so short ranges before that show zero feature activity by construction.";
+  "(Stripe-synced); users with no plan (unassigned workshops) are excluded. " +
+  "'Active' is behaviour-based — a user counts as active if they had a GA4 " +
+  "engagement event on app.wrenchlane.com, ran a diagnostic, or triggered a " +
+  "tracked feature in the range (logins are ignored: sessions are long-lived, " +
+  "so a login is a poor activity signal). Feature counters only exist from " +
+  "2026-06-11 onward; GA4 and diagnostics carry real history.";
 
 async function getPlanStatsDataUncached(
   rangeKey: DashboardTimeRangeKey,
@@ -150,14 +156,12 @@ async function getPlanStatsDataUncached(
 
   const startDate = range.start ? toStockholmIsoDate(range.start) : null;
   const endDate = toStockholmIsoDate(range.end);
-  const startIso = range.start ? range.start.toISOString() : null;
-  const endIso = range.end.toISOString();
 
   const [
     dayRowsResult,
-    loginRowsResult,
     userRowsResult,
     workshopRowsResult,
+    activeUsers,
   ] = await Promise.all([
     pageAll<FeatureUsageDbRow>(({ from, to }) => {
       let query = supabase
@@ -171,17 +175,6 @@ async function getPlanStatsDataUncached(
         .order("internal_user_id", { ascending: true })
         .range(from, to);
       if (startDate) query = query.gte("period_start", startDate);
-      return query;
-    }),
-    pageAll<UserLoginDbRow>(({ from, to }) => {
-      let query = supabase
-        .from(TABLES.userLogins)
-        .select("internal_user_id, logged_in_at")
-        .lt("logged_in_at", endIso)
-        .order("logged_in_at", { ascending: true })
-        .order("internal_user_id", { ascending: true })
-        .range(from, to);
-      if (startIso) query = query.gte("logged_in_at", startIso);
       return query;
     }),
     pageAll<DashboardUserDbRow>(({ from, to }) =>
@@ -198,10 +191,13 @@ async function getPlanStatsDataUncached(
         .order("workshop_id", { ascending: true })
         .range(from, to),
     ),
+    // Behaviour-based active set (GA4 engagement + diagnostics), already
+    // range- and country-scoped. Degrade gracefully if GA4 creds are missing
+    // (e.g. setup mode): feature counters below still drive a partial "active".
+    getActiveUsersData(rangeKey, country).catch(() => null),
   ]);
 
   if (dayRowsResult.error) throw new Error(dayRowsResult.error.message);
-  if (loginRowsResult.error) throw new Error(loginRowsResult.error.message);
   if (userRowsResult.error) throw new Error(userRowsResult.error.message);
   if (workshopRowsResult.error) throw new Error(workshopRowsResult.error.message);
 
@@ -232,7 +228,6 @@ async function getPlanStatsDataUncached(
     users: Set<string>;
     workshops: Set<string>;
     activeUsers: Set<string>;
-    logins: number;
     featureEvents: number;
     featureCounts: Map<FeatureUsageFeatureKey, number>;
     featureUsers: Map<FeatureUsageFeatureKey, Set<string>>;
@@ -243,7 +238,6 @@ async function getPlanStatsDataUncached(
       users: new Set(),
       workshops: new Set(),
       activeUsers: new Set(),
-      logins: 0,
       featureEvents: 0,
       featureCounts: new Map(),
       featureUsers: new Map(),
@@ -264,16 +258,16 @@ async function getPlanStatsDataUncached(
     accs.get(tier)!.workshops.add(row.workshop_id);
   }
 
-  // Active users + logins in range.
-  for (const row of loginRowsResult.data) {
-    const tier = userTier.get(row.internal_user_id);
+  // Behaviour-based active users in range: GA4 engagement + diagnostics
+  // (from getActiveUsersData, keyed on crmUserId == internal_user_id).
+  for (const row of activeUsers?.rows ?? []) {
+    const tier = userTier.get(row.crmUserId);
     if (!tier) continue;
-    const acc = accs.get(tier)!;
-    acc.activeUsers.add(row.internal_user_id);
-    acc.logins += 1;
+    accs.get(tier)!.activeUsers.add(row.crmUserId);
   }
 
-  // Feature events in range, per plan + feature.
+  // Feature events in range, per plan + feature. A feature event also marks
+  // the user active (catches mobile users GA4's web-host filter would miss).
   let overallFeatureEvents = 0;
   for (const row of dayRowsResult.data) {
     if (!isFeatureKey(row.feature_key)) continue;
@@ -283,6 +277,7 @@ async function getPlanStatsDataUncached(
     if (count <= 0) continue;
     const feature = row.feature_key as FeatureUsageFeatureKey;
     const acc = accs.get(tier)!;
+    acc.activeUsers.add(row.internal_user_id);
     acc.featureEvents += count;
     overallFeatureEvents += count;
     acc.featureCounts.set(
@@ -317,7 +312,6 @@ async function getPlanStatsDataUncached(
       users: acc.users.size,
       workshops: acc.workshops.size,
       activeUsers: acc.activeUsers.size,
-      logins: acc.logins,
       featureEvents: acc.featureEvents,
       features,
     };

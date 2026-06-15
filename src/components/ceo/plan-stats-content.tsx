@@ -26,6 +26,19 @@ const PLAN_INFO: SourceInfo = {
     "plan_key values like small_monthly / large_yearly collapse to their tier (Free / One / Small / Large). 'Users' counts the whole base on a plan; 'Active' counts those with a login in the range.",
 };
 
+const ACTIVE_INFO: SourceInfo = {
+  title: "Active users (behaviour-based)",
+  body:
+    "Distinct users on the plan who actually did something in the app during the range: a GA4 engagement event on app.wrenchlane.com, a diagnostic, or any tracked feature.",
+  sources: [
+    "GA4 · customUser:crm_user_id (app.wrenchlane.com)",
+    "dashboard_diagnostics",
+    "dashboard_feature_usage",
+  ],
+  logic:
+    "Logins are deliberately NOT used — app sessions are long-lived, so a login is a poor activity signal (a third of users who used a feature in a week had no login that week). Feature counters also catch mobile users that GA4's web-host filter misses.",
+};
+
 const FEATURE_INFO: SourceInfo = {
   title: "Feature counters per plan",
   body:
@@ -229,8 +242,7 @@ function PlanCard({
       ) : null}
 
       <div className="mt-3 text-center text-[11px] text-slate-400">
-        {formatNumber(row.workshops)} workshop{row.workshops === 1 ? "" : "s"} ·{" "}
-        {formatNumber(row.logins)} logins
+        {formatNumber(row.workshops)} workshop{row.workshops === 1 ? "" : "s"}
       </div>
     </div>
   );
@@ -255,8 +267,8 @@ export function PlanStatsContent({ data }: PlanStatsContentProps) {
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">
-            Active in range
+          <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-slate-500">
+            Active in range <InfoHint info={ACTIVE_INFO} />
           </div>
           <div className="mt-1 text-2xl font-semibold text-slate-900">
             {formatNumber(data.totals.activeUsers)}
@@ -286,7 +298,6 @@ export function PlanStatsContent({ data }: PlanStatsContentProps) {
               users: 0,
               workshops: 0,
               activeUsers: 0,
-              logins: 0,
               featureEvents: 0,
               features: [],
             } as PlanStatRow);
