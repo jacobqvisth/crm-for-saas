@@ -28,6 +28,7 @@ export type DashboardSectionKey =
   | "usage"
   | "active-users"
   | "feature-usage"
+  | "product-analytics"
   | "plan-stats"
   | "toplists"
   | "cta-clicks"
@@ -84,6 +85,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Feature Usage",
     description:
       "Per-feature adoption from first-party app data: diagnostics, chat, AI search, VRM lookups, InfoPro and Motor vehicle lookups, plus real app logins (login-history backfill reaches ~14 months). Feature counters accumulate from the hourly core_app sync starting 2026-06-11.",
+  },
+  {
+    key: "product-analytics",
+    label: "Product Analytics",
+    glyph: "PH",
+    href: "/dashboard/product-analytics",
+    title: "Product Analytics",
+    description:
+      "Live PostHog product behaviour, keyed on the Cognito sub (= contacts.wl_user_id) and grouped by workshop: the in-app activation funnel and where users drop off, monetization/upgrade intent, per-workshop engagement, top events (incl. autocapture), errors, and segments by plan/country. Internal staff excluded. Queried live, cached 5 min. (Retention cohorts arrive once there is enough history — data starts 2026-06-08.)",
   },
   {
     key: "plan-stats",
