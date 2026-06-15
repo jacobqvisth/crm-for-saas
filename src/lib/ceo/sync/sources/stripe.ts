@@ -67,7 +67,9 @@ export async function listSubscriptions(stripe: Stripe) {
       status: "all",
       limit: 100,
       starting_after: startingAfter,
-      expand: ["data.customer"],
+      // Expand the price's product so planName() resolves a human-readable
+      // product name instead of falling back to the raw price id.
+      expand: ["data.customer", "data.items.data.price.product"],
     });
 
     subscriptions.push(...page.data);
@@ -75,6 +77,95 @@ export async function listSubscriptions(stripe: Stripe) {
   } while (startingAfter);
 
   return subscriptions;
+}
+
+/**
+ * Minimal shape we read off a Stripe invoice. The subscription id lives in a
+ * couple of different places depending on API version, so we probe all of
+ * them. We only treat an invoice as evidence of payment when money actually
+ * moved (amount_paid > 0) — $0 trial invoices don't count.
+ */
+type InvoiceLike = {
+  amount_paid?: number | null;
+  status?: string | null;
+  created?: number | null;
+  status_transitions?: { paid_at?: number | null } | null;
+  subscription?: string | { id?: string } | null;
+  parent?: {
+    subscription_details?: {
+      subscription?: string | { id?: string } | null;
+    } | null;
+  } | null;
+  lines?: {
+    data?: Array<{ subscription?: string | { id?: string } | null }> | null;
+  } | null;
+};
+
+function invoiceSubscriptionId(invoice: InvoiceLike): string | null {
+  const candidates: Array<string | { id?: string } | null | undefined> = [
+    invoice.subscription,
+    invoice.parent?.subscription_details?.subscription,
+    ...(invoice.lines?.data ?? []).map((line) => line.subscription),
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate) return candidate;
+    if (candidate && typeof candidate === "object" && candidate.id) {
+      return candidate.id;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Map of subscription id → earliest ISO timestamp at which it had a paid
+ * invoice. A subscription present in this map has paid at least once; the
+ * timestamp is its first real payment. Pure so it can be unit-tested.
+ */
+export function buildPaidInvoiceMap(
+  invoices: InvoiceLike[],
+): Map<string, string> {
+  const firstPaidAt = new Map<string, string>();
+
+  for (const invoice of invoices) {
+    if (invoice.status !== "paid" || Number(invoice.amount_paid ?? 0) <= 0) {
+      continue;
+    }
+
+    const subscriptionId = invoiceSubscriptionId(invoice);
+    if (!subscriptionId) continue;
+
+    const paidUnix =
+      invoice.status_transitions?.paid_at ?? invoice.created ?? null;
+    const paidIso = unixToIso(paidUnix);
+    if (!paidIso) continue;
+
+    const existing = firstPaidAt.get(subscriptionId);
+    if (!existing || paidIso < existing) {
+      firstPaidAt.set(subscriptionId, paidIso);
+    }
+  }
+
+  return firstPaidAt;
+}
+
+async function listPaidInvoices(stripe: Stripe) {
+  const invoices: Stripe.Invoice[] = [];
+  let startingAfter: string | undefined;
+
+  do {
+    const page = await stripe.invoices.list({
+      status: "paid",
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    invoices.push(...page.data);
+    startingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+  } while (startingAfter);
+
+  return invoices;
 }
 
 function customerWorkshopId(
@@ -117,10 +208,14 @@ export const stripeConnector: SourceConnector = {
     requireSourceEnv("Stripe", ["STRIPE_SECRET_KEY"]);
 
     const stripe = new Stripe(getEnv("STRIPE_SECRET_KEY")!);
-    const [subscriptions, userStatsLookup] = await Promise.all([
+    const [subscriptions, userStatsLookup, paidInvoices] = await Promise.all([
       listSubscriptions(stripe),
       loadUserStatsEmailLookupFromS3(),
+      listPaidInvoices(stripe),
     ]);
+    // subscription id → first real payment timestamp. Used to split churn
+    // into "paid churn" (made a payment at least once) vs trial-only churn.
+    const firstPaidBySubscription = buildPaidInvoiceMap(paidInvoices);
     const stripeCustomerIdsByEmail = new Map<string, Set<string>>();
 
     for (const subscription of subscriptions) {
@@ -298,6 +393,8 @@ export const stripeConnector: SourceConnector = {
           matchedByEmail += 1;
         }
         const period = subscriptionPeriod(subscription);
+        const firstPaidAt =
+          firstPaidBySubscription.get(subscription.id) ?? null;
 
         return {
           stripe_subscription_id: subscription.id,
@@ -325,6 +422,10 @@ export const stripeConnector: SourceConnector = {
             customer_metadata_workshop_id: customerMetadataWorkshopId,
             matched_internal_user_id: matchedInternalUserId,
             workshop_match_source: workshopMatchSource,
+            // Payment history: present + timestamped only when this
+            // subscription has had at least one paid (amount_paid > 0) invoice.
+            ever_paid: firstPaidAt !== null,
+            first_paid_at: firstPaidAt,
           },
         };
       },
@@ -345,6 +446,7 @@ export const stripeConnector: SourceConnector = {
       metadata: {
         active: active.length,
         currency,
+        paid_subscriptions: firstPaidBySubscription.size,
         matched_by_core_stripe_customer_id: matchedByCoreStripeCustomerId,
         matched_by_core_stripe_subscription_id:
           matchedByCoreStripeSubscriptionId,

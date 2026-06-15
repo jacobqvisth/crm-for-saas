@@ -385,7 +385,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
         supabase
           .from(TABLES.workshops)
           .select(
-            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, is_internal_test, churned_at, metadata",
           )
           .order("workshop_id", { ascending: true })
           .range(from, to),
@@ -403,7 +403,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
         supabase
           .from(TABLES.subscriptions)
           .select(
-            "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
+            "workshop_id, stripe_customer_id, status, plan_key, mrr_amount_cents, currency, current_period_start, current_period_end, trial_end, cancel_at, canceled_at, metadata",
           )
           .order("stripe_customer_id", { ascending: true })
           .range(from, to),
