@@ -1377,7 +1377,17 @@ function buildPlanMix(snapshots: MetricSnapshot[]) {
     (row) => row.dimension_key !== "total",
   );
 
+  // Snapshots accumulate one row per plan per day in the range, so collapse to
+  // the most recent period only — otherwise the plan mix shows the same plan
+  // repeated once per day (and the "N plan rows" badge is inflated).
+  const latestPeriodEnd = rows.reduce(
+    (latest, row) =>
+      row.period_end.localeCompare(latest) > 0 ? row.period_end : latest,
+    "",
+  );
+
   return rows
+    .filter((row) => row.period_end === latestPeriodEnd)
     .map((row) => ({
       plan: readablePlanName(String(row.dimensions.plan ?? "unknown")),
       subscriptions: Number(row.value),
