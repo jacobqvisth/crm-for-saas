@@ -41,14 +41,18 @@ export type PlanBullet = {
 export type PlanDefinition = {
   tier: PlanTier;
   name: string;
-  tagline: string;
-  // Monthly list price in USD (display only; Stripe is the source of truth).
-  monthlyPrice: number;
-  // The "Save X% with yearly" pill text, or null for Free.
-  yearlySave: string | null;
-  popular?: boolean;
   bullets: PlanBullet[];
 };
+
+// Baseline features included on every plan. The free plan lists these, and
+// since paid plans include everything Free has, they're prepended to the top
+// of each paid plan too. Only the genuine always-on capabilities live here —
+// free-tier *limitations* like "1 diagnostic / day" or "Last 5 ongoing
+// diagnostics" are intentionally excluded because paid plans supersede them.
+const BASELINE_BULLETS: PlanBullet[] = [
+  { label: "TSB search", kind: "plain" },
+  { label: "Diagnostic reports", kind: "plain" },
+];
 
 // Bullets transcribed verbatim from the live pricing page (the granular
 // per-plan list), each tagged with the feature counter(s) that back it.
@@ -59,9 +63,6 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     tier: "free",
     name: "Free",
-    tagline: "For individual mechanics",
-    monthlyPrice: 0,
-    yearlySave: null,
     bullets: [
       { label: "1 diagnostic / day", kind: "metric", features: ["diagnostics"] },
       { label: "1 chat message / day", kind: "metric", features: ["chat"] },
@@ -82,10 +83,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     tier: "one",
     name: "One",
-    tagline: "1 vehicle, fully unlocked",
-    monthlyPrice: 19,
-    yearlySave: "Save 75% with yearly",
     bullets: [
+      ...BASELINE_BULLETS,
       { label: "1 fully unlocked vehicle", kind: "plain" },
       {
         label: "Unlimited diagnostics & chat",
@@ -105,11 +104,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     tier: "small",
     name: "Small",
-    tagline: "Suitable for workshops with 1-2 mechanics",
-    monthlyPrice: 79,
-    yearlySave: "Save 26% with yearly",
-    popular: true,
     bullets: [
+      ...BASELINE_BULLETS,
       { label: "Multiple users", kind: "seats" },
       {
         label: "Premium data for 20 vehicles / month",
@@ -126,10 +122,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     tier: "large",
     name: "Large",
-    tagline: "Suitable for workshops with 3-10 mechanics",
-    monthlyPrice: 195,
-    yearlySave: "Save 27% with yearly",
     bullets: [
+      ...BASELINE_BULLETS,
       { label: "Multiple users", kind: "seats" },
       {
         label: "Premium data for 80 vehicles / month",

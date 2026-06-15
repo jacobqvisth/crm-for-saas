@@ -98,36 +98,9 @@ function PlanCard({
     () => new Map(row.features.map((f) => [f.key, f])),
     [row.features],
   );
-  const popular = Boolean(definition.popular);
-
   return (
-    <div
-      className={`relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm ${
-        popular ? "border-blue-500 ring-1 ring-blue-500" : "border-slate-200"
-      }`}
-    >
-      {popular ? (
-        <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-          Most popular
-        </span>
-      ) : null}
-
-      <div>
-        <h3 className="text-lg font-semibold text-slate-900">{definition.name}</h3>
-        <p className="mt-0.5 text-sm text-slate-500">{definition.tagline}</p>
-      </div>
-
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-3xl font-semibold tracking-tight text-slate-900">
-          ${definition.monthlyPrice}
-        </span>
-        <span className="text-sm text-slate-500">/ month</span>
-      </div>
-      {definition.yearlySave ? (
-        <span className="mt-2 inline-flex w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-          {definition.yearlySave}
-        </span>
-      ) : null}
+    <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-slate-900">{definition.name}</h3>
 
       {/* Plan headline stats */}
       <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">
