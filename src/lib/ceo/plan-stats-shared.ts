@@ -44,21 +44,19 @@ export type PlanDefinition = {
   bullets: PlanBullet[];
 };
 
-// Baseline features included on every plan. The free plan lists these, and
-// since paid plans include everything Free has, they're prepended to the top
-// of each paid plan too. Only the genuine always-on capabilities live here —
-// free-tier *limitations* like "1 diagnostic / day" or "Last 5 ongoing
-// diagnostics" are intentionally excluded because paid plans supersede them.
-const BASELINE_BULLETS: PlanBullet[] = [
-  { label: "TSB search", kind: "plain" },
-  { label: "Diagnostic reports", kind: "plain" },
-];
-
-// Bullets transcribed verbatim from the live pricing page (the granular
-// per-plan list), each tagged with the feature counter(s) that back it.
-// OEM/Premium data rows map to the InfoPro + Motor vehicle counters; to avoid
-// showing the same number twice on a card, only the most representative row
-// per card carries the metric and the rest stay as plain entitlements.
+// Only features we can actually measure are listed — each row carries a stat
+// badge (a feature counter, or the seat/user count). Pure entitlement rows
+// with no data ("Everything in Small", "Priority support", "Verified
+// measurements", "Full Garage history", etc.) are intentionally omitted.
+// "OEM technical data" / "Premium data" map to the InfoPro + Motor (Haynes)
+// vehicle counters. Paid plans repeat the inherited measurable features
+// (diagnostics & chat, AI search) so each plan's own usage is visible rather
+// than hidden behind an "Everything in <lower tier>" line.
+//
+// NOTE: TSB search and Garage history are NOT here — TSB activity exists only
+// inside the raw per-diagnostic user_actions.tsbs_tab_viewed arrays (no
+// aggregated counter yet) and "search history" views aren't captured in the
+// export at all. Add a counter in the core_app sync before listing them.
 export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     tier: "free",
@@ -66,72 +64,65 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     bullets: [
       { label: "1 diagnostic / day", kind: "metric", features: ["diagnostics"] },
       { label: "1 chat message / day", kind: "metric", features: ["chat"] },
-      { label: "TSB search", kind: "plain" },
-      { label: "Diagnostic reports", kind: "plain" },
-      { label: "Last 5 ongoing diagnostics", kind: "plain" },
       { label: "10 AI searches / day", kind: "metric", features: ["ai_search"] },
       {
         label: "InfoPro data on 1 demo vehicle",
         kind: "metric",
         features: ["infopro_vehicles"],
       },
-      { label: "Full InfoPro on all vehicles", kind: "locked" },
-      { label: "Verified measurements", kind: "locked" },
-      { label: "Team members", kind: "locked" },
     ],
   },
   {
     tier: "one",
     name: "One",
     bullets: [
-      ...BASELINE_BULLETS,
-      { label: "1 fully unlocked vehicle", kind: "plain" },
       {
         label: "Unlimited diagnostics & chat",
         kind: "metric",
         features: ["diagnostics", "chat"],
       },
-      { label: "Full Garage history", kind: "plain" },
+      { label: "Unlimited AI search", kind: "metric", features: ["ai_search"] },
       {
-        label: "OEM technical data (1 vehicle)",
+        label: "OEM technical data",
         kind: "metric",
         features: ["infopro_vehicles", "motor_vehicles"],
       },
-      { label: "Unlimited AI search", kind: "metric", features: ["ai_search"] },
-      { label: "Verified measurements (1 vehicle)", kind: "plain" },
     ],
   },
   {
     tier: "small",
     name: "Small",
     bullets: [
-      ...BASELINE_BULLETS,
       { label: "Multiple users", kind: "seats" },
       {
-        label: "Premium data for 20 vehicles / month",
+        label: "Unlimited diagnostics & chat",
+        kind: "metric",
+        features: ["diagnostics", "chat"],
+      },
+      { label: "Unlimited AI search", kind: "metric", features: ["ai_search"] },
+      {
+        label: "Premium data (OEM / InfoPro)",
         kind: "metric",
         features: ["infopro_vehicles", "motor_vehicles"],
       },
-      { label: "Everything in One", kind: "plain" },
-      { label: "Verified measurements", kind: "plain" },
-      { label: "OEM technical data", kind: "plain" },
-      { label: "Unlimited AI search", kind: "metric", features: ["ai_search"] },
-      { label: "Priority support", kind: "plain" },
     ],
   },
   {
     tier: "large",
     name: "Large",
     bullets: [
-      ...BASELINE_BULLETS,
       { label: "Multiple users", kind: "seats" },
       {
-        label: "Premium data for 80 vehicles / month",
+        label: "Unlimited diagnostics & chat",
+        kind: "metric",
+        features: ["diagnostics", "chat"],
+      },
+      { label: "Unlimited AI search", kind: "metric", features: ["ai_search"] },
+      {
+        label: "Premium data (OEM / InfoPro)",
         kind: "metric",
         features: ["infopro_vehicles", "motor_vehicles"],
       },
-      { label: "Everything in Small", kind: "plain" },
-      { label: "Priority support", kind: "plain" },
     ],
   },
 ];
