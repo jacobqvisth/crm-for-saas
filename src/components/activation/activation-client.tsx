@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
   Plus,
   Pencil,
@@ -51,20 +52,27 @@ export function ActivationClient() {
   const [scrollToStartKey, setScrollToStartKey] = useState(0);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
 
-  // ---- legend filter (click a status / "event-triggered" chip to narrow) ----
+  // ---- legend filter (click a status / "event-triggered" / channel chip) ----
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [triggerFilter, setTriggerFilter] = useState(false);
-  const anyFilter = statusFilter.size > 0 || triggerFilter;
-  const toggleStatus = (s: string) =>
-    setStatusFilter((prev) => {
+  const [channelFilter, setChannelFilter] = useState<Set<string>>(new Set());
+  const anyFilter = statusFilter.size > 0 || triggerFilter || channelFilter.size > 0;
+  const toggleInSet = (
+    setter: Dispatch<SetStateAction<Set<string>>>,
+    value: string
+  ) =>
+    setter((prev) => {
       const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
       return next;
     });
+  const toggleStatus = (s: string) => toggleInSet(setStatusFilter, s);
+  const toggleChannel = (id: string) => toggleInSet(setChannelFilter, id);
   const clearFilters = () => {
     setStatusFilter(new Set());
     setTriggerFilter(false);
+    setChannelFilter(new Set());
   };
 
   const [editingTitle, setEditingTitle] = useState(false);
@@ -139,10 +147,14 @@ export function ActivationClient() {
       const usedGroupIds = new Set(items.map((it) => it.group_id));
       groups = groups.filter((g) => usedGroupIds.has(g.id));
     }
+    if (channelFilter.size > 0) {
+      groups = groups.filter((g) => channelFilter.has(g.id));
+      items = items.filter((it) => channelFilter.has(it.group_id));
+    }
     if (statusFilter.size > 0) items = items.filter((it) => statusFilter.has(it.status ?? ""));
     if (triggerFilter) items = items.filter((it) => it.trigger_type === "event");
     return { ...board, items, groups };
-  }, [board, activeScenario, statusFilter, triggerFilter]);
+  }, [board, activeScenario, statusFilter, triggerFilter, channelFilter]);
 
   /** Journey step numbers (1-based, day order) for the active scenario. */
   const stepNumbers = useMemo(() => {
@@ -274,6 +286,12 @@ export function ActivationClient() {
         : b
     );
     setGroupMenu(null);
+    setChannelFilter((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     try {
       const res = await fetch(`/api/activation/groups/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
@@ -712,24 +730,52 @@ export function ActivationClient() {
               <Plus className="h-3 w-3" /> Scenario
             </button>
 
-            {/* channels legend (click a chip to rename/recolor/delete) */}
+            {/* channels legend — click a chip to filter to that channel;
+                when active, the ⋯ button opens rename/recolor/delete */}
             <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-4">
               <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
                 Channels
               </span>
-              {board.groups.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={(e) =>
-                    setGroupMenu({ group: g, x: e.clientX, y: e.clientY, renaming: false, draft: g.name })
-                  }
-                  title={`${g.name} — click to edit`}
-                  className="flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
-                >
-                  <span className={`h-2 w-2 rounded-full ${colorClasses(g.color).dot}`} />
-                  {g.name}
-                </button>
-              ))}
+              {board.groups.map((g) => {
+                const active = channelFilter.has(g.id);
+                return (
+                  <span key={g.id} className="flex items-center">
+                    <button
+                      onClick={() => toggleChannel(g.id)}
+                      title={
+                        active ? `Showing only ${g.name} — click to clear` : `Show only ${g.name}`
+                      }
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition ${
+                        active
+                          ? "bg-slate-800 text-white"
+                          : `border border-slate-200 text-slate-600 hover:bg-slate-50 ${
+                              channelFilter.size > 0 ? "opacity-40" : ""
+                            }`
+                      }`}
+                    >
+                      <span className={`h-2 w-2 rounded-full ${colorClasses(g.color).dot}`} />
+                      {g.name}
+                    </button>
+                    {active && (
+                      <button
+                        onClick={(e) =>
+                          setGroupMenu({
+                            group: g,
+                            x: e.clientX,
+                            y: e.clientY,
+                            renaming: false,
+                            draft: g.name,
+                          })
+                        }
+                        title="Channel options"
+                        className="ml-0.5 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
               <button
                 onClick={addGroup}
                 title="Add channel"
