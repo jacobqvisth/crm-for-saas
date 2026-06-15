@@ -160,9 +160,9 @@ export type PlanStatRow = {
   users: number;
   // Distinct workshops on this plan.
   workshops: number;
-  // Distinct users with at least one login in the range.
+  // Distinct users active in the range (behaviour-based: GA4 engagement OR a
+  // diagnostic OR a tracked feature event — not logins).
   activeUsers: number;
-  logins: number;
   // Total feature events across all six counters in the range.
   featureEvents: number;
   features: PlanFeatureStat[];
