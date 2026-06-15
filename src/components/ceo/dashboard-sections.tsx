@@ -2135,48 +2135,52 @@ function LifecycleSection({ data }: { data: DashboardData }) {
 }
 
 function RevenueSection({ data }: { data: DashboardData }) {
+  const { revenue } = data;
+  const cur = revenue.currency;
+  const totalChurn = revenue.churn.paid + revenue.churn.trialOnly;
+
   const cards: KpiCard[] = [
     {
       label: "MRR",
-      value: formatCurrency(data.revenue.mrr),
-      rawValue: data.revenue.mrr,
-      hint: `${formatCurrency(data.revenue.arr)} ARR run rate`,
+      value: formatCurrency(revenue.mrr, cur),
+      rawValue: revenue.mrr,
+      hint: `${formatCurrency(revenue.arr, cur)} ARR run rate`,
       tone: "revenue",
     },
     {
       label: "Active subscriptions",
-      value: formatNumber(data.revenue.activeSubscriptions),
-      rawValue: data.revenue.activeSubscriptions,
-      hint: "Stripe canonical",
+      value: formatNumber(revenue.activeSubscriptions),
+      rawValue: revenue.activeSubscriptions,
+      hint: "Paying workshops (Stripe)",
       tone: "growth",
     },
     {
       label: "Trials",
-      value: formatNumber(data.revenue.trials),
-      rawValue: data.revenue.trials,
-      hint: "Potential future paid workshops",
+      value: formatNumber(revenue.trials),
+      rawValue: revenue.trials,
+      hint: `${formatCurrency(revenue.trialMrr, cur)} MRR if they convert`,
       tone: "growth",
     },
     {
-      label: "New paid workshops",
-      value: formatNumber(data.revenue.newPaidWorkshops),
-      rawValue: data.revenue.newPaidWorkshops,
-      hint: "New paid movement in range",
-      tone: "growth",
+      label: "Paused → Free",
+      value: formatNumber(revenue.pausedToFree),
+      rawValue: revenue.pausedToFree,
+      hint: "Billing paused, back on Free",
+      tone: revenue.pausedToFree ? "warning" : "neutral",
     },
     {
-      label: "Churned",
-      value: formatNumber(data.revenue.churnedSubscriptions),
-      rawValue: data.revenue.churnedSubscriptions,
-      hint: "Stripe churn events in range",
-      tone: data.revenue.churnedSubscriptions ? "warning" : "neutral",
+      label: "Paid churn",
+      value: formatNumber(revenue.churn.paid),
+      rawValue: revenue.churn.paid,
+      hint: `Paid ≥1×, then left · ${revenue.churn.rangeLabel}`,
+      tone: revenue.churn.paid ? "warning" : "neutral",
     },
     {
-      label: "Live workshops",
-      value: formatNumber(data.workshopSnapshot.live),
-      rawValue: data.workshopSnapshot.live,
-      hint: "Active + trialing workshops",
-      tone: "growth",
+      label: "Trial-only churn",
+      value: formatNumber(revenue.churn.trialOnly),
+      rawValue: revenue.churn.trialOnly,
+      hint: `Canceled, never paid · ${revenue.churn.rangeLabel}`,
+      tone: "neutral",
     },
   ];
 
@@ -2190,28 +2194,19 @@ function RevenueSection({ data }: { data: DashboardData }) {
             eyebrow="Trend"
             title="Revenue and subscription trend"
             badge="Normalized daily shape"
-            description="MRR, active subscriptions, and trials are shown together to help the CEO read momentum, not just the current snapshot."
+            description="MRR, active subscriptions, and trials are shown together to help read momentum, not just the current snapshot."
           />
           <TrendChart<RevenueTrendPoint, "mrr" | "activeSubscriptions" | "trials" | "newPaidWorkshops">
             points={data.revenueTrend}
             series={[
-              {
-                key: "mrr",
-                label: "MRR",
-                color: "#465fff",
-                fill: "#465fff",
-              },
+              { key: "mrr", label: "MRR", color: "#465fff", fill: "#465fff" },
               {
                 key: "activeSubscriptions",
                 label: "Active subscriptions",
                 color: "#12b76a",
                 fill: "#12b76a",
               },
-              {
-                key: "trials",
-                label: "Trials",
-                color: "#38bdf8",
-              },
+              { key: "trials", label: "Trials", color: "#38bdf8" },
               {
                 key: "newPaidWorkshops",
                 label: "New paid",
@@ -2227,17 +2222,47 @@ function RevenueSection({ data }: { data: DashboardData }) {
         <article className="panel">
           <PanelHeader
             eyebrow="Plan Mix"
-            title="Where recurring revenue is concentrated"
-            badge={`${formatNumber(data.revenue.planMix.length)} plan rows`}
+            title="Active subscriptions by plan"
+            badge={`${formatNumber(revenue.planMix.length)} plans`}
+            description="Each currently-paying subscription, grouped by the plan it bills for. MRR share shows where recurring revenue is concentrated."
           />
-          <BarList
-            items={data.revenue.planMix.map((plan) => ({
-              label: plan.plan,
-              value: plan.subscriptions,
-            }))}
-            emptyTitle="No plan mix rows yet"
-            emptyBody="Stripe plan distribution will appear here once recurring subscription rows are synced."
-          />
+          {revenue.planMix.length === 0 ? (
+            <EmptyState
+              title="No active paid plans yet"
+              body="Once workshops convert from trial to a paid plan, the plan distribution appears here."
+            />
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th><TableHeading label="Plan" /></th>
+                    <th><TableHeading label="Active" info="Count of currently-active (paying) Stripe subscriptions on this plan." /></th>
+                    <th><TableHeading label="MRR" info="Monthly recurring revenue from active subscriptions on this plan (yearly plans normalized to a monthly figure)." /></th>
+                    <th><TableHeading label="% of MRR" /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenue.planMix.map((plan) => (
+                    <tr key={plan.plan}>
+                      <td><strong>{plan.plan}</strong></td>
+                      <td>{formatNumber(plan.subscriptions)}</td>
+                      <td>{formatCurrency(plan.mrr, cur)}</td>
+                      <td>{formatPercent(plan.shareOfMrr * 100)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td><strong>Total</strong></td>
+                    <td><strong>{formatNumber(revenue.activeSubscriptions)}</strong></td>
+                    <td><strong>{formatCurrency(revenue.mrr, cur)}</strong></td>
+                    <td><strong>100%</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </article>
       </section>
 
@@ -2245,80 +2270,164 @@ function RevenueSection({ data }: { data: DashboardData }) {
         <article className="panel panel-wide">
           <PanelHeader
             eyebrow="Billing Posture"
-            title="Workshop billing state"
-            badge={`${formatNumber(data.workshopSnapshot.stripeLinked)} Stripe-linked`}
+            title="Subscription states (Stripe)"
+            badge={`${formatNumber(
+              revenue.billing.active +
+                revenue.billing.trialing +
+                revenue.billing.pausedToFree +
+                revenue.billing.canceled,
+            )} subscriptions`}
+            description="Every Stripe subscription by its current state. 'Paused → Free' means billing was paused and the workshop is effectively back on the Free plan."
           />
           <SegmentBar
             segments={[
-              {
-                label: "Active",
-                value: data.workshopSnapshot.active,
-                colorClass: "segment-active",
-              },
-              {
-                label: "Trialing",
-                value: data.workshopSnapshot.trialing,
-                colorClass: "segment-trialing",
-              },
-              {
-                label: "Paused",
-                value: data.workshopSnapshot.paused,
-                colorClass: "segment-paused",
-              },
-              {
-                label: "At risk",
-                value: data.workshopSnapshot.atRisk,
-                colorClass: "segment-risk",
-              },
-              {
-                label: "Inactive",
-                value: data.workshopSnapshot.inactive,
-                colorClass: "segment-inactive",
-              },
-              {
-                label: "Unknown",
-                value: data.workshopSnapshot.unknown,
-                colorClass: "segment-unknown",
-              },
+              { label: "Active", value: revenue.billing.active, colorClass: "segment-active" },
+              { label: "Trialing", value: revenue.billing.trialing, colorClass: "segment-trialing" },
+              { label: "Paused → Free", value: revenue.billing.pausedToFree, colorClass: "segment-paused" },
+              { label: "Canceled", value: revenue.billing.canceled, colorClass: "segment-inactive" },
             ]}
           />
           <SummaryGrid
             columns={4}
             items={[
+              { label: "ARR run rate", value: formatCurrency(revenue.arr, cur) },
+              { label: "MRR", value: formatCurrency(revenue.mrr, cur) },
               {
-                label: "ARR run rate",
-                value: formatCurrency(data.revenue.arr),
+                label: "Trial MRR",
+                value: formatCurrency(revenue.trialMrr, cur),
+                hint: "If active trials convert",
               },
               {
-                label: "MRR",
-                value: formatCurrency(data.revenue.mrr),
-              },
-              {
-                label: "Active subscriptions",
-                value: formatNumber(data.revenue.activeSubscriptions),
-              },
-              {
-                label: "Trialing subscriptions",
-                value: formatNumber(data.revenue.trials),
+                label: "Avg MRR / paying",
+                value: formatCurrency(
+                  revenue.activeSubscriptions
+                    ? revenue.mrr / revenue.activeSubscriptions
+                    : 0,
+                  cur,
+                ),
               },
             ]}
           />
         </article>
 
         <article className="panel">
-          <PanelHeader eyebrow="Retention Lens" title="How to read risk" />
+          <PanelHeader eyebrow="Retention Lens" title="How to read this" />
           <div className="insight-list">
             <p>
-              Active and trialing workshops show immediate revenue base plus
-              near-term expansion opportunity.
+              <strong>Active</strong> = paying now. <strong>Trialing</strong> ={" "}
+              future revenue if they convert.
             </p>
             <p>
-              Paused and at-risk workshops are the best early-warning group for
-              churn prevention and product success outreach.
+              <strong>Paused → Free</strong> dropped their paid plan but kept the
+              account on Free — the best win-back / upsell pool.
             </p>
             <p>
-              Unknown status should be treated as missing linkage, not as
-              healthy revenue.
+              <strong>Canceled</strong> ended the subscription. The churn
+              breakdown below splits these into customers who actually paid vs
+              trials that never did.
+            </p>
+            <p>Internal test workshops are excluded from every number here.</p>
+          </div>
+        </article>
+      </section>
+
+      <section className="content-grid">
+        <article className="panel panel-wide">
+          <PanelHeader
+            eyebrow="Churn breakdown"
+            title="Why subscriptions ended"
+            badge={
+              revenue.churn.everPaidKnown ? `${revenue.churn.rangeLabel}` : "Approximate"
+            }
+            description={`Subscriptions canceled during ${revenue.churn.rangeLabel}, split by whether the customer ever made a real payment.`}
+          />
+          <SummaryGrid
+            columns={3}
+            items={[
+              {
+                label: "Paid churn",
+                value: formatNumber(revenue.churn.paid),
+                hint: "Made ≥1 payment, then canceled",
+              },
+              {
+                label: "Trial → Free / lapsed",
+                value: formatNumber(revenue.churn.trialOnly),
+                hint: "Canceled without ever paying",
+              },
+              {
+                label: "Deleted accounts",
+                value: revenue.churn.deletedTracked
+                  ? formatNumber(revenue.churn.deleted)
+                  : "—",
+                hint: revenue.churn.deletedTracked
+                  ? "Account fully deleted"
+                  : "Not exported yet",
+              },
+            ]}
+          />
+          {!revenue.churn.everPaidKnown ? (
+            <p className="panel-description">
+              Payment history isn’t in the warehouse yet, so the paid/trial split
+              is approximated from the trial boundary (canceled after the trial
+              ended ⇒ counted as paid). It becomes exact after the next Stripe
+              sync populates payment history.
+            </p>
+          ) : null}
+          {revenue.churn.byPlan.length > 0 ? (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th><TableHeading label="Plan churned from" /></th>
+                    <th><TableHeading label="Paid churn" /></th>
+                    <th><TableHeading label="Trial-only" /></th>
+                    <th><TableHeading label="Total" /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenue.churn.byPlan.map((row) => (
+                    <tr key={row.plan}>
+                      <td><strong>{row.plan}</strong></td>
+                      <td>{formatNumber(row.paid)}</td>
+                      <td>{formatNumber(row.trialOnly)}</td>
+                      <td>{formatNumber(row.paid + row.trialOnly)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td><strong>Total</strong></td>
+                    <td><strong>{formatNumber(revenue.churn.paid)}</strong></td>
+                    <td><strong>{formatNumber(revenue.churn.trialOnly)}</strong></td>
+                    <td><strong>{formatNumber(totalChurn)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              title="No cancellations in this range"
+              body="Nothing churned during the selected window. Widen the range to see historical churn."
+            />
+          )}
+        </article>
+
+        <article className="panel">
+          <PanelHeader eyebrow="Definitions" title="What counts as churn" />
+          <div className="insight-list">
+            <p>
+              <strong>Paid churn</strong> — the number that matters most: a
+              customer who paid at least one real invoice and then canceled.
+            </p>
+            <p>
+              <strong>Trial → Free / lapsed</strong> — canceled without ever
+              paying. Usually a trial that didn’t convert; these often land back
+              on the Free plan rather than leaving entirely.
+            </p>
+            <p>
+              <strong>Deleted accounts</strong> — workshops that removed their
+              account outright. Not yet in the data export, so it shows “—”
+              until the core app surfaces it.
             </p>
           </div>
         </article>

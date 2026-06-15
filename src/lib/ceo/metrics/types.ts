@@ -71,6 +71,8 @@ export type WarehouseWorkshop = {
   created_by_agent: boolean | null;
   core_stripe_customer_id: string | null;
   core_stripe_subscription_id: string | null;
+  is_internal_test: boolean | null;
+  churned_at: string | null;
   metadata: Record<string, unknown>;
 };
 
@@ -79,11 +81,14 @@ export type WarehouseSubscription = {
   stripe_customer_id: string | null;
   status: string;
   plan_key: string | null;
+  mrr_amount_cents: number | null;
+  currency: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
   trial_end: string | null;
   cancel_at: string | null;
   canceled_at: string | null;
+  metadata: Record<string, unknown>;
 };
 
 export type KpiCard = {
@@ -339,14 +344,59 @@ export type DashboardData = {
     unsubscribed: number;
     bounced: number;
   };
-  revenue: {
-    mrr: number;
-    arr: number;
-    activeSubscriptions: number;
-    trials: number;
-    newPaidWorkshops: number;
-    churnedSubscriptions: number;
-    planMix: { plan: string; subscriptions: number }[];
-  };
+  revenue: RevenueSummary;
   insights: string[];
+};
+
+export type RevenuePlanRow = {
+  plan: string;
+  subscriptions: number;
+  mrr: number;
+  shareOfMrr: number;
+};
+
+export type RevenueChurnPlanRow = {
+  plan: string;
+  paid: number;
+  trialOnly: number;
+};
+
+export type RevenueChurnBreakdown = {
+  // Window the counts cover (matches the selected dashboard range).
+  rangeLabel: string;
+  // Canceled in range AND had at least one paid invoice.
+  paid: number;
+  // Canceled in range with no payment ever (trial-only / lapsed before paying).
+  trialOnly: number;
+  // True once the Stripe sync has populated ever_paid; until then the split
+  // uses a trial-end heuristic and the UI flags it as approximate.
+  everPaidKnown: boolean;
+  // Account deletions are not yet in the warehouse export.
+  deletedTracked: boolean;
+  deleted: number;
+  byPlan: RevenueChurnPlanRow[];
+};
+
+export type RevenueSummary = {
+  currency: string;
+  // Monthly recurring revenue from currently-active (paying) subscriptions.
+  mrr: number;
+  arr: number;
+  // MRR currently in trial — committed only if those trials convert.
+  trialMrr: number;
+  activeSubscriptions: number;
+  trials: number;
+  // Subscriptions paused → effectively back on the Free plan.
+  pausedToFree: number;
+  newPaidWorkshops: number;
+  // Total canceled in range (paid + trialOnly) — kept for back-compat.
+  churnedSubscriptions: number;
+  planMix: RevenuePlanRow[];
+  billing: {
+    active: number;
+    trialing: number;
+    pausedToFree: number;
+    canceled: number;
+  };
+  churn: RevenueChurnBreakdown;
 };

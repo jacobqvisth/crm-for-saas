@@ -32,6 +32,9 @@ import type {
   PerformancePoint,
   ProductTrendPoint,
   RecentSyncRun,
+  RevenueChurnPlanRow,
+  RevenuePlanRow,
+  RevenueSummary,
   RevenueTrendPoint,
   SourceHealth,
   SyncRun,
@@ -1359,40 +1362,205 @@ export function calculateDashboardData({
       platformSplit: buildPlatformSplit(snapshots),
     },
     lifecycle,
-    revenue: {
-      mrr,
-      arr: mrr * 12,
-      activeSubscriptions,
-      trials,
+    revenue: buildRevenueSummary(
+      subscriptions,
+      workshops,
+      resolvedRange,
       newPaidWorkshops,
-      churnedSubscriptions,
-      planMix: buildPlanMix(snapshots),
-    },
+    ),
     insights,
   };
 }
 
-function buildPlanMix(snapshots: MetricSnapshot[]) {
-  const rows = metricRows(snapshots, "plan_subscriptions", "stripe").filter(
-    (row) => row.dimension_key !== "total",
+// Known Stripe price ids → core-app plan tier. Stripe has legacy duplicate
+// prices per tier, so we map them all to one canonical key. New subscriptions
+// resolve their human name from the expanded product (see stripe.ts planName),
+// so this only needs to cover the historical price-id rows.
+const PRICE_ID_TO_PLAN_KEY: Record<string, string> = {
+  price_1TToj1ACX27zeuSMhRcYIAxa: "one_monthly",
+  price_1SG4zaACX27zeuSMaMCnWgPE: "small_monthly",
+  price_1R3mE9ACX27zeuSMo0cj8JVt: "small_monthly",
+  price_1SG50OACX27zeuSMQL37gjYY: "small_yearly",
+  price_1RYNy4ACX27zeuSMeDeO98Sp: "small_yearly",
+  price_1SG526ACX27zeuSM2slFf17x: "large_monthly",
+  price_1R3mE2ACX27zeuSMzci4kmXy: "large_monthly",
+  price_1RYNzfACX27zeuSM5DA97UTO: "large_yearly",
+};
+
+const PLAN_KEY_LABELS: Record<string, string> = {
+  free: "Free",
+  one_monthly: "One · Monthly",
+  one_yearly: "One · Yearly",
+  small_monthly: "Small · Monthly",
+  small_yearly: "Small · Yearly",
+  large_monthly: "Large · Monthly",
+  large_yearly: "Large · Yearly",
+};
+
+function planKeyLabel(planKey: string): string {
+  if (PLAN_KEY_LABELS[planKey]) return PLAN_KEY_LABELS[planKey];
+  if (planKey.startsWith("price_") && PRICE_ID_TO_PLAN_KEY[planKey]) {
+    return PLAN_KEY_LABELS[PRICE_ID_TO_PLAN_KEY[planKey]] ?? planKey;
+  }
+  return readablePlanName(planKey);
+}
+
+// The plan a subscription bills for. The subscription's own price id is the
+// source of truth (the workshop's current plan_key can read "free" after the
+// sub is paused/canceled). Falls back to the workshop plan, then the raw key.
+function resolveSubscriptionPlanKey(
+  subscription: WarehouseSubscription,
+  workshopById: Map<string, WarehouseWorkshop>,
+): string {
+  const key = subscription.plan_key ?? "";
+  if (PRICE_ID_TO_PLAN_KEY[key]) return PRICE_ID_TO_PLAN_KEY[key];
+  if (key && !key.startsWith("price_")) return key;
+
+  const workshop = subscription.workshop_id
+    ? workshopById.get(subscription.workshop_id)
+    : null;
+  if (workshop?.plan_key && workshop.plan_key !== "free") {
+    return workshop.plan_key;
+  }
+  return key || "unknown";
+}
+
+function inRange(
+  iso: string | null,
+  range: Pick<ResolvedDashboardRange, "start" | "end">,
+): boolean {
+  if (!iso) return false;
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return false;
+  if (range.start && time < range.start.getTime()) return false;
+  return time < range.end.getTime();
+}
+
+// Whether a canceled subscription ever took a real payment. Prefers the exact
+// ever_paid flag the Stripe sync writes; until that lands it approximates with
+// the trial boundary (canceled after the trial ended ⇒ it billed at least once).
+function subscriptionEverPaid(subscription: WarehouseSubscription): boolean {
+  const flag = subscription.metadata?.ever_paid;
+  if (typeof flag === "boolean") return flag;
+
+  if (!subscription.trial_end) return true;
+  if (!subscription.canceled_at) return false;
+  return (
+    new Date(subscription.canceled_at).getTime() >
+    new Date(subscription.trial_end).getTime()
+  );
+}
+
+function buildRevenueSummary(
+  subscriptions: WarehouseSubscription[],
+  workshops: WarehouseWorkshop[],
+  range: ResolvedDashboardRange,
+  newPaidWorkshops: number,
+): RevenueSummary {
+  const workshopById = new Map<string, WarehouseWorkshop>();
+  const testWorkshopIds = new Set<string>();
+  for (const workshop of workshops) {
+    workshopById.set(workshop.workshop_id, workshop);
+    if (workshop.is_internal_test) testWorkshopIds.add(workshop.workshop_id);
+  }
+
+  // Drop internal-test workshops from every revenue number.
+  const realSubscriptions = subscriptions.filter(
+    (subscription) =>
+      !subscription.workshop_id || !testWorkshopIds.has(subscription.workshop_id),
   );
 
-  // Snapshots accumulate one row per plan per day in the range, so collapse to
-  // the most recent period only — otherwise the plan mix shows the same plan
-  // repeated once per day (and the "N plan rows" badge is inflated).
-  const latestPeriodEnd = rows.reduce(
-    (latest, row) =>
-      row.period_end.localeCompare(latest) > 0 ? row.period_end : latest,
-    "",
-  );
+  const currency =
+    realSubscriptions.find((s) => s.currency)?.currency?.toUpperCase() ?? "USD";
+  const mrrOf = (subscription: WarehouseSubscription) =>
+    Number(subscription.mrr_amount_cents ?? 0) / 100;
 
-  return rows
-    .filter((row) => row.period_end === latestPeriodEnd)
-    .map((row) => ({
-      plan: readablePlanName(String(row.dimensions.plan ?? "unknown")),
-      subscriptions: Number(row.value),
+  const activeSubs = realSubscriptions.filter((s) => s.status === "active");
+  const trialingSubs = realSubscriptions.filter((s) => s.status === "trialing");
+  const pausedSubs = realSubscriptions.filter((s) => s.status === "paused");
+  const canceledSubs = realSubscriptions.filter((s) => s.status === "canceled");
+
+  const mrr = activeSubs.reduce((sum, s) => sum + mrrOf(s), 0);
+  const trialMrr = trialingSubs.reduce((sum, s) => sum + mrrOf(s), 0);
+
+  // Plan mix = active (paying) subscriptions grouped by plan tier.
+  const planTotals = new Map<string, { subscriptions: number; mrr: number }>();
+  for (const subscription of activeSubs) {
+    const key = resolveSubscriptionPlanKey(subscription, workshopById);
+    const current = planTotals.get(key) ?? { subscriptions: 0, mrr: 0 };
+    current.subscriptions += 1;
+    current.mrr += mrrOf(subscription);
+    planTotals.set(key, current);
+  }
+  const planMix: RevenuePlanRow[] = [...planTotals.entries()]
+    .map(([key, totals]) => ({
+      plan: planKeyLabel(key),
+      subscriptions: totals.subscriptions,
+      mrr: totals.mrr,
+      shareOfMrr: mrr > 0 ? totals.mrr / mrr : 0,
     }))
-    .sort((left, right) => right.subscriptions - left.subscriptions);
+    .sort(
+      (left, right) =>
+        right.mrr - left.mrr || right.subscriptions - left.subscriptions,
+    );
+
+  // Churn = subscriptions canceled within the selected range, split by whether
+  // the customer ever paid.
+  const canceledInRange = canceledSubs.filter((s) => inRange(s.canceled_at, range));
+  const everPaidKnown = realSubscriptions.some(
+    (s) => typeof s.metadata?.ever_paid === "boolean",
+  );
+  const churnByPlan = new Map<string, { paid: number; trialOnly: number }>();
+  let paidChurn = 0;
+  let trialChurn = 0;
+  for (const subscription of canceledInRange) {
+    const paid = subscriptionEverPaid(subscription);
+    if (paid) paidChurn += 1;
+    else trialChurn += 1;
+    const key = resolveSubscriptionPlanKey(subscription, workshopById);
+    const current = churnByPlan.get(key) ?? { paid: 0, trialOnly: 0 };
+    if (paid) current.paid += 1;
+    else current.trialOnly += 1;
+    churnByPlan.set(key, current);
+  }
+  const churnPlanRows: RevenueChurnPlanRow[] = [...churnByPlan.entries()]
+    .map(([key, counts]) => ({
+      plan: planKeyLabel(key),
+      paid: counts.paid,
+      trialOnly: counts.trialOnly,
+    }))
+    .sort(
+      (left, right) =>
+        right.paid + right.trialOnly - (left.paid + left.trialOnly),
+    );
+
+  return {
+    currency,
+    mrr,
+    arr: mrr * 12,
+    trialMrr,
+    activeSubscriptions: activeSubs.length,
+    trials: trialingSubs.length,
+    pausedToFree: pausedSubs.length,
+    newPaidWorkshops,
+    churnedSubscriptions: paidChurn + trialChurn,
+    planMix,
+    billing: {
+      active: activeSubs.length,
+      trialing: trialingSubs.length,
+      pausedToFree: pausedSubs.length,
+      canceled: canceledSubs.length,
+    },
+    churn: {
+      rangeLabel: range.label,
+      paid: paidChurn,
+      trialOnly: trialChurn,
+      everPaidKnown,
+      deletedTracked: false,
+      deleted: 0,
+      byPlan: churnPlanRows,
+    },
+  };
 }
 
 function demoSnapshot(
@@ -1707,6 +1875,8 @@ export function getDemoDashboardData(
         created_by_agent: null,
         core_stripe_customer_id: null,
         core_stripe_subscription_id: null,
+        is_internal_test: false,
+        churned_at: null,
         metadata: {
           stripe_customer_id: "cus_1",
           subscription_status: "active",
@@ -1726,6 +1896,8 @@ export function getDemoDashboardData(
         created_by_agent: null,
         core_stripe_customer_id: null,
         core_stripe_subscription_id: null,
+        is_internal_test: false,
+        churned_at: null,
         metadata: {
           subscription_status: "trialing",
         },
@@ -1734,7 +1906,7 @@ export function getDemoDashboardData(
         workshop_id: "w-3",
         name: "Workshop Prospect Demo",
         country: "US",
-        plan_key: "Workshop Small",
+        plan_key: "free",
         created_at: "2026-04-04T00:00:00.000Z",
         activated_at: null,
         language: null,
@@ -1744,6 +1916,8 @@ export function getDemoDashboardData(
         created_by_agent: null,
         core_stripe_customer_id: null,
         core_stripe_subscription_id: null,
+        is_internal_test: false,
+        churned_at: "2026-04-20T00:00:00.000Z",
         metadata: {},
       },
     ],
@@ -1753,11 +1927,42 @@ export function getDemoDashboardData(
         stripe_customer_id: "cus_1",
         status: "active",
         plan_key: "Workshop Large",
+        mrr_amount_cents: 19500,
+        currency: "USD",
         current_period_start: "2026-04-01T00:00:00.000Z",
         current_period_end: "2026-05-01T00:00:00.000Z",
         trial_end: null,
         cancel_at: null,
         canceled_at: null,
+        metadata: { ever_paid: true, first_paid_at: "2026-03-23T00:00:00.000Z" },
+      },
+      {
+        workshop_id: "w-2",
+        stripe_customer_id: "cus_2",
+        status: "trialing",
+        plan_key: "Workshop Small",
+        mrr_amount_cents: 7900,
+        currency: "USD",
+        current_period_start: null,
+        current_period_end: null,
+        trial_end: "2026-05-10T00:00:00.000Z",
+        cancel_at: null,
+        canceled_at: null,
+        metadata: { ever_paid: false, first_paid_at: null },
+      },
+      {
+        workshop_id: "w-3",
+        stripe_customer_id: "cus_3",
+        status: "canceled",
+        plan_key: "Workshop Small",
+        mrr_amount_cents: 7900,
+        currency: "USD",
+        current_period_start: null,
+        current_period_end: null,
+        trial_end: "2026-04-18T00:00:00.000Z",
+        cancel_at: null,
+        canceled_at: "2026-04-20T00:00:00.000Z",
+        metadata: { ever_paid: false, first_paid_at: null },
       },
     ],
     range: resolvedRange,
