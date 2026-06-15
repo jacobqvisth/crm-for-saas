@@ -67,9 +67,11 @@ export async function listSubscriptions(stripe: Stripe) {
       status: "all",
       limit: 100,
       starting_after: startingAfter,
-      // Expand the price's product so planName() resolves a human-readable
-      // product name instead of falling back to the raw price id.
-      expand: ["data.customer", "data.items.data.price.product"],
+      // Stripe caps expand at 4 levels, and data.items.data.price.product is 5
+      // (it errors: "cannot expand more than 4 levels"). We don't need the
+      // product expanded — plan_key stays the price id and the dashboard maps
+      // price ids → plan tiers (PRICE_ID_TO_PLAN_KEY in calculations.ts).
+      expand: ["data.customer"],
     });
 
     subscriptions.push(...page.data);
