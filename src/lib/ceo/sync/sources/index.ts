@@ -5,6 +5,7 @@ import { coreAppConnector } from "./core-app";
 import { customerIoConnector } from "./customer-io";
 import { ga4Connector } from "./ga4";
 import { googleAdsConnector } from "./google-ads";
+import { posthogConnector } from "./posthog";
 import { searchConsoleConnector } from "./search-console";
 import { stripeConnector } from "./stripe";
 
@@ -16,6 +17,7 @@ const CONNECTORS: Record<SourceKey, SourceConnector> = {
   customer_io: customerIoConnector,
   stripe: stripeConnector,
   app_store_connect: appStoreConnectConnector,
+  posthog: posthogConnector,
 };
 
 export function getConnector(sourceKey: SourceKey): SourceConnector {

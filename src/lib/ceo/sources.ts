@@ -6,6 +6,7 @@ export const SOURCE_KEYS = [
   "customer_io",
   "stripe",
   "app_store_connect",
+  "posthog",
 ] as const;
 
 export type SourceKey = (typeof SOURCE_KEYS)[number];
@@ -18,6 +19,7 @@ export const SOURCE_LABELS: Record<SourceKey, string> = {
   customer_io: "Customer.io",
   stripe: "Stripe",
   app_store_connect: "App Store Connect",
+  posthog: "PostHog",
 };
 
 export function isSourceKey(value: string): value is SourceKey {
