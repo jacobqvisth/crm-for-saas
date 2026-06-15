@@ -54,9 +54,11 @@ import {
 const FEATURE_KEYS = FEATURE_USAGE_FEATURE_KEYS;
 
 export const PLAN_STATS_DEFAULT_RANGE_KEY: DashboardTimeRangeKey =
-  // Feature counters only exist from 2026-06-11, so default to the widest
-  // window the time-range selector offers to avoid an empty-looking page.
-  "last_90_days";
+  // 30-day rolling window — the headline "Active" then reads as a 30-day
+  // active count (MAU-style), which is the most useful default. Other ranges
+  // stay available via the selector. (Earlier this was 90d to dodge the young
+  // feature data, but most activity now falls inside 30 days anyway.)
+  "last_30_days";
 
 export function normalizePlanStatsRangeKey(
   value: string | string[] | undefined,
