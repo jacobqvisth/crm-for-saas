@@ -15,8 +15,8 @@ interface SendEmailParams {
   replyToThreadId?: string;
   /**
    * When true (default), append the sender's signature_html (from user_profiles)
-   * to the body. Auto-suppressed when replyToMessageId is set so signatures don't
-   * stack inside an existing thread.
+   * to the body. Applies to first touches AND thread replies/follow-ups — set
+   * to false (e.g. via a sequence step's include_signature column) to skip it.
    */
   includeSignature?: boolean;
   /**
@@ -188,10 +188,14 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     : account.email_address;
 
   // Look up the sender's signature and append it to the body.
-  // Skip for thread replies — sigs stacking inside an existing thread is HubSpot-style noise.
+  // Honors the explicit includeSignature flag (default true) regardless of
+  // whether this is a thread reply — sequence bodies end on "Hälsningar," and
+  // rely on the signature to supply the sender name, so suppressing it on
+  // follow-up steps left a dangling sign-off. Callers that don't want a
+  // signature on a given send (or per-step) pass includeSignature: false.
   let finalHtmlBody = params.htmlBody;
   let finalTextBody = params.textBody;
-  const includeSignature = params.includeSignature !== false && !params.replyToMessageId;
+  const includeSignature = params.includeSignature !== false;
   if (includeSignature && account.user_id) {
     const { data: profile } = await supabase
       .from("user_profiles")
