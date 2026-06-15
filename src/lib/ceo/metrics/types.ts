@@ -97,6 +97,10 @@ export type KpiCard = {
   rawValue: number;
   hint: string;
   tone: "revenue" | "growth" | "product" | "warning" | "neutral";
+  // Optional explicit tooltip. When omitted, the tile derives one from the
+  // label via sourceInfoFromLabel. Typed loosely to avoid a circular import of
+  // SourceInfo into the metrics layer; the component narrows it.
+  info?: unknown;
 };
 
 export type FunnelStep = {
