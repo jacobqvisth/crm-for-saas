@@ -96,6 +96,21 @@ select cron.schedule(
   $$
 );
 
+-- posthog pulls daily product-analytics aggregates (active users, pageviews,
+-- sessions, custom events) via the HogQL Query API. Added 2026-06-15. Only
+-- runs once POSTHOG_API_KEY + POSTHOG_PROJECT_ID are set in Vercel; otherwise
+-- the route returns status=skipped and writes nothing.
+select cron.schedule(
+  'ceo-sync-posthog-hourly',
+  '47 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://crm-for-saas.vercel.app/api/ceo-sync/posthog',
+    headers := jsonb_build_object('authorization', 'Bearer __SYNC_SECRET__')
+  );
+  $$
+);
+
 -- AFTER the new jobs run successfully against crm-for-saas at least once
 -- (check `select * from cron.job_run_details order by start_time desc limit 20;`),
 -- run this against the OLD wl-dashboard Supabase (ref ivjlbknopdvadawjqpxl)
