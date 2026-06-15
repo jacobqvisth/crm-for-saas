@@ -46,7 +46,7 @@ export const OVERVIEW_COLUMNS: OverviewColumn[] = [
   { alias: "sessions", metricKey: "posthog_sessions" },
 ];
 
-type QueryResponse = {
+export type PostHogQueryResponse = {
   results?: Array<Array<string | number | null>>;
   columns?: string[];
   error?: string;
@@ -130,7 +130,12 @@ function toNumber(value: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
-async function runHogqlQuery(query: string): Promise<QueryResponse> {
+// Shared HogQL runner — used by this hourly connector AND by live dashboard
+// loaders (e.g. /dashboard/product-analytics) that query PostHog at render
+// time. Throws SyncSkippedError-free; callers handle errors per query.
+export async function runPostHogQuery(
+  query: string,
+): Promise<PostHogQueryResponse> {
   const host = getPostHogApiHost();
   const projectId = getEnv("POSTHOG_PROJECT_ID")!;
   const apiKey = getEnv("POSTHOG_API_KEY")!;
@@ -145,7 +150,7 @@ async function runHogqlQuery(query: string): Promise<QueryResponse> {
   });
 
   const payload = (await response.json().catch(() => null)) as
-    | QueryResponse
+    | PostHogQueryResponse
     | null;
 
   if (!response.ok) {
@@ -166,7 +171,7 @@ export const posthogConnector: SourceConnector = {
     const rawRows: RawMetricRow[] = [];
 
     // 1) Daily overview: events, active users, pageviews, sessions.
-    const overview = await runHogqlQuery(buildOverviewQuery(window));
+    const overview = await runPostHogQuery(buildOverviewQuery(window));
     const overviewRows = overview.results ?? [];
 
     for (const row of overviewRows) {
@@ -201,7 +206,7 @@ export const posthogConnector: SourceConnector = {
     // 2) Optional per-event breakout for product events worth surfacing.
     const trackedEvents = getTrackedEvents();
     if (trackedEvents.length > 0) {
-      const tracked = await runHogqlQuery(
+      const tracked = await runPostHogQuery(
         buildTrackedEventsQuery(window, trackedEvents),
       );
 
