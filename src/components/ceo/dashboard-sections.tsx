@@ -356,7 +356,9 @@ function KpiTile({
       <div className="kpi-card-main">
         <p className="label-with-info">
           <span>{card.label}</span>
-          <InfoHint info={sourceInfoFromLabel(card.label)} />
+          <InfoHint
+            info={(card.info as SourceInfo) ?? sourceInfoFromLabel(card.label)}
+          />
         </p>
         <strong>{card.value}</strong>
       </div>
@@ -2144,6 +2146,108 @@ function LifecycleSection({ data }: { data: DashboardData }) {
   );
 }
 
+// Precise per-metric tooltips for the revenue page. These spell out the exact
+// data source + condition behind each number, and (critically) draw the line
+// between "Paused → Free" (a current, reversible paused subscription) and
+// "Trial-only churn" (a fully canceled subscription that never paid).
+const EVER_PAID_NOTE =
+  "ever_paid is true when the subscription has at least one Stripe invoice with amount_paid > 0 (a real charge, not a $0 trial invoice). It's written each hour by the Stripe sync onto dashboard_subscriptions.metadata.ever_paid.";
+
+const REVENUE_INFO: Record<string, SourceInfo> = {
+  mrr: {
+    title: "MRR — monthly recurring revenue",
+    body:
+      "Recurring revenue from workshops that are paying right now. Trials are NOT included here — their potential value is shown separately as Trial MRR.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='active'", "mrr_amount_cents", "currency"],
+    logic:
+      "Sum of mrr_amount_cents / 100 across subscriptions with status='active'. Yearly plans are normalized to a monthly amount by the sync. ARR = MRR × 12. Internal-test workshops are excluded.",
+    refresh: "Refreshes when the hourly Stripe sync upserts dashboard_subscriptions.",
+  },
+  active: {
+    title: "Active subscriptions",
+    body: "Workshops with a live, paying Stripe subscription.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='active'"],
+    logic:
+      "Count of dashboard_subscriptions where status='active', excluding internal-test workshops. These are the subscriptions that make up MRR.",
+  },
+  trials: {
+    title: "Trials",
+    body:
+      "Workshops in a free trial that have not been charged yet. They are not revenue until they convert.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='trialing'", "trial_end", "mrr_amount_cents"],
+    logic:
+      "Count of dashboard_subscriptions where status='trialing'. Trial MRR is the MRR they would add if every current trial converted.",
+  },
+  pausedToFree: {
+    title: "Paused → Free (not churn)",
+    body:
+      "Subscriptions whose billing is PAUSED. The subscription still exists and can resume without a new signup — the workshop has simply dropped back to the Free plan in the meantime. This is a current snapshot of how many are paused right now, and it is reversible.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='paused'"],
+    logic:
+      "Count of dashboard_subscriptions where status='paused', excluding internal-test workshops. NOT counted as churn because the subscription was never canceled — this is the key difference from Trial-only churn, where the subscription is ended.",
+  },
+  paidChurn: {
+    title: "Paid churn",
+    body:
+      "The churn number that matters: customers who paid at least one real invoice and then canceled. True lost revenue.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='canceled'", "ever_paid=true", "canceled_at in range"],
+    logic:
+      "Count of subscriptions where status='canceled', ever_paid=true, and canceled_at falls inside the selected range. " +
+      EVER_PAID_NOTE,
+  },
+  trialChurn: {
+    title: "Trial-only churn",
+    body:
+      "Subscriptions that were CANCELED and never took a real payment — almost always trials that didn't convert. Contrast with Paused → Free: there the subscription is paused (alive, can resume); here it is fully ended.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='canceled'", "ever_paid=false", "canceled_at in range"],
+    logic:
+      "Count of subscriptions where status='canceled', ever_paid=false, and canceled_at falls inside the selected range. " +
+      EVER_PAID_NOTE,
+  },
+  planMix: {
+    title: "Active subscriptions by plan",
+    body:
+      "How many paying subscriptions sit on each plan, and how much MRR each plan contributes.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='active'", "plan_key (Stripe price id)", "mrr_amount_cents"],
+    logic:
+      "Active subscriptions grouped by plan tier. Each subscription's tier is its Stripe price id mapped to One / Small / Large × Monthly / Yearly; MRR is the summed monthly amount for that tier; % of MRR is the tier's share of total MRR.",
+  },
+  billing: {
+    title: "Subscription states",
+    body:
+      "Every Stripe subscription by its current state. Active and Trialing are in the funnel; Paused → Free is paused (reversible); Canceled has ended.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status in (active, trialing, paused, canceled)"],
+    logic:
+      "Counts of dashboard_subscriptions by status, excluding internal-test workshops. Paused → Free = status='paused'. These are current states; the churn breakdown below instead counts cancellations within the selected range.",
+  },
+  churnPanel: {
+    title: "Why subscriptions ended",
+    body:
+      "Cancellations within the selected range, split by whether the customer ever paid. This is distinct from Paused → Free: those subscriptions are paused, not canceled, so they are not here.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='canceled'", "canceled_at in range", "ever_paid"],
+    logic:
+      "Subscriptions with status='canceled' whose canceled_at is in range, bucketed by ever_paid (paid vs trial-only). " +
+      EVER_PAID_NOTE,
+  },
+  deleted: {
+    title: "Deleted accounts",
+    body:
+      "Workshops that removed their account entirely (a stronger signal than canceling a subscription).",
+    sources: ["core app export (not yet available)"],
+    logic:
+      "Not currently in the warehouse export, so this shows '—'. It will populate once the core app surfaces an account-deletion timestamp.",
+  },
+};
+
 function RevenueSection({ data }: { data: DashboardData }) {
   const { revenue } = data;
   const cur = revenue.currency;
@@ -2154,8 +2258,9 @@ function RevenueSection({ data }: { data: DashboardData }) {
       label: "MRR",
       value: formatCurrency(revenue.mrr, cur),
       rawValue: revenue.mrr,
-      hint: `${formatCurrency(revenue.arr, cur)} ARR run rate`,
+      hint: `${formatCurrency(revenue.arr, cur)} ARR run rate · active only`,
       tone: "revenue",
+      info: REVENUE_INFO.mrr,
     },
     {
       label: "Active subscriptions",
@@ -2163,6 +2268,7 @@ function RevenueSection({ data }: { data: DashboardData }) {
       rawValue: revenue.activeSubscriptions,
       hint: "Paying workshops (Stripe)",
       tone: "growth",
+      info: REVENUE_INFO.active,
     },
     {
       label: "Trials",
@@ -2170,20 +2276,23 @@ function RevenueSection({ data }: { data: DashboardData }) {
       rawValue: revenue.trials,
       hint: `${formatCurrency(revenue.trialMrr, cur)} MRR if they convert`,
       tone: "growth",
+      info: REVENUE_INFO.trials,
     },
     {
       label: "Paused → Free",
       value: formatNumber(revenue.pausedToFree),
       rawValue: revenue.pausedToFree,
-      hint: "Billing paused, back on Free",
+      hint: "Billing paused, alive & reversible — not churn",
       tone: revenue.pausedToFree ? "warning" : "neutral",
+      info: REVENUE_INFO.pausedToFree,
     },
     {
       label: "Paid churn",
       value: formatNumber(revenue.churn.paid),
       rawValue: revenue.churn.paid,
-      hint: `Paid ≥1×, then left · ${revenue.churn.rangeLabel}`,
+      hint: `Paid ≥1×, then canceled · ${revenue.churn.rangeLabel}`,
       tone: revenue.churn.paid ? "warning" : "neutral",
+      info: REVENUE_INFO.paidChurn,
     },
     {
       label: "Trial-only churn",
@@ -2191,6 +2300,7 @@ function RevenueSection({ data }: { data: DashboardData }) {
       rawValue: revenue.churn.trialOnly,
       hint: `Canceled, never paid · ${revenue.churn.rangeLabel}`,
       tone: "neutral",
+      info: REVENUE_INFO.trialChurn,
     },
   ];
 
@@ -2234,7 +2344,8 @@ function RevenueSection({ data }: { data: DashboardData }) {
             eyebrow="Plan Mix"
             title="Active subscriptions by plan"
             badge={`${formatNumber(revenue.planMix.length)} plans`}
-            description="Each currently-paying subscription, grouped by the plan it bills for. MRR share shows where recurring revenue is concentrated."
+            description="Each currently-paying subscription, grouped by the plan it bills for. MRR share shows where recurring revenue is concentrated. Trials and paused subscriptions are not counted here."
+            info={REVENUE_INFO.planMix}
           />
           {revenue.planMix.length === 0 ? (
             <EmptyState
@@ -2249,7 +2360,7 @@ function RevenueSection({ data }: { data: DashboardData }) {
                     <th><TableHeading label="Plan" /></th>
                     <th><TableHeading label="Active" info="Count of currently-active (paying) Stripe subscriptions on this plan." /></th>
                     <th><TableHeading label="MRR" info="Monthly recurring revenue from active subscriptions on this plan (yearly plans normalized to a monthly figure)." /></th>
-                    <th><TableHeading label="% of MRR" /></th>
+                    <th><TableHeading label="% of MRR" info="This plan's MRR as a share of total active MRR — where recurring revenue is concentrated." /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2287,7 +2398,8 @@ function RevenueSection({ data }: { data: DashboardData }) {
                 revenue.billing.pausedToFree +
                 revenue.billing.canceled,
             )} subscriptions`}
-            description="Every Stripe subscription by its current state. 'Paused → Free' means billing was paused and the workshop is effectively back on the Free plan."
+            description="Every Stripe subscription by its current state. These are current statuses — not events in the selected range. 'Paused → Free' = billing paused (alive, reversible); 'Canceled' = the subscription has ended."
+            info={REVENUE_INFO.billing}
           />
           <SegmentBar
             segments={[
@@ -2321,22 +2433,37 @@ function RevenueSection({ data }: { data: DashboardData }) {
         </article>
 
         <article className="panel">
-          <PanelHeader eyebrow="Retention Lens" title="How to read this" />
+          <PanelHeader
+            eyebrow="Retention Lens"
+            title="Paused → Free vs. churn"
+          />
           <div className="insight-list">
             <p>
-              <strong>Active</strong> = paying now. <strong>Trialing</strong> ={" "}
-              future revenue if they convert.
+              These two get confused, so to be precise — both describe a
+              non-paying workshop, but the subscription is in a different state:
             </p>
             <p>
-              <strong>Paused → Free</strong> dropped their paid plan but kept the
-              account on Free — the best win-back / upsell pool.
+              <strong>Paused → Free</strong> — the Stripe subscription is{" "}
+              <strong>paused</strong>. It still exists, isn’t being charged, and
+              can resume billing without a new signup. A live, reversible state
+              and the best win-back / upsell pool. <em>Not</em> churn.
             </p>
             <p>
-              <strong>Canceled</strong> ended the subscription. The churn
-              breakdown below splits these into customers who actually paid vs
-              trials that never did.
+              <strong>Trial-only churn</strong> — the subscription is{" "}
+              <strong>canceled</strong> and never took a payment. It’s gone, not
+              paused; reactivating means a fresh subscription. Counted as churn
+              (the non-paying kind).
             </p>
-            <p>Internal test workshops are excluded from every number here.</p>
+            <p>
+              <strong>Paid churn</strong> — also <strong>canceled</strong>, but
+              the customer had paid at least once. This is real lost revenue.
+            </p>
+            <p>
+              In short: <strong>paused</strong> ⇒ Paused → Free;{" "}
+              <strong>canceled</strong> ⇒ churn (paid or trial-only). Active and
+              trialing are the live funnel. Internal-test workshops are excluded
+              from every number.
+            </p>
           </div>
         </article>
       </section>
@@ -2349,7 +2476,8 @@ function RevenueSection({ data }: { data: DashboardData }) {
             badge={
               revenue.churn.everPaidKnown ? `${revenue.churn.rangeLabel}` : "Approximate"
             }
-            description={`Subscriptions canceled during ${revenue.churn.rangeLabel}, split by whether the customer ever made a real payment.`}
+            description={`Subscriptions CANCELED during ${revenue.churn.rangeLabel}, split by whether the customer ever made a real payment. Paused → Free subscriptions are not here — those are paused, not canceled.`}
+            info={REVENUE_INFO.churnPanel}
           />
           <SummaryGrid
             columns={3}
@@ -2357,12 +2485,14 @@ function RevenueSection({ data }: { data: DashboardData }) {
               {
                 label: "Paid churn",
                 value: formatNumber(revenue.churn.paid),
-                hint: "Made ≥1 payment, then canceled",
+                hint: "Paid ≥1 invoice, then canceled — lost revenue",
+                info: REVENUE_INFO.paidChurn,
               },
               {
-                label: "Trial → Free / lapsed",
+                label: "Trial-only churn",
                 value: formatNumber(revenue.churn.trialOnly),
-                hint: "Canceled without ever paying",
+                hint: "Canceled, never paid (subscription ended)",
+                info: REVENUE_INFO.trialChurn,
               },
               {
                 label: "Deleted accounts",
@@ -2372,6 +2502,7 @@ function RevenueSection({ data }: { data: DashboardData }) {
                 hint: revenue.churn.deletedTracked
                   ? "Account fully deleted"
                   : "Not exported yet",
+                info: REVENUE_INFO.deleted,
               },
             ]}
           />
@@ -2388,10 +2519,10 @@ function RevenueSection({ data }: { data: DashboardData }) {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th><TableHeading label="Plan churned from" /></th>
-                    <th><TableHeading label="Paid churn" /></th>
-                    <th><TableHeading label="Trial-only" /></th>
-                    <th><TableHeading label="Total" /></th>
+                    <th><TableHeading label="Plan churned from" info="The plan the canceled subscription was billing for (from its Stripe price id), even if the workshop has since dropped to Free." /></th>
+                    <th><TableHeading label="Paid churn" info={REVENUE_INFO.paidChurn} /></th>
+                    <th><TableHeading label="Trial-only" info={REVENUE_INFO.trialChurn} /></th>
+                    <th><TableHeading label="Total" info="All cancellations on this plan in the selected range (paid + trial-only)." /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2426,18 +2557,30 @@ function RevenueSection({ data }: { data: DashboardData }) {
           <PanelHeader eyebrow="Definitions" title="What counts as churn" />
           <div className="insight-list">
             <p>
-              <strong>Paid churn</strong> — the number that matters most: a
-              customer who paid at least one real invoice and then canceled.
+              Churn here means a <strong>canceled</strong> subscription whose{" "}
+              <code>canceled_at</code> falls in the selected range. Paused → Free
+              is excluded — a paused subscription hasn’t churned.
             </p>
             <p>
-              <strong>Trial → Free / lapsed</strong> — canceled without ever
-              paying. Usually a trial that didn’t convert; these often land back
-              on the Free plan rather than leaving entirely.
+              <strong>Paid churn</strong> — <code>ever_paid = true</code>: the
+              customer paid at least one real invoice, then canceled. The number
+              that matters most — actual lost revenue.
+            </p>
+            <p>
+              <strong>Trial-only churn</strong> — <code>ever_paid = false</code>:
+              canceled without ever paying. Usually a trial that didn’t convert.
+              (If they’re still on Free with the subscription paused rather than
+              canceled, they’re in Paused → Free, not here.)
             </p>
             <p>
               <strong>Deleted accounts</strong> — workshops that removed their
-              account outright. Not yet in the data export, so it shows “—”
-              until the core app surfaces it.
+              account outright. Not yet in the data export, so it shows “—”.
+            </p>
+            <p>
+              <strong>ever_paid</strong> is set by the hourly Stripe sync: true
+              when the subscription has ≥1 invoice with{" "}
+              <code>amount_paid &gt; 0</code> (a real charge, not a $0 trial
+              invoice).
             </p>
           </div>
         </article>
