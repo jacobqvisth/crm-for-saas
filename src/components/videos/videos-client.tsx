@@ -10,8 +10,11 @@ import {
   Loader2,
   Sparkles,
   Film,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { TOP_CHANNELS } from "@/lib/videos/channels";
+import { parseYouTubeId } from "@/lib/videos/parse";
 import type { DiagnosticVideo } from "@/lib/videos/types";
 
 export function VideosClient() {
@@ -20,6 +23,9 @@ export function VideosClient() {
   const [error, setError] = useState<string | null>(null);
   const [markedOnly, setMarkedOnly] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [addUrl, setAddUrl] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +70,45 @@ export function VideosClient() {
       );
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function addVideo(e: React.FormEvent) {
+    e.preventDefault();
+    const url = addUrl.trim();
+    if (!url) return;
+    if (!parseYouTubeId(url)) {
+      setAddError("That doesn't look like a YouTube link.");
+      return;
+    }
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await fetch("/api/videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Couldn't add that video.");
+      setVideos((prev) => [...prev, data.video as DiagnosticVideo]);
+      setAddUrl("");
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Couldn't add that video.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function deleteVideo(video: DiagnosticVideo) {
+    if (!window.confirm(`Remove "${video.title}" from the page?`)) return;
+    const prev = videos;
+    setVideos((cur) => cur.filter((v) => v.id !== video.id));
+    try {
+      const res = await fetch(`/api/videos/${video.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+    } catch {
+      setVideos(prev); // revert
     }
   }
 
@@ -145,6 +190,45 @@ export function VideosClient() {
           </label>
         </div>
 
+        {/* Add a video by pasting a YouTube link */}
+        <form
+          onSubmit={addVideo}
+          className="mb-5 rounded-lg border border-slate-200 bg-white p-3"
+        >
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
+              <input
+                type="url"
+                value={addUrl}
+                onChange={(e) => {
+                  setAddUrl(e.target.value);
+                  if (addError) setAddError(null);
+                }}
+                placeholder="Paste a YouTube link to add it (e.g. https://youtu.be/…)"
+                className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={adding || !addUrl.trim()}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {adding ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Add video
+            </button>
+          </div>
+          {addError && <p className="mt-2 text-xs text-red-600">{addError}</p>}
+          <p className="mt-2 text-[11px] text-slate-400">
+            We pull the title + channel automatically and detect any DTC codes in
+            the title. Added videos stay until you remove them.
+          </p>
+        </form>
+
         {loading && (
           <div className="flex items-center gap-2 text-slate-500 text-sm py-12 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading videos…
@@ -165,6 +249,7 @@ export function VideosClient() {
                 video={v}
                 saving={savingId === v.id}
                 onToggle={() => toggleMark(v)}
+                onDelete={() => deleteVideo(v)}
               />
             ))}
             {shown.length === 0 && (
@@ -183,10 +268,12 @@ function VideoCard({
   video,
   saving,
   onToggle,
+  onDelete,
 }: {
   video: DiagnosticVideo;
   saving: boolean;
   onToggle: () => void;
+  onDelete: () => void;
 }) {
   const thumb = `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`;
 
@@ -219,6 +306,11 @@ function VideoCard({
         {video.category && (
           <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white">
             {video.category}
+          </span>
+        )}
+        {video.source === "manual" && (
+          <span className="absolute right-2 top-2 rounded-full bg-indigo-600/90 px-2 py-0.5 text-[11px] font-medium text-white">
+            Added
           </span>
         )}
       </a>
@@ -280,6 +372,15 @@ function VideoCard({
           >
             <ExternalLink className="h-4 w-4" /> Watch
           </a>
+          {video.source === "manual" && (
+            <button
+              onClick={onDelete}
+              title="Remove this video"
+              className="ml-auto inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Summary + Veo 3 prompt (phase 2). Shown once generated. */}
