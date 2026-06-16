@@ -111,6 +111,71 @@ export type Database = {
           },
         ]
       }
+      forum_posts: {
+        Row: {
+          created_at: string
+          diagnostic_id: string | null
+          forum_target: string
+          generated_body: string | null
+          generated_title: string | null
+          id: string
+          language: string
+          mention_level: string
+          model: string | null
+          post_type: string
+          posted_at: string | null
+          posted_url: string | null
+          scenario_snapshot: Json
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          diagnostic_id?: string | null
+          forum_target: string
+          generated_body?: string | null
+          generated_title?: string | null
+          id?: string
+          language?: string
+          mention_level?: string
+          model?: string | null
+          post_type?: string
+          posted_at?: string | null
+          posted_url?: string | null
+          scenario_snapshot?: Json
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          diagnostic_id?: string | null
+          forum_target?: string
+          generated_body?: string | null
+          generated_title?: string | null
+          id?: string
+          language?: string
+          mention_level?: string
+          model?: string | null
+          post_type?: string
+          posted_at?: string | null
+          posted_url?: string | null
+          scenario_snapshot?: Json
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_posts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       _ops_queue_pause_2026_04_28: {
         Row: {
           captured_at: string | null
