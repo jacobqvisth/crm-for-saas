@@ -4,7 +4,26 @@ import {
   deriveLifecycleStage,
   lookupSelfAttribution,
   normalizeCompanyName,
+  normalizePhone,
 } from "./matching";
+
+describe("normalizePhone", () => {
+  it("matches the same number across country-code / formatting differences", () => {
+    expect(normalizePhone("+46 70 123 45 67")).toBe(
+      normalizePhone("070-1234567"),
+    );
+  });
+
+  it("keeps the last 9 significant digits", () => {
+    expect(normalizePhone("+46701234567")).toBe("701234567");
+  });
+
+  it("returns empty for too-short or missing input", () => {
+    expect(normalizePhone("12345")).toBe("");
+    expect(normalizePhone(null)).toBe("");
+    expect(normalizePhone(undefined)).toBe("");
+  });
+});
 
 describe("normalizeCompanyName", () => {
   it("strips Swedish AB suffix", () => {

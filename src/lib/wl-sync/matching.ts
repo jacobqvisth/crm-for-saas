@@ -25,6 +25,15 @@ export function normalizeCompanyName(name: string): string {
     .trim();
 }
 
+// Normalize a phone number to its last 9 significant digits for matching.
+// Strips country codes / formatting so a prospect phone stored as
+// "+46 70 123 45 67" matches an app-user phone stored as "070-1234567".
+// Returns "" when there aren't enough digits to be a confident key.
+export function normalizePhone(phone: string | null | undefined): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return digits.length >= 7 ? digits.slice(-9) : "";
+}
+
 export type CompanyMatchResult = {
   companyId: string;
   matchType: "org_number" | "exact_normalized_name" | "strict_trigram";
