@@ -59,6 +59,7 @@ export type Database = {
           id: string
           marked: boolean
           sort_order: number
+          source: string
           summary: string | null
           title: string
           updated_at: string
@@ -76,6 +77,7 @@ export type Database = {
           id?: string
           marked?: boolean
           sort_order?: number
+          source?: string
           summary?: string | null
           title: string
           updated_at?: string
@@ -93,6 +95,7 @@ export type Database = {
           id?: string
           marked?: boolean
           sort_order?: number
+          source?: string
           summary?: string | null
           title?: string
           updated_at?: string
