@@ -15,6 +15,10 @@ export type ConversionRow = {
   sequenceStatus: string | null;
   totalSends: number;
   uniqueRecipients: number;
+  // Distinct recipients with at least one open / click event. Inflated by
+  // email security scanners, so treat as upper bounds.
+  openedRecipients: number;
+  clickedRecipients: number;
   attributedSignups: number;
   conversionRate: number | null;
   medianLagDays: number | null;
@@ -32,6 +36,9 @@ export type ConversionsData = {
   totalAppSignups: number; // all wl-app signups created in the window
   // share of app signups traceable back to outreach (attributed / signups)
   outreachSourcedShare: number | null;
+  // Funnel rollups across all sequences (distinct recipients).
+  totalOpenedRecipients: number;
+  totalClickedRecipients: number;
   rows: ConversionRow[];
 };
 
@@ -42,6 +49,8 @@ const EMPTY: ConversionsData = {
   overallConversionRate: null,
   totalAppSignups: 0,
   outreachSourcedShare: null,
+  totalOpenedRecipients: 0,
+  totalClickedRecipients: 0,
   rows: [],
 };
 
@@ -82,6 +91,8 @@ async function getConversionsDataUncached(
     sequence_status: string | null;
     total_sends: number | string;
     unique_recipients: number | string;
+    opened_recipients: number | string | null;
+    clicked_recipients: number | string | null;
     attributed_signups: number | string;
     conversion_rate: number | string | null;
     median_lag_days: number | string | null;
@@ -92,6 +103,8 @@ async function getConversionsDataUncached(
     sequenceStatus: r.sequence_status,
     totalSends: Number(r.total_sends ?? 0),
     uniqueRecipients: Number(r.unique_recipients ?? 0),
+    openedRecipients: Number(r.opened_recipients ?? 0),
+    clickedRecipients: Number(r.clicked_recipients ?? 0),
     attributedSignups: Number(r.attributed_signups ?? 0),
     conversionRate:
       r.conversion_rate === null || r.conversion_rate === undefined
@@ -107,10 +120,18 @@ async function getConversionsDataUncached(
     (acc, row) => {
       acc.totalSends += row.totalSends;
       acc.totalUniqueRecipients += row.uniqueRecipients;
+      acc.totalOpenedRecipients += row.openedRecipients;
+      acc.totalClickedRecipients += row.clickedRecipients;
       acc.totalAttributedSignups += row.attributedSignups;
       return acc;
     },
-    { totalSends: 0, totalUniqueRecipients: 0, totalAttributedSignups: 0 },
+    {
+      totalSends: 0,
+      totalUniqueRecipients: 0,
+      totalOpenedRecipients: 0,
+      totalClickedRecipients: 0,
+      totalAttributedSignups: 0,
+    },
   );
   const overall =
     totals.totalUniqueRecipients > 0
