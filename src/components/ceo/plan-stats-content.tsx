@@ -18,34 +18,37 @@ type PlanStatsContentProps = {
 };
 
 const PLAN_INFO: SourceInfo = {
-  title: "Plan membership",
+  title: "Users on a plan",
   body:
-    "Each user is mapped to a plan via their workshop's plan_key on dashboard_workshops (synced hourly from Stripe). The four tiers mirror the public pricing page; users with no plan are excluded.",
+    "Every app user mapped to this plan via their workshop's plan_key on dashboard_workshops (synced hourly from Stripe). The four tiers mirror the public pricing page; users on an unassigned workshop (no plan) are excluded.",
   sources: ["Stripe → dashboard_workshops.plan_key", "dashboard_users.workshop_id"],
   logic:
-    "plan_key values like small_monthly / large_yearly collapse to their tier (Free / One / Small / Large). 'Users' counts the whole base on a plan; 'Active' counts those with a login in the range.",
+    "plan_key values like small_monthly / large_yearly collapse to their tier (Free / One / Small / Large). This is current membership — the whole base on the plan — so it does NOT change with the time-range filter. Only Active and the feature counts respond to the range.",
 };
 
 const ACTIVE_INFO: SourceInfo = {
   title: "Active users (behaviour-based)",
   body:
-    "Distinct users on the plan who actually did something in the app during the range: a GA4 engagement event on app.wrenchlane.com, a diagnostic, or any tracked feature.",
+    "Distinct users on the plan who actually did something in the app during the selected range: a GA4 engagement event on app.wrenchlane.com, a diagnostic, or any tracked feature event.",
   sources: [
     "GA4 · customUser:crm_user_id (app.wrenchlane.com)",
     "dashboard_diagnostics",
     "dashboard_feature_usage",
   ],
   logic:
-    "Logins are deliberately NOT used — app sessions are long-lived, so a login is a poor activity signal (a third of users who used a feature in a week had no login that week). Feature counters also catch mobile users that GA4's web-host filter misses.",
+    "Responds to the time filter — the page defaults to Last 30 days, so the headline reads as a 30-day active (MAU) count; pick another range to widen or narrow it. Logins are deliberately NOT used: app sessions are long-lived, so a login is a poor activity signal (about a third of users who used a feature in a week had no login that week, and ~44% of users with a login did nothing). The diagnostic + feature signals also catch mobile users that GA4's web-host filter would miss.",
 };
 
 const FEATURE_INFO: SourceInfo = {
-  title: "Feature counters per plan",
+  title: "Feature events per plan",
   body:
-    "Per-user, per-day feature activity (diagnostics, chat, AI search, VRM lookups, InfoPro, Motor) summed across every user on the plan.",
-  sources: ["codeoc S3 export · user_stats counters", "dashboard_feature_usage"],
+    "Total feature activity across the tracked counters (diagnostics, chat, AI search, InfoPro, Motor, VRM lookups), summed over every user on the plan for the selected range.",
+  sources: [
+    "Diagnoses · dashboard_diagnostics (real per-diagnostic records)",
+    "Other counters · dashboard_feature_usage (core_app sync)",
+  ],
   logic:
-    "Counters exist from 2026-06-11 onward — earlier days are zero by construction. Badges on a feature row show that plan's total events for the matching counter(s).",
+    "Diagnosis counts use the real per-diagnostic records from the codeoc S3 export (dashboard_diagnostics, history to Feb 2026) — not the feature_usage snapshot counter, which badly undercounts (it showed only 7 diagnoses for Small in 30 days vs 146 real ones). The other counters come from the hourly core_app sync, which began accumulating 2026-06-11, so the 30 / 90 / all-time views look near-identical for now (most activity is within ~30 days) and will diverge as history builds; the 7-day view is already clearly smaller. OEM / Premium-data badges sum the InfoPro + Motor (Haynes) vehicle counters.",
 };
 
 function CheckIcon({ muted = false }: { muted?: boolean }) {

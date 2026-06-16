@@ -91,6 +91,11 @@ type WorkshopDbRow = {
   plan_key: string | null;
 };
 
+type DiagnosticDbRow = {
+  internal_user_id: string | null;
+  created_at: string | null;
+};
+
 function emptyPlanRow(tier: PlanTier): PlanStatRow {
   return {
     tier,
@@ -128,11 +133,17 @@ function emptyData(
 const PLAN_STATS_NOTE =
   "A user's plan comes from their workshop's plan_key on dashboard_workshops " +
   "(Stripe-synced); users with no plan (unassigned workshops) are excluded. " +
-  "'Active' is behaviour-based — a user counts as active if they had a GA4 " +
-  "engagement event on app.wrenchlane.com, ran a diagnostic, or triggered a " +
-  "tracked feature in the range (logins are ignored: sessions are long-lived, " +
-  "so a login is a poor activity signal). Feature counters only exist from " +
-  "2026-06-11 onward; GA4 and diagnostics carry real history.";
+  "Users on a plan is current membership and does not change with the time " +
+  "range — only Active and the feature counts do. 'Active' is behaviour-based: " +
+  "a user counts as active if they had a GA4 engagement event on " +
+  "app.wrenchlane.com, ran a diagnostic, or triggered a tracked feature in the " +
+  "selected range (logins are ignored — sessions are long-lived, so a login is " +
+  "a poor activity signal). Diagnosis counts come from the real per-diagnostic " +
+  "records in the codeoc S3 export (dashboard_diagnostics, history to Feb 2026); " +
+  "the other feature counters (chat, AI search, InfoPro, Motor, VRM) come from " +
+  "the hourly core_app sync, which began accumulating 2026-06-11 — so the 30 / " +
+  "90 / all-time views look near-identical for now (most activity is within ~30 " +
+  "days) and will diverge as history builds.";
 
 async function getPlanStatsDataUncached(
   rangeKey: DashboardTimeRangeKey,
@@ -158,11 +169,14 @@ async function getPlanStatsDataUncached(
 
   const startDate = range.start ? toStockholmIsoDate(range.start) : null;
   const endDate = toStockholmIsoDate(range.end);
+  const startIso = range.start ? range.start.toISOString() : null;
+  const endIso = range.end.toISOString();
 
   const [
     dayRowsResult,
     userRowsResult,
     workshopRowsResult,
+    diagnosticsResult,
     activeUsers,
   ] = await Promise.all([
     pageAll<FeatureUsageDbRow>(({ from, to }) => {
@@ -193,6 +207,20 @@ async function getPlanStatsDataUncached(
         .order("workshop_id", { ascending: true })
         .range(from, to),
     ),
+    // Real per-diagnostic records (codeoc S3 export → dashboard_diagnostics),
+    // the authoritative source for diagnoses. History reaches back to Feb 2026,
+    // and unlike the feature_usage 'diagnostics' snapshot counter it does not
+    // undercount active users (esp. paid plans).
+    pageAll<DiagnosticDbRow>(({ from, to }) => {
+      let query = supabase
+        .from(TABLES.diagnostics)
+        .select("internal_user_id, created_at")
+        .lt("created_at", endIso)
+        .order("created_at", { ascending: true })
+        .range(from, to);
+      if (startIso) query = query.gte("created_at", startIso);
+      return query;
+    }),
     // Behaviour-based active set (GA4 engagement + diagnostics), already
     // range- and country-scoped. Degrade gracefully if GA4 creds are missing
     // (e.g. setup mode): feature counters below still drive a partial "active".
@@ -202,6 +230,7 @@ async function getPlanStatsDataUncached(
   if (dayRowsResult.error) throw new Error(dayRowsResult.error.message);
   if (userRowsResult.error) throw new Error(userRowsResult.error.message);
   if (workshopRowsResult.error) throw new Error(workshopRowsResult.error.message);
+  if (diagnosticsResult.error) throw new Error(diagnosticsResult.error.message);
 
   // ---- Plan resolution: user -> workshop -> tier -------------------------
   const workshopTier = new Map<string, PlanTier | null>();
@@ -273,6 +302,9 @@ async function getPlanStatsDataUncached(
   let overallFeatureEvents = 0;
   for (const row of dayRowsResult.data) {
     if (!isFeatureKey(row.feature_key)) continue;
+    // 'diagnostics' comes from the authoritative dashboard_diagnostics records
+    // below — skip the unreliable feature_usage snapshot counter for it.
+    if (row.feature_key === "diagnostics") continue;
     const tier = userTier.get(row.internal_user_id);
     if (!tier) continue;
     const count = Number(row.usage_count) || 0;
@@ -292,6 +324,29 @@ async function getPlanStatsDataUncached(
       acc.featureUsers.set(feature, users);
     }
     users.add(row.internal_user_id);
+  }
+
+  // Real diagnoses from dashboard_diagnostics (one row per diagnostic run) —
+  // the 'diagnostics' feature count, replacing the feature_usage counter.
+  for (const row of diagnosticsResult.data) {
+    const userId = row.internal_user_id;
+    if (!userId) continue;
+    const tier = userTier.get(userId);
+    if (!tier) continue;
+    const acc = accs.get(tier)!;
+    acc.activeUsers.add(userId);
+    acc.featureEvents += 1;
+    overallFeatureEvents += 1;
+    acc.featureCounts.set(
+      "diagnostics",
+      (acc.featureCounts.get("diagnostics") ?? 0) + 1,
+    );
+    let users = acc.featureUsers.get("diagnostics");
+    if (!users) {
+      users = new Set();
+      acc.featureUsers.set("diagnostics", users);
+    }
+    users.add(userId);
   }
 
   // ---- Shape output -------------------------------------------------------
