@@ -44,6 +44,7 @@ export type DashboardSectionKey =
   | "operations"
   | "lifecycle"
   | "revenue"
+  | "payment-methods"
   | "data-health"
   | "domain-health"
   | "reviews"
@@ -229,6 +230,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Revenue",
     description:
       "Stripe-backed subscription health, plan mix, paid growth, and workshop billing posture.",
+  },
+  {
+    key: "payment-methods",
+    label: "Payment Methods",
+    glyph: "PM",
+    href: "/dashboard/payment-methods",
+    title: "Payment Methods",
+    description:
+      "How many accounts have a card on file in Stripe (live), the now-vs-ever-added gap, method/plan mix, and a CRM-mirror cross-reference. Billing is per workshop/account.",
   },
   {
     key: "data-health",
