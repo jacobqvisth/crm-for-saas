@@ -55,6 +55,7 @@ export type Database = {
           channel: string
           created_at: string
           description: string | null
+          dtc_codes: string[]
           id: string
           marked: boolean
           sort_order: number
@@ -71,6 +72,7 @@ export type Database = {
           channel: string
           created_at?: string
           description?: string | null
+          dtc_codes?: string[]
           id?: string
           marked?: boolean
           sort_order?: number
@@ -87,6 +89,7 @@ export type Database = {
           channel?: string
           created_at?: string
           description?: string | null
+          dtc_codes?: string[]
           id?: string
           marked?: boolean
           sort_order?: number
