@@ -24,6 +24,7 @@ import {
   GanttChart,
   Rocket,
   Phone,
+  Youtube,
 } from "lucide-react";
 
 type NavItem = {
@@ -45,6 +46,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/roadmap", label: "Roadmap", icon: GanttChart },
+  { href: "/videos", label: "Videos", icon: Youtube },
   { href: "/activation", label: "Activation Plan", icon: Rocket },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
