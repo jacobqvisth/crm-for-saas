@@ -5,24 +5,53 @@ import { formatNumber, formatPercent } from "@/lib/ceo/format";
 export function ConversionsContent({ data }: { data: ConversionsData }) {
   return (
     <div className="flex flex-col gap-6">
+      {/* Audience-overlap KPIs. The headline is "how many app signups can we
+          trace to outreach", NOT a raw send→signup rate — cold-email reaches
+          workshops, but most app signups arrive via other channels. */}
       <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <KpiTile label="Sends" value={formatNumber(data.totalSends)} />
         <KpiTile
-          label="Unique recipients"
-          value={formatNumber(data.totalUniqueRecipients)}
+          label="App signups (window)"
+          value={formatNumber(data.totalAppSignups)}
+          sub="all new app users"
         />
         <KpiTile
-          label="Attributed signups"
+          label="Sourced from outreach"
           value={formatNumber(data.totalAttributedSignups)}
+          sub="signed up after we emailed them"
         />
         <KpiTile
-          label="Conversion rate"
+          label="Outreach-sourced share"
           value={
-            data.overallConversionRate === null
+            data.outreachSourcedShare === null
               ? "—"
-              : formatPercent(data.overallConversionRate / 100, 2)
+              : formatPercent(data.outreachSourcedShare / 100, 1)
           }
+          sub="of all app signups"
         />
+        <KpiTile
+          label="Emails sent"
+          value={formatNumber(data.totalSends)}
+          sub={`${formatNumber(data.totalUniqueRecipients)} unique recipients`}
+        />
+      </section>
+
+      <section className="rounded border border-amber-200 bg-amber-50 px-4 py-3">
+        <h2 className="text-sm font-semibold text-amber-900">
+          Why this number looks low — it&rsquo;s an audience mismatch, not broken
+          email
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed text-amber-800">
+          Cold outreach targets <strong>auto-repair workshops</strong>, but the
+          vast majority of app signups come from a different channel (app store
+          / consumer &amp; hobbyist installs) and were never on an outreach
+          list. Across all history only ~25 of ~880 app users sit at a company
+          we&rsquo;d emailed, so the share traceable to outreach is structurally
+          tiny. Attribution requires the same person/company we emailed{" "}
+          <em>before</em> they signed up — matched by email, company, or phone.
+          To judge sequence performance, lean on{" "}
+          <strong>reply and meeting rates</strong> rather than app-signup
+          attribution.
+        </p>
       </section>
 
       <section className="rounded border border-slate-200 bg-white shadow-sm">
@@ -31,16 +60,17 @@ export function ConversionsContent({ data }: { data: ConversionsData }) {
             Per-sequence funnel
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Signups attributed by company-match: the prospect contact who got
-            the email isn&rsquo;t always the same person who signed up. Lag is the
-            number of days between the most recent attributed send and the
-            signup contact landing in the CRM.
+            Signups attributed when the emailed prospect (or someone at the same
+            company / sharing a phone) later became an app user. &ldquo;Rate&rdquo;
+            is attributed signups ÷ unique recipients — expect it to be near
+            zero for the reason above. Lag is the days between the attributed
+            send and the signup landing in the CRM.
           </p>
         </div>
         {data.rows.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-slate-500">
             No attributed signups in the window yet. New attributions land
-            here whenever a wl-app signup lands at a company we&rsquo;d already
+            here whenever a wl-app signup matches someone we&rsquo;d already
             emailed.
           </div>
         ) : (
@@ -100,13 +130,22 @@ export function ConversionsContent({ data }: { data: ConversionsData }) {
   );
 }
 
-function KpiTile({ label, value }: { label: string; value: string }) {
+function KpiTile({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
     <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
       </p>
       <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
     </div>
   );
 }

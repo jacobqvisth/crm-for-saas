@@ -25,7 +25,24 @@ export type ConversionsData = {
   totalUniqueRecipients: number;
   totalAttributedSignups: number;
   overallConversionRate: number | null;
+  // Audience-overlap context: cold outreach (workshops) and app signups are
+  // largely different populations. These reframe the funnel so the tiny
+  // attributed-signups figure reads as "audience mismatch" rather than
+  // "email is broken".
+  totalAppSignups: number; // all wl-app signups created in the window
+  // share of app signups traceable back to outreach (attributed / signups)
+  outreachSourcedShare: number | null;
   rows: ConversionRow[];
+};
+
+const EMPTY: ConversionsData = {
+  totalSends: 0,
+  totalUniqueRecipients: 0,
+  totalAttributedSignups: 0,
+  overallConversionRate: null,
+  totalAppSignups: 0,
+  outreachSourcedShare: null,
+  rows: [],
 };
 
 export const getConversionsData = unstable_cache(
@@ -39,13 +56,7 @@ async function getConversionsDataUncached(
 ): Promise<ConversionsData> {
   const supabase = createSupabaseServiceClient();
   if (!supabase) {
-    return {
-      totalSends: 0,
-      totalUniqueRecipients: 0,
-      totalAttributedSignups: 0,
-      overallConversionRate: null,
-      rows: [],
-    };
+    return EMPTY;
   }
   const { data, error } = await supabase.rpc("get_sequence_conversions", {
     p_workspace_id: WRENCHLANE_WORKSPACE_ID,
@@ -53,14 +64,18 @@ async function getConversionsDataUncached(
   });
   if (error) {
     console.error("[ceo/conversions] rpc failed", error);
-    return {
-      totalSends: 0,
-      totalUniqueRecipients: 0,
-      totalAttributedSignups: 0,
-      overallConversionRate: null,
-      rows: [],
-    };
+    return EMPTY;
   }
+
+  // Total app signups in the window — the denominator that makes the
+  // attributed-signups number interpretable (most signups never touched
+  // outreach at all).
+  const { count: appSignupCount } = await supabase
+    .from("contacts")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", WRENCHLANE_WORKSPACE_ID)
+    .not("wl_user_id", "is", null)
+    .gte("created_at", sinceIso);
   type Raw = {
     sequence_id: string;
     sequence_name: string;
@@ -105,9 +120,19 @@ async function getConversionsDataUncached(
         ) / 100
       : null;
 
+  const totalAppSignups = appSignupCount ?? 0;
+  const outreachSourcedShare =
+    totalAppSignups > 0
+      ? Math.round(
+          (totals.totalAttributedSignups / totalAppSignups) * 10000,
+        ) / 100
+      : null;
+
   return {
     ...totals,
     overallConversionRate: overall,
+    totalAppSignups,
+    outreachSourcedShare,
     rows,
   };
 }
