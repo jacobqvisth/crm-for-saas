@@ -49,6 +49,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      diagnostic_videos: {
+        Row: {
+          category: string | null
+          channel: string
+          created_at: string
+          description: string | null
+          id: string
+          marked: boolean
+          sort_order: number
+          summary: string | null
+          title: string
+          updated_at: string
+          url: string
+          veo3_prompt: string | null
+          workspace_id: string
+          youtube_id: string
+        }
+        Insert: {
+          category?: string | null
+          channel: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          marked?: boolean
+          sort_order?: number
+          summary?: string | null
+          title: string
+          updated_at?: string
+          url: string
+          veo3_prompt?: string | null
+          workspace_id: string
+          youtube_id: string
+        }
+        Update: {
+          category?: string | null
+          channel?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          marked?: boolean
+          sort_order?: number
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          url?: string
+          veo3_prompt?: string | null
+          workspace_id?: string
+          youtube_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diagnostic_videos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       _ops_queue_pause_2026_04_28: {
         Row: {
           captured_at: string | null
