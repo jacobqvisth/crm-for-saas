@@ -77,7 +77,8 @@ export function VideosClient() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Videos</h1>
           <p className="text-sm text-slate-500">
-            YouTube car-diagnosis videos to mine for AI-generated marketing clips.
+            YouTube videos that diagnose a specific DTC fault code — our targets
+            for AI-generated marketing clips.
           </p>
         </div>
       </div>
@@ -93,6 +94,9 @@ export function VideosClient() {
         summary and a ready-to-paste{" "}
         <span className="font-medium">Google Veo 3</span> prompt that recreates
         the problem with a DIY car owner solving it using the Wrenchlane app.
+        Every video here centers on one or more{" "}
+        <span className="font-mono text-xs font-semibold text-red-700">P-codes</span>{" "}
+        (shown as badges) — the fault the recreated clip will resolve.
       </div>
 
       {/* Top YouTubers */}
@@ -125,7 +129,7 @@ export function VideosClient() {
       <section className="mt-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Diagnosis videos{" "}
+            DTC-coded diagnosis videos{" "}
             <span className="ml-1 text-slate-400">
               ({markedCount} marked of {videos.length})
             </span>
@@ -229,6 +233,18 @@ function VideoCard({
           {video.title}
         </a>
         <p className="mt-0.5 text-xs text-slate-500">{video.channel}</p>
+        {video.dtc_codes.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {video.dtc_codes.map((code) => (
+              <span
+                key={code}
+                className="rounded-md bg-red-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-red-700 ring-1 ring-inset ring-red-200"
+              >
+                {code}
+              </span>
+            ))}
+          </div>
+        )}
         {video.description && (
           <p className="mt-2 text-xs text-slate-600 line-clamp-2">
             {video.description}

@@ -10,6 +10,7 @@ export interface DiagnosticVideo {
   channel: string;
   url: string;
   category: string | null;
+  dtc_codes: string[];
   description: string | null;
   sort_order: number;
   marked: boolean;
