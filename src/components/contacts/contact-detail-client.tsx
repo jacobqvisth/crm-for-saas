@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2, X,
+  Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, X,
   Activity as ActivityIcon, Wrench, Clock, BadgeCheck,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -14,6 +14,7 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
+import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -99,7 +100,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [showForgetConfirm, setShowForgetConfirm] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [showEnrollInSequence, setShowEnrollInSequence] = useState(false);
-  const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
+  const [showComposeModal, setShowComposeModal] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -876,11 +877,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setShowPersonalizeModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50"
+                  onClick={() => setShowComposeModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
                 >
-                  <Wand2 className="w-4 h-4" />
-                  Personalize email
+                  <Mail className="w-4 h-4" />
+                  Email
                 </button>
                 <button
                   onClick={() => setShowAddNote(!showAddNote)}
@@ -1070,13 +1071,14 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         }}
       />
 
-      {/* Personalize Email Modal */}
-      {showPersonalizeModal && workspaceId && (
-        <PersonalizeModal
+      {/* Compose Email Modal */}
+      {showComposeModal && workspaceId && (
+        <ComposeEmailModal
           contact={contact}
           workspaceId={workspaceId}
-          companyName={company?.name}
-          onClose={() => setShowPersonalizeModal(false)}
+          company={company}
+          onClose={() => setShowComposeModal(false)}
+          onSent={() => { setActivitiesPage(0); fetchActivities(0); }}
         />
       )}
 
@@ -1196,135 +1198,6 @@ function SocialLinkField({
   );
 }
 
-type EmailTemplate = Tables<'email_templates'>;
-
-function PersonalizeModal({
-  contact,
-  workspaceId,
-  companyName,
-  onClose,
-}: {
-  contact: Contact;
-  workspaceId: string;
-  companyName?: string;
-  onClose: () => void;
-}) {
-  const supabase = createClient();
-  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<{ subject: string; body: string } | null>(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('email_templates')
-        .select('*')
-        .eq('workspace_id', workspaceId)
-        .order('name');
-      setTemplates(data || []);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
-
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
-
-  const handlePersonalize = async () => {
-    if (!selectedTemplate) return;
-    setGenerating(true);
-    setError('');
-    try {
-      const res = await fetch('/api/ai/generate-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId,
-          personaAngle: 'shop_owner',
-          contactContext: {
-            firstName: contact.first_name || undefined,
-            lastName: contact.last_name || undefined,
-            title: contact.title || undefined,
-            company: companyName,
-            city: contact.city || undefined,
-            country: contact.country || undefined,
-          },
-          stepNumber: 1,
-          existingTemplate: {
-            subject: selectedTemplate.subject,
-            body: selectedTemplate.body_html,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Personalization failed');
-        return;
-      }
-      setResult({ subject: data.subject, body: data.body });
-    } catch {
-      setError('Network error. Try again.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const firstName = contact.first_name || 'this contact';
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-base font-semibold text-slate-900 mb-4">
-          Personalize email for {firstName}
-        </h3>
-
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Template</label>
-          <select
-            value={selectedTemplateId}
-            onChange={(e) => setSelectedTemplateId(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Select a template...</option>
-            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </div>
-
-        {selectedTemplate && (
-          <div className="mb-4 p-3 bg-slate-50 rounded-lg">
-            <p className="text-xs font-medium text-slate-600 mb-1">Subject: {selectedTemplate.subject}</p>
-            <div
-              className="text-xs text-slate-500 line-clamp-3"
-              dangerouslySetInnerHTML={{ __html: selectedTemplate.body_html || '' }}
-            />
-          </div>
-        )}
-
-        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-
-        {result && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-xs font-medium text-green-800 mb-1">Subject: {result.subject}</p>
-            <p className="text-xs text-green-700 whitespace-pre-wrap">{result.body}</p>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50">
-            Close
-          </button>
-          <button
-            onClick={handlePersonalize}
-            disabled={!selectedTemplateId || generating}
-            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {generating ? 'Generating...' : result ? 'Regenerate' : 'Personalize'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function VerifyEmailButton({
   contact,

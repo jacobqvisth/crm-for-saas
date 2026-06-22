@@ -31,6 +31,13 @@ interface SendEmailParams {
 interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  /**
+   * Gmail thread ID for the sent message. For a brand-new email this is a
+   * fresh thread; callers persist it on email_queue.gmail_thread_id so the
+   * check-replies cron can detect replies (it only scans rows where
+   * gmail_thread_id IS NOT NULL).
+   */
+  threadId?: string;
   error?: string;
 }
 
@@ -251,6 +258,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     return {
       success: true,
       messageId: response.data.id || undefined,
+      threadId: response.data.threadId || undefined,
     };
   } catch (err: unknown) {
     const error = err as { code?: number; message?: string };
