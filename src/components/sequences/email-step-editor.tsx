@@ -302,6 +302,7 @@ export function EmailStepEditor({
   const [subject, setSubject] = useState(step.subject_override || "");
   const [bodyHtml, setBodyHtml] = useState(step.body_override || "");
   const [includeSignature, setIncludeSignature] = useState(step.include_signature !== false);
+  const [signatureHtml, setSignatureHtml] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
@@ -363,6 +364,21 @@ export function EmailStepEditor({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
+
+  // Pull the current user's signature so the preview can show body + signature
+  // together — mirrors what the send engine appends (user_profiles.signature_html).
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/profile");
+        if (!res.ok) return;
+        const data = (await res.json()) as { signature_html?: string | null };
+        setSignatureHtml(data.signature_html ?? null);
+      } catch {
+        // Non-fatal — preview just renders without a signature.
+      }
+    })();
+  }, []);
 
   // Initial variant fetch + reset when the step changes
   useEffect(() => {
@@ -758,9 +774,17 @@ export function EmailStepEditor({
           <div className="border border-slate-300 rounded-lg overflow-hidden bg-white">
             <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 flex items-center gap-1.5">
               <Eye className="w-3 h-3" />
-              Gmail preview — sample values shown
+              {includeSignature && signatureHtml?.trim()
+                ? "Gmail preview — sample values + your signature"
+                : "Gmail preview — sample values shown"}
             </div>
-            <EmailPreviewFrame html={previewInterpolate(bodyHtml)} />
+            <EmailPreviewFrame
+              html={
+                includeSignature && signatureHtml?.trim()
+                  ? `${previewInterpolate(bodyHtml)}${signatureHtml}`
+                  : previewInterpolate(bodyHtml)
+              }
+            />
           </div>
         ) : (
           <RichEmailEditor
