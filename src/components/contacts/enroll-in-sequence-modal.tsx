@@ -181,8 +181,10 @@ export function EnrollInSequenceModal({
           <span>
             Enroll customers anyway
             <span className="block text-xs text-slate-400">
-              By default, existing app users / customer workshops are skipped. Tick
-              this for a deliberate follow-up (e.g. after a call).
+              By default, existing app users / customer workshops are skipped (and
+              their emails cancelled at send time). Tick this to mark the sequence
+              as a customer follow-up so the email actually sends — e.g. a
+              post-call “thanks for the conversation” message.
             </span>
           </span>
         </label>
