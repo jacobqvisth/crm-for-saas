@@ -39,6 +39,15 @@ export type SequenceSettings = {
    * array of gmail_accounts.id values is set, auto-rotate restricts to those accounts.
    */
   rotation_account_ids?: string[];
+  /**
+   * When true, this sequence is allowed to enroll AND send to existing
+   * wl-app users / customer workshops. By default both the enroll guard and
+   * the send-time cron guard skip customers (sequences are for prospecting);
+   * this flag marks a sequence as a deliberate customer follow-up (e.g. a
+   * post-call "thanks for the conversation" message). Set by the contact
+   * "Add to Sequence" modal's "Enroll customers anyway" override.
+   */
+  allow_customers?: boolean;
 };
 
 export type Database = {

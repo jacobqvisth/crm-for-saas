@@ -121,6 +121,23 @@ export async function enrollContacts(
 
   const settings = sequence.settings as SequenceSettings;
 
+  // A sequence already flagged as a customer follow-up implicitly allows
+  // customers, so a later enroll without the explicit param still works.
+  const effectiveAllowCustomers = allowCustomers || settings.allow_customers === true;
+
+  // If the caller explicitly opted in (the modal's "Enroll customers anyway"
+  // override), persist it on the sequence. The send-time cron guard in
+  // process-emails only sees the sequence — not this runtime param — so without
+  // this the queued email would be cancelled at send time even though we
+  // deliberately enrolled the customer.
+  if (allowCustomers && settings.allow_customers !== true) {
+    await supabase
+      .from("sequences")
+      .update({ settings: { ...settings, allow_customers: true } })
+      .eq("id", sequenceId)
+      .eq("workspace_id", workspaceId);
+  }
+
   // Pre-fetch eligible senders ONCE so we don't issue a getNextSender query per
   // contact. We round-robin through the result in JS — fast, deterministic
   // distribution within this batch. Falls back to per-row getNextSender if no
@@ -197,13 +214,13 @@ export async function enrollContacts(
     // Also covers the case where a colleague at the same shop signed up
     // (company has wl_workshop_id set even if this contact doesn't).
     // Bypass with allowCustomers=true for deliberate follow-up sequences.
-    if (!allowCustomers && contact.wl_user_id) {
+    if (!effectiveAllowCustomers && contact.wl_user_id) {
       result.skipped++;
       result.skippedCustomer++;
       result.reasons.push(`${contact.email}: Already a wl-app user`);
       continue;
     }
-    if (!allowCustomers && contact.companies?.wl_workshop_id) {
+    if (!effectiveAllowCustomers && contact.companies?.wl_workshop_id) {
       result.skipped++;
       result.skippedCustomer++;
       result.reasons.push(

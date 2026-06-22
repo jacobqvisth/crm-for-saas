@@ -365,10 +365,17 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Sequences explicitly flagged as customer follow-ups (allow_customers)
+      // are exempt from the customer guard — the operator deliberately enrolled
+      // the customer (e.g. a post-call "thanks for the conversation" message).
+      const allowCustomers =
+        (enrollment.sequences as unknown as { settings?: SequenceSettings | null })
+          ?.settings?.allow_customers === true;
+
       const companyWorkshopId =
         (contactStatus?.companies as { wl_workshop_id?: string | null } | null)
           ?.wl_workshop_id ?? null;
-      if (contactStatus?.wl_user_id || companyWorkshopId) {
+      if (!allowCustomers && (contactStatus?.wl_user_id || companyWorkshopId)) {
         await supabase
           .from("email_queue")
           .update({ status: "cancelled" as const })
