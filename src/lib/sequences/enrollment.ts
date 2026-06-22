@@ -31,6 +31,13 @@ interface EnrollParams {
   senderAccountId?: string;
   /** Bypass the ALREADY_SEQUENCED_TAGS guard. Default false. */
   allowAlreadySequenced?: boolean;
+  /**
+   * Bypass the "contact is an existing wl-app user / customer workshop" guard.
+   * Default false. Used for deliberate follow-up sequences (e.g. a post-call
+   * "thanks for the conversation" message) where you DO want to email an
+   * existing customer.
+   */
+  allowCustomers?: boolean;
 }
 
 interface EnrollResult {
@@ -39,15 +46,17 @@ interface EnrollResult {
   reasons: string[];
   /** Subset of `skipped` that hit the ALREADY_SEQUENCED_TAGS guard. */
   skippedAlreadySequenced: number;
+  /** Subset of `skipped` that were skipped for being a wl-app user / workshop. */
+  skippedCustomer: number;
 }
 
 export async function enrollContacts(
   params: EnrollParams,
   supabaseClient?: SupabaseClient<Database>,
 ): Promise<EnrollResult> {
-  const { sequenceId, contactIds, workspaceId, senderAccountId, allowAlreadySequenced = false } = params;
+  const { sequenceId, contactIds, workspaceId, senderAccountId, allowAlreadySequenced = false, allowCustomers = false } = params;
   const supabase = supabaseClient ?? (await createClient());
-  const result: EnrollResult = { enrolled: 0, skipped: 0, reasons: [], skippedAlreadySequenced: 0 };
+  const result: EnrollResult = { enrolled: 0, skipped: 0, reasons: [], skippedAlreadySequenced: 0, skippedCustomer: 0 };
 
   // Get the sequence
   const { data: sequence, error: seqError } = await supabase
@@ -58,11 +67,11 @@ export async function enrollContacts(
     .single();
 
   if (seqError || !sequence) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence not found"], skippedAlreadySequenced: 0 };
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence not found"], skippedAlreadySequenced: 0, skippedCustomer: 0 };
   }
 
   if (!["active", "draft", "paused"].includes(sequence.status ?? "")) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active, draft, or paused"], skippedAlreadySequenced: 0 };
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["Sequence is not active, draft, or paused"], skippedAlreadySequenced: 0, skippedCustomer: 0 };
   }
 
   // Get unsubscribed emails for this workspace
@@ -101,13 +110,13 @@ export async function enrollContacts(
       .in("id", chunk)
       .eq("workspace_id", workspaceId);
     if (error) {
-      return { enrolled: 0, skipped: contactIds.length, reasons: [`Failed to load contacts: ${error.message}`], skippedAlreadySequenced: 0 };
+      return { enrolled: 0, skipped: contactIds.length, reasons: [`Failed to load contacts: ${error.message}`], skippedAlreadySequenced: 0, skippedCustomer: 0 };
     }
     if (data) contacts.push(...(data as unknown as ContactWithCompany[]));
   }
 
   if (contacts.length === 0) {
-    return { enrolled: 0, skipped: contactIds.length, reasons: ["No contacts found"], skippedAlreadySequenced: 0 };
+    return { enrolled: 0, skipped: contactIds.length, reasons: ["No contacts found"], skippedAlreadySequenced: 0, skippedCustomer: 0 };
   }
 
   const settings = sequence.settings as SequenceSettings;
@@ -187,13 +196,16 @@ export async function enrollContacts(
     // Don't enroll existing wl-app users (they're customers, not prospects).
     // Also covers the case where a colleague at the same shop signed up
     // (company has wl_workshop_id set even if this contact doesn't).
-    if (contact.wl_user_id) {
+    // Bypass with allowCustomers=true for deliberate follow-up sequences.
+    if (!allowCustomers && contact.wl_user_id) {
       result.skipped++;
+      result.skippedCustomer++;
       result.reasons.push(`${contact.email}: Already a wl-app user`);
       continue;
     }
-    if (contact.companies?.wl_workshop_id) {
+    if (!allowCustomers && contact.companies?.wl_workshop_id) {
       result.skipped++;
+      result.skippedCustomer++;
       result.reasons.push(
         `${contact.email}: Company already has a wl-app workshop`,
       );
