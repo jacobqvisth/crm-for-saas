@@ -591,6 +591,131 @@ export type Database = {
           },
         ]
       }
+      call_sessions: {
+        Row: {
+          activity_id: string | null
+          agent_number: string | null
+          ai_json: Json | null
+          ai_model: string | null
+          ai_processed_at: string | null
+          company_id: string | null
+          connected_at: string | null
+          contact_id: string | null
+          created_at: string
+          direction: string
+          duration_seconds: number | null
+          ended_at: string | null
+          error: string | null
+          from_number: string | null
+          id: string
+          list_id: string | null
+          live_tips: Json | null
+          provider: string
+          provider_call_id: string | null
+          recording_storage_path: string | null
+          recording_url: string | null
+          started_at: string
+          status: string
+          summary: string | null
+          to_number: string | null
+          transcript: Json | null
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          agent_number?: string | null
+          ai_json?: Json | null
+          ai_model?: string | null
+          ai_processed_at?: string | null
+          company_id?: string | null
+          connected_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          error?: string | null
+          from_number?: string | null
+          id?: string
+          list_id?: string | null
+          live_tips?: Json | null
+          provider?: string
+          provider_call_id?: string | null
+          recording_storage_path?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          to_number?: string | null
+          transcript?: Json | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          agent_number?: string | null
+          ai_json?: Json | null
+          ai_model?: string | null
+          ai_processed_at?: string | null
+          company_id?: string | null
+          connected_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          error?: string | null
+          from_number?: string | null
+          id?: string
+          list_id?: string | null
+          live_tips?: Json | null
+          provider?: string
+          provider_call_id?: string | null
+          recording_storage_path?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          to_number?: string | null
+          transcript?: Json | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_sessions_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           account_owner_id: string | null
