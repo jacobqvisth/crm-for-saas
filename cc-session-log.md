@@ -4542,3 +4542,21 @@ Session closed.
 - **Page (PR #394):** `/dashboard/product-analytics` ("Product Analytics", nav glyph PH). **Live** HogQL loader `src/lib/ceo/data/product-analytics.ts` (queried at render, cached 5 min via CEO_CACHE_OPTIONS — not pre-synced; funnels too dimensional to flatten) + server content `src/components/ceo/product-analytics-content.tsx`. Exposes: overview KPIs + stickiness, diagnostic activation funnel (vehicle_selected→…→completed, live shows 4→1 drop-off), monetization activity (incl. upgrade_started = intent Stripe misses), per-workshop engagement (group_0 joined to `dashboard_workshops`), top events (incl. autocapture), `$exception` errors, segments by plan/country. **Staff excluded** via `coalesce(person.properties.privilege,'') NOT IN ('admin','staff')`. Extracted reusable `runPostHogQuery` from the connector.
 - **Deferred:** retention cohorts (only ~8 days history, data starts 2026-06-08); PostHog MCP not connected (needs `npx @posthog/wizard mcp add` + session restart); per-workshop drill-down + plan/country page filter.
 - **Checks:** tsc ✅ · eslint ✅ · connector tests 4/4 ✅ · `npm run build` ✅ (route compiled) · live HogQL preview returned real numbers · prod deploy verified (commit status success). Preview-build failures seen were the pre-existing `/calls/feedback` prerender bug (no Supabase env in preview), unrelated.
+
+---
+
+## In-CRM Calling Pipeline (Phase 1) — 2026-06-23 — branch feat/call-pipeline
+
+**What was built:** Click-to-call directly from the CRM with AI summarization, ported from the result-insurance (Kundbolaget/Hantverkarbolaget) stack — 46elks (telephony) + Deepgram (STT) + Claude (summary). Repos stay fully independent (code copied, not shared).
+
+- **Flow:** Click "Call" on a contact/worklist → 46elks rings the agent's own phone → bridges to the contact (caller ID = workspace number) → records → on hangup, Deepgram transcribes → Claude (Sonnet tool-use) returns summary + key takeaways + sentiment + suggested outcome + suggested follow-up email + suggested tasks + product feedback → auto-logs a `call` activity (non-destructive) and surfaces a review card.
+- **DB:** new `call_sessions` table (migration 20260623120000) — telephony + recording + transcript + ai_json; links to the `activities` row. RLS workspace-scoped. `transcript`/`live_tips` columns reserved for a future real-time in-call coaching phase. Applied to prod via pooler (aws-1-eu-north-1).
+- **API routes:** `POST /api/calls/dial` (places bridge call, respects nix_blocked/do_not_contact w/ override), `POST /api/calls/webhook/hangup` (public, secret-gated, service client, runs processing via `after()`), `POST /api/calls/process` (manual retry), `GET /api/calls/session/[id]` (UI poll), `GET/POST /api/settings/calls` (agent phone + caller ID + master switch, merged into settings.calls).
+- **Lib:** `src/lib/calls/{phone,elks,deepgram,ai-summary,process}.ts`; extended `decision.ts` CallSettings.
+- **UI:** `CallNowButton` + live drawer + AI review card (editable follow-up email → existing send-email endpoint; suggested tasks → /api/tasks). Wired into contact profile + call worklist. New `/settings/calls` page + settings card.
+- **Env (Vercel prod+dev):** ELKS_API_USERNAME/PASSWORD, DEEPGRAM_API_KEY copied from result-insurance; CRM_CALL_FROM_NUMBER=+46766860335 (dedicated to Wrenchlane CRM); CALL_WEBHOOK_SECRET generated. ANTHROPIC_API_KEY already present.
+- **Build:** `tsc --noEmit` clean, `eslint` clean, `next build` OK (all /api/calls/* routes compiled).
+
+**Needs Jacob:** set your cell number at /settings/calls before placing a live call. Known limitation: only ~63/818 app users have a phone in the CRM (export gap) — dialer works today for those; "call all users" scales once the backend export adds phones.
+
+**Phase 2+ (prepped, not built):** real-time in-call AI tips (streaming path — call_sessions.transcript/live_tips reserved); accept-outcome→sequence enrollment from the review card.

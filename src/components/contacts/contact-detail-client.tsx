@@ -15,6 +15,7 @@ import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
+import { CallNowButton } from '@/components/calls/call-now';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -876,6 +877,16 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
               <div className="flex items-center gap-2">
+                <CallNowButton
+                  target={{
+                    contactId: contact.id,
+                    contactName: fullName,
+                    phone: contact.phone ?? null,
+                    companyId: contact.company_id ?? null,
+                    companyName: company?.name ?? null,
+                  }}
+                  onLogged={() => { setActivitiesPage(0); fetchActivities(0); }}
+                />
                 <button
                   onClick={() => setShowComposeModal(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"

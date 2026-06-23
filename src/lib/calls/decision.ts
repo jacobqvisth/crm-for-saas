@@ -70,6 +70,14 @@ export const CALL_OUTCOME_LABEL: Record<CallOutcome, string> = {
 export interface CallSettings {
   auto_followup_enabled?: boolean;
   sequence_by_outcome?: Partial<Record<CallOutcome, string>>;
+  // In-CRM dialer (46elks bridge). When agent_phone is unset, click-to-call is
+  // disabled and the UI prompts the user to configure it.
+  /** The agent's own phone 46elks rings first, E.164 (e.g. +46701234567). */
+  agent_phone?: string;
+  /** Caller ID shown to the contact; a 46elks number. Falls back to env default. */
+  caller_id?: string;
+  /** Master switch for click-to-call + AI summarization (default on). */
+  calling_enabled?: boolean;
 }
 
 export function readCallSettings(workspaceSettings: unknown): CallSettings {

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Mail, MapPin, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
+import { Mail, MapPin, Phone, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -29,6 +29,12 @@ const settingsItems = [
     description: 'Auto-enroll companies in a sequence after a field-route stop is logged',
     href: '/settings/field-visits',
     icon: MapPin,
+  },
+  {
+    title: 'Calling',
+    description: 'Place recorded, AI-summarized calls from the CRM — set your phone & caller ID',
+    href: '/settings/calls',
+    icon: Phone,
   },
   {
     title: 'AI Product Knowledge',

@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { CallLogger, type CallLoggerTarget } from "@/components/calls/call-logger";
+import { CallNowButton } from "@/components/calls/call-now";
 
 type QueueRow = {
   contactId: string;
@@ -156,13 +157,20 @@ export default function CallListPage() {
               </div>
 
               {r.phone && (
-                <a
-                  href={`tel:${r.phone}`}
-                  className="hidden shrink-0 text-xs text-slate-500 hover:text-indigo-600 sm:block"
-                >
-                  {r.phone}
-                </a>
+                <span className="hidden shrink-0 text-xs text-slate-500 sm:block">{r.phone}</span>
               )}
+              <CallNowButton
+                target={{
+                  contactId: r.contactId,
+                  contactName: r.name,
+                  phone: r.phone,
+                  companyId: r.companyId,
+                  companyName: r.companyName,
+                  listId,
+                }}
+                onLogged={load}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+              />
               <button
                 onClick={() =>
                   setActive({
@@ -175,7 +183,7 @@ export default function CallListPage() {
                     listId,
                   })
                 }
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Phone className="h-3.5 w-3.5" /> Log
               </button>
