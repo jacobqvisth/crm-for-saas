@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -17,6 +17,7 @@ import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
 import { PhoneField } from '@/components/contacts/phone-field';
+import { countryNameFromIso, languageFromIso, isoFromCountryName } from '@/lib/geo/country';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -232,6 +233,24 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, contactId]);
 
+  // One-time: backfill a missing Country (name) from an existing country_code
+  // (or vice-versa) so the three identity fields are consistent on open.
+  const countrySynced = useRef(false);
+  useEffect(() => {
+    if (!contact || countrySynced.current) return;
+    if (contact.country_code && !contact.country) {
+      countrySynced.current = true;
+      syncCountry(contact.country_code);
+    } else if (!contact.country_code && contact.country) {
+      const iso = isoFromCountryName(contact.country);
+      if (iso) {
+        countrySynced.current = true;
+        syncCountry(iso);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact]);
+
   const updateField = async (field: string, value: string | boolean | null) => {
     if (!contact || !workspaceId) return;
     const { error } = await supabase
@@ -244,6 +263,31 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     else {
       setContact(prev => prev ? { ...prev, [field]: value } : null);
       toast.success('Updated');
+    }
+    setEditField(null);
+  };
+
+  // Keep country_code (ISO), country (name) and language in sync. Driven by the
+  // ISO code (from the phone picker or the Country Code field). Never overwrites
+  // an existing language — only fills it when empty.
+  const syncCountry = async (rawIso: string | null) => {
+    if (!contact || !workspaceId) return;
+    const iso = rawIso?.trim().toUpperCase() || null;
+    const updates: Record<string, unknown> = { country_code: iso };
+    const name = iso ? countryNameFromIso(iso) : null;
+    if (name) updates.country = name;
+    if (iso && !contact.language) {
+      const lang = languageFromIso(iso);
+      if (lang) updates.language = lang;
+    }
+    const { error } = await supabase
+      .from('contacts')
+      .update(updates as Record<string, unknown>)
+      .eq('id', contact.id)
+      .eq('workspace_id', workspaceId);
+    if (error) toast.error('Failed to update');
+    else {
+      setContact(prev => prev ? { ...prev, ...updates } as typeof prev : null);
     }
     setEditField(null);
   };
@@ -454,6 +498,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 value={contact.phone || null}
                 defaultCountry={contact.country_code}
                 onSave={(e164) => updateField('phone', e164)}
+                onCountryChange={(iso) => syncCountry(iso)}
               />
               <EditableField
                 label="Title"
@@ -567,7 +612,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onEdit={() => { setEditField('country'); setEditValue(contact.country || ''); }}
                 editValue={editValue}
                 onEditValueChange={setEditValue}
-                onSave={() => updateField('country', editValue || null)}
+                onSave={() => {
+                  const iso = isoFromCountryName(editValue);
+                  if (iso) syncCountry(iso);
+                  else updateField('country', editValue || null);
+                }}
                 onCancel={() => setEditField(null)}
               />
               <EditableField
@@ -577,7 +626,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onEdit={() => { setEditField('country_code'); setEditValue(contact.country_code || ''); }}
                 editValue={editValue}
                 onEditValueChange={setEditValue}
-                onSave={() => updateField('country_code', editValue || null)}
+                onSave={() => syncCountry(editValue || null)}
                 onCancel={() => setEditField(null)}
               />
               <div>

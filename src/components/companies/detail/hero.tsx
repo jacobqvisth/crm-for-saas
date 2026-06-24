@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { Company } from './types';
 import { OUTREACH_LABEL, OUTREACH_COLOR, type OutreachStatus } from './status';
+import { CountryFlag, countryFromPhone } from '@/components/contacts/phone-field';
 
 interface HeroProps {
   company: Company;
@@ -73,13 +74,16 @@ export function CompanyHero({
             ) : null}
             {company.phone && <span>·</span>}
             {company.phone && (
-              <InlineEditable
-                value={company.phone}
-                onSave={(v) => onUpdate('phone', v.trim() || null)}
-                className="text-slate-500"
-                inputClassName="text-sm"
-                ariaLabel="Phone"
-              />
+              <span className="inline-flex items-center gap-1.5">
+                <CountryFlag country={countryFromPhone(company.phone, company.country_code)} />
+                <InlineEditable
+                  value={company.phone}
+                  onSave={(v) => onUpdate('phone', v.trim() || null)}
+                  className="text-slate-500"
+                  inputClassName="text-sm"
+                  ariaLabel="Phone"
+                />
+              </span>
             )}
           </div>
           <Badges company={company} outreachStatus={outreachStatus} />
