@@ -15,7 +15,7 @@ import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
-import { CallNowButton } from '@/components/calls/call-now';
+import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -104,6 +104,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
+  const [openCallSession, setOpenCallSession] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [callSubject, setCallSubject] = useState('');
   const [callNotes, setCallNotes] = useState('');
@@ -957,22 +958,41 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               <p className="text-sm text-slate-400 py-8 text-center">No activity yet</p>
             ) : (
               <div className="space-y-0">
-                {activities.map((activity) => (
-                  <div key={activity.id} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
-                    <div className="mt-0.5 flex-shrink-0">
-                      {activityIcons[activity.type] || <FileText className="w-4 h-4 text-slate-400" />}
+                {activities.map((activity) => {
+                  const callSessionId =
+                    activity.type === 'call'
+                      ? ((activity.metadata as Record<string, unknown> | null)?.call_session_id as
+                          | string
+                          | undefined)
+                      : undefined;
+                  return (
+                    <div
+                      key={activity.id}
+                      onClick={callSessionId ? () => setOpenCallSession(callSessionId) : undefined}
+                      className={`flex gap-3 py-3 border-b border-slate-100 last:border-0 ${callSessionId ? 'cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded-lg' : ''}`}
+                    >
+                      <div className="mt-0.5 flex-shrink-0">
+                        {activityIcons[activity.type] || <FileText className="w-4 h-4 text-slate-400" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-900">
+                          {getActivityTitle(activity)}
+                          {callSessionId && (
+                            <span className="ml-2 text-xs font-normal text-indigo-600">
+                              View call →
+                            </span>
+                          )}
+                        </p>
+                        {activity.body && (
+                          <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
+                        )}
+                        <p className="text-xs text-slate-400 mt-1">
+                          {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900">{getActivityTitle(activity)}</p>
-                      {activity.body && (
-                        <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
-                      )}
-                      <p className="text-xs text-slate-400 mt-1">
-                        {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {hasMoreActivities && (
                   <button
                     onClick={() => {
@@ -1090,6 +1110,21 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           company={company}
           onClose={() => setShowComposeModal(false)}
           onSent={() => { setActivitiesPage(0); fetchActivities(0); }}
+        />
+      )}
+
+      {/* Call detail drawer (recording + transcript + AI summary) */}
+      {openCallSession && (
+        <CallDetailDrawer
+          sessionId={openCallSession}
+          target={{
+            contactId: contact.id,
+            contactName: fullName,
+            phone: contact.phone ?? null,
+            companyId: contact.company_id ?? null,
+            companyName: company?.name ?? null,
+          }}
+          onClose={() => { setOpenCallSession(null); setActivitiesPage(0); fetchActivities(0); }}
         />
       )}
 
