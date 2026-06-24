@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
       // outreach to existing customers).
       const { data: contactStatus } = await supabase
         .from("contacts")
-        .select("status, wl_user_id, companies(wl_workshop_id)")
+        .select("status, wl_user_id, email_status, email_verified_at, companies(wl_workshop_id)")
         .eq("id", item.contact_id)
         .single();
 
@@ -362,6 +362,69 @@ export async function POST(request: NextRequest) {
           .from("email_queue")
           .update({ status: "cancelled" as const })
           .eq("id", item.id);
+        continue;
+      }
+
+      // Verification gate. MillionVerifier results were previously advisory only:
+      // neither enrollment nor this cron read email_status, so addresses we knew
+      // were undeliverable (or had never been verified) were still sent to — and
+      // bounced, surfacing in Compliance & DNC. Enforce verification here, the
+      // last gate before sendEmail().
+      const emailStatus = contactStatus?.email_status ?? null;
+
+      if (emailStatus === "invalid") {
+        // Known-bad mailbox → will bounce. Cancel and suppress permanently so it
+        // can't be re-queued or re-enrolled, mirroring how a hard bounce is
+        // handled by the check-replies cron.
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("id", item.id);
+
+        const emailDomainForSuppression = item.to_email.split("@")[1]?.toLowerCase();
+        const { data: existingInvalidSuppression } = await supabase
+          .from("suppressions")
+          .select("id")
+          .eq("workspace_id", item.workspace_id)
+          .eq("active", true)
+          .or(`email.eq.${item.to_email},domain.eq.${emailDomainForSuppression}`)
+          .limit(1)
+          .maybeSingle();
+        if (!existingInvalidSuppression) {
+          await supabase.from("suppressions").insert({
+            workspace_id: item.workspace_id,
+            email: item.to_email,
+            reason: "invalid_email",
+            source: "verification gate (process-emails cron): email_status=invalid",
+          });
+        }
+
+        if (item.enrollment_id) {
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "failed", completed_at: new Date().toISOString() })
+            .eq("id", item.enrollment_id);
+        }
+        continue;
+      }
+
+      const neverVerified =
+        emailStatus === null || ["unknown", "unverified", ""].includes(emailStatus);
+      if (neverVerified) {
+        // Deliverability unknown — don't send blind. Pause (don't suppress): once
+        // the address is verified valid/catch_all the operator can resume the
+        // enrollment. The standard enrollment flow verifies first, so this is a
+        // safety net for un-verified bulk imports rather than the common path.
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("id", item.id);
+        if (item.enrollment_id) {
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "paused" })
+            .eq("id", item.enrollment_id);
+        }
         continue;
       }
 
