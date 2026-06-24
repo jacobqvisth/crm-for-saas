@@ -161,6 +161,10 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           .eq('id', contactData.company_id)
           .single();
         if (companyData) setCompany(companyData);
+      } else {
+        // Clear any stale company from a previously-viewed contact so the
+        // right-side card stays in sync with this contact's company_id.
+        setCompany(null);
       }
 
       // Fetch all companies for dropdown
@@ -543,7 +547,14 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">No company</option>
-                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {/* The companies list is capped by PostgREST's row limit, so the
+                      contact's linked company may be absent from it. Prepend it
+                      explicitly so the dropdown reflects the real company_id
+                      instead of falling back to "No company". */}
+                  {(company && !companies.some(c => c.id === company.id)
+                    ? [company, ...companies]
+                    : companies
+                  ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
