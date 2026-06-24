@@ -55,16 +55,32 @@ export async function processCallSession(
   const { data: contact } = session.contact_id
     ? await supabase
         .from("contacts")
-        .select("id, first_name, last_name, lead_status, status, company_id, language")
+        .select("id, first_name, last_name, lead_status, status, company_id, language, country_code")
         .eq("id", session.contact_id)
         .maybeSingle()
     : { data: null };
   const { data: company } = session.company_id
-    ? await supabase.from("companies").select("name").eq("id", session.company_id).maybeSingle()
+    ? await supabase
+        .from("companies")
+        .select("name, country_code")
+        .eq("id", session.company_id)
+        .maybeSingle()
     : { data: null };
 
   const contactName =
     [contact?.first_name, contact?.last_name].filter(Boolean).join(" ").trim() || null;
+
+  // Output-language rule: Swedish output for Swedish contacts, English for the
+  // rest. Prefer explicit contact language, then country (contact or company);
+  // when nothing is known, let the AI infer from the transcript.
+  const cc = (contact?.country_code ?? company?.country_code ?? "").toUpperCase();
+  const lang = contact?.language?.slice(0, 2).toLowerCase();
+  const languageHint: "sv" | "other" | "unknown" =
+    lang === "sv" || (!lang && cc === "SE")
+      ? "sv"
+      : lang || cc
+        ? "other"
+        : "unknown";
 
   // 1) Transcribe.
   let transcriptUtterances;
@@ -90,6 +106,7 @@ export async function processCallSession(
     companyName: company?.name ?? null,
     knowledgeMd: contentMd,
     today,
+    languageHint,
   });
 
   if (!analyzed.ok) {
