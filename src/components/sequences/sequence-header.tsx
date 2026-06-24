@@ -77,6 +77,7 @@ export function SequenceHeader({
   const [changeSenderOpen, setChangeSenderOpen] = useState(false);
 
   const badge = STATUS_BADGES[sequence.status ?? 'draft'] || STATUS_BADGES.draft;
+  const pauseNewContacts = !!(sequence.settings as { pause_new_contacts?: boolean } | null)?.pause_new_contacts;
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
   const saveName = async () => {
@@ -134,6 +135,14 @@ export function SequenceHeader({
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
             {badge.label}
           </span>
+          {pauseNewContacts && (
+            <span
+              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
+              title="Only sending follow-ups to contacts who already received an email. New contacts are paused."
+            >
+              New contacts paused
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

@@ -73,6 +73,8 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
   const [rotationAccounts, setRotationAccounts] = useState<RotationAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pauseNewContacts, setPauseNewContacts] = useState(settings.pause_new_contacts ?? false);
+  const [togglingPause, setTogglingPause] = useState(false);
 
   useEffect(() => {
     const s = sequence.settings as SequenceSettingsType;
@@ -86,7 +88,37 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
     setStopOnCompanyReply(s.stop_on_company_reply ?? true);
     setSenderRotation(s.sender_rotation ?? true);
     setRotationAccountIds(s.rotation_account_ids ?? []);
+    setPauseNewContacts(s.pause_new_contacts ?? false);
   }, [sequence]);
+
+  // The "finish in-progress only" toggle has an immediate side effect (it
+  // demotes/promotes already-queued first emails), so it goes through its own
+  // endpoint rather than the generic Save. Optimistically flip the switch, then
+  // reconcile on failure.
+  const handleTogglePauseNewContacts = async (next: boolean) => {
+    setPauseNewContacts(next);
+    setTogglingPause(true);
+    try {
+      const res = await fetch(`/api/sequences/${sequence.id}/pause-new-contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Request failed");
+      toast.success(
+        next
+          ? `Paused new contacts — held ${data.affected} first email${data.affected === 1 ? "" : "s"}`
+          : `Resumed — ${data.affected} first email${data.affected === 1 ? "" : "s"} re-queued`
+      );
+      onSave();
+    } catch {
+      setPauseNewContacts(!next);
+      toast.error("Failed to update — try again");
+    } finally {
+      setTogglingPause(false);
+    }
+  };
 
   // Load Gmail accounts so the user can pick a per-sequence rotation pool.
   useEffect(() => {
@@ -143,6 +175,11 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
       ...(typeof dailyLimitTotal === "number" && dailyLimitTotal > 0
         ? { daily_limit_total: dailyLimitTotal }
         : {}),
+      // Preserve flags this panel doesn't edit directly so a plain Save doesn't
+      // wipe them. allow_customers is set by the enroll flow; pause_new_contacts
+      // is owned by its dedicated toggle/endpoint.
+      ...(settings.allow_customers ? { allow_customers: true } : {}),
+      ...(pauseNewContacts ? { pause_new_contacts: true } : {}),
     };
 
     const { error } = await supabase
@@ -299,6 +336,42 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
             />
             <span className="text-sm text-slate-700">Rotate across all sender accounts</span>
           </label>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-800">
+                Finish in-progress only
+              </label>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Keep sending follow-ups to contacts who already received an email,
+                but don&apos;t start the first email for any new contacts. Turn off
+                to start emailing new contacts again.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={pauseNewContacts}
+              disabled={togglingPause}
+              onClick={() => handleTogglePauseNewContacts(!pauseNewContacts)}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                pauseNewContacts ? "bg-amber-500" : "bg-slate-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  pauseNewContacts ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+          {pauseNewContacts && (
+            <p className="text-xs font-medium text-amber-700">
+              New contacts are paused — only follow-ups are sending.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
