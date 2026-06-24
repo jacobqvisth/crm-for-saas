@@ -12,6 +12,7 @@ import {
   Mail,
   ListTodo,
   RefreshCw,
+  Hash,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -546,6 +547,8 @@ function FollowupEmail({
 
 function SuggestedTasks({ target, tasks }: { target: CallNowTarget; tasks: SuggestedTask[] }) {
   const [added, setAdded] = useState<Record<number, boolean>>({});
+  const [sent, setSent] = useState<Record<number, boolean>>({});
+  const [sending, setSending] = useState<Record<number, boolean>>({});
 
   const add = async (i: number, t: SuggestedTask) => {
     try {
@@ -568,25 +571,64 @@ function SuggestedTasks({ target, tasks }: { target: CallNowTarget; tasks: Sugge
     }
   };
 
+  const sendToSlack = async (i: number, t: SuggestedTask) => {
+    setSending((s) => ({ ...s, [i]: true }));
+    try {
+      const res = await fetch("/api/slack/bug-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: t.title,
+          dueDate: t.due_date ?? undefined,
+          contactId: target.contactId || undefined,
+          contactName: target.contactName,
+          companyName: target.companyName ?? undefined,
+        }),
+      });
+      if (res.status === 503) {
+        toast.error("Slack isn't configured yet (#bug-reports webhook).");
+        return;
+      }
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      setSent((s) => ({ ...s, [i]: true }));
+      toast.success("Sent to #bug-reports");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send to Slack");
+    } finally {
+      setSending((s) => ({ ...s, [i]: false }));
+    }
+  };
+
   return (
     <div className="rounded-lg border border-slate-200 p-3">
       <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
         <ListTodo className="h-3.5 w-3.5 text-indigo-600" /> Suggested follow-ups
       </div>
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {tasks.map((t, i) => (
-          <li key={i} className="flex items-center justify-between gap-2 text-sm text-slate-700">
-            <span>
+          <li key={i} className="flex items-start justify-between gap-2 text-sm text-slate-700">
+            <span className="min-w-0">
               {t.title}
               {t.due_date ? <span className="ml-1 text-xs text-slate-400">({t.due_date})</span> : null}
             </span>
-            <button
-              onClick={() => add(i, t)}
-              disabled={added[i]}
-              className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {added[i] ? "Added" : "Add task"}
-            </button>
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                onClick={() => sendToSlack(i, t)}
+                disabled={sending[i] || sent[i]}
+                title="Send to #bug-reports on Slack"
+                className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Hash className="h-3 w-3" />
+                {sent[i] ? "Sent" : sending[i] ? "…" : "Slack"}
+              </button>
+              <button
+                onClick={() => add(i, t)}
+                disabled={added[i]}
+                className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {added[i] ? "Added" : "Add task"}
+              </button>
+            </span>
           </li>
         ))}
       </ul>
