@@ -76,6 +76,7 @@ const contact = {
   attributed_to_sequence_id: null,
   attributed_via: null,
   attributed_at: null,
+  website: null,
 } satisfies Contact;
 
 const company: Company = {

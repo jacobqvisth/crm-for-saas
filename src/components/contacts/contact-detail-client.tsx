@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
   Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, X,
-  Activity as ActivityIcon, Wrench, Clock, BadgeCheck,
+  Activity as ActivityIcon, Wrench, Clock, BadgeCheck, Globe, Sparkles,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -113,6 +113,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [newFieldKey, setNewFieldKey] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
+  const [findingWebsite, setFindingWebsite] = useState(false);
 
   const fetchActivities = useCallback(async (pageNum: number) => {
     if (!workspaceId) return;
@@ -290,6 +291,39 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
       setContact(prev => prev ? { ...prev, ...updates } as typeof prev : null);
     }
     setEditField(null);
+  };
+
+  const handleFindWebsite = async () => {
+    if (!contact || !workspaceId || findingWebsite) return;
+    setFindingWebsite(true);
+    const toastId = toast.loading('Searching for website…');
+    try {
+      const res = await fetch('/api/enrich/find-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, contactId: contact.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Search failed', { id: toastId });
+        return;
+      }
+      if (data.found && data.website) {
+        await supabase
+          .from('contacts')
+          .update({ website: data.website })
+          .eq('id', contact.id)
+          .eq('workspace_id', workspaceId);
+        setContact(prev => prev ? { ...prev, website: data.website } : null);
+        toast.success(`Found ${data.website}`, { id: toastId });
+      } else {
+        toast.error(data.reasoning || 'No website found', { id: toastId });
+      }
+    } catch {
+      toast.error('Search failed', { id: toastId });
+    } finally {
+      setFindingWebsite(false);
+    }
   };
 
   const updateArrayField = async (field: string, newArray: string[]) => {
@@ -509,6 +543,17 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onEditValueChange={setEditValue}
                 onSave={() => updateField('title', editValue || null)}
                 onCancel={() => setEditField(null)}
+              />
+              <WebsiteField
+                value={contact.website || ''}
+                isEditing={editField === 'website'}
+                onEdit={() => { setEditField('website'); setEditValue(contact.website || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('website', editValue.trim() || null)}
+                onCancel={() => setEditField(null)}
+                onFind={handleFindWebsite}
+                finding={findingWebsite}
               />
 
               {/* Primary contact toggle (only when company is set) */}
@@ -1284,6 +1329,67 @@ function SocialLinkField({
         >
           —
         </p>
+      )}
+    </div>
+  );
+}
+
+// Website field — clickable link when set; "Find" (auto-discovery) when empty.
+function WebsiteField({
+  value, isEditing, onEdit, editValue, onEditValueChange, onSave, onCancel, onFind, finding,
+}: {
+  value: string; isEditing: boolean;
+  onEdit: () => void; editValue: string; onEditValueChange: (v: string) => void;
+  onSave: () => void; onCancel: () => void;
+  onFind: () => void; finding: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1">Website</label>
+      {isEditing ? (
+        <input
+          type="url"
+          value={editValue}
+          onChange={(e) => onEditValueChange(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
+          autoFocus
+          placeholder="https://..."
+          className="w-full text-sm px-2 py-1.5 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      ) : value ? (
+        <div className="flex items-center gap-1 px-2 py-1.5">
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate"
+          >
+            <Globe className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{value.replace(/^https?:\/\//, '')}</span>
+          </a>
+          <button onClick={onEdit} className="ml-auto text-xs text-slate-400 hover:text-slate-600">
+            Edit
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <p
+            onClick={onEdit}
+            className="flex-1 text-sm text-slate-400 cursor-pointer hover:bg-slate-50 px-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200"
+          >
+            —
+          </p>
+          <button
+            onClick={onFind}
+            disabled={finding}
+            title="Find the website automatically from the name and email"
+            className="inline-flex items-center gap-1 text-xs px-2 py-1.5 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-50 flex-shrink-0"
+          >
+            {finding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {finding ? 'Finding…' : 'Find'}
+          </button>
+        </div>
       )}
     </div>
   );
