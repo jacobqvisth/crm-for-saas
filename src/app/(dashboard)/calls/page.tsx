@@ -23,6 +23,7 @@ type CallRow = {
   created_at: string | null;
   outcome: string | null;
   subject: string | null;
+  contact_id: string | null;
   contacts: { first_name: string | null; last_name: string | null; email: string; wl_user_id: string | null } | null;
   companies: { name: string | null } | null;
 };
@@ -157,8 +158,8 @@ export default function CallsOverviewPage() {
                 [c.contacts?.first_name, c.contacts?.last_name].filter(Boolean).join(" ").trim() ||
                 c.contacts?.email ||
                 "Unknown";
-              return (
-                <div key={c.id} className="flex items-center justify-between px-3 py-2.5">
+              const rowInner = (
+                <>
                   <div className="min-w-0">
                     <div className="truncate text-sm text-slate-900">
                       {name}
@@ -184,6 +185,19 @@ export default function CallsOverviewPage() {
                       </div>
                     )}
                   </div>
+                </>
+              );
+              return c.contact_id ? (
+                <Link
+                  key={c.id}
+                  href={`/contacts/${c.contact_id}`}
+                  className="flex items-center justify-between px-3 py-2.5 hover:bg-slate-50"
+                >
+                  {rowInner}
+                </Link>
+              ) : (
+                <div key={c.id} className="flex items-center justify-between px-3 py-2.5">
+                  {rowInner}
                 </div>
               );
             })}
