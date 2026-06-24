@@ -55,7 +55,7 @@ export async function processCallSession(
   const { data: contact } = session.contact_id
     ? await supabase
         .from("contacts")
-        .select("id, first_name, last_name, lead_status, status, company_id")
+        .select("id, first_name, last_name, lead_status, status, company_id, language")
         .eq("id", session.contact_id)
         .maybeSingle()
     : { data: null };
@@ -71,6 +71,7 @@ export async function processCallSession(
   try {
     const { buffer, contentType } = await fetchRecordingAudio(session.recording_url);
     transcriptUtterances = await transcribeAudio(buffer, contentType, {
+      language: contact?.language ?? undefined,
       timeoutMs: (session.duration_seconds ?? 0) > 120 ? 180_000 : 120_000,
     });
   } catch (err) {
