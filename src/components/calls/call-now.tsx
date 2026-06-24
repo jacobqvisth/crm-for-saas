@@ -31,6 +31,7 @@ type FeedbackItem = {
 };
 type AiJson = {
   summary: string;
+  summary_native?: string;
   key_takeaways: string[];
   sentiment: "positive" | "neutral" | "negative";
   suggested_outcome: CallOutcome;
@@ -303,7 +304,23 @@ function CallDrawer({
                 )}
               </div>
 
-              <p className="text-sm leading-relaxed text-slate-700">{ai.summary}</p>
+              <div>
+                {ai.summary_native ? (
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    English
+                  </div>
+                ) : null}
+                <p className="text-sm leading-relaxed text-slate-700">{ai.summary}</p>
+              </div>
+
+              {ai.summary_native ? (
+                <div>
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Svenska
+                  </div>
+                  <p className="text-sm leading-relaxed text-slate-700">{ai.summary_native}</p>
+                </div>
+              ) : null}
 
               {ai.key_takeaways.length > 0 && (
                 <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">

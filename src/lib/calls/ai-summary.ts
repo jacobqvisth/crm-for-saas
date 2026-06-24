@@ -32,7 +32,10 @@ export interface CallFeedbackItem {
 }
 
 export interface CallAnalysis {
+  /** Summary in English — always present (the agent's scanning language). */
   summary: string;
+  /** Summary in Swedish — present only for Swedish calls, else "". */
+  summary_native: string;
   key_takeaways: string[];
   sentiment: "positive" | "neutral" | "negative";
   suggested_outcome: CallOutcome;
@@ -49,6 +52,14 @@ export interface AnalyzeCallContext {
   knowledgeMd: string;
   /** Today's date (ISO) so the model can schedule callbacks sensibly. */
   today: string;
+  /**
+   * Whether the contact is Swedish, from the contact's stored language/country.
+   * "sv" → Swedish; "other" → a known non-Swedish contact; "unknown" → no data,
+   * infer from the transcript. Drives the output-language rule:
+   *   Swedish contact  → email + a Swedish summary (plus the English summary)
+   *   everyone else    → email + summary in English only
+   */
+  languageHint: "sv" | "other" | "unknown";
 }
 
 export type AnalyzeResult =
@@ -63,12 +74,17 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
     properties: {
       summary: {
         type: "string",
-        description: "2-5 sentence summary of what was discussed and decided.",
+        description: "2-5 sentence summary of what was discussed and decided. ALWAYS in English.",
+      },
+      summary_native: {
+        type: "string",
+        description:
+          "The SAME summary written in Swedish — ONLY when the contact is Swedish (see the language rule). For a non-Swedish contact, return an empty string \"\".",
       },
       key_takeaways: {
         type: "array",
         items: { type: "string" },
-        description: "Short bullet points: the most important facts, asks, objections, or commitments.",
+        description: "Short bullet points in English: the most important facts, asks, objections, or commitments.",
       },
       sentiment: { type: "string", enum: ["positive", "neutral", "negative"] },
       suggested_outcome: {
@@ -85,7 +101,7 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
           body: {
             type: "string",
             description:
-              "Plain-text email body in the contact's language. 2-4 sentences. No greeting line, no signature — those are added at send time. Reference what was actually discussed. Stay grounded in the product knowledge; never invent features/pricing/links.",
+              "Plain-text email body. LANGUAGE: Swedish if the contact is Swedish, otherwise English (see the language rule). 2-4 sentences. No greeting line, no signature — those are added at send time. Reference what was actually discussed. Stay grounded in the product knowledge; never invent features/pricing/links.",
           },
           reason: { type: "string", description: "Why this email (or why not, if not recommended)." },
         },
@@ -124,6 +140,7 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
     },
     required: [
       "summary",
+      "summary_native",
       "key_takeaways",
       "sentiment",
       "suggested_outcome",
@@ -140,9 +157,22 @@ export async function analyzeCall(ctx: AnalyzeCallContext): Promise<AnalyzeResul
 
   const client = new Anthropic({ apiKey });
 
+  const contactSwedishness =
+    ctx.languageHint === "sv"
+      ? "The contact IS Swedish."
+      : ctx.languageHint === "other"
+        ? "The contact is NOT Swedish."
+        : "The contact's language is unknown — decide whether they are Swedish by the language actually spoken in the transcript.";
+
   const system = `You analyze recorded phone calls between a Wrenchlane team member (the "Agent") and a user/prospect (the "Contact"), then produce a structured summary and follow-up plan that the Agent reviews before anything is sent.
 
-Stay grounded in the canonical product knowledge below — never invent features, pricing, partners, stats, or links that aren't in it. The suggested follow-up email must be in the Contact's language (infer it from the transcript; default to Swedish if unclear) and must read like a human peer, not a chatbot.
+Stay grounded in the canonical product knowledge below — never invent features, pricing, partners, stats, or links that aren't in it. Everything must read like a human peer, not a chatbot.
+
+LANGUAGE RULE (important):
+- ${contactSwedishness}
+- If the contact is Swedish: write \`summary_native\` as the Swedish version of the summary, AND write the follow-up email (subject + body) in Swedish.
+- If the contact is NOT Swedish: set \`summary_native\` to an empty string "", AND write the follow-up email in English.
+- \`summary\` and \`key_takeaways\` are ALWAYS in English regardless.
 
 === WRENCHLANE PRODUCT KNOWLEDGE (authoritative) ===
 ${ctx.knowledgeMd}
@@ -178,6 +208,7 @@ Today's date is ${ctx.today}. Call the record_call_analysis tool exactly once wi
     if (!CALL_OUTCOMES.includes(analysis.suggested_outcome)) {
       analysis.suggested_outcome = "interested";
     }
+    if (typeof analysis.summary_native !== "string") analysis.summary_native = "";
     return { ok: true, analysis, model: MODEL };
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : "analyzeCall failed" };
