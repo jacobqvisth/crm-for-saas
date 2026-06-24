@@ -43,6 +43,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [logActivityOpen, setLogActivityOpen] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
+  const [findingWebsite, setFindingWebsite] = useState(false);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -135,6 +136,39 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       return;
     }
     setCompany((prev) => (prev ? { ...prev, [field]: value } as Company : null));
+  };
+
+  const handleFindWebsite = async () => {
+    if (!company || !workspaceId || findingWebsite) return;
+    setFindingWebsite(true);
+    const toastId = toast.loading('Searching for website…');
+    try {
+      const res = await fetch('/api/enrich/find-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, companyId: company.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Search failed', { id: toastId });
+        return;
+      }
+      if (data.found && data.website) {
+        await supabase
+          .from('companies')
+          .update({ website: data.website } as Record<string, unknown>)
+          .eq('id', company.id)
+          .eq('workspace_id', workspaceId);
+        setCompany((prev) => (prev ? { ...prev, website: data.website } as Company : null));
+        toast.success(`Found ${data.website}`, { id: toastId });
+      } else {
+        toast.error(data.reasoning || 'No website found', { id: toastId });
+      }
+    } catch {
+      toast.error('Search failed', { id: toastId });
+    } finally {
+      setFindingWebsite(false);
+    }
   };
 
   const updatePatch = async (patch: Partial<Company>) => {
@@ -289,6 +323,8 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             onUpdateTags={updateTags}
             onUpdateNotes={(notes) => updateField('notes', notes)}
             onUpdateFollowupFlags={updateFollowupFlags}
+            onFindWebsite={handleFindWebsite}
+            findingWebsite={findingWebsite}
           />
         </div>
 

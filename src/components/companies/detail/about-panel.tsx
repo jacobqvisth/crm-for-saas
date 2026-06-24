@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import {
   ExternalLink, Pencil, MapPin, Building2, Linkedin, Instagram, Facebook, Trash2, CreditCard, Copy, ShieldOff,
+  Globe, Sparkles, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
@@ -19,10 +20,13 @@ interface AboutPanelProps {
   onUpdateTags: (tags: string[]) => void;
   onUpdateNotes: (notes: string | null) => void;
   onUpdateFollowupFlags: (patch: { skip_auto_followup?: boolean; do_not_contact?: boolean }) => Promise<void>;
+  onFindWebsite: () => void;
+  findingWebsite: boolean;
 }
 
 export function AboutPanel({
   company, parentCompany, childCompanies, onEditDetails, onDelete, onUpdateTags, onUpdateNotes, onUpdateFollowupFlags,
+  onFindWebsite, findingWebsite,
 }: AboutPanelProps) {
   const tags = (company.tags as string[] | null) || [];
 
@@ -62,6 +66,40 @@ export function AboutPanel({
             <Pencil className="w-3 h-3" />
             Edit
           </button>
+        </div>
+
+        {/* Website — priority field, always shown */}
+        <div className="mb-3 pb-3 border-b border-slate-100">
+          <div className="text-[11px] text-slate-500 mb-0.5">Website</div>
+          {company.website ? (
+            <a
+              href={company.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 max-w-full"
+            >
+              <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
+            </a>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onEditDetails}
+                className="text-sm text-slate-400 hover:text-slate-600"
+              >
+                — add
+              </button>
+              <button
+                onClick={onFindWebsite}
+                disabled={findingWebsite}
+                title="Find the website automatically from the company name and location"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-50"
+              >
+                {findingWebsite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {findingWebsite ? 'Finding…' : 'Find'}
+              </button>
+            </div>
+          )}
         </div>
 
         {firmographic.length > 0 ? (

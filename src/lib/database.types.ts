@@ -1160,6 +1160,7 @@ export type Database = {
           user_stripe_customer_id: string | null
           user_stripe_subscription_id: string | null
           user_subscription_status: string | null
+          website: string | null
           wl_user_id: string | null
           workspace_id: string
         }
@@ -1216,6 +1217,7 @@ export type Database = {
           user_stripe_customer_id?: string | null
           user_stripe_subscription_id?: string | null
           user_subscription_status?: string | null
+          website?: string | null
           wl_user_id?: string | null
           workspace_id: string
         }
@@ -1272,6 +1274,7 @@ export type Database = {
           user_stripe_customer_id?: string | null
           user_stripe_subscription_id?: string | null
           user_subscription_status?: string | null
+          website?: string | null
           wl_user_id?: string | null
           workspace_id?: string
         }
