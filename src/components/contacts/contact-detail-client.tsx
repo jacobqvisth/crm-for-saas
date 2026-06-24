@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
+import { PhoneField } from '@/components/contacts/phone-field';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -449,15 +450,10 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onSave={() => updateField('email', editValue)}
                 onCancel={() => setEditField(null)}
               />
-              <EditableField
-                label="Phone"
-                value={contact.phone || ''}
-                isEditing={editField === 'phone'}
-                onEdit={() => { setEditField('phone'); setEditValue(contact.phone || ''); }}
-                editValue={editValue}
-                onEditValueChange={setEditValue}
-                onSave={() => updateField('phone', editValue || null)}
-                onCancel={() => setEditField(null)}
+              <PhoneField
+                value={contact.phone || null}
+                defaultCountry={contact.country_code}
+                onSave={(e164) => updateField('phone', e164)}
               />
               <EditableField
                 label="Title"
