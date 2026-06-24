@@ -16,14 +16,42 @@ export interface CallUtterance {
 export interface TranscribeOptions {
   apiKey?: string;
   model?: string;
+  /** Contact/locale hint (2-letter, e.g. "sv"). Used to pick the Deepgram
+   *  language when supported; otherwise we fall back to auto-detection. */
   language?: string;
   timeoutMs?: number;
 }
+
+// Deepgram nova-2 language codes we trust to pin explicitly. Our contact
+// `language` field uses 2-letter locales (sv, da, no, fi, de, en, …); map them
+// to Deepgram's codes. Anything not listed (et/lv/lt and unknowns) falls back
+// to detect_language so we never force the wrong model onto the audio — that
+// mismatch is exactly what produced garbled "Swedish/Dutch/English" transcripts
+// when we previously forced nova-3 `multi` (which doesn't support Swedish).
+const DEEPGRAM_LANG: Record<string, string> = {
+  sv: "sv",
+  da: "da",
+  no: "no",
+  nb: "no",
+  nn: "no",
+  fi: "fi",
+  en: "en",
+  de: "de",
+  nl: "nl",
+  fr: "fr",
+  es: "es",
+  it: "it",
+  pt: "pt",
+};
 
 /**
  * Transcribe audio bytes with Deepgram and return diarized utterances ordered
  * by start time. Returns [] for silence-only / unrecognized audio. Throws on
  * HTTP error or timeout.
+ *
+ * Uses nova-2 (Deepgram's broadest language coverage). When the caller passes a
+ * supported `language` hint we pin it (most accurate); otherwise we enable
+ * automatic language detection so any supported language transcribes correctly.
  */
 export async function transcribeAudio(
   audio: ArrayBuffer,
@@ -34,14 +62,21 @@ export async function transcribeAudio(
   if (!apiKey) throw new Error("DEEPGRAM_API_KEY missing");
 
   const params = new URLSearchParams({
-    model: opts.model ?? "nova-3",
-    // "multi" auto-detects Swedish/English code-switching common on these calls.
-    language: opts.language ?? "multi",
+    model: opts.model ?? "nova-2",
     punctuate: "true",
     smart_format: "true",
     diarize: "true",
     utterances: "true",
   });
+
+  const hint = opts.language?.slice(0, 2).toLowerCase();
+  const pinned = hint ? DEEPGRAM_LANG[hint] : undefined;
+  if (pinned) {
+    params.set("language", pinned);
+  } else {
+    // Auto-detect the spoken language for this recording.
+    params.set("detect_language", "true");
+  }
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 120_000);
