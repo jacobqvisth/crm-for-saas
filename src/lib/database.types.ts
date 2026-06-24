@@ -48,6 +48,17 @@ export type SequenceSettings = {
    * "Add to Sequence" modal's "Enroll customers anyway" override.
    */
   allow_customers?: boolean;
+  /**
+   * When true, this sequence keeps sending follow-ups to contacts who have
+   * already received at least one email (current_step >= 1), but does NOT
+   * start sending the first email to brand-new contacts (current_step === 0).
+   * Used to "finish what we've started" on a sequence without onboarding new
+   * contacts. Enforced in the process-emails cron (first emails are demoted
+   * from 'scheduled' to 'pending') and toggled via the
+   * POST /api/sequences/[id]/pause-new-contacts endpoint, which also
+   * demotes/promotes the already-queued first emails. Default false.
+   */
+  pause_new_contacts?: boolean;
 };
 
 export type Database = {

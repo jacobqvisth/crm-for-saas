@@ -224,6 +224,31 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // --- Pause-new-contacts guard ---
+      // When a sequence is set to "finish in-progress only", hold the FIRST
+      // email of any not-yet-started contact (current_step === 0) by demoting
+      // it out of the scheduled pool to 'pending'. Follow-ups (current_step >= 1)
+      // for already-started contacts keep flowing. Demoting (rather than
+      // skipping in place) frees the oldest-100 send window so it isn't clogged
+      // by held first emails. Flipping the flag off via the pause-new-contacts
+      // endpoint promotes these back to 'scheduled'.
+      {
+        const seqSettings = (enrollment.sequences as unknown as {
+          settings?: SequenceSettings | null;
+        })?.settings;
+        if (
+          seqSettings?.pause_new_contacts === true &&
+          (enrollment.current_step ?? 0) === 0
+        ) {
+          await supabase
+            .from("email_queue")
+            .update({ status: "pending" as const })
+            .eq("id", item.id);
+          continue;
+        }
+      }
+      // --- End pause-new-contacts guard ---
+
       // --- Send-window guard ---
       // Defense in depth: refuse to send if the current moment is outside the
       // sequence's configured timezone/day/hour window. The jitter, retry, and
