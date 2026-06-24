@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { NewCallListModal } from "@/components/calls/new-call-list-modal";
+import { CallDetailDrawer } from "@/components/calls/call-now";
 
 type Stats = {
   callsToday: number;
@@ -24,9 +25,12 @@ type CallRow = {
   outcome: string | null;
   subject: string | null;
   contact_id: string | null;
+  metadata: Record<string, unknown> | null;
   contacts: { first_name: string | null; last_name: string | null; email: string; wl_user_id: string | null } | null;
   companies: { name: string | null } | null;
 };
+
+type OpenCall = { sessionId: string; contactId: string | null; name: string; companyName: string | null };
 
 type CallList = {
   id: string;
@@ -43,6 +47,7 @@ export default function CallsOverviewPage() {
   const [lists, setLists] = useState<CallList[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [openCall, setOpenCall] = useState<OpenCall | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,6 +192,25 @@ export default function CallsOverviewPage() {
                   </div>
                 </>
               );
+              const sessionId = c.metadata?.call_session_id as string | undefined;
+              if (sessionId) {
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() =>
+                      setOpenCall({
+                        sessionId,
+                        contactId: c.contact_id,
+                        name,
+                        companyName: c.companies?.name ?? null,
+                      })
+                    }
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
+                  >
+                    {rowInner}
+                  </button>
+                );
+              }
               return c.contact_id ? (
                 <Link
                   key={c.id}
@@ -206,6 +230,21 @@ export default function CallsOverviewPage() {
       </div>
 
       {showNew && <NewCallListModal onClose={() => setShowNew(false)} onCreated={(id) => router.push(`/calls/lists/${id}`)} />}
+
+      {openCall && (
+        <CallDetailDrawer
+          sessionId={openCall.sessionId}
+          target={{
+            contactId: openCall.contactId ?? "",
+            contactName: openCall.name,
+            phone: null,
+            companyId: null,
+            companyName: openCall.companyName,
+          }}
+          contactHref={openCall.contactId ? `/contacts/${openCall.contactId}` : undefined}
+          onClose={() => setOpenCall(null)}
+        />
+      )}
     </div>
   );
 }

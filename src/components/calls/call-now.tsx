@@ -39,6 +39,7 @@ type AiJson = {
   suggested_tasks: SuggestedTask[];
   feedback_items: FeedbackItem[];
 };
+type Utterance = { speaker: string; text: string; start_ms: number; end_ms: number };
 type Session = {
   id: string;
   status: string;
@@ -46,6 +47,7 @@ type Session = {
   recording_url: string | null;
   summary: string | null;
   ai_json: AiJson | null;
+  transcript: Utterance[] | null;
   error: string | null;
 };
 
@@ -212,19 +214,98 @@ export function CallNowButton({
   );
 }
 
+/**
+ * Opens the same review drawer for a PAST call, loaded by session id — used
+ * from the contact timeline and the Calls page so you can replay the recording,
+ * read the full transcript, and see the AI summary after the fact.
+ */
+export function CallDetailDrawer({
+  sessionId,
+  target,
+  onClose,
+  contactHref,
+}: {
+  sessionId: string;
+  target: CallNowTarget;
+  onClose: () => void;
+  contactHref?: string;
+}) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/calls/session/${sessionId}`);
+      if (res.ok) {
+        const json = await res.json();
+        setSession(json.session);
+        if (["processed", "failed", "no_recording"].includes(json.session?.status) && pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    load();
+    // Keep polling only while a call is still being processed.
+    pollRef.current = setInterval(load, 3000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [load]);
+
+  if (loading && !session) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
+        <div className="flex h-full w-full max-w-lg items-center justify-center bg-white shadow-xl">
+          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <CallDrawer
+      target={target}
+      session={session}
+      onClose={onClose}
+      contactHref={contactHref}
+      onRetry={() =>
+        fetch("/api/calls/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        }).then(() => {
+          setSession((s) => (s ? { ...s, status: "processing", error: null } : s));
+          if (!pollRef.current) pollRef.current = setInterval(load, 3000);
+        })
+      }
+    />
+  );
+}
+
 function CallDrawer({
   target,
   session,
   onClose,
   onRetry,
+  contactHref,
 }: {
   target: CallNowTarget;
   session: Session | null;
   onClose: () => void;
   onRetry: () => void;
+  /** When set, shows a "View contact" link in the header (used by the detail drawer). */
+  contactHref?: string;
 }) {
   const status = session?.status ?? "dialing";
   const ai = session?.ai_json ?? null;
+  const transcript = session?.transcript ?? null;
   const inFlight = ["dialing", "in_progress", "completed", "processing"].includes(status);
 
   return (
@@ -243,6 +324,14 @@ function CallDrawer({
               {target.companyName ? `${target.companyName} · ` : ""}
               {target.phone}
             </div>
+            {contactHref && (
+              <Link
+                href={contactHref}
+                className="mt-1 inline-block text-xs font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                View contact →
+              </Link>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="h-5 w-5" />
@@ -334,6 +423,26 @@ function CallDrawer({
                 <audio controls src={session.recording_url} className="w-full">
                   <track kind="captions" />
                 </audio>
+              )}
+
+              {transcript && transcript.length > 0 && (
+                <details className="rounded-lg border border-slate-200">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-700">
+                    Full transcript ({transcript.length} lines)
+                  </summary>
+                  <div className="max-h-72 space-y-1.5 overflow-y-auto border-t border-slate-100 px-3 py-2.5">
+                    {transcript.map((u, i) => (
+                      <p key={i} className="text-xs leading-relaxed text-slate-600">
+                        <span
+                          className={`font-semibold ${u.speaker === "agent" ? "text-teal-700" : "text-slate-800"}`}
+                        >
+                          {u.speaker === "agent" ? "Agent" : "Contact"}:
+                        </span>{" "}
+                        {u.text}
+                      </p>
+                    ))}
+                  </div>
+                </details>
               )}
 
               <FollowupEmail target={target} suggested={ai.suggested_followup_email} />
