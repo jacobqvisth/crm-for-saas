@@ -4573,3 +4573,19 @@ Follow-ups after Jacob's first live calls on the Phase 1 pipeline above. All mer
 - **PR #413 — Recent calls → contact links.** Each row in the `/calls` overview "Recent calls" list now links to `/contacts/[id]` (when the call has a contact) so you can jump to the contact and see the full call log. `src/app/(dashboard)/calls/page.tsx`.
 
 **Checks:** each PR `tsc --noEmit` + `eslint` + `next build` clean; all merged via squash and verified live on production.
+
+---
+
+## Contact + Company website field, with AI auto-discovery — PR #417 — 2026-06-24
+
+Website was unsurfaced on both profiles. Companies had `website` (edit-drawer + hero when set) but no add-affordance when empty; contacts had no `website` column at all (so the contact in Jacob's screenshots — a Gmail address with "No company" — showed nothing).
+
+- **Migration `20260624130000_contacts_website.sql`** — `ALTER TABLE contacts ADD COLUMN website text`. Applied to prod via psql (pooler host `aws-1-eu-north-1.pooler.supabase.com`).
+- **`src/lib/enrich/find-website.ts`** — discovery helper. If the contact has a custom (non-free) email domain, that domain *is* the site (no API call). Otherwise Claude `claude-sonnet-4-6` + the `web_search` server tool finds the official site from name + city/country, returning `{found, website, confidence, reasoning}` via a `report_website` client tool. Free-provider domain list (gmail/hotmail/telia/etc.) gates the shortcut.
+- **`POST /api/enrich/find-website`** — workspace-scoped lookup for a contact or company (no DB write; the client persists the chosen result so a wrong guess is editable). For a contact, borrows the linked company's name + location to make the search resolvable. `maxDuration = 60`.
+- **Contact profile** — new **Website** field (clickable link / inline edit / **Find** button that auto-discovers + saves). `WebsiteField` component in `contact-detail-client.tsx`.
+- **Company About panel** — **Website** row in Details with the same **Find** button.
+
+Decision: used `claude-sonnet-4-6` to match the project's other AI-helper endpoints (call summaries, inbox drafts, forums) — low-volume manual lookups where Sonnet + web search is the right cost/quality point.
+
+**Checks:** `tsc --noEmit` clean, `eslint` clean, `next build --webpack` green (`/api/enrich/find-website` compiled), smoke 8/8. Merged squash (`440101e`), deploy verified live (root → 307 /login).
