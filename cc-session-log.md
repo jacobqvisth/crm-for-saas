@@ -4560,3 +4560,16 @@ Session closed.
 **Needs Jacob:** set your cell number at /settings/calls before placing a live call. Known limitation: only ~63/818 app users have a phone in the CRM (export gap) — dialer works today for those; "call all users" scales once the backend export adds phones.
 
 **Phase 2+ (prepped, not built):** real-time in-call AI tips (streaming path — call_sessions.transcript/live_tips reserved); accept-outcome→sequence enrollment from the review card.
+
+---
+
+## In-CRM Calling — post-launch fixes (first real calls) — 2026-06-24
+
+Follow-ups after Jacob's first live calls on the Phase 1 pipeline above. All merged + deployed same day.
+
+- **Deepgram 401 / processing failed (no PR — env fix).** First call recorded fine but processing failed with `Deepgram HTTP 401 INVALID_AUTH`. Root cause: the `DEEPGRAM_API_KEY` copied from result-insurance's **Vercel** env was a stale 42-char value (RI's edge functions read the real key from **Supabase Vault**, so the Vercel copy was never exercised). The correct key is the clean 40-char Vault value (verified 200 against `GET api.deepgram.com/v1/projects`). Replaced `DEEPGRAM_API_KEY` in crm-for-saas Vercel (prod+dev) and redeployed. Lesson: for RI-sourced secrets, the Vault is the source of truth, not RI's Vercel env. (The auto-mode classifier blocks reading another project's `vault.decrypted_secrets` as "credential exploration" — Jacob ran the read himself with `!`.)
+- **PR #411 — Deepgram language fix (garbled Swedish).** First Swedish call transcribed as "fragmented Swedish/Dutch/English". Cause: Deepgram was on `nova-3` + `language=multi`, whose multi mode covers ~10 languages and **excludes Swedish**. Switched to **`nova-2`** (broadest coverage; RI's proven Swedish model), pin the contact's `language` when it maps to a supported Deepgram code (sv/da/no/fi/de/en/nl/fr/es/it/pt), else enable `detect_language=true`. `src/lib/calls/{deepgram,process}.ts`.
+- **PR #412 — bilingual AI output.** Per Jacob: Swedish for Swedish contacts, English for everyone else. `summary` is always English; new `summary_native` holds the Swedish version **only** for Swedish contacts (else ""); the suggested follow-up email is Swedish for Swedes / English otherwise; key takeaways stay English. "Swedishness" decided in `process.ts` from contact.language → country_code (contact then company) → else the model infers from the transcript. Review card renders an extra "Svenska" block. `src/lib/calls/{ai-summary,process}.ts`, `src/components/calls/call-now.tsx`.
+- **PR #413 — Recent calls → contact links.** Each row in the `/calls` overview "Recent calls" list now links to `/contacts/[id]` (when the call has a contact) so you can jump to the contact and see the full call log. `src/app/(dashboard)/calls/page.tsx`.
+
+**Checks:** each PR `tsc --noEmit` + `eslint` + `next build` clean; all merged via squash and verified live on production.
