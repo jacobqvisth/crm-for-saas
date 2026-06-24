@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   // Load the contact (RLS scopes to the user's workspace).
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id, workspace_id, company_id, phone, first_name, last_name")
+    .select("id, workspace_id, company_id, phone, first_name, last_name, country_code")
     .eq("id", contactId)
     .maybeSingle();
   if (!contact) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
@@ -58,8 +58,10 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Contact must have a dialable number.
-  const contactPhone = normalizePhone(contact.phone);
+  // Contact must have a dialable number. Use the contact's country as the hint
+  // so national numbers expand to the right country code (a bare "358…" is
+  // already international and normalizes correctly regardless).
+  const contactPhone = normalizePhone(contact.phone, contact.country_code);
   if (!contactPhone) {
     return NextResponse.json(
       { error: "This contact has no valid phone number" },
