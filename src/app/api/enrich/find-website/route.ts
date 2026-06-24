@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { findWebsite } from "@/lib/enrich/find-website";
 
-// Web search can take a little while — give it room.
-export const maxDuration = 60;
+// Web search + liveness verification + retries on dead domains can take a while.
+export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
