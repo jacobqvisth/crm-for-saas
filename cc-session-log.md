@@ -4602,3 +4602,35 @@ Follow-up to PR #417 (same day). The **Find website** button returned a plausibl
 - Route `maxDuration` 60 → 180 (a reject + re-search cycle measured ~84s end-to-end).
 
 **Verified** end-to-end against the real case: huoltosaari.fi rejected, `https://www.autokorjaamoturku.fi/` returned with high confidence. `tsc` + `eslint` + `next build --webpack` clean. Merged squash (`c6bc9fc`), deploy live.
+
+---
+
+## Non-Swedish user check-in sequences + "finish in-progress only" feature — 2026-06-24 — PR #421
+
+A background-session thread that started as "email all non-Swedish app users who've had Wrenchlane >2 weeks, asking how they like it" and turned into a sequence-send-queue investigation + a new throttle-control feature.
+
+### 1. Two existing-user check-in sequences (prod data, no code)
+- Cohort: `contacts` with `wl_user_id` set (app users), `country_code` ≠ SE (and country not Sweden/Sverige), `signed_up_at` < 2026-06-08 (>2 weeks), `status='active'`, excluding 5 internal `@wrenchlane.com` test accounts → **476**.
+- **Validated all 476 via MillionVerifier** (`scripts/lib/email-verify.mjs`, `MILLIONVERIFIER_API_KEY`): 416 valid / 17 catch_all / 31 risky / 12 invalid. Only valid+catch_all (**433**) enrolled; 43 risky/invalid excluded.
+- Split by engagement into two DRAFT→then-started sequences (the original single combined seq `4d8fc02f` was deleted):
+  - **"Non-Swedish users — product check-in (active)"** `795c9a17-9b01-4391-a364-8518fa9ed8da` — 144 who ran ≥1 diagnosis.
+  - **"Non-Swedish users — getting started (no diagnosis yet)"** `b3798cfd-39af-468a-b631-c25bda3c2f6f` — 289 with 0 diagnoses.
+- Each: 3 steps (email → 4-day delay → follow-up), `allow_customers:true` (REQUIRED — targets are wl-app users; both the enroll guard and the send-time cron guard skip customers otherwise), sender pinned to jacob@wrenchlane.com, stop_on_reply. Greeting uses `{{first_name_optional}}` (most have no first name). Enrolled via `enrollContacts(..., serviceClient)` with `allowCustomers:true` (never SQL-insert). Lists at `~/nonse-active-diagnosed.csv`, `~/nonse-no-diagnosis.csv`, `~/nonse-excluded-undeliverable.csv`.
+
+### 2. Send-queue throughput investigation
+- After Jacob started them, nothing sent for the check-ins. Root cause = **head-of-line clog**: the `process-emails` cron pulls the **100 oldest** due `email_queue` rows (status=scheduled, scheduled_for<=now, sender has capacity) **globally, oldest-first**, then groups by sender. The per-account `min_send_interval_seconds` check keys off `gmail_accounts.updated_at`, and every send bumps it → **each account sends at most ONE email per 5-min run**. On rate-limit the row reschedules to `now+interval` → jumps to the BACK, so backdating a throttled sender does NOT durably jump the queue.
+- The whole system was stuck at ~15/hr against a 4,400+ backlog because **390 month-old (May 28) Sverige first-emails** sat on two slow `.co` accounts (`hans@wrenchlane.co`, `magnus@wrenchlane.co`, interval 1200s) that monopolized the oldest-100 window and starved the ~8 faster `.com` accounts (600s ≈ 6/hr each ≈ ~50-60/hr once unclogged).
+- Tuned jacob@wrenchlane.com sender to `min_send_interval_seconds=120`, `max_daily_sends=40`.
+
+### 3. "Finish in-progress only" — PR #421 (feature)
+Per Jacob: finish every contact already mid-sequence (got 1 of 2/3 emails) before starting any NEW contact; his existing-user check-ins stay exempt and keep sending to new contacts.
+- **`settings.pause_new_contacts`** bool (SequenceSettings type). When true, the cron demotes any first email (`enrollment.current_step === 0`) from `scheduled`→`pending` (out of the oldest-100 window, so it stops clogging and won't send); follow-ups (`current_step >= 1`) keep flowing.
+- **`POST /api/sequences/[id]/pause-new-contacts`** `{ paused }` — sets the flag and immediately demotes (pause) / promotes (resume) already-queued first emails, paginated + chunked like `resume-all`.
+- **Sequence settings panel** — "Finish in-progress only" toggle (calls the endpoint for instant effect). Also **fixed a latent bug**: the plain Save rebuilt `settings` from scratch and silently wiped `allow_customers` — now preserves both `allow_customers` and `pause_new_contacts`.
+- **Sequence header** — amber "New contacts paused" badge.
+- New sequences default to `pause_new_contacts` unset (= sends to new contacts immediately).
+
+### Prod data applied this session
+- 6 cold-outreach sequences (Sverige, UK, Czech, Lithuania, Estonia, Latvia) set `pause_new_contacts=true`; their ~1,633 not-started first-emails demoted `scheduled`→`pending`. The two check-in sequences left sending to new contacts. ~3,327 in-progress follow-ups across all sequences keep flowing.
+
+**Checks:** `tsc --noEmit` clean on changed files (only pre-existing `phone-field.tsx` missing-dep errors, local node_modules stale — CI green), `eslint` clean. Merged squash (`da72594`), Build & Lint ✅, production deploy status success.
