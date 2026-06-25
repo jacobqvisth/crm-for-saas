@@ -1,5 +1,5 @@
 # CRM Project Status
-Last updated: 2026-06-24 (**In-CRM Calling pipeline LIVE** — click-to-call via 46elks dial-out bridge, Deepgram transcription, Claude summary → auto-logged call activity + AI-suggested follow-up email/tasks. Bilingual output (Swedish for Swedes, English otherwise). See `cc-session-log.md` PRs #410–#413. Prior: Inbox UX overhaul PRs #239 → #267.)
+Last updated: 2026-06-24 (**Sequence "Finish in-progress only" toggle LIVE — PR #421**. Per-sequence `pause_new_contacts` setting: keeps sending follow-ups to already-started contacts but holds first emails for new contacts; toggle in sequence Settings + amber header badge + cron enforcement + `/api/sequences/[id]/pause-new-contacts`. Applied to the 6 cold-outreach sequences (Sverige/UK/Czech/LT/EE/LV); ~1,633 first-emails held, follow-ups still flowing. Also fixed: settings Save was wiping `allow_customers`. Diagnosed the ~15/hr send-throughput issue = head-of-line clog (oldest-first 100-row cron window, 1 email/account/run; 390 month-old Sverige rows on slow .co accounts). Plus two MillionVerifier-validated non-Swedish app-user check-in sequences (diagnosed vs no-diagnosis, 433 enrolled). See `cc-session-log.md` "Non-Swedish user check-in sequences + finish in-progress only". Prior: In-CRM Calling pipeline LIVE PRs #410–#413.)
 
 ## Cowork Session Startup (READ THIS FIRST)
 
