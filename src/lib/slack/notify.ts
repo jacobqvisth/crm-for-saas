@@ -2,6 +2,7 @@
 // Mirrors the SLACK_ALERT_WEBHOOK_URL pattern used by domain-health, but uses a
 // dedicated SLACK_BUG_REPORTS_WEBHOOK_URL incoming webhook bound to the
 // #bug-reports channel so these don't mix with infra alerts.
+// Webhook configured in Vercel env (codeoc workspace, #bug-reports) 2026-06-26.
 
 export type SlackBugReport = {
   title: string;
