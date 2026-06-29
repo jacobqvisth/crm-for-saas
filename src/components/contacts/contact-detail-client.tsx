@@ -16,7 +16,7 @@ import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
-import { PhoneField } from '@/components/contacts/phone-field';
+import { PhoneField, PhoneDisplay } from '@/components/contacts/phone-field';
 import { countryNameFromIso, languageFromIso, isoFromCountryName } from '@/lib/geo/country';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
@@ -26,6 +26,17 @@ import type { Tables, Json } from '@/lib/database.types';
 type Contact = Tables<'contacts'>;
 type Activity = Tables<'activities'>;
 type Company = Tables<'companies'>;
+
+// Shape returned by POST /api/enrich/find-phone (see src/lib/enrich/find-phone.ts).
+// Declared locally so the client bundle never pulls in the server-only lib.
+type FoundPhone = {
+  number: string;
+  raw: string;
+  label: string | null;
+  source: 'website' | 'web-search';
+  sourceUrl: string | null;
+  confidence: string;
+};
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 const CONTACT_STATUSES = ['active', 'bounced', 'unsubscribed'] as const;
@@ -114,6 +125,8 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [newFieldKey, setNewFieldKey] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
   const [findingWebsite, setFindingWebsite] = useState(false);
+  const [findingPhones, setFindingPhones] = useState(false);
+  const [phoneResults, setPhoneResults] = useState<FoundPhone[] | null>(null);
 
   const fetchActivities = useCallback(async (pageNum: number) => {
     if (!workspaceId) return;
@@ -330,6 +343,51 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     }
   };
 
+  const handleFindPhones = async () => {
+    if (!contact || !workspaceId || findingPhones) return;
+    setFindingPhones(true);
+    const toastId = toast.loading('Searching for phone numbers…');
+    try {
+      const res = await fetch('/api/enrich/find-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, contactId: contact.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Search failed', { id: toastId });
+        return;
+      }
+      if (data.found && data.phones?.length) {
+        toast.success(
+          `Found ${data.phones.length} number${data.phones.length === 1 ? '' : 's'}`,
+          { id: toastId },
+        );
+        setPhoneResults(data.phones as FoundPhone[]);
+      } else {
+        toast.error(data.reasoning || 'No phone numbers found', { id: toastId });
+      }
+    } catch {
+      toast.error('Search failed', { id: toastId });
+    } finally {
+      setFindingPhones(false);
+    }
+  };
+
+  const setPrimaryPhone = (num: string) => {
+    updateField('phone', num);
+    toast.success('Set as primary phone');
+  };
+
+  const addAdditionalPhone = (num: string) => {
+    const current = (contact?.all_phones as string[] | null) || [];
+    if (contact?.phone === num || current.includes(num)) {
+      toast('Already saved');
+      return;
+    }
+    updateArrayField('all_phones', [...current, num]);
+  };
+
   const updateArrayField = async (field: string, newArray: string[]) => {
     if (!contact || !workspaceId) return;
     const { error } = await supabase
@@ -532,12 +590,23 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onSave={() => updateField('email', editValue)}
                 onCancel={() => setEditField(null)}
               />
-              <PhoneField
-                value={contact.phone || null}
-                defaultCountry={contact.country_code}
-                onSave={(e164) => updateField('phone', e164)}
-                onCountryChange={(iso) => syncCountry(iso)}
-              />
+              <div>
+                <PhoneField
+                  value={contact.phone || null}
+                  defaultCountry={contact.country_code}
+                  onSave={(e164) => updateField('phone', e164)}
+                  onCountryChange={(iso) => syncCountry(iso)}
+                />
+                <button
+                  onClick={handleFindPhones}
+                  disabled={findingPhones}
+                  title="Search the company website and the web for phone numbers linked to this contact"
+                  className="mt-1.5 inline-flex items-center gap-1 text-xs px-2 py-1 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-50"
+                >
+                  {findingPhones ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {findingPhones ? 'Searching…' : 'Find numbers'}
+                </button>
+              </div>
               <EditableField
                 label="Title"
                 value={contact.title || ''}
@@ -1253,6 +1322,93 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
           >
             {forgetting ? 'Processing...' : 'Delete & Forget'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Found phone numbers picker */}
+      <Modal
+        open={phoneResults !== null}
+        onClose={() => setPhoneResults(null)}
+        title="Phone numbers found"
+      >
+        {phoneResults && phoneResults.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-500 mb-3">
+              Found {phoneResults.length} number{phoneResults.length === 1 ? '' : 's'} linked to{' '}
+              <strong>{fullName}</strong>
+              {company?.name ? <> / {company.name}</> : null}. Pick which to save.
+            </p>
+            {phoneResults.map((p) => {
+              const saved = contact.phone === p.number || ((contact.all_phones as string[] | null) || []).includes(p.number);
+              return (
+                <div
+                  key={p.number}
+                  className="flex items-center gap-3 p-2.5 border border-slate-200 rounded-lg"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-slate-900">
+                      <PhoneDisplay value={p.number} defaultCountry={contact.country_code} />
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      {p.label && <span className="font-medium text-slate-600">{p.label}</span>}
+                      <span
+                        className={`px-1.5 py-0.5 rounded ${
+                          p.confidence === 'high'
+                            ? 'bg-green-100 text-green-700'
+                            : p.confidence === 'medium'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {p.confidence}
+                      </span>
+                      {p.sourceUrl ? (
+                        <a
+                          href={p.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700"
+                        >
+                          {p.source === 'website' ? 'website' : 'web'}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span>{p.source === 'website' ? 'website' : 'web search'}</span>
+                      )}
+                    </div>
+                  </div>
+                  {saved ? (
+                    <span className="text-xs text-green-600 font-medium flex-shrink-0">Saved</span>
+                  ) : (
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => setPrimaryPhone(p.number)}
+                        className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                      >
+                        Set primary
+                      </button>
+                      <button
+                        onClick={() => addAdditionalPhone(p.number)}
+                        className="text-xs px-2 py-1 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No phone numbers found.</p>
+        )}
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={() => setPhoneResults(null)}
+            className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+          >
+            Done
           </button>
         </div>
       </Modal>
