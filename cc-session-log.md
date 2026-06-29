@@ -14,6 +14,18 @@ updated: 2026-05-26
 
 ---
 
+## 2026-06-29 — Find phone numbers for a contact (PR #429)
+
+**Branch:** `worktree-feature+find-phone` → main (squash `81a2dc9`). Phone-number auto-discovery on the contact profile, modeled on the Find-website feature (#417).
+
+- **`src/lib/enrich/find-phone.ts`** (new): `findPhones()` scrapes the contact's/company's website (homepage + Nordic contact paths `/kontakt`, `/kontakta-oss`, `/contact`, `/om-oss`, …) for `tel:` links + phone-like visible text (text matcher requires leading `+`/`00`/`0` to skip org numbers/years), then runs a `claude-sonnet-4-6` `web_search` by name+company+location returning numbers via a `report_phones` tool. Normalizes all via `normalizePhone`→E.164, drops numbers already on the record, dedupes, ranks website > web-search then by confidence.
+- **`POST /api/enrich/find-phone`** (new): workspace-scoped, `maxDuration=180`, mirrors find-website; loads contact + linked company (name/website/location/existing phones). Also accepts `companyId`. No DB write — client persists.
+- **`contact-detail-client.tsx`**: "Find numbers" button under the Phone field → results picker modal (number, label, confidence badge, source link) with Set-primary / Add-to-additional actions; already-saved numbers show "Saved".
+
+**Checks:** `npx tsc --noEmit` ✅, `npm run lint` ✅, `next build --webpack` ✅ (route `ƒ /api/enrich/find-phone` present). Prod verified: endpoint returns 401 unauth like the find-website baseline. Note: contact/company need a website for the scrape leg to fire; web-search leg works from name+location alone.
+
+---
+
 ## 2026-06-03 — Active Users page: per-column header info hints
 
 **Branch:** `worktree-active-users-col-info` → main (squash merge). Follow-up to #334: every table column header now has a hover info (ⓘ) explaining the source + how it's calculated.
