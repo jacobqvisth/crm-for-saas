@@ -1,10 +1,13 @@
 // 46elks telephony client for the in-CRM calling pipeline.
 //
-// Outbound calls use the "dial-out bridge": 46elks rings the agent's own phone
-// (`to`), and when they answer it connects them to the contact (`voice_start.
-// connect`) showing the workspace's caller ID (`from`). The conversation is
-// recorded; when the bridge ends, 46elks POSTs the recording to our hangup
-// webhook (the `recordcall`/`next` action URLs).
+// Outbound calls use the "dial-out bridge": 46elks rings the agent's leg
+// (`to` = their mobile, or the WebRTC number when calling from the computer),
+// and when it answers connects them to the contact (`voice_start.connect`)
+// showing the workspace's caller ID (`from`). The conversation is recorded;
+// when the bridge ends, 46elks POSTs the recording to our hangup webhook (the
+// `recordcall`/`next` action URLs). The ring leg is the only thing that differs
+// between phone-bridge and computer (WebRTC) calls — everything downstream
+// (recording, transcript, AI summary) is identical.
 //
 // Credentials come from env (ELKS_API_USERNAME / ELKS_API_PASSWORD), the same
 // account result-insurance uses — they are independent deployments sharing one
@@ -22,8 +25,9 @@ function authHeader(): string {
 export interface PlaceBridgeCallParams {
   /** Caller ID shown to the contact (a 46elks number, E.164). */
   from: string;
-  /** The agent's own phone — 46elks rings this first (E.164). */
-  agentPhone: string;
+  /** The agent's leg 46elks rings first — their mobile (phone bridge) or the
+   *  46elks WebRTC number (computer calling). E.164. */
+  ring: string;
   /** The contact's number we bridge to once the agent answers (E.164). */
   contactPhone: string;
   /** Absolute URL 46elks POSTs the recording + hangup info to. */
@@ -54,7 +58,7 @@ export async function placeBridgeCall(params: PlaceBridgeCallParams): Promise<Pl
     },
     body: new URLSearchParams({
       from: params.from,
-      to: params.agentPhone,
+      to: params.ring,
       voice_start: voiceStart,
       // Backup hangup callback (carries duration/cost even if recordcall fails).
       whenhangup: params.hangupWebhookUrl,

@@ -94,8 +94,10 @@ export default function CallSettingsPage() {
       </div>
       <p className="text-sm text-slate-500 mb-8">
         Place calls directly from the CRM. When you click <strong>Call</strong> on a contact, we ring
-        your phone first, then connect you to them — the conversation is recorded, transcribed, and
-        summarized by AI, and logged to the contact&apos;s timeline with a suggested follow-up.
+        your phone first, then connect you to them — or use the <strong>Call</strong> dropdown to
+        &ldquo;Talk from computer&rdquo; and take the call in your browser with a headset. Either way the
+        conversation is recorded, transcribed, and summarized by AI, and logged to the contact&apos;s
+        timeline with a suggested follow-up.
       </p>
       <p className="text-xs text-slate-400 mb-8 -mt-6">
         These settings are personal to your account — each team member sets their own phone and

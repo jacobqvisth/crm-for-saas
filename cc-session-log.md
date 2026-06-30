@@ -27,6 +27,50 @@ The backend already existed — `contact_lists.purpose` (`'email'` default / `'c
 
 ---
 
+## WebRTC outbound calling — "Talk from computer" (PR A) — 2026-06-30 — feature/webrtc-outbound-calling
+
+Jacob asked whether the click-to-call has to ring his iPhone first or whether he can talk through the computer. It can — 46elks ships WebRTC (JsSIP), and his account already has a WebRTC number `+4600120210` (confirmed enabled in the 46elks dashboard). This PR adds computer-calling as a **per-call option on the Call button**, without disturbing the existing phone bridge.
+
+**Design (no client-initiated SIP, no support ticket):** the browser registers as the WebRTC number; the dial API places a normal 46elks call with `to=<webrtc-number>` (instead of the agent's mobile) and `voice_start.connect=<contact>`; 46elks rings the registered browser leg, which auto-answers, and bridges to the contact. Recording/Deepgram/Claude pipeline is byte-for-byte identical — only the ring leg changed. Caller ID shown to the contact is unchanged (the 46elks caller-ID number); the agent's personal number is never involved.
+
+- **`src/lib/calls/webrtc-client.ts`** (new): browser-only singleton wrapping JsSIP (lazy `import("jssip")` so it never hits the server bundle). Registers once per tab, arms to auto-answer the inbound leg, attaches remote audio to a hidden `<audio>`, exposes mute/hangup + a state machine (idle→connecting→registered→ringing→in_call→ended/error).
+- **`src/app/api/calls/webrtc-credentials/route.ts`** (new): auth-gated GET returning `{wsUri, uri, password}` from env (`ELKS_WEBRTC_USERNAME`/`ELKS_WEBRTC_PASSWORD`, ws/host overridable). Returns `{available:false}` when unconfigured so the UI hides the option. A SIP client authenticates from the browser, so this credential necessarily reaches the client — gated to authed members with calling enabled.
+- **`src/lib/calls/elks.ts`**: `placeBridgeCall` param `agentPhone`→`ring` (the leg to ring — mobile or WebRTC number). Only caller is the dial route.
+- **`src/app/api/calls/dial/route.ts`**: accepts `mode: 'bridge'|'webrtc'`. `webrtc` rings `ELKS_WEBRTC_NUMBER` (400 `webrtc_unavailable` if unset) and skips the mobile requirement; `bridge` unchanged. `call_sessions.agent_number` stores whichever leg was rung.
+- **`src/components/calls/call-now.tsx`**: Call button now always shows an options caret → "Ring my phone" / "Talk from computer" (+ number picker when a pool exists). Computer mode registers JsSIP + arms before POSTing dial; the drawer shows in-browser controls (Mute / Hang up) + live state. Falls back with a clear toast when WebRTC isn't configured.
+- **`settings/calls/page.tsx`**: copy mentions the computer-calling option.
+- **`package.json`**: + `jssip@^3.13.8` (ships its own types).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · 45/45 calls unit tests pass · `next build` compiles+bundles clean (local prerender fails only on missing Supabase env, the usual preview limitation — CI Build&Lint is the gate).
+
+**NOT merged / NOT yet live-tested** — the WebRTC audio leg can only be verified in a real browser with a mic. Inert until env vars are set (without them the option hides and `mode=webrtc` 400s; the phone bridge is unchanged). **Deploy steps for Jacob:**
+1. Set Vercel env (Production): `ELKS_WEBRTC_NUMBER=+4600120210`, `ELKS_WEBRTC_USERNAME=4600120210`, `ELKS_WEBRTC_PASSWORD=<from 46elks Edit page>`.
+2. Merge → Vercel deploys.
+3. On a contact, Call ▾ → "Talk from computer", allow mic, confirm two-way audio + recording/transcript logs as usual.
+4. (Optional) rotate the WebRTC SIP password in 46elks afterward, since it appeared in chat.
+
+**Next:** PR B — inbound "ring my computer too" on callback (small change to `buildInboundActions`: primary `connect` becomes `"<webrtc-number>,<cell>"` — rings both, answer whichever, degrades to phone when the tab's offline).
+
+---
+
+## WebRTC inbound — "ring my computer too" on callback (PR B) — 2026-06-30 — same branch feature/webrtc-outbound-calling
+
+Stacked on PR A (same branch/PR #445 → retitled to cover outbound + inbound). When a customer calls back, ring the agent's **browser in parallel with their mobile** — answer on whichever; if the laptop's closed it silently degrades to phone (the existing PR #441 cell→failover→voicemail tree is untouched).
+
+**No DDL (deliberate).** A per-user opt-in column would need prod DDL (classifier-blocked, and `.env.local` is off-limits for psql). Instead: the single shared WebRTC number maps to ONE owner via env `ELKS_WEBRTC_OWNER_USER_ID` (only that agent's callbacks ring the browser; unset = any owner — fine for single-user). Per-device on/off is `localStorage` (`wl_webrtc_presence_enabled`, default on). Multi-agent later = one WebRTC number per agent + a real column.
+
+- **`src/lib/calls/inbound-actions.ts`**: `buildInboundActions` gains optional `computerNumber` → primary `connect` becomes `"<webrtc-number>,<cell>"` (46elks comma list = simultaneous ring, first-answer-wins). +2 unit tests (47/47 pass).
+- **`src/app/api/calls/webhook/inbound/route.ts`**: passes `computerNumber = ELKS_WEBRTC_NUMBER` when the call's owner === `ELKS_WEBRTC_OWNER_USER_ID` (or unset). 46elks numbers need NO reconfig — the inbound webhook already drives them.
+- **`src/lib/calls/webrtc-client.ts`**: evolved to support a persistent presence — multi-listener `subscribe()` (replaces single `setHandlers`; PR A's call-now.tsx updated), `setIncomingHandler` + `acceptIncoming`/`declineIncoming`, new `incoming` state, best-effort caller-number extraction from the SIP From header. Armed (outbound) auto-answer still takes priority over inbound surfacing.
+- **`src/components/calls/webrtc-presence.tsx`** (new): mounted once in `(dashboard)/layout.tsx`. If this user is the WebRTC owner (creds endpoint returns available) and the device toggle is on, it holds a live SIP registration and shows an Accept/Decline card on incoming + a Mute/Hang-up in-call bar + a small bottom-left presence toggle.
+- **`/api/calls/webrtc-credentials`**: now also gates on `ELKS_WEBRTC_OWNER_USER_ID` (so only the owner can register the shared number, in or out).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · 47/47 calls tests · `next build` "Compiled successfully" (prerender-only env failure as usual).
+
+**Extra deploy step for PR B:** set Vercel prod `ELKS_WEBRTC_OWNER_USER_ID=<Jacob's auth user id>` (so only his callbacks ring his browser). Then a callback to his dedicated number rings both his iPhone and the CRM tab; answer either. Still NOT live-tested (needs real callback + browser+mic).
+
+---
+
 ## Mailbox sync — backfill + ongoing email logging — 2026-06-30 — PR (feature/mailbox-sync)
 
 Jacob: "what about all the emails Hans sent from his Google email that aren't logged in our CRM? HubSpot has a plugin for this — can we do it better?" We can: we already hold the Gmail OAuth (`gmail.readonly`+`modify`), so this is a server-side sync — no browser plugin, no BCC, and we can backfill full history (HubSpot's plugin only logs going forward).
