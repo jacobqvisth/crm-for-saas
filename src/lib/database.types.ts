@@ -847,6 +847,11 @@ export type Database = {
           nix_blocked: boolean
           notes: string | null
           org_number: string | null
+          owner_auto: boolean
+          owner_updated_at: string | null
+          primary_owner_id: string | null
+          primary_owner_source: string | null
+          secondary_owner_id: string | null
           parent_company_id: string | null
           payment_status: string | null
           phone: string | null
@@ -924,6 +929,11 @@ export type Database = {
           nix_blocked?: boolean
           notes?: string | null
           org_number?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
@@ -1001,6 +1011,11 @@ export type Database = {
           nix_blocked?: boolean
           notes?: string | null
           org_number?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
@@ -1222,7 +1237,12 @@ export type Database = {
           linkedin_url: string | null
           login_count: number | null
           notes: string | null
+          owner_auto: boolean
+          owner_updated_at: string | null
           phone: string | null
+          primary_owner_id: string | null
+          primary_owner_source: string | null
+          secondary_owner_id: string | null
           postal_code: string | null
           seniority: string | null
           signed_up_at: string | null
@@ -1279,7 +1299,12 @@ export type Database = {
           linkedin_url?: string | null
           login_count?: number | null
           notes?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
           phone?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           postal_code?: string | null
           seniority?: string | null
           signed_up_at?: string | null
@@ -1336,7 +1361,12 @@ export type Database = {
           linkedin_url?: string | null
           login_count?: number | null
           notes?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
           phone?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           postal_code?: string | null
           seniority?: string | null
           signed_up_at?: string | null
@@ -4073,6 +4103,18 @@ export type Database = {
       }
     }
     Functions: {
+      recompute_contact_owner: {
+        Args: {
+          p_contact_id: string
+        }
+        Returns: undefined
+      }
+      recompute_company_owner: {
+        Args: {
+          p_company_id: string
+        }
+        Returns: undefined
+      }
       find_fuzzy_company_matches: {
         Args: {
           p_country_code: string
