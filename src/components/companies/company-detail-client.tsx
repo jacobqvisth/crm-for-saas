@@ -17,6 +17,7 @@ import { EditDrawer } from './detail/edit-drawer';
 import { CompanyTabs } from './detail/tabs';
 import { AddContactModal } from './detail/add-contact-modal';
 import { LogActivityModal } from './detail/log-activity-modal';
+import { PhoneNumbersPanel } from '@/components/contacts/phone-numbers-panel';
 import { deriveOutreachStatus } from './detail/status';
 import type {
   Company, Contact, Activity, Subscription, UsageEvent, DiscoveredShop,
@@ -313,7 +314,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       {discoveredShop && <DiscoveryStrip shop={discoveredShop} />}
 
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="w-full lg:w-[280px] flex-shrink-0">
+        <div className="w-full lg:w-[280px] flex-shrink-0 space-y-4">
           <AboutPanel
             company={company}
             parentCompany={parentCompany}
@@ -326,6 +327,22 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             onFindWebsite={handleFindWebsite}
             findingWebsite={findingWebsite}
           />
+
+          {/* Shared phone-number pool — every number on the company and its
+              contacts, labelled (Stockholm, Malmö, …) with one primary. */}
+          {workspaceId && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <PhoneNumbersPanel
+                workspaceId={workspaceId}
+                scope="company"
+                companyId={company.id}
+                defaultCountry={company.country_code}
+                onChange={({ primary }) =>
+                  setCompany((prev) => (prev ? { ...prev, phone: primary } as Company : prev))
+                }
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">

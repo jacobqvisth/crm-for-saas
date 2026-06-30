@@ -727,6 +727,70 @@ export type Database = {
           },
         ]
       }
+      phone_numbers: {
+        Row: {
+          company_id: string | null
+          contact_id: string | null
+          country_code: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          label: string | null
+          number: string
+          source: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          label?: string | null
+          number: string
+          source?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          label?: string | null
+          number?: string
+          source?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_numbers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           account_owner_id: string | null

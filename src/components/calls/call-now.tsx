@@ -13,9 +13,15 @@ import {
   ListTodo,
   RefreshCw,
   Hash,
+  ChevronDown,
+  Star,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
+import { PhoneDisplay } from "@/components/contacts/phone-field";
+
+/** A dialable number for the Call button's picker. */
+export type CallNumber = { number: string; label: string | null; isPrimary: boolean };
 
 type SuggestedEmail = {
   recommended: boolean;
@@ -86,10 +92,14 @@ function textToHtml(text: string): string {
 
 export function CallNowButton({
   target,
+  numbers,
   onLogged,
   className,
 }: {
   target: CallNowTarget;
+  /** All dialable numbers for this contact's company pool. When more than one,
+   *  the button shows a picker so you choose which to call. */
+  numbers?: CallNumber[];
   onLogged?: () => void;
   className?: string;
 }) {
@@ -97,7 +107,11 @@ export function CallNowButton({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pool = numbers ?? [];
+  const hasPicker = pool.length > 1;
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -133,9 +147,13 @@ export function CallNowButton({
   }, [sessionId, open, poll, stopPolling]);
 
   const dial = useCallback(
-    async (override = false) => {
+    async (override = false, to?: string | null) => {
+      setPickerOpen(false);
       setPlacing(true);
       try {
+        // Dial the explicitly chosen number, else the button's default
+        // (the pool primary). Always send `to` so we ring exactly what the UI shows.
+        const toNumber = to ?? target.phone ?? null;
         const res = await fetch("/api/calls/dial", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -143,6 +161,7 @@ export function CallNowButton({
             contactId: target.contactId,
             listId: target.listId ?? null,
             override,
+            to: toNumber,
           }),
         });
         const json = await res.json();
@@ -150,7 +169,7 @@ export function CallNowButton({
           if (json.error === "blocked") {
             if (window.confirm(`${json.message}\n\nPlace the call anyway?`)) {
               setPlacing(false);
-              return dial(true);
+              return dial(true, to);
             }
             return;
           }
@@ -180,18 +199,64 @@ export function CallNowButton({
 
   return (
     <>
-      <button
-        onClick={() => dial(false)}
-        disabled={placing || !target.phone}
-        title={target.phone ? `Call ${target.phone}` : "No phone number"}
-        className={
-          className ??
-          "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50"
-        }
-      >
-        {placing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
-        Call
-      </button>
+      <div className="relative inline-flex">
+        <button
+          onClick={() => dial(false)}
+          disabled={placing || !target.phone}
+          title={target.phone ? `Call ${target.phone}` : "No phone number"}
+          className={
+            className ??
+            `inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 ${
+              hasPicker ? "rounded-l-lg" : "rounded-lg"
+            }`
+          }
+        >
+          {placing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
+          Call
+        </button>
+
+        {hasPicker && (
+          <button
+            onClick={() => setPickerOpen((v) => !v)}
+            disabled={placing}
+            title="Choose which number to call"
+            aria-label="Choose which number to call"
+            className="inline-flex items-center px-1.5 py-1.5 text-white bg-teal-600 hover:bg-teal-700 rounded-r-lg border-l border-teal-500 disabled:opacity-50"
+          >
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        )}
+
+        {pickerOpen && hasPicker && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+            <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Call which number
+              </div>
+              {pool.map((n) => (
+                <button
+                  key={n.number}
+                  onClick={() => dial(false, n.number)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  {n.isPrimary ? (
+                    <Star className="w-3.5 h-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                  ) : (
+                    <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-slate-900">
+                      <PhoneDisplay value={n.number} />
+                    </span>
+                    {n.label && <span className="block truncate text-xs text-slate-500">{n.label}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {open && (
         <CallDrawer

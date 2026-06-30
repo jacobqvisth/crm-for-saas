@@ -13,6 +13,9 @@ const DialBody = z.object({
   listId: z.string().uuid().nullish(),
   /** Override the company-level do-not-contact / NIX block for a deliberate call. */
   override: z.boolean().optional(),
+  /** Explicit number to dial (chosen from the shared pool). Falls back to the
+   *  contact's stored primary phone when absent. */
+  to: z.string().nullish(),
 });
 
 function appBaseUrl(): string {
@@ -37,7 +40,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { contactId, listId, override } = parsed.data;
+  const { contactId, listId, override, to } = parsed.data;
 
   // Load the contact (RLS scopes to the user's workspace).
   const { data: contact } = await supabase
@@ -58,10 +61,11 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Contact must have a dialable number. Use the contact's country as the hint
-  // so national numbers expand to the right country code (a bare "358…" is
-  // already international and normalizes correctly regardless).
-  const contactPhone = normalizePhone(contact.phone, contact.country_code);
+  // Resolve the number to dial: the explicit pick (from the pool picker) when
+  // provided, else the contact's stored primary phone. Use the contact's
+  // country as the hint so national numbers expand to the right country code
+  // (a bare "358…" is already international and normalizes correctly regardless).
+  const contactPhone = normalizePhone(to || contact.phone, contact.country_code);
   if (!contactPhone) {
     return NextResponse.json(
       { error: "This contact has no valid phone number" },
