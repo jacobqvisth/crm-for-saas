@@ -4685,3 +4685,24 @@ Added a verification gate in `process-emails`, as the last check before `sendEma
 `valid` 5294 · `catch_all` 36 · `risky` 27 · `invalid` 6 · never-verified **0** — so the gate won't silently cancel live campaigns; it stops the 6 known-invalid sends going forward.
 
 **Checks:** `tsc --noEmit` clean on the changed file (only pre-existing `phone-field.tsx` missing-dep errors from the fresh worktree's stale node_modules), `eslint` clean. Merged squash (`3d74d9b`), Build & Lint ✅, production deploy Ready.
+
+---
+
+## Call Planner — "who to call today" dashboard — 2026-06-30
+
+Jacob asked for an analysis dashboard under /calls that surfaces *who to call today* — ranked by relevance — plus many ready-made segments (free-too-long, dropped-from-trial, bounced payment, …) each with a one-click "create call list → go to worklist" button. Same contact can land on several lists; dedup happens at call time.
+
+### What shipped (no schema changes — all data already on `contacts` + `dashboard_subscriptions`)
+- **`/calls/planner`** (`src/app/(dashboard)/calls/planner/page.tsx`) — client page with two sections:
+  - **Today's top contacts:** ranked queue (top 30), each row = priority badge + reason chips (the "why now") + plan badge + click-to-call/`Find number`. A `Top N` input + **"Start calling these"** turns the phone-having top N into a static snapshot list and routes to its worklist.
+  - **Playbooks grid:** 12 segment cards with live total + with-phone counts and a **"Create call list"** button.
+- **Scoring engine** (`src/lib/calls/scoring.ts`, pure + 11 vitest cases) — `scoreContact()` weights lifecycle urgency (payment bounced 55, paid trial 45, recently-canceled 40, trial-just-ended 38, never-activated/new-signup), engagement (diagnoses 30d, engaged-free upsell, power user, logins), churn-risk-save (was-engaged + quiet), low-credits upsell, paid-retention; emits explainable reasons. `isFreshToCall()` hides anyone contacted in the last 7d so the list rolls forward daily.
+- **Playbooks** (`src/lib/calls/playbooks.ts`) — 12 defs; 11 are pure-`contacts` dynamic filters (roll forward as dynamic lists), `payment_bounced` is special (joins `dashboard_subscriptions.status in past_due/unpaid/incomplete*` → static snapshot list).
+- **API:** `GET /api/calls/planner` (ranked contacts + per-playbook counts), `POST /api/calls/planner/create-list` (playbook→dynamic list, payment_bounced/today→static snapshot via contact_list_members). Reuses `contact_lists` (purpose='calling') so the existing worklist + call-logger just work.
+- Entry point: "Plan today's calls" button on the /calls overview header.
+
+### Prod data validated (psql)
+- `dashboard_subscriptions`: 6 `past_due` → 6 distinct matched contacts; RLS = `authenticated can read` so the user-scoped client reads it fine.
+- App-user contacts: **1,019 with `wl_user_id`, only 68 with a phone** → the planner shows a phone-coverage banner and a `Find number` CTA for phone-less top contacts; "Start calling" only enlists phone-having ones. (CTO phone export remains the real unlock; PR #434 shared phone pool mirrors into `contacts.phone`.)
+
+**Checks:** vitest 31/31 (calls), `tsc --noEmit`, `eslint`, `npm run build` all clean. Routes `/calls/planner`, `/api/calls/planner`, `/api/calls/planner/create-list` registered.

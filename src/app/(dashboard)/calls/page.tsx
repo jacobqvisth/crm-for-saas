@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Phone, Plus, ListChecks, MessageSquare } from "lucide-react";
+import { Phone, Plus, ListChecks, MessageSquare, Target } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -90,6 +90,12 @@ export default function CallsOverviewPage() {
           <h1 className="text-xl font-semibold text-slate-900">Calls</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/calls/planner"
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+          >
+            <Target className="h-4 w-4" /> Plan today&apos;s calls
+          </Link>
           <Link
             href="/calls/feedback"
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
