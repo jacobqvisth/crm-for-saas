@@ -15,6 +15,7 @@ import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
+import { ActivityDetailModal } from '@/components/contacts/activity-detail-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
 import { PhoneNumbersPanel, type PhonePoolState, type PhoneNumber } from '@/components/contacts/phone-numbers-panel';
 import { RepOwnerControl } from '@/components/reps/rep-owner-control';
@@ -92,6 +93,23 @@ function getActivityTitle(activity: Activity): string {
   }
 }
 
+const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  email_sent: 'Email sent',
+  email_received: 'Reply received',
+  email_opened: 'Email opened',
+  email_clicked: 'Link clicked',
+  note: 'Note',
+  call: 'Call',
+  meeting: 'Meeting',
+  contact_created: 'Contact created',
+  deal_stage_change: 'Deal stage change',
+  task: 'Task',
+};
+
+function getActivityTypeLabel(type: string): string {
+  return ACTIVITY_TYPE_LABELS[type] ?? type.replace(/_/g, ' ');
+}
+
 export function ContactDetailClient({ contactId }: { contactId: string }) {
   const router = useRouter();
   const { workspaceId } = useWorkspace();
@@ -116,6 +134,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
   const [openCallSession, setOpenCallSession] = useState<string | null>(null);
+  const [openActivity, setOpenActivity] = useState<Activity | null>(null);
   const [noteText, setNoteText] = useState('');
   const [callSubject, setCallSubject] = useState('');
   const [callNotes, setCallNotes] = useState('');
@@ -1140,8 +1159,12 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   return (
                     <div
                       key={activity.id}
-                      onClick={callSessionId ? () => setOpenCallSession(callSessionId) : undefined}
-                      className={`flex gap-3 py-3 border-b border-slate-100 last:border-0 ${callSessionId ? 'cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded-lg' : ''}`}
+                      onClick={
+                        callSessionId
+                          ? () => setOpenCallSession(callSessionId)
+                          : () => setOpenActivity(activity)
+                      }
+                      className="group flex gap-3 py-3 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded-lg"
                     >
                       <div className="mt-0.5 flex-shrink-0">
                         {activityIcons[activity.type] || <FileText className="w-4 h-4 text-slate-400" />}
@@ -1149,9 +1172,13 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-900">
                           {getActivityTitle(activity)}
-                          {callSessionId && (
+                          {callSessionId ? (
                             <span className="ml-2 text-xs font-normal text-indigo-600">
                               View call →
+                            </span>
+                          ) : (
+                            <span className="ml-2 text-xs font-normal text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                              View details →
                             </span>
                           )}
                         </p>
@@ -1299,6 +1326,19 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           onClose={() => { setOpenCallSession(null); setActivitiesPage(0); fetchActivities(0); }}
         />
       )}
+
+      {/* Activity detail modal (full subject/body/metadata for any non-call activity) */}
+      <ActivityDetailModal
+        activity={openActivity}
+        title={openActivity ? getActivityTitle(openActivity) : ''}
+        icon={
+          openActivity
+            ? activityIcons[openActivity.type] || <FileText className="w-4 h-4 text-slate-400" />
+            : null
+        }
+        typeLabel={openActivity ? getActivityTypeLabel(openActivity.type) : ''}
+        onClose={() => setOpenActivity(null)}
+      />
 
       {/* Delete Modal */}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Contact">
