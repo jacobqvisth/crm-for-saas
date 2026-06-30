@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Mail, MapPin, Phone, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
+import { Mail, MapPin, Phone, PhoneCall, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -35,6 +35,12 @@ const settingsItems = [
     description: 'Place recorded, AI-summarized calls from the CRM — set your phone & caller ID',
     href: '/settings/calls',
     icon: Phone,
+  },
+  {
+    title: 'Phone System',
+    description: 'How calling works, the 46elks numbers on the account, and who calls from what',
+    href: '/settings/phone-system',
+    icon: PhoneCall,
   },
   {
     title: 'AI Product Knowledge',

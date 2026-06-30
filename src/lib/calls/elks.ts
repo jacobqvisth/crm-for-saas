@@ -91,3 +91,30 @@ export async function fetchRecordingAudio(
   const buffer = await resp.arrayBuffer();
   return { buffer, contentType };
 }
+
+export interface ElksNumber {
+  number: string;
+  active: string; // "yes" | "no"
+  allocated?: string;
+  capabilities?: string[];
+  /** Inbound action: a URL (forwards to that webhook) or a JSON action string. */
+  voice_start?: string;
+  sms_url?: string;
+}
+
+/**
+ * List all phone numbers allocated to the 46elks account, with their inbound
+ * (voice_start) configuration. Used by the Phone System overview page to show
+ * which numbers exist, what they can do, and where inbound calls currently go.
+ */
+export async function listElksNumbers(): Promise<ElksNumber[]> {
+  const resp = await fetch(`${ELKS_BASE}/numbers?limit=100`, {
+    headers: { Authorization: authHeader() },
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "(unreadable)");
+    throw new Error(`46elks numbers fetch failed (HTTP ${resp.status}): ${text}`);
+  }
+  const json = (await resp.json()) as { data?: ElksNumber[] };
+  return json.data ?? [];
+}
