@@ -4646,3 +4646,15 @@ Per Jacob: finish every contact already mid-sequence (got 1 of 2/3 emails) befor
 - 6 cold-outreach sequences (Sverige, UK, Czech, Lithuania, Estonia, Latvia) set `pause_new_contacts=true`; their ~1,633 not-started first-emails demoted `scheduled`→`pending`. The two check-in sequences left sending to new contacts. ~3,327 in-progress follow-ups across all sequences keep flowing.
 
 **Checks:** `tsc --noEmit` clean on changed files (only pre-existing `phone-field.tsx` missing-dep errors, local node_modules stale — CI green), `eslint` clean. Merged squash (`da72594`), Build & Lint ✅, production deploy status success.
+
+---
+
+## Auto-fill contact name from email — 2026-06-30 — PR #431
+
+Background-session task from a screenshot: a contact like `timo.larsson@icloud.com` had blank First/Last Name. Added a one-click suggestion to fill the name from the email.
+
+- **`src/lib/contacts/parse-name-from-email.ts`** — conservative parser. Only fires on the unambiguous two-token `first.last` shape (`.`/`_`/`-` separators); rejects role inboxes (`info@`, `sales@`, `kundservice@`, …), single-letter initials (`j.larsson`), digit-bearing tokens, and 1- or 3+-token locals. Unicode-aware so `jörgen.åkesson` → `Jörgen Åkesson`. 10 vitest cases.
+- **`contact-detail-client.tsx`** — when both name fields are empty and the email parses, a `Sparkles` chip ("Use **Timo Larsson** from email") renders above First Name; click writes `first_name`+`last_name` in one update. Non-destructive — never shown when a name already exists.
+- **Decision:** one-click suggestion rather than silent auto-write on load, to avoid polluting data on ambiguous cases. Easy to flip to auto-fill if wanted.
+
+**Checks:** vitest 10/10, `tsc --noEmit`, `eslint`, `npm run build` all clean. Merged squash (`0719bfb`), deploy live (root 307→login as expected).
