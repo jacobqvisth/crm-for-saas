@@ -14,7 +14,13 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { is_read, category } = body as { is_read?: boolean; category?: string };
+  const { is_read, category, reply_draft } = body as {
+    is_read?: boolean;
+    category?: string;
+    // Human reply-in-progress. Autosaved as the user types; "" clears it (the
+    // message drops out of "Started replying" back into "Needs reply").
+    reply_draft?: string;
+  };
 
   // Verify the message exists and belongs to this user's workspace
   const { data: existing } = await supabase
@@ -30,6 +36,11 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   if (is_read !== undefined) updates.is_read = is_read;
   if (category !== undefined) updates.category = category;
+  if (reply_draft !== undefined) {
+    const trimmed = reply_draft.trim();
+    updates.reply_draft = trimmed ? reply_draft : null;
+    updates.reply_draft_updated_at = trimmed ? new Date().toISOString() : null;
+  }
 
   const { data, error } = await supabase
     .from("inbox_messages")
