@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ChevronLeft, Loader2, Phone } from "lucide-react";
 import toast from "react-hot-toast";
 
+type Member = { id: string; name: string };
+
 export default function CallSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -12,6 +14,10 @@ export default function CallSettingsPage() {
   const [callerId, setCallerId] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [defaultCallerId, setDefaultCallerId] = useState<string | null>(null);
+  const [failoverUserId, setFailoverUserId] = useState<string | null>(null);
+  const [ringSeconds, setRingSeconds] = useState(25);
+  const [voicemailEnabled, setVoicemailEnabled] = useState(true);
+  const [members, setMembers] = useState<Member[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +29,10 @@ export default function CallSettingsPage() {
       setCallerId(res.caller_id ?? "");
       setEnabled(res.calling_enabled !== false);
       setDefaultCallerId(res.default_caller_id ?? null);
+      setFailoverUserId(res.failover_user_id ?? null);
+      setRingSeconds(res.ring_seconds ?? 25);
+      setVoicemailEnabled(res.voicemail_enabled !== false);
+      setMembers(res.members ?? []);
       setLoading(false);
     })();
     return () => {
@@ -40,12 +50,16 @@ export default function CallSettingsPage() {
           agent_phone: agentPhone,
           caller_id: callerId,
           calling_enabled: enabled,
+          failover_user_id: failoverUserId,
+          ring_seconds: ringSeconds,
+          voicemail_enabled: voicemailEnabled,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
       setAgentPhone(json.agent_phone ?? "");
       setCallerId(json.caller_id ?? "");
+      setFailoverUserId(json.failover_user_id ?? null);
       toast.success("Call settings saved");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save settings");
@@ -139,6 +153,78 @@ export default function CallSettingsPage() {
             placeholder={defaultCallerId ?? "+46 76 686 03 35"}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
+        </div>
+      </div>
+
+      {/* Inbound: no-answer failover + voicemail */}
+      <h2 className="text-base font-semibold text-slate-900 mb-1">When someone calls you back</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        How an incoming call to your number is handled if you don&apos;t pick up. These calls are
+        recorded, transcribed, and logged to the contact just like the ones you place.
+      </p>
+
+      <div className="space-y-5 mb-8">
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <label className="block text-sm font-medium text-slate-900 mb-1">
+            Ring my phone for
+          </label>
+          <p className="text-xs text-slate-500 mb-2">
+            How long your phone rings before we move on (about 5 seconds per ring).
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={5}
+              max={60}
+              value={ringSeconds}
+              onChange={(e) => setRingSeconds(Math.max(5, Math.min(60, Number(e.target.value) || 25)))}
+              className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <span className="text-sm text-slate-500">seconds (≈ {Math.round(ringSeconds / 5)} rings)</span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <label className="block text-sm font-medium text-slate-900 mb-1">
+            If I don&apos;t answer, ring
+          </label>
+          <p className="text-xs text-slate-500 mb-2">
+            Forward the call to a teammate&apos;s phone before giving up.
+          </p>
+          <select
+            value={failoverUserId ?? ""}
+            onChange={(e) => setFailoverUserId(e.target.value || null)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+          >
+            <option value="">No one — go straight to voicemail</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Take a voicemail if nobody answers</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Plays a beep, records the caller&apos;s message, and logs it (transcribed) to the contact.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setVoicemailEnabled((v) => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+              voicemailEnabled ? "bg-teal-600" : "bg-slate-200"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                voicemailEnabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
         </div>
       </div>
 
