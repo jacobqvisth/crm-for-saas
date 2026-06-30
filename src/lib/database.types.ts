@@ -2751,6 +2751,57 @@ export type Database = {
           },
         ]
       }
+      gmail_sync_state: {
+        Row: {
+          backfill_cursor: string | null
+          backfill_done_at: string | null
+          created_at: string
+          gmail_account_id: string
+          last_run_at: string | null
+          last_synced_at: string | null
+          messages_synced: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          backfill_cursor?: string | null
+          backfill_done_at?: string | null
+          created_at?: string
+          gmail_account_id: string
+          last_run_at?: string | null
+          last_synced_at?: string | null
+          messages_synced?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          backfill_cursor?: string | null
+          backfill_done_at?: string | null
+          created_at?: string
+          gmail_account_id?: string
+          last_run_at?: string | null
+          last_synced_at?: string | null
+          messages_synced?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_sync_state_gmail_account_id_fkey"
+            columns: ["gmail_account_id"]
+            isOneToOne: true
+            referencedRelation: "gmail_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_sync_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_messages: {
         Row: {
           body_html: string | null

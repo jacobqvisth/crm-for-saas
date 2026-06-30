@@ -10,6 +10,23 @@ updated: 2026-05-26
 
 > Running log of all Claude Code sessions. Most recent first.
 > CC should append a new entry here at the end of every session.
+
+---
+
+## Mailbox sync — backfill + ongoing email logging — 2026-06-30 — PR (feature/mailbox-sync)
+
+Jacob: "what about all the emails Hans sent from his Google email that aren't logged in our CRM? HubSpot has a plugin for this — can we do it better?" We can: we already hold the Gmail OAuth (`gmail.readonly`+`modify`), so this is a server-side sync — no browser plugin, no BCC, and we can backfill full history (HubSpot's plugin only logs going forward).
+
+`check-replies` only ingests replies to *sequence* emails. This adds a general mailbox-sync cron that logs ALL correspondence between connected mailboxes and CRM contacts.
+
+- **`supabase/migrations/20260630120000_mailbox_sync.sql`** — `gmail_sync_state` (per-account cursor: backfill pageToken, `backfill_done_at`, `last_synced_at`) + partial UNIQUE index `activities((metadata->>'gmail_message_id')) WHERE synced_from='mailbox_sync'` (outbound idempotency) + partial index on `email_queue(gmail_message_id)` (sequence-send dedup).
+- **`src/lib/contacts/match.ts`** — shared `findContactByEmail` (exact → `all_emails` → domain→company), `autoCreateContactFromMail` (race-safe), generic-domain + role/no-reply detection.
+- **`src/lib/gmail/messages.ts`** — shared header/body parse helpers + `isAutoReply` (extracted reusable versions; check-replies keeps its private copies).
+- **`src/app/api/cron/mailbox-sync/route.ts`** — per account: backfill walks `threads.list` newest→oldest one page/run (resumable via cursor), then incremental via `after:<epoch>`. Per thread: pass-1 computes genuine **two-way** counterparties; pass-2 logs inbound (→ `inbox_messages` + `email_received` activity) and outbound (→ `email_sent` activity, skipping sequence sends). **Auto-create gate (per Jacob): known contacts always logged; unknown externals auto-created only when two-way AND not role/no-reply.** Idempotency: inbound gated on fresh `inbox_messages` insert (dedups vs check-replies); outbound/activity gated on the partial unique index (swallows 23505).
+- **`vercel.json`** — cron at `15,45 * * * *` (interleaved with check-replies).
+- **Decisions:** no `direction` column / no Inbox-UI change (kept blast radius minimal — outbound lives only as an activity); `last_contacted_at` never moved backwards by old backfill mail; one `email_sent` per outbound attributed to first matched recipient (multi-contact recipients in metadata).
+
+**Checks:** `tsc --noEmit` clean, `eslint` clean on new files, `npm run build` exit 0 (route in manifest). **Deploy TODO:** apply the migration to prod (`psql -f supabase/migrations/20260630120000_mailbox_sync.sql`) at merge — the cron is harmless until then (no `gmail_sync_state` table = it no-ops). The cron auto-deploys from `vercel.json` and uses the existing `CRON_SECRET`.
 > Cowork reads this at session start instead of relying on Jacob pasting summaries.
 
 ---
