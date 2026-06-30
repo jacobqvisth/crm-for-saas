@@ -17,6 +17,7 @@ import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
 import { PhoneNumbersPanel, type PhonePoolState, type PhoneNumber } from '@/components/contacts/phone-numbers-panel';
+import { RepOwnerControl } from '@/components/reps/rep-owner-control';
 import { countryNameFromIso, languageFromIso, isoFromCountryName } from '@/lib/geo/country';
 import { parseNameFromEmail, type ParsedName } from '@/lib/contacts/parse-name-from-email';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
@@ -527,6 +528,27 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                     }}
                   />
                 )}
+              </div>
+              <div className="mt-3 flex justify-center">
+                <RepOwnerControl
+                  entityType="contact"
+                  entityId={contact.id}
+                  value={{
+                    primaryOwnerId: contact.primary_owner_id,
+                    secondaryOwnerId: contact.secondary_owner_id,
+                    ownerAuto: contact.owner_auto,
+                    ownerUpdatedAt: contact.owner_updated_at,
+                    primaryOwnerSource: contact.primary_owner_source,
+                  }}
+                  onChange={(next) => setContact(prev => prev ? {
+                    ...prev,
+                    primary_owner_id: next.primaryOwnerId,
+                    secondary_owner_id: next.secondaryOwnerId,
+                    owner_auto: next.ownerAuto,
+                    owner_updated_at: next.ownerUpdatedAt,
+                    primary_owner_source: next.primaryOwnerSource,
+                  } : null)}
+                />
               </div>
             </div>
 

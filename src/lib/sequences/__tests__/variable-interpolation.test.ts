@@ -77,6 +77,11 @@ const contact = {
   attributed_via: null,
   attributed_at: null,
   website: null,
+  primary_owner_id: null,
+  secondary_owner_id: null,
+  owner_auto: true,
+  owner_updated_at: null,
+  primary_owner_source: null,
 } satisfies Contact;
 
 const company: Company = {
@@ -156,6 +161,11 @@ const company: Company = {
   is_sole_proprietor: false,
   employee_size_band: null,
   county: null,
+  primary_owner_id: null,
+  secondary_owner_id: null,
+  owner_auto: true,
+  owner_updated_at: null,
+  primary_owner_source: null,
 };
 
 // ---------------------------------------------------------------------------

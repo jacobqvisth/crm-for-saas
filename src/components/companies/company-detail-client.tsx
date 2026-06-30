@@ -307,6 +307,14 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
         onAddContact={() => setAddContactOpen(true)}
         onLogActivity={() => setLogActivityOpen(true)}
         onDelete={() => setShowDeleteConfirm(true)}
+        onOwnerChange={(next) => setCompany((prev) => (prev ? {
+          ...prev,
+          primary_owner_id: next.primaryOwnerId,
+          secondary_owner_id: next.secondaryOwnerId,
+          owner_auto: next.ownerAuto,
+          owner_updated_at: next.ownerUpdatedAt,
+          primary_owner_source: next.primaryOwnerSource,
+        } as Company : null))}
       />
 
       <CompanySignals company={company} contacts={contacts} />

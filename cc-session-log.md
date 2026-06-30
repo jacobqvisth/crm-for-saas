@@ -4706,3 +4706,35 @@ Jacob asked for an analysis dashboard under /calls that surfaces *who to call to
 - App-user contacts: **1,019 with `wl_user_id`, only 68 with a phone** → the planner shows a phone-coverage banner and a `Find number` CTA for phone-less top contacts; "Start calling" only enlists phone-having ones. (CTO phone export remains the real unlock; PR #434 shared phone pool mirrors into `contacts.phone`.)
 
 **Checks:** vitest 31/31 (calls), `tsc --noEmit`, `eslint`, `npm run build` all clean. Routes `/calls/planner`, `/api/calls/planner`, `/api/calls/planner/create-list` registered.
+
+---
+
+## Rep ownership (Primary / Secondary rep per contact & company) — 2026-06-30
+
+**Branch:** `worktree-rep-ownership` · PR: _pending_
+
+Track which sales rep (Hans, Jacob, …) owns each contact and company, auto-assigned by most-recent contact, manually lockable.
+
+### What was built
+- **Migration `20260630140000_rep_ownership.sql`** — adds `primary_owner_id`, `secondary_owner_id`, `owner_auto` (default true), `owner_updated_at`, `primary_owner_source` to `contacts` + `companies`.
+  - `rep_touches` view: unified attribution — email_sent/email_received → sending gmail account's `user_id` (resolved via `metadata.sender_account_id`, or `email_queue.sender_account_id` for replies); call/meeting/note/field_visit → `activities.user_id`.
+  - `recompute_contact_owner()` / `recompute_company_owner()`: Primary = most-recent distinct rep, Secondary = next. Company rolls up its own + its contacts' touches. Both skip rows where `owner_auto=false` (locked).
+  - `AFTER INSERT` trigger on `activities` recomputes the affected contact + company (calls log a `call` activity, so calls are covered — no separate call_sessions trigger).
+  - Set-based one-time backfill for existing contacts + companies.
+- **API:** `GET /api/reps` (reps from gmail_accounts, stable shorthand number by connect order); `POST /api/contacts/[id]/owner` + `POST /api/companies/[id]/owner` (`{auto:true}` → recompute; `{auto:false, primaryOwnerId, secondaryOwnerId}` → lock).
+- **UI:** `RepOwnerControl` badge + popover ("P ① Hans · S ② Jacob", Auto/Locked toggle, manual rep selects, explanatory copy). Wired into contact detail header and company hero.
+
+### Decisions (per Jacob)
+- Signals counted: outbound email, calls, replies received, manual notes/meetings (+ field visits).
+- Auto rule: **most recent contact wins** (Primary = latest, Secondary = next distinct rep).
+- Scope: contacts **and** companies. Reps derived from gmail accounts.
+- Shorthand numbers (①②) are stable per rep (connect order), shown alongside P/S role.
+
+### Modelling fix found in verification
+One person connects multiple mailboxes under **different auth user_ids** (Hans×2, Magnus×4). Added a `rep_identity` view that collapses a person's user_ids to a canonical id (earliest by display-name/email), and `rep_touches` resolves through it — so a rep is one human, not one mailbox. `listReps`/`resolveManualOwners`/the UI lookup all group by person too. Verified 0 rows where Primary == Secondary.
+
+### Applied to prod ✅
+Migration applied via psql (`20260630140000`). Backfill: **5,551 contacts**, **5,545 companies**. Primary-rep split — Hans 4,636 · Magnus 720 · Jacob 195.
+
+### Checks
+`tsc --noEmit` clean · `eslint` clean · `next build --webpack` ✅ · affected unit tests 22/22.

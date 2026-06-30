@@ -8,6 +8,7 @@ import {
 import type { Company } from './types';
 import { OUTREACH_LABEL, OUTREACH_COLOR, type OutreachStatus } from './status';
 import { CountryFlag, countryFromPhone } from '@/components/contacts/phone-field';
+import { RepOwnerControl, type OwnerState } from '@/components/reps/rep-owner-control';
 
 interface HeroProps {
   company: Company;
@@ -16,10 +17,11 @@ interface HeroProps {
   onAddContact: () => void;
   onLogActivity: () => void;
   onDelete: () => void;
+  onOwnerChange?: (next: OwnerState) => void;
 }
 
 export function CompanyHero({
-  company, outreachStatus, onUpdate, onAddContact, onLogActivity, onDelete,
+  company, outreachStatus, onUpdate, onAddContact, onLogActivity, onDelete, onOwnerChange,
 }: HeroProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const faviconUrl = company.domain
@@ -87,6 +89,20 @@ export function CompanyHero({
             )}
           </div>
           <Badges company={company} outreachStatus={outreachStatus} />
+          <div className="mt-2">
+            <RepOwnerControl
+              entityType="company"
+              entityId={company.id}
+              value={{
+                primaryOwnerId: company.primary_owner_id,
+                secondaryOwnerId: company.secondary_owner_id,
+                ownerAuto: company.owner_auto,
+                ownerUpdatedAt: company.owner_updated_at,
+                primaryOwnerSource: company.primary_owner_source,
+              }}
+              onChange={onOwnerChange}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
