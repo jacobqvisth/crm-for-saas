@@ -18,6 +18,7 @@ import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
 import { PhoneField, PhoneDisplay } from '@/components/contacts/phone-field';
 import { countryNameFromIso, languageFromIso, isoFromCountryName } from '@/lib/geo/country';
+import { parseNameFromEmail, type ParsedName } from '@/lib/contacts/parse-name-from-email';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -285,6 +286,23 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     setEditField(null);
   };
 
+  // Fill First/Last Name from a firstname.lastname email (one-click suggestion
+  // shown only when both name fields are empty). Writes both fields at once.
+  const applyNameSuggestion = async (name: ParsedName) => {
+    if (!contact || !workspaceId) return;
+    const { error } = await supabase
+      .from('contacts')
+      .update({ first_name: name.firstName, last_name: name.lastName })
+      .eq('id', contact.id)
+      .eq('workspace_id', workspaceId);
+
+    if (error) toast.error('Failed to update');
+    else {
+      setContact(prev => prev ? { ...prev, first_name: name.firstName, last_name: name.lastName } : null);
+      toast.success('Name filled from email');
+    }
+  };
+
   // Keep country_code (ISO), country (name) and language in sync. Driven by the
   // ISO code (from the phone picker or the Country Code field). Never overwrites
   // an existing language — only fills it when empty.
@@ -509,6 +527,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
   const initials = [contact.first_name?.[0], contact.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
   const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unnamed Contact';
+  // Offer to fill the name from the email (e.g. timo.larsson@ → Timo Larsson)
+  // only when we have nothing to lose — both name fields empty.
+  const nameSuggestion = !contact.first_name && !contact.last_name
+    ? parseNameFromEmail(contact.email)
+    : null;
   const allEmails = (contact.all_emails as string[] | null) || [];
   const allPhones = (contact.all_phones as string[] | null) || [];
   const tags = (contact.tags as string[] | null) || [];
@@ -560,6 +583,18 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
             {/* Contact Info */}
             <div className="space-y-3">
+              {nameSuggestion && (
+                <button
+                  onClick={() => applyNameSuggestion(nameSuggestion)}
+                  title="Fill the name fields from the email address"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="text-left">
+                    Use <strong>{nameSuggestion.firstName} {nameSuggestion.lastName}</strong> from email
+                  </span>
+                </button>
+              )}
               <EditableField
                 label="First Name"
                 value={contact.first_name || ''}
