@@ -78,9 +78,11 @@ function getActivityTitle(activity: Activity): string {
     case 'email_clicked': return `Clicked link in: ${activity.subject || 'No subject'}`;
     case 'note': return 'Note';
     case 'call': {
-      const who = typeof (activity.metadata as Record<string, unknown> | null)?.agent_name === 'string'
-        ? ((activity.metadata as Record<string, unknown>).agent_name as string)
-        : null;
+      const meta = (activity.metadata ?? {}) as Record<string, unknown>;
+      const who = typeof meta.agent_name === 'string' ? meta.agent_name : null;
+      if (meta.direction === 'inbound') {
+        return who ? `Inbound call — answered by ${who}` : 'Inbound call';
+      }
       return who ? `Call logged by ${who}` : 'Call logged';
     }
     case 'meeting': return `Meeting: ${activity.subject || ''}`;
