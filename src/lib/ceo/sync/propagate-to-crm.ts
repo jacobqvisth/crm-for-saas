@@ -66,7 +66,7 @@ async function propagateUsersToContacts(
   const contacts = await fetchAll(supabase, async (offset) =>
     supabase
       .from("contacts")
-      .select("id, wl_user_id")
+      .select("id, wl_user_id, lead_status")
       .not("wl_user_id", "is", null)
       .order("id")
       .range(offset, offset + PAGE_SIZE - 1),
@@ -102,6 +102,14 @@ async function propagateUsersToContacts(
         const u = usersById.get(contact.wl_user_id);
         if (!u) return;
         const meta = readMetadata(u.metadata);
+        // Keep the sales-funnel lead_status aligned with the live subscription
+        // for linked app users, without clobbering the prospecting funnel a
+        // rep owns. Returns null (omitted from the update) unless the value
+        // should actually change. See deriveContactLeadStatus.
+        const nextLeadStatus = deriveContactLeadStatus(
+          meta.subscription_status,
+          contact.lead_status,
+        );
         const update = {
           app_username: meta.username,
           app_role: normalizeAppRole(meta.user_role),
@@ -115,6 +123,7 @@ async function propagateUsersToContacts(
           user_stripe_customer_id:
             u.core_stripe_customer_id ?? meta.stripe_customer_id,
           user_stripe_subscription_id: meta.stripe_subscription_id,
+          ...(nextLeadStatus ? { lead_status: nextLeadStatus } : {}),
         };
         const { error } = await supabase
           .from("contacts")
@@ -292,6 +301,43 @@ function normalizeAppRole(v: string | null): string | null {
   const lower = v.trim().toLowerCase();
   if (lower === "admin" || lower === "mechanic") return lower;
   return null;
+}
+
+// Map a linked app user's live subscription onto the contact's sales-funnel
+// lead_status. Deliberately conservative: we only assert the two states
+// billing makes unambiguous and never overwrite the early/mid funnel that
+// sales owns.
+//   - active / past_due  → "customer"  (an active or dunning subscriber IS a
+//                          customer; mirrors deriveCustomerStatus, which also
+//                          treats past_due as active)
+//   - lapsed (canceled / unpaid / incomplete_expired / paused / inactive)
+//                        → "churned", but ONLY when the contact was previously
+//                          synced to "customer". This demotes a customer who
+//                          lapsed without clobbering a rep's win-back funnel
+//                          state (engaged/qualified) on a churned account.
+//   - trialing / unknown / missing → null (leave it to sales)
+// Returns null whenever the value should not change (already correct, or no
+// opinion), so the caller can omit lead_status from the update entirely.
+export function deriveContactLeadStatus(
+  subscriptionStatus: string | null,
+  currentLeadStatus: string | null,
+): "customer" | "churned" | null {
+  const s = subscriptionStatus?.toLowerCase() ?? null;
+  if (!s) return null;
+  if (s === "active" || s === "past_due") {
+    return currentLeadStatus === "customer" ? null : "customer";
+  }
+  if (
+    s === "canceled" ||
+    s === "cancelled" ||
+    s === "unpaid" ||
+    s === "incomplete_expired" ||
+    s === "paused" ||
+    s === "inactive"
+  ) {
+    return currentLeadStatus === "customer" ? "churned" : null;
+  }
+  return null; // trialing / unknown → owned by sales
 }
 
 function deriveCustomerStatus(
