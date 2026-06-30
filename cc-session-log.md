@@ -13,6 +13,20 @@ updated: 2026-05-26
 
 ---
 
+## Mark a list as a call list — 2026-06-30 — PR #442 (feature/mark-call-list)
+
+Jacob, from the list detail page: "I want to be able to tag or mark a list as a call list."
+
+The backend already existed — `contact_lists.purpose` (`'email'` default / `'calling'`, migration `20260527000100`), the emerald **Call list** badge in both the list index and detail views, and the `/calls/lists/[id]` worklist that `/api/calls/lists` powers by filtering `purpose='calling'`. The only missing piece was a UI to *set* `purpose`. This wires it up — no schema change.
+
+- **`src/components/lists/list-detail-client.tsx`** — `handleTogglePurpose()` flips `purpose` between `'calling'` and `'email'`; new header button toggles `Mark as Call list` ↔ `Call list ✓` (emerald when active). Activating it makes the existing badge appear + link to the worklist.
+- **`src/components/lists/list-table.tsx`** — `handleTogglePurpose(list)` + a `Mark as call list` / `Unmark call list` item at the top of the per-row `⋯` action menu (menu widened to `w-44`); updates local state optimistically.
+
+**Checks:** `npx tsc --noEmit` clean, `eslint` clean on both files, prod `next build` **Ready** on Vercel (local build's only failure was prerendering `/calls/feedback` for lack of Supabase env vars — pre-existing, prod has them). **Deploy:** auto-deployed, production deployment Ready ~2s after merge (`crm-for-saas-onegljyui`), https://crm-for-saas.vercel.app live (307→/login). No migration, no env var, no cron.
+> Follow-up idea offered to Jacob: also expose the call-list toggle in the Create List modal (set at creation time).
+
+---
+
 ## Mailbox sync — backfill + ongoing email logging — 2026-06-30 — PR (feature/mailbox-sync)
 
 Jacob: "what about all the emails Hans sent from his Google email that aren't logged in our CRM? HubSpot has a plugin for this — can we do it better?" We can: we already hold the Gmail OAuth (`gmail.readonly`+`modify`), so this is a server-side sync — no browser plugin, no BCC, and we can backfill full history (HubSpot's plugin only logs going forward).
