@@ -4658,3 +4658,30 @@ Background-session task from a screenshot: a contact like `timo.larsson@icloud.c
 - **Decision:** one-click suggestion rather than silent auto-write on load, to avoid polluting data on ambiguous cases. Easy to flip to auto-fill if wanted.
 
 **Checks:** vitest 10/10, `tsc --noEmit`, `eslint`, `npm run build` all clean. Merged squash (`0719bfb`), deploy live (root 307→login as expected).
+
+---
+
+## Send-time email verification gate — 2026-06-30 — PR #420
+
+Jacob asked, after seeing bounced addresses on the Compliance & DNC page: "can we send emails that bounce? I thought we verify every email before sending."
+
+### Finding
+Verification was **advisory only**. MillionVerifier writes `contacts.email_status`, but nothing on the send path read it:
+- Verify endpoint ✅ writes it
+- Enrollment (`enrollment.ts`) ❌ no gate
+- Preflight (`sequences/[id]/preflight`) ⚠️ warning count only
+- Send cron (`cron/process-emails`) ❌ never checked `email_status`
+- Bounce → suppression ✅ but only *after* the bounce, for *future* sends
+
+So `invalid` / never-verified addresses sent and bounced. (Caveat surfaced to Jacob: most bounces in his screenshot were `550 5.7.1xx` policy/reputation rejections, which verification cannot predict — this only eliminates the `550 5.1.1` "mailbox doesn't exist" class.)
+
+### Fix
+Added a verification gate in `process-emails`, as the last check before `sendEmail()` (right after the bounced/unsubscribed guard):
+- **`email_status='invalid'`** → cancel queue item + insert email-level suppression (`reason: invalid_email`) + mark enrollment `failed`. Permanent, mirroring how `check-replies` handles a hard bounce.
+- **never-verified** (`null`/`unknown`/`unverified`/`''`) → cancel queue item + set enrollment `paused` (recoverable, not suppressed). Safety net for un-verified bulk imports; the normal enrollment flow verifies first.
+- **`risky` / `catch_all` / `valid`** → send unchanged (out of scope; flagged the 27 queued `risky` to Jacob as a possible follow-up).
+
+### Blast radius (prod, scheduled queue items at the time)
+`valid` 5294 · `catch_all` 36 · `risky` 27 · `invalid` 6 · never-verified **0** — so the gate won't silently cancel live campaigns; it stops the 6 known-invalid sends going forward.
+
+**Checks:** `tsc --noEmit` clean on the changed file (only pre-existing `phone-field.tsx` missing-dep errors from the fresh worktree's stale node_modules), `eslint` clean. Merged squash (`3d74d9b`), Build & Lint ✅, production deploy Ready.
