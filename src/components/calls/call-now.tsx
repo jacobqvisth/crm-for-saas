@@ -91,6 +91,7 @@ const WEBRTC_COPY: Record<WebrtcState, string> = {
   connecting: "Connecting your computer…",
   registered: "Connected — placing the call…",
   ringing: "Connecting to the contact…",
+  incoming: "Incoming call…",
   in_call: "On call",
   ended: "Call ended",
   error: "Computer call failed",
@@ -136,6 +137,7 @@ export function CallNowButton({
   const [muted, setMuted] = useState(false);
   const [activeMode, setActiveMode] = useState<CallMode>("bridge");
   const credsRef = useRef<WebrtcCreds | null>(null);
+  const webrtcUnsubRef = useRef<(() => void) | null>(null);
 
   const pool = numbers ?? [];
   const hasPicker = pool.length > 1;
@@ -211,7 +213,8 @@ export function CallNowButton({
             return;
           }
           const phone = getWebrtcPhone();
-          phone.setHandlers({
+          webrtcUnsubRef.current?.();
+          webrtcUnsubRef.current = phone.subscribe({
             onState: (s) => {
               setWebrtcState(s);
               if (s === "in_call") setMuted(false);
@@ -297,6 +300,8 @@ export function CallNowButton({
   const close = () => {
     // Hang up an in-progress computer call when the drawer is dismissed.
     if (activeMode === "webrtc" && getWebrtcPhone().inCall()) getWebrtcPhone().hangup();
+    webrtcUnsubRef.current?.();
+    webrtcUnsubRef.current = null;
     setOpen(false);
     stopPolling();
   };

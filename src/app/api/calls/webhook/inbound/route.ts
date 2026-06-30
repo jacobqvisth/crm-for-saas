@@ -144,12 +144,23 @@ export async function POST(request: NextRequest) {
     token ? `?token=${encodeURIComponent(token)}` : ""
   }`;
 
-  // Ring the owner, fail over to their backup, then voicemail — recorded +
-  // transcribed by the same pipeline as outbound. callerid is omitted so each
-  // agent's phone shows the customer's number.
+  // Also ring the owner's browser (WebRTC) in parallel with their cell, when a
+  // shared WebRTC number is configured and this owner is its registered user.
+  // The single shared number maps to one agent (ELKS_WEBRTC_OWNER_USER_ID); when
+  // unset, any owner rings it. Degrades to phone-only if no browser is listening.
+  const ownerId = process.env.ELKS_WEBRTC_OWNER_USER_ID;
+  const computerNumber =
+    !ownerId || ownerId === profile.user_id
+      ? normalizePhone(process.env.ELKS_WEBRTC_NUMBER)
+      : null;
+
+  // Ring the owner (cell + browser), fail over to their backup, then voicemail —
+  // recorded + transcribed by the same pipeline as outbound. callerid is omitted
+  // so each agent's phone shows the customer's number.
   return NextResponse.json(
     buildInboundActions({
       primaryCell: agentCell,
+      computerNumber,
       ringSeconds: profile.call_ring_seconds ?? 25,
       failoverCell,
       failoverRingSeconds,

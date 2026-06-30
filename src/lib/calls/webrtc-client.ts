@@ -1,18 +1,21 @@
-// Browser-only JsSIP wrapper for "talk from the computer" calling.
+// Browser-only JsSIP wrapper for computer calling (outbound + inbound).
 //
-// How outbound computer-calling works (no client-initiated SIP needed):
+// Outbound ("talk from the computer"), no client-initiated SIP needed:
 //   1. The browser registers as the 46elks WebRTC number (a SIP endpoint).
 //   2. The CRM API places a normal 46elks call with `to = <webrtc-number>` and
-//      `voice_start.connect = <contact>` — exactly like the phone bridge, just
-//      ringing the browser leg instead of a mobile.
-//   3. 46elks rings this registered client; we AUTO-ANSWER it, and 46elks
-//      bridges the answered leg to the contact. Audio flows through the laptop.
-//   4. The call is recorded server-side and POSTed to the hangup webhook, so the
-//      Deepgram → Claude pipeline runs identically to a phone-bridge call.
+//      `voice_start.connect = <contact>` — like the phone bridge, just ringing
+//      the browser leg. We ARM the client so it auto-answers that inbound leg.
+//   3. 46elks bridges the answered browser leg to the contact. Audio flows
+//      through the laptop; the call is recorded server-side as usual.
+//
+// Inbound ("ring my computer too" on a callback):
+//   The inbound webhook returns `connect: "<webrtc-number>,<cell>"`, so 46elks
+//   rings the browser AND the mobile at once. The browser leg arrives as an
+//   un-armed incoming session — we surface it for manual Accept/Decline.
 //
 // JsSIP touches `window`/`navigator`/WebRTC, so it is dynamically imported and
-// this module must only ever run in the browser. A single shared UA is reused
-// across calls (one agent → one registration).
+// this module only ever runs in the browser. A single shared UA per tab serves
+// both the persistent inbound presence and on-demand outbound calls.
 
 import type { UA, WebSocketInterface } from "jssip";
 import type { RTCSession } from "jssip/lib/RTCSession";
@@ -32,6 +35,7 @@ export type WebrtcState =
   | "connecting"
   | "registered"
   | "ringing"
+  | "incoming"
   | "in_call"
   | "ended"
   | "error";
@@ -41,34 +45,45 @@ export interface WebrtcHandlers {
   onError?: (message: string) => void;
 }
 
+export interface IncomingInfo {
+  /** Best-effort caller number from the SIP From header (E.164-ish), if any. */
+  from: string | null;
+}
+
 class WebrtcPhone {
   private ua: UA | null = null;
   private session: RTCSession | null = null;
   private audioEl: HTMLAudioElement | null = null;
-  private handlers: WebrtcHandlers = {};
+  private listeners = new Set<WebrtcHandlers>();
+  private incomingHandler: ((info: IncomingInfo) => void) | null = null;
   /** When true, the next inbound session (our own outbound leg) auto-answers. */
   private armed = false;
   private credsKey: string | null = null;
 
-  setHandlers(h: WebrtcHandlers) {
-    this.handlers = h;
+  /** Subscribe to state/error events. Returns an unsubscribe fn. */
+  subscribe(h: WebrtcHandlers): () => void {
+    this.listeners.add(h);
+    return () => this.listeners.delete(h);
+  }
+
+  /** Set the handler that surfaces un-armed incoming calls (inbound presence). */
+  setIncomingHandler(fn: ((info: IncomingInfo) => void) | null) {
+    this.incomingHandler = fn;
   }
 
   private emit(state: WebrtcState) {
-    this.handlers.onState?.(state);
+    this.listeners.forEach((h) => h.onState?.(state));
   }
 
   private fail(message: string) {
-    this.handlers.onError?.(message);
+    this.listeners.forEach((h) => h.onError?.(message));
     this.emit("error");
   }
 
   /** Lazily create + register the shared UA. Resolves once registered. */
   async ensureRegistered(creds: WebrtcCreds): Promise<void> {
     const key = `${creds.wsUri}|${creds.uri}`;
-    // Reuse an existing live registration for the same identity.
     if (this.ua && this.ua.isRegistered() && this.credsKey === key) return;
-    // Tear down a stale UA (different creds) before re-registering.
     if (this.ua && this.credsKey !== key) {
       try {
         this.ua.stop();
@@ -79,7 +94,6 @@ class WebrtcPhone {
     }
 
     const JsSIP = await import("jssip");
-    // JsSIP is chatty on the console; keep it quiet in production.
     if (process.env.NODE_ENV === "production") JsSIP.debug.disable();
 
     const socket = new JsSIP.WebSocketInterface(creds.wsUri) as WebSocketInterface;
@@ -118,35 +132,72 @@ class WebrtcPhone {
     });
   }
 
+  isRegistered(): boolean {
+    return !!this.ua && this.ua.isRegistered();
+  }
+
   /** Arm so the next inbound leg (our outbound call) is auto-answered. */
   arm() {
     this.armed = true;
   }
 
   private onNewSession(e: RTCSessionEvent) {
-    // We only expect inbound legs (46elks calling our registered client as the
-    // agent side of an outbound bridge). Ignore anything we didn't arm for.
     if ((e.originator as string) !== "remote") return;
-    if (!this.armed) {
-      try {
-        e.session.terminate();
-      } catch {
-        /* ignore */
-      }
+
+    // Outbound: this is the agent leg of a call we just placed — auto-answer.
+    if (this.armed) {
+      this.armed = false;
+      this.session = e.session;
+      this.emit("ringing");
+      this.wireSession(e.session);
+      this.doAnswer(e.session);
       return;
     }
-    this.armed = false;
-    this.session = e.session;
-    this.emit("ringing");
-    this.wireSession(e.session);
+
+    // Inbound: a real callback ringing the browser leg. Surface for Accept if a
+    // presence handler is listening; otherwise we can't take it — reject.
+    if (this.incomingHandler && !this.inCall()) {
+      this.session = e.session;
+      this.wireSession(e.session);
+      this.emit("incoming");
+      this.incomingHandler({ from: extractFrom(e) });
+      return;
+    }
 
     try {
-      e.session.answer({
+      e.session.terminate();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private doAnswer(session: RTCSession) {
+    try {
+      session.answer({
         mediaConstraints: { audio: true, video: false },
         pcConfig: { rtcpMuxPolicy: "require", iceServers: [] },
       });
     } catch (err) {
       this.fail(err instanceof Error ? err.message : "Failed to answer the call");
+    }
+  }
+
+  /** Accept a surfaced inbound call. */
+  acceptIncoming() {
+    if (this.session && !this.session.isEnded()) {
+      this.emit("ringing");
+      this.doAnswer(this.session);
+    }
+  }
+
+  /** Decline a surfaced inbound call (the mobile leg can still answer). */
+  declineIncoming() {
+    if (this.session && !this.session.isEnded()) {
+      try {
+        this.session.terminate();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -177,14 +228,12 @@ class WebrtcPhone {
     }
     this.audioEl.srcObject = stream;
     void this.audioEl.play().catch(() => {
-      /* autoplay may need a gesture; the click that started the call counts */
+      /* autoplay may need a gesture; the click that started/accepted counts */
     });
   }
 
   private cleanupSession(finalState: WebrtcState) {
-    if (this.audioEl) {
-      this.audioEl.srcObject = null;
-    }
+    if (this.audioEl) this.audioEl.srcObject = null;
     this.session = null;
     this.emit(finalState);
   }
@@ -208,6 +257,19 @@ class WebrtcPhone {
 
   inCall(): boolean {
     return !!this.session && !this.session.isEnded();
+  }
+}
+
+/** Best-effort caller number from an incoming SIP session's From header. */
+function extractFrom(e: RTCSessionEvent): string | null {
+  try {
+    const req = e.request as unknown as {
+      from?: { uri?: { user?: string }; display_name?: string };
+    };
+    const user = req.from?.uri?.user;
+    return user ? (user.startsWith("+") ? user : `+${user}`) : null;
+  } catch {
+    return null;
   }
 }
 

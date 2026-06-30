@@ -53,6 +53,24 @@ Jacob asked whether the click-to-call has to ring his iPhone first or whether he
 
 ---
 
+## WebRTC inbound — "ring my computer too" on callback (PR B) — 2026-06-30 — same branch feature/webrtc-outbound-calling
+
+Stacked on PR A (same branch/PR #445 → retitled to cover outbound + inbound). When a customer calls back, ring the agent's **browser in parallel with their mobile** — answer on whichever; if the laptop's closed it silently degrades to phone (the existing PR #441 cell→failover→voicemail tree is untouched).
+
+**No DDL (deliberate).** A per-user opt-in column would need prod DDL (classifier-blocked, and `.env.local` is off-limits for psql). Instead: the single shared WebRTC number maps to ONE owner via env `ELKS_WEBRTC_OWNER_USER_ID` (only that agent's callbacks ring the browser; unset = any owner — fine for single-user). Per-device on/off is `localStorage` (`wl_webrtc_presence_enabled`, default on). Multi-agent later = one WebRTC number per agent + a real column.
+
+- **`src/lib/calls/inbound-actions.ts`**: `buildInboundActions` gains optional `computerNumber` → primary `connect` becomes `"<webrtc-number>,<cell>"` (46elks comma list = simultaneous ring, first-answer-wins). +2 unit tests (47/47 pass).
+- **`src/app/api/calls/webhook/inbound/route.ts`**: passes `computerNumber = ELKS_WEBRTC_NUMBER` when the call's owner === `ELKS_WEBRTC_OWNER_USER_ID` (or unset). 46elks numbers need NO reconfig — the inbound webhook already drives them.
+- **`src/lib/calls/webrtc-client.ts`**: evolved to support a persistent presence — multi-listener `subscribe()` (replaces single `setHandlers`; PR A's call-now.tsx updated), `setIncomingHandler` + `acceptIncoming`/`declineIncoming`, new `incoming` state, best-effort caller-number extraction from the SIP From header. Armed (outbound) auto-answer still takes priority over inbound surfacing.
+- **`src/components/calls/webrtc-presence.tsx`** (new): mounted once in `(dashboard)/layout.tsx`. If this user is the WebRTC owner (creds endpoint returns available) and the device toggle is on, it holds a live SIP registration and shows an Accept/Decline card on incoming + a Mute/Hang-up in-call bar + a small bottom-left presence toggle.
+- **`/api/calls/webrtc-credentials`**: now also gates on `ELKS_WEBRTC_OWNER_USER_ID` (so only the owner can register the shared number, in or out).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · 47/47 calls tests · `next build` "Compiled successfully" (prerender-only env failure as usual).
+
+**Extra deploy step for PR B:** set Vercel prod `ELKS_WEBRTC_OWNER_USER_ID=<Jacob's auth user id>` (so only his callbacks ring his browser). Then a callback to his dedicated number rings both his iPhone and the CRM tab; answer either. Still NOT live-tested (needs real callback + browser+mic).
+
+---
+
 ## Mailbox sync — backfill + ongoing email logging — 2026-06-30 — PR (feature/mailbox-sync)
 
 Jacob: "what about all the emails Hans sent from his Google email that aren't logged in our CRM? HubSpot has a plugin for this — can we do it better?" We can: we already hold the Gmail OAuth (`gmail.readonly`+`modify`), so this is a server-side sync — no browser plugin, no BCC, and we can backfill full history (HubSpot's plugin only logs going forward).

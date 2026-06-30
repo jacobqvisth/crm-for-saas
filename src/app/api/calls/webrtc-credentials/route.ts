@@ -28,6 +28,14 @@ export async function GET() {
     return NextResponse.json({ available: false });
   }
 
+  // There is a single shared WebRTC number (one SIP registration at a time), so
+  // computer calling is scoped to one owner. When ELKS_WEBRTC_OWNER_USER_ID is
+  // set, only that agent gets it; unset = any member (single-user setups).
+  const ownerId = process.env.ELKS_WEBRTC_OWNER_USER_ID;
+  if (ownerId && ownerId !== user.id) {
+    return NextResponse.json({ available: false });
+  }
+
   // Respect the per-user calling master switch.
   const { data: profile } = await supabase
     .from("user_profiles")

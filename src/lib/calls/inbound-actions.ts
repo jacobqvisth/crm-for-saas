@@ -14,6 +14,12 @@
 export interface InboundActionConfig {
   /** The number's owner — rung first. E.164. */
   primaryCell: string;
+  /** The owner's 46elks WebRTC number, rung in PARALLEL with their cell so a
+   *  callback also rings their browser — they answer on whichever they grab
+   *  first (46elks `connect` takes a comma-separated list, first-answer-wins).
+   *  Omitted = phone only. If no browser is registered, that leg fails fast and
+   *  the cell keeps ringing. E.164. */
+  computerNumber?: string | null;
   /** Seconds to ring the owner before giving up. */
   ringSeconds: number;
   /** Another agent rung if the owner doesn't answer. E.164, or null. */
@@ -73,10 +79,16 @@ export function buildInboundActions(cfg: InboundActionConfig): VoiceAction {
     afterPrimary = vm; // may be null (no failover, no voicemail → call just ends)
   }
 
+  // Ring the browser leg in parallel with the cell when a WebRTC number is
+  // configured for this owner (comma-separated = simultaneous, first answer wins).
+  const primaryConnect = cfg.computerNumber
+    ? `${cfg.computerNumber},${cfg.primaryCell}`
+    : cfg.primaryCell;
+
   const actions: VoiceAction = {
     recordcall: cfg.recordHookUrl,
     whenhangup: cfg.recordHookUrl,
-    connect: cfg.primaryCell,
+    connect: primaryConnect,
     timeout: cfg.ringSeconds,
   };
   if (afterPrimary) {

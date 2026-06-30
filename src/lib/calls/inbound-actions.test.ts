@@ -52,6 +52,34 @@ describe("buildInboundActions", () => {
     expect(vm?.next?.silencedetection).toBe("yes");
   });
 
+  it("rings the browser (WebRTC) in parallel with the cell when configured", () => {
+    const a = buildInboundActions({
+      primaryCell: "+46700000001",
+      computerNumber: "+4600120210",
+      ringSeconds: 25,
+      failoverCell: null,
+      failoverRingSeconds: 25,
+      voicemailEnabled: false,
+      recordHookUrl: HOOK,
+    });
+    // comma-separated = simultaneous ring, first answer wins
+    expect(a.connect).toBe("+4600120210,+46700000001");
+    expect(a.timeout).toBe(25);
+  });
+
+  it("rings the cell only when no computer number is given", () => {
+    const a = buildInboundActions({
+      primaryCell: "+46700000001",
+      computerNumber: null,
+      ringSeconds: 25,
+      failoverCell: null,
+      failoverRingSeconds: 25,
+      voicemailEnabled: false,
+      recordHookUrl: HOOK,
+    });
+    expect(a.connect).toBe("+46700000001");
+  });
+
   it("goes straight to voicemail when there is no failover agent", () => {
     const a = buildInboundActions({
       primaryCell: "+46700000001",
