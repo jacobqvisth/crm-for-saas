@@ -55,11 +55,27 @@ export async function GET(
     last_name: string | null;
     email: string;
     phone: string | null;
+    all_phones: string[] | null;
+    all_emails: string[] | null;
+    title: string | null;
+    city: string | null;
+    country: string | null;
+    country_code: string | null;
+    language: string | null;
     lead_status: string | null;
+    tags: string[] | null;
+    notes: string | null;
     wl_user_id: string | null;
+    app_role: string | null;
+    user_plan_type: string | null;
+    user_subscription_status: string | null;
+    diagnostics_total: number | null;
+    diagnostics_last_30d: number | null;
+    last_active_at: string | null;
+    last_login_at: string | null;
     last_contacted_at: string | null;
     company_id: string | null;
-    companies: { name: string | null } | null;
+    companies: { name: string | null; phone: string | null; city: string | null } | null;
   };
   const contacts: ContactRow[] = [];
   for (let i = 0; i < pageIds.length; i += IN_CHUNK) {
@@ -67,7 +83,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("contacts")
       .select(
-        "id, first_name, last_name, email, phone, lead_status, wl_user_id, last_contacted_at, company_id, companies(name)",
+        "id, first_name, last_name, email, phone, all_phones, all_emails, title, city, country, country_code, language, lead_status, tags, notes, wl_user_id, app_role, user_plan_type, user_subscription_status, diagnostics_total, diagnostics_last_30d, last_active_at, last_login_at, last_contacted_at, company_id, companies(name, phone, city)",
       )
       .in("id", chunk);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -103,10 +119,28 @@ export async function GET(
       name: [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.email,
       email: c.email,
       phone: c.phone,
+      allPhones: (c.all_phones ?? []).filter((p): p is string => Boolean(p && p.trim())),
+      allEmails: (c.all_emails ?? []).filter((e): e is string => Boolean(e && e.trim())),
+      title: c.title,
+      city: c.city,
+      country: c.country,
+      countryCode: c.country_code,
+      language: c.language,
       leadStatus: c.lead_status,
+      tags: (c.tags ?? []).filter((t): t is string => Boolean(t && t.trim())),
+      notes: c.notes,
       companyId: c.company_id,
       companyName: c.companies?.name ?? null,
+      companyPhone: c.companies?.phone ?? null,
+      companyCity: c.companies?.city ?? null,
       isCustomer: c.wl_user_id != null,
+      appRole: c.app_role,
+      planType: c.user_plan_type,
+      subscriptionStatus: c.user_subscription_status,
+      diagnosticsTotal: c.diagnostics_total,
+      diagnosticsLast30d: c.diagnostics_last_30d,
+      lastActiveAt: c.last_active_at,
+      lastLoginAt: c.last_login_at,
       lastContactedAt: c.last_contacted_at,
       lastCall: lastCallByContact.get(c.id) ?? null,
     }));
