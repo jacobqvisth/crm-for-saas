@@ -38,9 +38,15 @@ export async function GET(request: NextRequest) {
         sender_account_id
       )
     `
-    )
-    .order("received_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    );
+
+  // "Recently answered" sorts by when we replied; every other tab by arrival.
+  if (filter === "answered") {
+    query = query.order("replied_at", { ascending: false });
+  } else {
+    query = query.order("received_at", { ascending: false });
+  }
+  query = query.range(offset, offset + limit - 1);
 
   if (filter === "unread") {
     query = query.eq("is_read", false);
@@ -50,6 +56,20 @@ export async function GET(request: NextRequest) {
     query = query.eq("category", "not_interested");
   } else if (filter === "out_of_office") {
     query = query.eq("category", "out_of_office");
+  } else if (filter === "needs_reply") {
+    // Actionable inbound: not answered, no draft started, not an auto-reply,
+    // not already triaged as not-interested/OOO. (is_auto_reply may be NULL on
+    // older rows, so include NULL explicitly.)
+    query = query
+      .is("replied_at", null)
+      .is("reply_draft", null)
+      .or("is_auto_reply.is.null,is_auto_reply.is.false")
+      .not("category", "in", "(not_interested,out_of_office)");
+  } else if (filter === "started_replying") {
+    // A draft is in progress but nothing has been sent yet.
+    query = query.is("replied_at", null).not("reply_draft", "is", null);
+  } else if (filter === "answered") {
+    query = query.not("replied_at", "is", null);
   }
 
   // Hide OOO from any non-OOO tab when toggle is on.

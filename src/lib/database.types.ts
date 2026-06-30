@@ -2824,6 +2824,9 @@ export type Database = {
           is_auto_reply: boolean | null
           is_read: boolean
           received_at: string
+          replied_at: string | null
+          reply_draft: string | null
+          reply_draft_updated_at: string | null
           subject: string | null
           subject_translated_en: string | null
           translation_model: string | null
@@ -2851,6 +2854,9 @@ export type Database = {
           is_auto_reply?: boolean | null
           is_read?: boolean
           received_at: string
+          replied_at?: string | null
+          reply_draft?: string | null
+          reply_draft_updated_at?: string | null
           subject?: string | null
           subject_translated_en?: string | null
           translation_model?: string | null
@@ -2878,6 +2884,9 @@ export type Database = {
           is_auto_reply?: boolean | null
           is_read?: boolean
           received_at?: string
+          replied_at?: string | null
+          reply_draft?: string | null
+          reply_draft_updated_at?: string | null
           subject?: string | null
           subject_translated_en?: string | null
           translation_model?: string | null

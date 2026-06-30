@@ -20,6 +20,7 @@ import {
   Languages,
   Sparkles,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 
 type Contact = {
@@ -55,6 +56,9 @@ type InboxMessage = {
   detected_language: string | null;
   subject_translated_en: string | null;
   body_translated_en: string | null;
+  replied_at: string | null;
+  reply_draft: string | null;
+  reply_draft_updated_at: string | null;
   contacts: Contact | null;
   email_queue: EmailQueue | null;
 };
@@ -84,7 +88,15 @@ type ThreadItem =
       body_translated_en: string | null;
     };
 
-type Filter = "all" | "unread" | "interested" | "not_interested" | "out_of_office";
+type Filter =
+  | "all"
+  | "needs_reply"
+  | "started_replying"
+  | "answered"
+  | "unread"
+  | "interested"
+  | "not_interested"
+  | "out_of_office";
 
 type Sender = {
   id: string;
@@ -385,6 +397,10 @@ export function InboxClient() {
   // Most recent English body that the preview was generated against — used to
   // invalidate the preview when the user edits the textarea.
   const previewBaseRef = useRef<string | null>(null);
+  // Human reply-in-progress autosave. We debounce writes and flush the pending
+  // one before switching messages so a half-typed reply is never lost.
+  const pendingDraftRef = useRef<{ id: string; body: string } | null>(null);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hideOOO, setHideOOO] = useState(true);
   const [senders, setSenders] = useState<Sender[]>([]);
   const [selectedSenderIds, setSelectedSenderIds] = useState<string[] | null>(null);
@@ -532,6 +548,23 @@ export function InboxClient() {
     fetchMessages();
   }, [fetchMessages]);
 
+  // Flush any pending draft when the inbox unmounts (SPA navigation away).
+  // keepalive lets the request outlive the component.
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+      const pending = pendingDraftRef.current;
+      if (pending) {
+        void fetch(`/api/inbox/${pending.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reply_draft: pending.body }),
+          keepalive: true,
+        });
+      }
+    };
+  }, []);
+
   const loadThread = useCallback(async (id: string) => {
     setThreadLoading(true);
     setThread([]);
@@ -611,12 +644,56 @@ export function InboxClient() {
     [fetchPreview],
   );
 
+  // Persist a human reply-in-progress. Reflects the change locally so the row's
+  // draft state (and the "Started replying" tab) stays in sync without a refetch.
+  const saveDraft = useCallback(async (id: string, bodyValue: string) => {
+    try {
+      await fetch(`/api/inbox/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply_draft: bodyValue }),
+      });
+      const nextDraft = bodyValue.trim() ? bodyValue : null;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, reply_draft: nextDraft } : m)),
+      );
+    } catch {
+      // Autosave is best-effort; the reply itself is what matters.
+    }
+  }, []);
+
+  // Write out any pending debounced draft immediately (e.g. before switching
+  // messages). Returns nothing; fire-and-forget.
+  const flushDraft = useCallback(() => {
+    if (draftSaveTimer.current) {
+      clearTimeout(draftSaveTimer.current);
+      draftSaveTimer.current = null;
+    }
+    const pending = pendingDraftRef.current;
+    pendingDraftRef.current = null;
+    if (pending) void saveDraft(pending.id, pending.body);
+  }, [saveDraft]);
+
+  const scheduleDraftSave = useCallback(
+    (id: string, bodyValue: string) => {
+      pendingDraftRef.current = { id, body: bodyValue };
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+      draftSaveTimer.current = setTimeout(() => {
+        const pending = pendingDraftRef.current;
+        pendingDraftRef.current = null;
+        draftSaveTimer.current = null;
+        if (pending) void saveDraft(pending.id, pending.body);
+      }, 1000);
+    },
+    [saveDraft],
+  );
+
   const selectMessage = useCallback(
     async (msg: InboxMessage) => {
+      // Don't lose a half-typed draft on the message we're leaving.
+      flushDraft();
+
       setSelectedId(msg.id);
-      setReplyOpen(false);
-      setReplyBody("");
-      setDraftPresent(false);
       setDraftError(null);
       setPreviewText(null);
       setPreviewError(null);
@@ -636,14 +713,24 @@ export function InboxClient() {
 
       loadThread(msg.id);
 
-      // Auto-suggest a draft on non-English threads. EN threads keep the
-      // previous "blank composer" behavior.
-      if (isTranslatable(msg.detected_language)) {
-        // Don't await — let the thread load in parallel.
-        void fetchDraft(msg.id, false);
+      if (msg.reply_draft) {
+        // A human draft is in progress — restore it and skip the AI suggestion.
+        setReplyBody(msg.reply_draft);
+        setReplyOpen(true);
+        setDraftPresent(false);
+      } else {
+        setReplyBody("");
+        setReplyOpen(false);
+        setDraftPresent(false);
+        // Auto-suggest a draft on non-English threads. EN threads keep the
+        // previous "blank composer" behavior.
+        if (isTranslatable(msg.detected_language)) {
+          // Don't await — let the thread load in parallel.
+          void fetchDraft(msg.id, false);
+        }
       }
     },
-    [loadThread, fetchDraft]
+    [loadThread, fetchDraft, flushDraft]
   );
 
   const updateMessage = useCallback(
@@ -676,18 +763,40 @@ export function InboxClient() {
         const data = await res.json();
         throw new Error(data.error || "Failed to send reply");
       }
+      // The send already cleared the draft + stamped replied_at server-side;
+      // drop the pending autosave so it can't re-create the draft.
+      if (draftSaveTimer.current) {
+        clearTimeout(draftSaveTimer.current);
+        draftSaveTimer.current = null;
+      }
+      pendingDraftRef.current = null;
       toast.success("Reply sent");
       setReplyOpen(false);
       setReplyBody("");
+      setDraftPresent(false);
+      const sentAt = new Date().toISOString();
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === selectedId
+            ? { ...m, replied_at: sentAt, reply_draft: null }
+            : m,
+        ),
+      );
+      // Refetch so the thread leaves "Needs reply"/"Started replying" (and
+      // shows under "Recently answered") per the active tab.
+      void fetchMessages();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send reply");
     } finally {
       setReplySending(false);
     }
-  }, [selectedId, replyBody]);
+  }, [selectedId, replyBody, fetchMessages]);
 
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
+    { key: "needs_reply", label: "Needs reply" },
+    { key: "started_replying", label: "Started replying" },
+    { key: "answered", label: "Recently answered" },
     { key: "unread", label: "Unread" },
     { key: "interested", label: "Interested" },
     { key: "not_interested", label: "Not Interested" },
@@ -863,15 +972,31 @@ export function InboxClient() {
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs text-slate-400 truncate">{preview}</span>
-                      {msg.category !== "uncategorized" && CATEGORY_COLORS[msg.category] && (
-                        <span
-                          className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                            CATEGORY_COLORS[msg.category]
-                          }`}
-                        >
-                          {CATEGORY_LABELS[msg.category]}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* Reply-workflow status. Draft beats answered: if a
+                            newer inbound arrived after we replied, we surface
+                            "needs a reply" rather than the stale answered state. */}
+                        {msg.reply_draft && !msg.replied_at ? (
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                            <Pencil className="w-2.5 h-2.5" />
+                            Draft
+                          </span>
+                        ) : msg.replied_at ? (
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-0.5">
+                            <Check className="w-2.5 h-2.5" />
+                            Replied
+                          </span>
+                        ) : null}
+                        {msg.category !== "uncategorized" && CATEGORY_COLORS[msg.category] && (
+                          <span
+                            className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              CATEGORY_COLORS[msg.category]
+                            }`}
+                          >
+                            {CATEGORY_LABELS[msg.category]}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -1082,6 +1207,9 @@ export function InboxClient() {
                       if (previewBaseRef.current !== e.target.value) {
                         setPreviewText(null);
                       }
+                      // Autosave the in-progress reply (debounced). Once edited,
+                      // it counts as "Started replying".
+                      scheduleDraftSave(selectedMessage.id, e.target.value);
                     }}
                     onBlur={(e) => {
                       if (

@@ -4769,3 +4769,48 @@ Migration applied via psql (`20260630140000`). Backfill: **5,551 contacts**, **5
 
 ### Checks
 `tsc --noEmit` clean · `eslint` clean · `next build --webpack` ✅ · affected unit tests 22/22.
+
+---
+
+## Inbox reply-workflow tabs (Needs reply / Started replying / Recently answered)
+**Date:** 2026-06-30 · **PR:** (pending) · **Branch:** worktree-inbox-reply-tabs
+
+Hans asked for inbox tabs that split threads by where they are in the reply loop:
+the ones he still needs to answer, the ones he's started a draft on, and the ones
+he's recently answered.
+
+### What was built
+- **Migration `20260630170000_inbox_reply_state.sql`** — adds to `inbox_messages`:
+  - `replied_at` — set thread-wide when a reply is sent; backfilled from existing
+    `email_sent` activities (matched by `metadata->>'gmail_thread_id'`, only when the
+    send was at/after the message arrived).
+  - `reply_draft` / `reply_draft_updated_at` — the human reply-in-progress.
+    Deliberately distinct from `draft_en` (the AI auto-draft cache, which is
+    populated for every non-English thread on open and so can't mean "Hans started
+    replying"). Three partial indexes back the new tabs.
+- **`GET /api/inbox`** — three new filters: `needs_reply`
+  (`replied_at IS NULL AND reply_draft IS NULL`, excludes auto-replies / not-interested
+  / OOO), `started_replying` (`reply_draft IS NOT NULL AND replied_at IS NULL`),
+  `answered` (`replied_at IS NOT NULL`, sorted by `replied_at` desc).
+- **`POST /api/inbox/[id]/reply`** — after a successful send, stamps `replied_at` and
+  clears `reply_draft` on every still-unanswered message in the thread.
+- **`PATCH /api/inbox/[id]`** — accepts `reply_draft` (empty string clears it).
+- **`inbox-client.tsx`** — three new workflow tabs; composer autosaves the draft
+  (debounced 1s, flushed on message-switch and on unmount via keepalive); persisted
+  drafts are restored on select (and suppress the AI auto-draft); send clears the
+  draft + refetches; list rows show amber "Draft" / emerald "Replied" pills.
+- `database.types.ts` updated for the three new columns.
+
+### Decisions
+- "Started replying" keys off a human draft, NOT `draft_en`, so non-English threads
+  don't all falsely show as started.
+- `replied_at` is stamped thread-wide; a later inbound reply lands a fresh row with
+  `replied_at NULL` and resurfaces in "Needs reply" on its own.
+
+### Checks
+`tsc --noEmit` clean · `eslint` (changed files) clean · `next build --webpack` ✅
+
+### ⚠️ Deploy ordering
+Migration must be applied to prod BEFORE/with the deploy — the reply route's post-send
+UPDATE and the new tabs reference the new columns. Classifier blocked CC from applying
+the DDL directly (expected); Jacob to apply `20260630170000_inbox_reply_state.sql`.

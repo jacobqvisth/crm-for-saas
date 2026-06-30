@@ -116,6 +116,22 @@ export async function POST(
     },
   });
 
+  // Mark the whole thread answered and clear any in-progress draft, so it moves
+  // out of "Needs reply"/"Started replying" and into "Recently answered". We
+  // stamp every still-unanswered message in the thread (a thread can hold
+  // several inbound messages) — a later inbound reply lands a fresh row with
+  // replied_at NULL and resurfaces in "Needs reply" on its own.
+  await supabase
+    .from("inbox_messages")
+    .update({
+      replied_at: new Date().toISOString(),
+      reply_draft: null,
+      reply_draft_updated_at: null,
+    })
+    .eq("workspace_id", inboxMessage.workspace_id)
+    .eq("gmail_thread_id", inboxMessage.gmail_thread_id)
+    .is("replied_at", null);
+
   return NextResponse.json({
     success: true,
     target_language: translation.targetLanguage,
