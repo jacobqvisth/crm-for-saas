@@ -136,7 +136,12 @@ export default function CallListPage() {
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-slate-900">{r.name}</span>
+                  <Link
+                    href={`/contacts/${r.contactId}`}
+                    className="truncate text-sm font-medium text-slate-900 hover:text-indigo-600"
+                  >
+                    {r.name}
+                  </Link>
                   {r.isCustomer && (
                     <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">Customer</span>
                   )}
