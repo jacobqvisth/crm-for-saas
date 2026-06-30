@@ -3925,6 +3925,9 @@ export type Database = {
           call_agent_phone: string | null
           call_caller_id: string | null
           call_enabled: boolean
+          call_failover_user_id: string | null
+          call_ring_seconds: number
+          call_voicemail_enabled: boolean
           created_at: string
           full_name: string | null
           origin_address: string | null
@@ -3942,6 +3945,9 @@ export type Database = {
           call_agent_phone?: string | null
           call_caller_id?: string | null
           call_enabled?: boolean
+          call_failover_user_id?: string | null
+          call_ring_seconds?: number
+          call_voicemail_enabled?: boolean
           created_at?: string
           full_name?: string | null
           origin_address?: string | null
@@ -3959,6 +3965,9 @@ export type Database = {
           call_agent_phone?: string | null
           call_caller_id?: string | null
           call_enabled?: boolean
+          call_failover_user_id?: string | null
+          call_ring_seconds?: number
+          call_voicemail_enabled?: boolean
           created_at?: string
           full_name?: string | null
           origin_address?: string | null

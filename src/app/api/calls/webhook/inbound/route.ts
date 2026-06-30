@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizePhone } from "@/lib/calls/phone";
+import { buildInboundActions } from "@/lib/calls/inbound-actions";
 import type { TablesInsert } from "@/lib/database.types";
 
 // Inbound call handler for the dedicated agent numbers.
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest) {
   // Which agent owns this number as their caller ID?
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("user_id, call_agent_phone, call_enabled")
+    .select(
+      "user_id, call_agent_phone, call_enabled, call_ring_seconds, call_voicemail_enabled, call_failover_user_id",
+    )
     .eq("call_caller_id", dialed)
     .maybeSingle();
 
@@ -121,19 +124,37 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Resolve the failover agent's phone (if this agent has one configured).
+  let failoverCell: string | null = null;
+  let failoverRingSeconds = 25;
+  if (profile.call_failover_user_id) {
+    const { data: failover } = await supabase
+      .from("user_profiles")
+      .select("call_agent_phone, call_ring_seconds, call_enabled")
+      .eq("user_id", profile.call_failover_user_id)
+      .maybeSingle();
+    if (failover && failover.call_enabled !== false) {
+      failoverCell = normalizePhone(failover.call_agent_phone);
+      failoverRingSeconds = failover.call_ring_seconds ?? 25;
+    }
+  }
+
   const token = process.env.CALL_WEBHOOK_SECRET ?? "";
   const hangupWebhookUrl = `${appBaseUrl()}/api/calls/webhook/hangup${
     token ? `?token=${encodeURIComponent(token)}` : ""
   }`;
 
-  // Ring the agent's own phone, record it, and feed the recording to the same
-  // pipeline as outbound. callerid is omitted on purpose so the agent's phone
-  // shows the customer's number (46elks defaults the connect leg to the caller).
-  return NextResponse.json({
-    connect: agentCell,
-    timeout: 25,
-    recordcall: hangupWebhookUrl,
-    next: hangupWebhookUrl,
-    whenhangup: hangupWebhookUrl,
-  });
+  // Ring the owner, fail over to their backup, then voicemail — recorded +
+  // transcribed by the same pipeline as outbound. callerid is omitted so each
+  // agent's phone shows the customer's number.
+  return NextResponse.json(
+    buildInboundActions({
+      primaryCell: agentCell,
+      ringSeconds: profile.call_ring_seconds ?? 25,
+      failoverCell,
+      failoverRingSeconds,
+      voicemailEnabled: profile.call_voicemail_enabled !== false,
+      recordHookUrl: hangupWebhookUrl,
+    }),
+  );
 }

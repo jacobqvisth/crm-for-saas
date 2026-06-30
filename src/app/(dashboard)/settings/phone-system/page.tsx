@@ -30,6 +30,9 @@ interface Agent {
   phone: string | null;
   callerId: string | null; // null = uses shared default
   enabled: boolean;
+  failoverName: string | null; // who unanswered calls roll to
+  ringSeconds: number;
+  voicemail: boolean;
 }
 
 const KIND_BADGE: Record<NumberKind, { label: string; cls: string; Icon: typeof Smartphone }> = {
@@ -84,12 +87,19 @@ async function loadData() {
 
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, full_name, call_agent_phone, call_caller_id, call_enabled")
+      .select(
+        "user_id, full_name, call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled",
+      )
       .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
     const profileById = new Map((profiles ?? []).map((p) => [p.user_id, p]));
 
     const { data: usersList } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const emailById = new Map((usersList?.users ?? []).map((u) => [u.id, u.email ?? null]));
+    const nameFor = (id: string | null | undefined): string | null => {
+      if (!id) return null;
+      const p = profileById.get(id);
+      return p?.full_name?.trim() || emailById.get(id) || null;
+    };
 
     for (const id of memberIds) {
       const p = profileById.get(id);
@@ -106,6 +116,9 @@ async function loadData() {
         phone,
         callerId,
         enabled: p?.call_enabled !== false,
+        failoverName: nameFor(p?.call_failover_user_id),
+        ringSeconds: p?.call_ring_seconds ?? 25,
+        voicemail: p?.call_voicemail_enabled !== false,
       });
       const key = callerId || defaultCallerId;
       if (key) {
@@ -287,6 +300,7 @@ export default async function PhoneSystemPage() {
                   <th className="px-3 py-2 font-medium">Agent</th>
                   <th className="px-3 py-2 font-medium">Rings this phone</th>
                   <th className="px-3 py-2 font-medium">Caller ID shown to customer</th>
+                  <th className="px-3 py-2 font-medium">If no answer</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                 </tr>
               </thead>
@@ -306,6 +320,11 @@ export default async function PhoneSystemPage() {
                           shared default{defaultCallerId ? ` (${defaultCallerId})` : ""}
                         </span>
                       )}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-500">
+                      ring {a.ringSeconds}s
+                      {a.failoverName ? ` → ${a.failoverName}` : ""}
+                      {a.voicemail ? " → voicemail" : ""}
                     </td>
                     <td className="px-3 py-2.5">
                       <span
