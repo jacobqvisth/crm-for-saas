@@ -176,6 +176,22 @@ export function ListTable() {
     setShowDelete(null);
   };
 
+  const handleTogglePurpose = async (list: ContactList) => {
+    setActionMenuId(null);
+    const next = list.purpose === 'calling' ? 'email' : 'calling';
+    const { error } = await supabase
+      .from('contact_lists')
+      .update({ purpose: next })
+      .eq('id', list.id);
+
+    if (error) {
+      toast.error('Failed to update list');
+      return;
+    }
+    setLists(prev => prev.map(l => (l.id === list.id ? { ...l, purpose: next } : l)));
+    toast.success(next === 'calling' ? 'Marked as call list' : 'Removed from call lists');
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -302,7 +318,14 @@ export function ListTable() {
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
                         {actionMenuId === list.id && (
-                          <div className="absolute right-0 top-8 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-36">
+                          <div className="absolute right-0 top-8 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-44">
+                            <button
+                              onClick={() => handleTogglePurpose(list)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              <Phone className="w-4 h-4" />
+                              {list.purpose === 'calling' ? 'Unmark call list' : 'Mark as call list'}
+                            </button>
                             <button
                               onClick={() => handleDuplicate(list)}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"

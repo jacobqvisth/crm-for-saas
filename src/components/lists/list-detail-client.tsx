@@ -238,6 +238,21 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
     fetchContacts();
   };
 
+  const handleTogglePurpose = async () => {
+    if (!list) return;
+    const next = list.purpose === 'calling' ? 'email' : 'calling';
+    const { error } = await supabase
+      .from('contact_lists')
+      .update({ purpose: next })
+      .eq('id', list.id);
+
+    if (error) toast.error('Failed to update list');
+    else {
+      setList({ ...list, purpose: next });
+      toast.success(next === 'calling' ? 'Marked as call list' : 'Removed from call lists');
+    }
+  };
+
   const handleDeleteList = async () => {
     const { error } = await supabase.from('contact_lists').delete().eq('id', listId);
     if (error) toast.error('Failed to delete list');
@@ -361,6 +376,19 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
               Add Contacts
             </button>
           )}
+
+          <button
+            onClick={handleTogglePurpose}
+            title={list.purpose === 'calling' ? 'Remove from call lists' : 'Mark this list as a call list'}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border ${
+              list.purpose === 'calling'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <Phone className="w-4 h-4" />
+            {list.purpose === 'calling' ? 'Call list ✓' : 'Mark as Call list'}
+          </button>
 
           <button
             onClick={() => setShowEnroll(true)}
