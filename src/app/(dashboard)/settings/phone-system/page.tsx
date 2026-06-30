@@ -173,13 +173,13 @@ export default async function PhoneSystemPage() {
           <div className="bg-white border border-slate-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-1.5">
               <PhoneIncoming className="w-4 h-4 text-amber-600" />
-              <p className="text-sm font-medium text-slate-900">Inbound / callbacks (not built yet)</p>
+              <p className="text-sm font-medium text-slate-900">Inbound / callbacks</p>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              When a customer calls a number <em>back</em>, what happens is set per-number in 46elks
-              (see the table). The CRM has <strong>no inbound handler</strong> yet, so today most
-              callbacks route to the Result-Insurance flow, not to an agent&apos;s phone. The plan
-              below would route callbacks (with no-answer failover) and log them.
+              Dedicated agent numbers (those routed to <em>This CRM&apos;s inbound handler</em> below)
+              now ring the owning agent&apos;s phone on a callback, <strong>record + transcribe</strong>
+              the call, and log it to the contact timeline — same pipeline as outbound. Other numbers
+              still route elsewhere (see the table). No-answer failover between agents is the next step.
             </p>
           </div>
         </div>

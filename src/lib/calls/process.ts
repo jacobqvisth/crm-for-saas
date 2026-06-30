@@ -37,7 +37,7 @@ export async function processCallSession(
   const { data: session, error: sErr } = await supabase
     .from("call_sessions")
     .select(
-      "id, workspace_id, contact_id, company_id, user_id, recording_url, duration_seconds, activity_id, status",
+      "id, workspace_id, contact_id, company_id, user_id, recording_url, duration_seconds, activity_id, status, direction",
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -137,10 +137,11 @@ export async function processCallSession(
 
   // 3) Auto-log the call activity (or update the existing one on re-run).
   let activityId = session.activity_id ?? undefined;
+  const direction = session.direction === "inbound" ? "inbound" : "outbound";
   const metadata: Record<string, Json> = {
     outcome: a.suggested_outcome,
     connected: true,
-    direction: "outbound",
+    direction,
     ai_generated: true,
     call_session_id: sessionId,
     sentiment: a.sentiment,
@@ -152,7 +153,7 @@ export async function processCallSession(
   if (agentName) metadata.agent_name = agentName;
   if (session.user_id) metadata.agent_user_id = session.user_id;
 
-  const subject = `Call: ${CALL_OUTCOME_LABEL[a.suggested_outcome]} — ${contactName ?? "contact"}`;
+  const subject = `${direction === "inbound" ? "Inbound call" : "Call"}: ${CALL_OUTCOME_LABEL[a.suggested_outcome]} — ${contactName ?? "contact"}`;
 
   if (activityId) {
     await supabase
