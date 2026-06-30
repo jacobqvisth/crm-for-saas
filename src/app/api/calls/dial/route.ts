@@ -15,6 +15,9 @@ const DialBody = z.object({
   /** Explicit number to dial (chosen from the shared pool). Falls back to the
    *  contact's stored primary phone when absent. */
   to: z.string().nullish(),
+  /** Which leg to ring as the agent: their mobile ("bridge", default) or the
+   *  browser via the 46elks WebRTC number ("webrtc" — talk from the computer). */
+  mode: z.enum(["bridge", "webrtc"]).optional(),
 });
 
 function appBaseUrl(): string {
@@ -40,6 +43,7 @@ export async function POST(request: NextRequest) {
     );
   }
   const { contactId, listId, override, to } = parsed.data;
+  const mode = parsed.data.mode ?? "bridge";
 
   // Load the contact (RLS scopes to the user's workspace).
   const { data: contact } = await supabase
@@ -105,12 +109,32 @@ export async function POST(request: NextRequest) {
   if (profile?.call_enabled === false) {
     return NextResponse.json({ error: "Calling is disabled for your account" }, { status: 403 });
   }
-  const agentPhone = normalizePhone(profile?.call_agent_phone);
-  if (!agentPhone) {
-    return NextResponse.json(
-      { error: "no_agent_phone", message: "Set your phone number in Call Settings first." },
-      { status: 400 },
-    );
+
+  // Resolve the agent leg 46elks rings. Phone bridge → their mobile; computer
+  // (WebRTC) → the shared 46elks WebRTC number, which their browser is
+  // registered to and auto-answers. Everything downstream is identical.
+  let ring: string;
+  if (mode === "webrtc") {
+    const webrtcNumber = normalizePhone(process.env.ELKS_WEBRTC_NUMBER);
+    if (!webrtcNumber) {
+      return NextResponse.json(
+        {
+          error: "webrtc_unavailable",
+          message: "Computer calling isn't configured (ELKS_WEBRTC_NUMBER).",
+        },
+        { status: 400 },
+      );
+    }
+    ring = webrtcNumber;
+  } else {
+    const agentPhone = normalizePhone(profile?.call_agent_phone);
+    if (!agentPhone) {
+      return NextResponse.json(
+        { error: "no_agent_phone", message: "Set your phone number in Call Settings first." },
+        { status: 400 },
+      );
+    }
+    ring = agentPhone;
   }
   const callerId =
     normalizePhone(profile?.call_caller_id) ||
@@ -132,7 +156,7 @@ export async function POST(request: NextRequest) {
   try {
     const result = await placeBridgeCall({
       from: callerId,
-      agentPhone,
+      ring,
       contactPhone,
       hangupWebhookUrl,
     });
@@ -155,7 +179,7 @@ export async function POST(request: NextRequest) {
     provider_call_id: callId,
     direction: "outbound",
     from_number: callerId,
-    agent_number: agentPhone,
+    agent_number: ring,
     to_number: contactPhone,
     status: "dialing",
   };

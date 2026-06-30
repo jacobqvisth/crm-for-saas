@@ -15,10 +15,19 @@ import {
   Hash,
   ChevronDown,
   Star,
+  Laptop,
+  Smartphone,
+  Mic,
+  MicOff,
+  PhoneOff,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { PhoneDisplay } from "@/components/contacts/phone-field";
+import { getWebrtcPhone, type WebrtcState, type WebrtcCreds } from "@/lib/calls/webrtc-client";
+
+/** Which leg rings as the agent: their mobile (bridge) or the browser (webrtc). */
+type CallMode = "bridge" | "webrtc";
 
 /** A dialable number for the Call button's picker. */
 export type CallNumber = { number: string; label: string | null; isPrimary: boolean };
@@ -77,6 +86,16 @@ const STATUS_COPY: Record<string, string> = {
   no_recording: "No recording was captured for this call",
 };
 
+const WEBRTC_COPY: Record<WebrtcState, string> = {
+  idle: "",
+  connecting: "Connecting your computer…",
+  registered: "Connected — placing the call…",
+  ringing: "Connecting to the contact…",
+  in_call: "On call",
+  ended: "Call ended",
+  error: "Computer call failed",
+};
+
 const SENTIMENT_TONE: Record<string, string> = {
   positive: "bg-emerald-100 text-emerald-700",
   neutral: "bg-slate-100 text-slate-600",
@@ -110,8 +129,40 @@ export function CallNowButton({
   const [pickerOpen, setPickerOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // WebRTC ("talk from computer") state. webrtcAvailable is null until first
+  // checked; creds are cached so we register once per tab.
+  const [webrtcAvailable, setWebrtcAvailable] = useState<boolean | null>(null);
+  const [webrtcState, setWebrtcState] = useState<WebrtcState>("idle");
+  const [muted, setMuted] = useState(false);
+  const [activeMode, setActiveMode] = useState<CallMode>("bridge");
+  const credsRef = useRef<WebrtcCreds | null>(null);
+
   const pool = numbers ?? [];
   const hasPicker = pool.length > 1;
+  // Show the options caret whenever there's a choice to make: multiple numbers,
+  // or computer-calling is (or might be) available.
+  const showCaret = hasPicker || webrtcAvailable !== false;
+
+  // Lazily fetch WebRTC credentials/availability (only when the menu opens, so
+  // it never costs anything on list renders). Returns the creds, or null.
+  const loadWebrtcCreds = useCallback(async (): Promise<WebrtcCreds | null> => {
+    if (credsRef.current) return credsRef.current;
+    try {
+      const res = await fetch("/api/calls/webrtc-credentials");
+      const json = await res.json();
+      if (!res.ok || !json.available) {
+        setWebrtcAvailable(false);
+        return null;
+      }
+      const creds: WebrtcCreds = { wsUri: json.wsUri, uri: json.uri, password: json.password };
+      credsRef.current = creds;
+      setWebrtcAvailable(true);
+      return creds;
+    } catch {
+      setWebrtcAvailable(false);
+      return null;
+    }
+  }, []);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -147,10 +198,37 @@ export function CallNowButton({
   }, [sessionId, open, poll, stopPolling]);
 
   const dial = useCallback(
-    async (override = false, to?: string | null) => {
+    async (override = false, to?: string | null, mode: CallMode = "bridge") => {
       setPickerOpen(false);
       setPlacing(true);
       try {
+        // For computer calls, register the browser SIP client and arm it to
+        // auto-answer BEFORE placing the call (46elks may ring it immediately).
+        if (mode === "webrtc") {
+          const creds = await loadWebrtcCreds();
+          if (!creds) {
+            toast.error("Computer calling isn't set up yet.");
+            return;
+          }
+          const phone = getWebrtcPhone();
+          phone.setHandlers({
+            onState: (s) => {
+              setWebrtcState(s);
+              if (s === "in_call") setMuted(false);
+            },
+            onError: (msg) => toast.error(msg),
+          });
+          setWebrtcState("connecting");
+          try {
+            await phone.ensureRegistered(creds);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Couldn't connect the computer phone");
+            setWebrtcState("error");
+            return;
+          }
+          phone.arm();
+        }
+
         // Dial the explicitly chosen number, else the button's default
         // (the pool primary). Always send `to` so we ring exactly what the UI shows.
         const toNumber = to ?? target.phone ?? null;
@@ -162,14 +240,16 @@ export function CallNowButton({
             listId: target.listId ?? null,
             override,
             to: toNumber,
+            mode,
           }),
         });
         const json = await res.json();
         if (!res.ok) {
+          if (mode === "webrtc") getWebrtcPhone().hangup();
           if (json.error === "blocked") {
             if (window.confirm(`${json.message}\n\nPlace the call anyway?`)) {
               setPlacing(false);
-              return dial(true, to);
+              return dial(true, to, mode);
             }
             return;
           }
@@ -177,22 +257,46 @@ export function CallNowButton({
             toast.error("Set your phone number in Call Settings first.");
             return;
           }
+          if (json.error === "webrtc_unavailable") {
+            toast.error("Computer calling isn't configured.");
+            return;
+          }
           throw new Error(json.message || json.error || "Failed to place call");
         }
-        toast.success("Calling — your phone should ring now.");
+        toast.success(
+          mode === "webrtc"
+            ? "Calling — connecting in your browser…"
+            : "Calling — your phone should ring now.",
+        );
+        setActiveMode(mode);
         setSession(null);
         setSessionId(json.sessionId);
         setOpen(true);
       } catch (err) {
+        if (mode === "webrtc") getWebrtcPhone().hangup();
         toast.error(err instanceof Error ? err.message : "Failed to place call");
       } finally {
         setPlacing(false);
       }
     },
-    [target],
+    [target, loadWebrtcCreds],
   );
 
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      getWebrtcPhone().setMuted(next);
+      return next;
+    });
+  }, []);
+
+  const hangupWebrtc = useCallback(() => {
+    getWebrtcPhone().hangup();
+  }, []);
+
   const close = () => {
+    // Hang up an in-progress computer call when the drawer is dismissed.
+    if (activeMode === "webrtc" && getWebrtcPhone().inCall()) getWebrtcPhone().hangup();
     setOpen(false);
     stopPolling();
   };
@@ -207,7 +311,7 @@ export function CallNowButton({
           className={
             className ??
             `inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 ${
-              hasPicker ? "rounded-l-lg" : "rounded-lg"
+              showCaret ? "rounded-l-lg" : "rounded-lg"
             }`
           }
         >
@@ -215,44 +319,79 @@ export function CallNowButton({
           Call
         </button>
 
-        {hasPicker && (
+        {showCaret && (
           <button
-            onClick={() => setPickerOpen((v) => !v)}
+            onClick={() => {
+              setPickerOpen((v) => !v);
+              if (webrtcAvailable === null) void loadWebrtcCreds();
+            }}
             disabled={placing}
-            title="Choose which number to call"
-            aria-label="Choose which number to call"
+            title="Call options"
+            aria-label="Call options"
             className="inline-flex items-center px-1.5 py-1.5 text-white bg-teal-600 hover:bg-teal-700 rounded-r-lg border-l border-teal-500 disabled:opacity-50"
           >
             <ChevronDown className="w-4 h-4" />
           </button>
         )}
 
-        {pickerOpen && hasPicker && (
+        {pickerOpen && showCaret && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
             <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
               <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Call which number
+                How to call
               </div>
-              {pool.map((n) => (
+              <button
+                onClick={() => dial(false, null, "bridge")}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+              >
+                <Smartphone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-slate-900">Ring my phone</span>
+                  <span className="block truncate text-xs text-slate-500">Answer on your mobile</span>
+                </span>
+              </button>
+              {webrtcAvailable !== false && (
                 <button
-                  key={n.number}
-                  onClick={() => dial(false, n.number)}
+                  onClick={() => dial(false, null, "webrtc")}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                 >
-                  {n.isPrimary ? (
-                    <Star className="w-3.5 h-3.5 shrink-0 fill-amber-400 text-amber-400" />
-                  ) : (
-                    <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                  )}
+                  <Laptop className="w-3.5 h-3.5 shrink-0 text-teal-600" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-slate-900">
-                      <PhoneDisplay value={n.number} />
-                    </span>
-                    {n.label && <span className="block truncate text-xs text-slate-500">{n.label}</span>}
+                    <span className="block text-slate-900">Talk from computer</span>
+                    <span className="block truncate text-xs text-slate-500">Use your headset / mic</span>
                   </span>
                 </button>
-              ))}
+              )}
+
+              {hasPicker && (
+                <>
+                  <div className="mt-1 border-t border-slate-100 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Call which number
+                  </div>
+                  {pool.map((n) => (
+                    <button
+                      key={n.number}
+                      onClick={() => dial(false, n.number, "bridge")}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    >
+                      {n.isPrimary ? (
+                        <Star className="w-3.5 h-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                      ) : (
+                        <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-slate-900">
+                          <PhoneDisplay value={n.number} />
+                        </span>
+                        {n.label && (
+                          <span className="block truncate text-xs text-slate-500">{n.label}</span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </>
         )}
@@ -263,6 +402,11 @@ export function CallNowButton({
           target={target}
           session={session}
           onClose={close}
+          webrtc={
+            activeMode === "webrtc"
+              ? { state: webrtcState, muted, onToggleMute: toggleMute, onHangup: hangupWebrtc }
+              : undefined
+          }
           onRetry={() =>
             sessionId &&
             fetch("/api/calls/process", {
@@ -361,6 +505,7 @@ function CallDrawer({
   onClose,
   onRetry,
   contactHref,
+  webrtc,
 }: {
   target: CallNowTarget;
   session: Session | null;
@@ -368,11 +513,21 @@ function CallDrawer({
   onRetry: () => void;
   /** When set, shows a "View contact" link in the header (used by the detail drawer). */
   contactHref?: string;
+  /** Present for an active computer (WebRTC) call — renders in-browser controls. */
+  webrtc?: {
+    state: WebrtcState;
+    muted: boolean;
+    onToggleMute: () => void;
+    onHangup: () => void;
+  };
 }) {
   const status = session?.status ?? "dialing";
   const ai = session?.ai_json ?? null;
   const transcript = session?.transcript ?? null;
   const inFlight = ["dialing", "in_progress", "completed", "processing"].includes(status);
+  // Show the browser call controls while the WebRTC leg is live.
+  const webrtcLive =
+    webrtc && ["connecting", "registered", "ringing", "in_call"].includes(webrtc.state);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
@@ -405,7 +560,38 @@ function CallDrawer({
         </div>
 
         <div className="space-y-5 px-5 py-4">
-          {/* Live status */}
+          {/* In-browser call controls (computer calling) */}
+          {webrtcLive && webrtc && (
+            <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-teal-800">
+                {webrtc.state === "in_call" ? (
+                  <Laptop className="h-4 w-4 shrink-0" />
+                ) : (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                )}
+                <span>{WEBRTC_COPY[webrtc.state]}</span>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={webrtc.onToggleMute}
+                  disabled={webrtc.state !== "in_call"}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {webrtc.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {webrtc.muted ? "Unmute" : "Mute"}
+                </button>
+                <button
+                  onClick={webrtc.onHangup}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
+                >
+                  <PhoneOff className="h-4 w-4" /> Hang up
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Live status (hidden during a live computer call — the controls card covers it) */}
+          {!webrtcLive && (
           <div
             className={`flex items-center gap-3 rounded-lg border p-3 text-sm ${
               status === "processed"
@@ -424,6 +610,7 @@ function CallDrawer({
             )}
             <span>{STATUS_COPY[status] ?? status}</span>
           </div>
+          )}
 
           {(status === "failed" || status === "no_recording") && (
             <div className="space-y-2">
