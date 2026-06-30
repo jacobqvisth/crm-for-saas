@@ -3922,6 +3922,9 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          call_agent_phone: string | null
+          call_caller_id: string | null
+          call_enabled: boolean
           created_at: string
           full_name: string | null
           origin_address: string | null
@@ -3936,6 +3939,9 @@ export type Database = {
           working_days: Json
         }
         Insert: {
+          call_agent_phone?: string | null
+          call_caller_id?: string | null
+          call_enabled?: boolean
           created_at?: string
           full_name?: string | null
           origin_address?: string | null
@@ -3950,6 +3956,9 @@ export type Database = {
           working_days?: Json
         }
         Update: {
+          call_agent_phone?: string | null
+          call_caller_id?: string | null
+          call_enabled?: boolean
           created_at?: string
           full_name?: string | null
           origin_address?: string | null

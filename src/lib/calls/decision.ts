@@ -70,13 +70,15 @@ export const CALL_OUTCOME_LABEL: Record<CallOutcome, string> = {
 export interface CallSettings {
   auto_followup_enabled?: boolean;
   sequence_by_outcome?: Partial<Record<CallOutcome, string>>;
-  // In-CRM dialer (46elks bridge). When agent_phone is unset, click-to-call is
-  // disabled and the UI prompts the user to configure it.
-  /** The agent's own phone 46elks rings first, E.164 (e.g. +46701234567). */
+  // LEGACY in-CRM dialer config — the per-agent telephony identity moved to
+  // user_profiles.call_{agent_phone,caller_id,enabled} so each member rings
+  // their own phone. These workspace-level keys are no longer read by the
+  // dialer; only auto_followup_enabled / sequence_by_outcome above are still live.
+  /** @deprecated moved to user_profiles.call_agent_phone */
   agent_phone?: string;
-  /** Caller ID shown to the contact; a 46elks number. Falls back to env default. */
+  /** @deprecated moved to user_profiles.call_caller_id */
   caller_id?: string;
-  /** Master switch for click-to-call + AI summarization (default on). */
+  /** @deprecated moved to user_profiles.call_enabled */
   calling_enabled?: boolean;
 }
 
