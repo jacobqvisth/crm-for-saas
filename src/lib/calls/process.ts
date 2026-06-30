@@ -70,6 +70,17 @@ export async function processCallSession(
   const contactName =
     [contact?.first_name, contact?.last_name].filter(Boolean).join(" ").trim() || null;
 
+  // Which agent placed the call (for "Call logged by …" on the timeline).
+  // Service-role client here, so we can read any member's profile name.
+  const { data: agentProfile } = session.user_id
+    ? await supabase
+        .from("user_profiles")
+        .select("full_name")
+        .eq("user_id", session.user_id)
+        .maybeSingle()
+    : { data: null };
+  const agentName = agentProfile?.full_name?.trim() || null;
+
   // Output-language rule: Swedish output for Swedish contacts, English for the
   // rest. Prefer explicit contact language, then country (contact or company);
   // when nothing is known, let the AI infer from the transcript.
@@ -138,6 +149,8 @@ export async function processCallSession(
   if (typeof session.duration_seconds === "number") {
     metadata.duration_seconds = session.duration_seconds;
   }
+  if (agentName) metadata.agent_name = agentName;
+  if (session.user_id) metadata.agent_user_id = session.user_id;
 
   const subject = `Call: ${CALL_OUTCOME_LABEL[a.suggested_outcome]} — ${contactName ?? "contact"}`;
 

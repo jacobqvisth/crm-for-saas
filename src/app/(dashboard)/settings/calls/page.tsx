@@ -83,6 +83,10 @@ export default function CallSettingsPage() {
         your phone first, then connect you to them — the conversation is recorded, transcribed, and
         summarized by AI, and logged to the contact&apos;s timeline with a suggested follow-up.
       </p>
+      <p className="text-xs text-slate-400 mb-8 -mt-6">
+        These settings are personal to your account — each team member sets their own phone and
+        caller ID, and every call is logged under whoever placed it.
+      </p>
 
       <div className="flex items-center justify-between py-4 border-b border-slate-200 mb-6">
         <div>
@@ -124,8 +128,10 @@ export default function CallSettingsPage() {
             Caller ID <span className="font-normal text-slate-400">(optional)</span>
           </label>
           <p className="text-xs text-slate-500 mb-2">
-            The number shown to the contact. Leave blank to use the workspace default
-            {defaultCallerId ? ` (${defaultCallerId})` : ""}.
+            The number shown to the contact when <em>you</em> call. Leave blank to use the shared
+            default{defaultCallerId ? ` (${defaultCallerId})` : ""}. Note: a custom number must be
+            rented from or verified with 46elks first, otherwise the call is rejected — talk to an
+            admin before setting your own.
           </p>
           <input
             value={callerId}

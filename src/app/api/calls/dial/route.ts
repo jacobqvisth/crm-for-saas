@@ -3,7 +3,6 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { placeBridgeCall } from "@/lib/calls/elks";
 import { normalizePhone } from "@/lib/calls/phone";
-import { readCallSettings } from "@/lib/calls/decision";
 import type { TablesInsert } from "@/lib/database.types";
 
 export const maxDuration = 30;
@@ -94,18 +93,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Dialer config: agent's phone (required) + caller ID (settings or env).
-  const { data: workspace } = await supabase
-    .from("workspaces")
-    .select("settings")
-    .eq("id", workspaceId)
+  // Per-user dialer config: this agent's own phone (required) + their own
+  // caller ID (falls back to the shared env default). Each member rings their
+  // own phone and shows their own caller ID — see user_profiles.call_*.
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("call_agent_phone, call_caller_id, call_enabled")
+    .eq("user_id", user.id)
     .maybeSingle();
-  const cs = readCallSettings(workspace?.settings);
 
-  if (cs.calling_enabled === false) {
-    return NextResponse.json({ error: "Calling is disabled for this workspace" }, { status: 403 });
+  if (profile?.call_enabled === false) {
+    return NextResponse.json({ error: "Calling is disabled for your account" }, { status: 403 });
   }
-  const agentPhone = normalizePhone(cs.agent_phone);
+  const agentPhone = normalizePhone(profile?.call_agent_phone);
   if (!agentPhone) {
     return NextResponse.json(
       { error: "no_agent_phone", message: "Set your phone number in Call Settings first." },
@@ -113,7 +113,9 @@ export async function POST(request: NextRequest) {
     );
   }
   const callerId =
-    normalizePhone(cs.caller_id) || normalizePhone(process.env.CRM_CALL_FROM_NUMBER) || null;
+    normalizePhone(profile?.call_caller_id) ||
+    normalizePhone(process.env.CRM_CALL_FROM_NUMBER) ||
+    null;
   if (!callerId) {
     return NextResponse.json(
       { error: "no_caller_id", message: "No caller ID configured (settings or CRM_CALL_FROM_NUMBER)." },
