@@ -15,6 +15,23 @@ import { createClient } from "@/lib/supabase/server";
 const WS_URI = process.env.ELKS_WEBRTC_WS_URI || "wss://voip.46elks.com/w1/websocket";
 const SIP_HOST = process.env.ELKS_WEBRTC_SIP_HOST || "voip.46elks.com";
 
+// ICE servers for the browser's media negotiation. A STUN server is required for
+// a laptop behind NAT to establish audio; a TURN server is needed on restrictive
+// networks. Defaults to a public STUN; override with ELKS_WEBRTC_ICE_SERVERS
+// (a JSON array of RTCIceServer, e.g. to add a TURN server with credentials).
+function iceServers(): RTCIceServer[] {
+  const raw = process.env.ELKS_WEBRTC_ICE_SERVERS;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as RTCIceServer[];
+    } catch {
+      /* fall through to the default */
+    }
+  }
+  return [{ urls: "stun:stun.l.google.com:19302" }];
+}
+
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -51,5 +68,6 @@ export async function GET() {
     wsUri: WS_URI,
     uri: `${username}@${SIP_HOST}`,
     password,
+    iceServers: iceServers(),
   });
 }

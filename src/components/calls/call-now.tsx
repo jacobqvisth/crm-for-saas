@@ -156,7 +156,12 @@ export function CallNowButton({
         setWebrtcAvailable(false);
         return null;
       }
-      const creds: WebrtcCreds = { wsUri: json.wsUri, uri: json.uri, password: json.password };
+      const creds: WebrtcCreds = {
+        wsUri: json.wsUri,
+        uri: json.uri,
+        password: json.password,
+        iceServers: json.iceServers,
+      };
       credsRef.current = creds;
       setWebrtcAvailable(true);
       return creds;
