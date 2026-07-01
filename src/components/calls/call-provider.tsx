@@ -189,6 +189,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
             setPanelOpen(false);
             return;
           }
+          // Become the sole holder of the shared WebRTC line so 46elks rings
+          // THIS tab — other CRM tabs drop their registration. Without this, a
+          // background presence tab could receive the leg and the call would
+          // never reach the tab you dialed from.
+          phone.claimLine();
           phone.arm();
         }
 

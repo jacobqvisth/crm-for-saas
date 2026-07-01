@@ -95,17 +95,35 @@ export function WebrtcPresence() {
     // (leaving the caller stuck on "Connecting…"). A cross-tab Web Lock ensures
     // exactly one tab holds the live registration; the rest wait for the lock.
     const ac = new AbortController();
-    const hold = async () => {
-      phone.setIncomingHandler(incomingHandler);
-      // Hold a live registration so 46elks can ring this browser.
-      await phone.ensureRegistered(creds).catch(() => {
+    const register = () =>
+      phone.ensureRegistered(creds).catch(() => {
         /* registration failure is non-fatal; the cell still rings */
       });
+    // When THIS tab is looking at the CRM, make sure it holds the line, so an
+    // outbound call placed here (or an inbound one) reaches this tab.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void register();
+    };
+    const hold = async () => {
+      // This tab is the elected presence holder: it keeps its registration even
+      // after an outbound call (a non-presence caller tab drops its own).
+      phone.setPresenceHolder(true);
+      phone.setIncomingHandler(incomingHandler);
+      await register();
+      // If another tab grabs the line for an outbound call, it broadcasts a
+      // release when done — reclaim the line for inbound then.
+      phone.setLineFreedHandler(register);
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("focus", onVisible);
       // Keep the lock (and the registration) until this tab releases it.
       await new Promise<void>((resolve) => {
         if (ac.signal.aborted) resolve();
         else ac.signal.addEventListener("abort", () => resolve(), { once: true });
       });
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      phone.setLineFreedHandler(null);
+      phone.setPresenceHolder(false);
     };
 
     const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
