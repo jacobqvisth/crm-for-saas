@@ -727,6 +727,72 @@ export type Database = {
           },
         ]
       }
+      phone_enrichment_jobs: {
+        Row: {
+          attempts: number
+          contact_id: string
+          enqueued_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          outcome: string | null
+          requested_by: string | null
+          saved_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          website_added: string | null
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          contact_id: string
+          enqueued_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          outcome?: string | null
+          requested_by?: string | null
+          saved_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          website_added?: string | null
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          contact_id?: string
+          enqueued_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          outcome?: string | null
+          requested_by?: string | null
+          saved_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          website_added?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_enrichment_jobs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_enrichment_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       phone_numbers: {
         Row: {
           company_id: string | null
@@ -1240,6 +1306,8 @@ export type Database = {
           owner_auto: boolean
           owner_updated_at: string | null
           phone: string | null
+          phone_search_outcome: string | null
+          phone_searched_at: string | null
           primary_owner_id: string | null
           primary_owner_source: string | null
           secondary_owner_id: string | null
@@ -1302,6 +1370,8 @@ export type Database = {
           owner_auto?: boolean
           owner_updated_at?: string | null
           phone?: string | null
+          phone_search_outcome?: string | null
+          phone_searched_at?: string | null
           primary_owner_id?: string | null
           primary_owner_source?: string | null
           secondary_owner_id?: string | null
@@ -1364,6 +1434,8 @@ export type Database = {
           owner_auto?: boolean
           owner_updated_at?: string | null
           phone?: string | null
+          phone_search_outcome?: string | null
+          phone_searched_at?: string | null
           primary_owner_id?: string | null
           primary_owner_source?: string | null
           secondary_owner_id?: string | null

@@ -2,6 +2,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { findPhones, type FindPhonesResult, type PhoneCandidate } from "@/lib/enrich/find-phone";
 import { findWebsite } from "@/lib/enrich/find-website";
 
+export type PhoneSearchOutcome = "found" | "none" | "blocked" | "error";
+
+/** Summarize a finder run into a single outcome for tracking. */
+export function classifyPhoneSearchOutcome(result: FindPhonesResult): PhoneSearchOutcome {
+  if (result.phones.length) return "found";
+  const d = result.debug;
+  if (d?.searchError) return "error";
+  // Every website fetch failed with something other than a real 200/404 →
+  // the host is refusing us; distinct from "searched and genuinely nothing".
+  if (d && d.fetchLog.length && d.fetchLog.every((f) => f.status !== 200 && f.status !== 404)) {
+    return "blocked";
+  }
+  return "none";
+}
+
 /**
  * Resolve a contact/company, make sure we have a website to work with (finding
  * and persisting one when it's missing — the natural first step), then find its
@@ -161,6 +176,22 @@ export async function findPhonesForRecord(
     countryCode,
     existing,
   });
+
+  // Record the attempt on the searched record so we can show "searched — none
+  // found" everywhere and skip re-searching. Best-effort: if the columns aren't
+  // there yet (migration not applied), the update just returns an error we
+  // ignore — it must never break the finder.
+  if (contactId) {
+    const stamp = {
+      phone_searched_at: new Date().toISOString(),
+      phone_search_outcome: classifyPhoneSearchOutcome(result),
+    };
+    try {
+      await supabase.from("contacts").update(stamp).eq("id", contactId).eq("workspace_id", workspaceId);
+    } catch {
+      /* tracking is best-effort — never break the finder */
+    }
+  }
 
   return { ...result, websiteAdded, companyId: resolvedCompanyId, countryCode };
 }

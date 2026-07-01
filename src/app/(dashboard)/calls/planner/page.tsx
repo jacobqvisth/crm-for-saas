@@ -33,10 +33,14 @@ import { useWorkspace } from "@/lib/hooks/use-workspace";
 import type { ReasonTone } from "@/lib/calls/scoring";
 import { CallNowButton } from "@/components/calls/call-now";
 
-// The bulk find-numbers endpoint caps each request at 6 contacts; chunk to match.
-const FIND_BATCH = 6;
-// Don't fan out over an unbounded list in one click.
-const FIND_CAP = 30;
+// How often to poll background enrichment progress (ms).
+const QUEUE_POLL_MS = 6000;
+
+const SEARCH_OUTCOME_CHIP: Record<string, { label: string; cls: string }> = {
+  none: { label: "searched · none", cls: "bg-slate-100 text-slate-500" },
+  blocked: { label: "searched · site blocked", cls: "bg-amber-50 text-amber-700" },
+  error: { label: "searched · error", cls: "bg-red-50 text-red-600" },
+};
 
 const ICONS: Record<string, LucideIcon> = {
   CreditCard,
@@ -89,6 +93,8 @@ type TopContact = {
   score: number;
   priority: "high" | "medium" | "low";
   reasons: Reason[];
+  searchedAt: string | null;
+  searchOutcome: string | null;
 };
 
 type PlaybookCount = { key: string; count: number; withPhone: number };
@@ -109,6 +115,9 @@ export default function CallPlannerPage() {
   const [creating, setCreating] = useState<string | null>(null);
   const [topN, setTopN] = useState(20);
   const [findingNumbers, setFindingNumbers] = useState(false);
+  const [includeSearched, setIncludeSearched] = useState(false);
+  const [queue, setQueue] = useState<{ queued: number; processing: number } | null>(null);
+  const [watching, setWatching] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +135,34 @@ export default function CallPlannerPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // While a background enrichment run is active, poll its progress. When the
+  // queue drains, refresh the planner so newly-found numbers appear.
+  useEffect(() => {
+    if (!workspaceId || !watching) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/enrich/find-phone/queue-status?workspaceId=${workspaceId}`);
+        if (!res.ok || !active) return;
+        const s = await res.json();
+        if (!active) return;
+        setQueue({ queued: s.queued ?? 0, processing: s.processing ?? 0 });
+        if ((s.queued ?? 0) === 0 && (s.processing ?? 0) === 0) {
+          setWatching(false);
+          await load();
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    };
+    poll();
+    const t = setInterval(poll, QUEUE_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
+  }, [watching, workspaceId, load]);
 
   const createFromPlaybook = async (key: string) => {
     setCreating(key);
@@ -169,53 +206,48 @@ export default function CallPlannerPage() {
     }
   };
 
-  // Bulk-find phone numbers for the top contacts that don't have one yet. The
-  // finder discovers each contact's website first (if missing), scrapes it, then
-  // web-searches — and saves the best number so they become callable. Runs in
-  // small batches so we stay inside the serverless time limit.
+  // Queue the number-less top contacts for background enrichment. The finder
+  // discovers each contact's website (if missing), scrapes it, web-searches, and
+  // saves the best number — server-side, so you can leave the page. Progress is
+  // polled below and the list refreshes as numbers land.
   const findMissingNumbers = async () => {
     if (!data || findingNumbers) return;
     if (!workspaceId) {
       toast.error("No workspace loaded — reload the page");
       return;
     }
-    const missing = data.topContacts.filter((c) => !c.hasPhone).slice(0, FIND_CAP);
+    const missing = data.topContacts.filter((c) => !c.hasPhone).map((c) => c.contactId);
     if (missing.length === 0) {
       toast("All your top contacts already have a phone number");
       return;
     }
     setFindingNumbers(true);
-    const toastId = toast.loading(`Finding numbers… 0/${missing.length}`);
-    let done = 0;
-    let saved = 0;
-    let withNumbers = 0;
     try {
-      for (let i = 0; i < missing.length; i += FIND_BATCH) {
-        const batch = missing.slice(i, i + FIND_BATCH).map((c) => c.contactId);
-        const res = await fetch("/api/enrich/find-phone/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, contactIds: batch }),
-        });
-        const json = await res.json();
-        if (res.ok) {
-          saved += json.savedTotal ?? 0;
-          withNumbers += json.withNumbers ?? 0;
-        }
-        done += batch.length;
-        toast.loading(`Finding numbers… ${done}/${missing.length}`, { id: toastId });
-      }
-      if (saved > 0) {
+      const res = await fetch("/api/enrich/find-phone/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, contactIds: missing, force: includeSearched }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to queue");
+      if (json.queued > 0) {
         toast.success(
-          `Found numbers for ${withNumbers} contact${withNumbers === 1 ? "" : "s"} (${saved} saved)`,
-          { id: toastId },
+          `Queued ${json.queued} contact${json.queued === 1 ? "" : "s"} — finding in the background`,
         );
+        setQueue({ queued: json.queued, processing: 0 });
+        setWatching(true);
       } else {
-        toast.error("No new phone numbers found for these contacts", { id: toastId });
+        const parts: string[] = [];
+        if (json.skippedRecent) parts.push(`${json.skippedRecent} already searched`);
+        if (json.skippedOpen) parts.push(`${json.skippedOpen} already queued`);
+        toast(
+          parts.length
+            ? `Nothing new to queue — ${parts.join(", ")}. Tick "re-search" to force.`
+            : "Nothing to queue",
+        );
       }
-      await load();
-    } catch {
-      toast.error("Find numbers failed", { id: toastId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to queue");
     } finally {
       setFindingNumbers(false);
     }
@@ -270,19 +302,33 @@ export default function CallPlannerPage() {
               </div>
               <div className="flex items-center gap-2">
                 {missingTop > 0 && (
-                  <button
-                    onClick={findMissingNumbers}
-                    disabled={findingNumbers}
-                    title="Find websites + phone numbers for the top contacts that don't have one yet"
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {findingNumbers ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Search className="h-4 w-4" />
-                    )}
-                    Find missing numbers
-                  </button>
+                  <>
+                    <label
+                      className="flex items-center gap-1 text-xs text-slate-500"
+                      title="Also re-search contacts already searched in the last 14 days"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={includeSearched}
+                        onChange={(e) => setIncludeSearched(e.target.checked)}
+                        className="h-3.5 w-3.5"
+                      />
+                      re-search
+                    </label>
+                    <button
+                      onClick={findMissingNumbers}
+                      disabled={findingNumbers}
+                      title="Queue the top contacts without a number for background phone enrichment"
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {findingNumbers ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                      Find missing numbers
+                    </button>
+                  </>
                 )}
                 <label className="text-xs text-slate-500">Top</label>
                 <input
@@ -308,11 +354,19 @@ export default function CallPlannerPage() {
               </div>
             </div>
 
+            {watching && queue && (queue.queued > 0 || queue.processing > 0) && (
+              <p className="mt-2 flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Finding numbers in the background — {queue.queued + queue.processing} remaining. You
+                can leave this page; numbers appear as they&apos;re found.
+              </p>
+            )}
+
             {callableTop < data.topContacts.length && (
               <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 {data.topContacts.length - callableTop} of your top contacts have no phone number yet
-                — hit <span className="font-medium">Find missing numbers</span> to look them up
-                automatically, or they&apos;ll be skipped when you start calling.
+                — hit <span className="font-medium">Find missing numbers</span> to look them up in the
+                background, or they&apos;ll be skipped when you start calling.
               </p>
             )}
 
@@ -382,12 +436,28 @@ export default function CallPlannerPage() {
                         }}
                       />
                     ) : (
-                      <Link
-                        href={`/contacts/${c.contactId}`}
-                        className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 hover:bg-slate-50"
-                      >
-                        Find number <ChevronRight className="h-3.5 w-3.5" />
-                      </Link>
+                      <div className="flex flex-col items-end gap-1">
+                        <Link
+                          href={`/contacts/${c.contactId}`}
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 hover:bg-slate-50"
+                        >
+                          Find number <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                        {c.searchOutcome && SEARCH_OUTCOME_CHIP[c.searchOutcome] && (
+                          <span
+                            title={
+                              c.searchedAt
+                                ? `Last searched ${new Date(c.searchedAt).toLocaleDateString()}`
+                                : undefined
+                            }
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                              SEARCH_OUTCOME_CHIP[c.searchOutcome].cls
+                            }`}
+                          >
+                            {SEARCH_OUTCOME_CHIP[c.searchOutcome].label}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

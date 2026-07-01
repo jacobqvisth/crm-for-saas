@@ -118,7 +118,27 @@ export async function GET(_request: NextRequest) {
       return bb - aa;
     });
 
-  const top = scored.slice(0, TOP_LIMIT).map(({ c, result }) => ({
+  const scoredTop = scored.slice(0, TOP_LIMIT);
+
+  // Best-effort: annotate number-less rows with their last phone-search outcome
+  // so the UI can show "searched — none". Kept as a SEPARATE query (not in the
+  // main select above) so a not-yet-applied migration can never break the planner.
+  const numberlessIds = scoredTop.filter(({ c }) => !c.phone).map(({ c }) => c.id);
+  const searchState: Record<string, { searchedAt: string | null; outcome: string | null }> = {};
+  if (numberlessIds.length) {
+    const { data: st } = await supabase
+      .from("contacts")
+      .select("id, phone_searched_at, phone_search_outcome")
+      .in("id", numberlessIds);
+    for (const r of st ?? []) {
+      searchState[r.id as string] = {
+        searchedAt: (r.phone_searched_at as string | null) ?? null,
+        outcome: (r.phone_search_outcome as string | null) ?? null,
+      };
+    }
+  }
+
+  const top = scoredTop.map(({ c, result }) => ({
     contactId: c.id,
     name: [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.email,
     email: c.email,
@@ -132,6 +152,8 @@ export async function GET(_request: NextRequest) {
     score: result.score,
     priority: result.priority,
     reasons: result.reasons.slice(0, 3),
+    searchedAt: searchState[c.id]?.searchedAt ?? null,
+    searchOutcome: searchState[c.id]?.outcome ?? null,
   }));
 
   const topWithPhone = top.filter((t) => t.hasPhone).length;
