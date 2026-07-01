@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Phone, Plus, ListChecks, MessageSquare, Target } from "lucide-react";
+import { Phone, Plus, ListChecks, MessageSquare, Target, PhoneIncoming, PhoneOutgoing } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -252,13 +252,27 @@ export default function CallsOverviewPage() {
                 [c.contacts?.first_name, c.contacts?.last_name].filter(Boolean).join(" ").trim() ||
                 c.contacts?.email ||
                 "Unknown";
+              // Inbound calling is a newer feature; legacy calls with no direction are outbound.
+              const isInbound = c.metadata?.direction === "inbound";
               const rowInner = (
                 <>
                   <div className="min-w-0">
-                    <div className="truncate text-sm text-slate-900">
-                      {name}
+                    <div className="flex items-center gap-1.5 text-sm text-slate-900">
+                      <span className="truncate">{name}</span>
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          isInbound ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {isInbound ? (
+                          <PhoneIncoming className="h-2.5 w-2.5" />
+                        ) : (
+                          <PhoneOutgoing className="h-2.5 w-2.5" />
+                        )}
+                        {isInbound ? "Inbound" : "Outbound"}
+                      </span>
                       {c.contacts?.wl_user_id && (
-                        <span className="ml-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                        <span className="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
                           Customer
                         </span>
                       )}
