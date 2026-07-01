@@ -13,6 +13,23 @@ updated: 2026-05-26
 
 ---
 
+## Calls: date-filter tabs (Today / Yesterday / Last 7 days) on Recent calls — 2026-07-01 — PR #474 — feature/recent-calls-date-tabs
+
+Jacob asked (from a screenshot of `/calls`) to add tabs above the **Recent calls** list to filter by **Today / Yesterday / Last 7 days (excluding today)**, and to show the full list (scroll) with pagination.
+
+**What shipped (frontend only — `src/app/(dashboard)/calls/page.tsx`):**
+- Three-tab segmented control above the Recent calls feed: **Today** (default), **Yesterday**, **Last 7 days**. "Last 7 days" = the 7 full days *before* today, not including today.
+- Date bounds computed in the browser's local (Stockholm) timezone via a `rangeFor()` helper and passed to the existing `/api/calls` `since`/`until` params (`until` is 1 ms before today's midnight so the boundary isn't double-counted).
+- Replaced the old fixed `?limit=15` snapshot with paginated loading: `PAGE_SIZE=50`, list is scrollable (`max-h-[70vh] overflow-y-auto`), and a **Load more (N left)** button appends the next 50 using `res.total` from the API.
+- Header shows a live per-period count. Split the single `load()` into `load()` (stats + lists, once) and `loadCalls(filter, offset)` (reloads on tab change).
+- No API/schema change — `/api/calls` already supported `since`/`until`/`limit`/`offset` and returns `{ calls, total }`.
+
+**Checks:** `npx tsc --noEmit` clean, `npm run lint` clean, GitHub Actions **Build & Lint** passed. Local `next build` couldn't run in the bg sandbox (OOM / exit 137) — relied on GH Actions + Vercel prod build. Vercel *preview* check was red for a **pre-existing, project-wide** reason (Supabase env not set on the Preview environment → `/calls/feedback` prerender fails); every PR preview is ERROR while every push-to-prod build is READY. Merged past it.
+
+**Deploy:** merged to main as `f2042c5`; prod deployment `dpl_AEdBzWkDf6eZW9E9Dm6kHX7sE6jF` **READY**, `/calls` returns 200 on `crm-for-saas.vercel.app`. No build conflict — the only PR merged in between (#475, WebRTC multi-tab) touched disjoint files; branch rebased cleanly.
+
+---
+
 ## Computer calling: fix "call didn't reach this computer" from a non-presence tab — 2026-07-01 — fix/webrtc-single-tab
 
 Jacob reported "Talk from computer" **rings then errors "The call didn't reach this computer. Close any other CRM tabs…"** with two CRM tabs open (confirmed by screenshot). Diagnosed the gap left by #468:
