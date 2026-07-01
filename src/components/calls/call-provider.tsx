@@ -261,6 +261,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     getWebrtcPhone().hangup();
   }, []);
 
+  const sendDtmf = useCallback((tone: string) => {
+    getWebrtcPhone().sendDTMF(tone);
+  }, []);
+
   const retryProcessing = useCallback(() => {
     const id = activeCall?.sessionId;
     if (!id) return;
@@ -308,7 +312,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           onRetry={retryProcessing}
           webrtc={
             activeCall.mode === "webrtc"
-              ? { state: webrtcState, muted, onToggleMute: toggleMute, onHangup: hangup }
+              ? { state: webrtcState, muted, onToggleMute: toggleMute, onHangup: hangup, onSendDtmf: sendDtmf }
               : undefined
           }
         />
