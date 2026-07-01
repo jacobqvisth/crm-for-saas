@@ -13,6 +13,24 @@ updated: 2026-05-26
 
 ---
 
+## Interactive emails send from the acting rep's own account — 2026-07-01 — PR #456 (worktree-fix-call-email-sender)
+
+Jacob: "if I call a contact as Jacob, after the call the email sender should also be Jacob." His post-call follow-up to **Azad @ Gävle Bilexpert** went out **from Magnus/matteo** instead.
+
+Diagnosed against prod: the primary-owner side already worked (both `call` activities correctly attributed to Jacob via the `activities` AFTER-INSERT rep-ownership trigger). The real bug was **sender selection**. The one-off "Email" button and the call's "Suggested follow-up" both POST to `/api/contacts/[id]/send-email`, which chose the sender via `getNextSender()` = the account with the **lowest daily send count**. Jacob had 18 sends today, so Magnus (`e8cf0456`, 1 send) and matteo (`1ecf295a`, 1 send) won. Both problem emails were confirmed one-off sends (`email_queue.enrollment_id` NULL). Side effect: a foreign `email_sent` is a *newer* rep-touch than the call, so under `owner_auto=true` it would flip the primary owner away from the caller (why Jacob had locked Azad to himself manually).
+
+- **`src/lib/gmail/sender-rotation.ts`** — `getNextSender(workspaceId, allowedAccountIds?, preferredUserId?)`. Extracted a pure, exported `selectSender(accounts, preferredUserId?)` policy: prefer the acting user's own active account **with capacity**, else fall back to the historical lowest-count round-robin.
+- **`src/app/api/contacts/[id]/send-email/route.ts`** — passes the logged-in `user.id` as `preferredUserId`. Explicit `senderAccountId` still wins.
+- **`src/components/contacts/compose-email-modal.tsx`** — sender dropdown now defaults to the logged-in user's own account (still overridable).
+- **`src/app/api/inbox/senders/route.ts`** — now returns `user_id` so the modal can match.
+- **`src/lib/gmail/sender-rotation.test.ts`** (new) — 5 tests incl. the exact Jacob-vs-Magnus scenario, at-capacity fallback, unknown-user fallback.
+
+**Deliberately out of scope:** cold **sequence enrollment** stays on round-robin across the rotation pool — forcing every contact onto its owner's single account (Hans owns ~4,600) would blow per-account daily caps and defeat deliverability/warmup.
+
+**Checks:** 5/5 new unit tests pass · `tsc --noEmit` + `eslint src/` clean on changed files (local `jssip` module-not-found in `webrtc-client.ts` is a pre-existing env gap — jssip in package.json but not installed in the local node_modules; Vercel installs fresh). **Deploy:** merged to main (`9a00252`); current prod build `cbe44bd` (includes #456 + #455) live, https://crm-for-saas.vercel.app 200. No migration, no env var, no cron.
+
+---
+
 ## Mark a list as a call list — 2026-06-30 — PR #442 (feature/mark-call-list)
 
 Jacob, from the list detail page: "I want to be able to tag or mark a list as a call list."
