@@ -36,6 +36,12 @@ export interface CallAnalysis {
   summary: string;
   /** Summary in Swedish — present only for Swedish calls, else "". */
   summary_native: string;
+  /**
+   * The contact's language as a 2-letter ISO code (e.g. "sv", "en", "fi"), the
+   * language the follow-up email should ultimately be sent in. Best guess from
+   * the language hint + the language actually spoken in the transcript.
+   */
+  contact_language: string;
   key_takeaways: string[];
   sentiment: "positive" | "neutral" | "negative";
   suggested_outcome: CallOutcome;
@@ -81,6 +87,11 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
         description:
           "The SAME summary written in Swedish — ONLY when the contact is Swedish (see the language rule). For a non-Swedish contact, return an empty string \"\".",
       },
+      contact_language: {
+        type: "string",
+        description:
+          "The contact's language as a 2-letter ISO code (e.g. \"sv\", \"en\", \"fi\", \"no\", \"da\"). This is the language the follow-up email will ultimately be sent in. Infer from the language hint and the language actually spoken in the transcript. Default to \"en\" only if genuinely unclear.",
+      },
       key_takeaways: {
         type: "array",
         items: { type: "string" },
@@ -97,13 +108,17 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
         type: "object",
         properties: {
           recommended: { type: "boolean" },
-          subject: { type: "string" },
+          subject: {
+            type: "string",
+            description:
+              "Subject line in English (translated at send). Short and specific to this call — no generic 'Following up' filler.",
+          },
           body: {
             type: "string",
             description:
-              "Plain-text email body. LANGUAGE: Swedish if the contact is Swedish, otherwise English (see the language rule). 2-4 sentences. No greeting line, no signature — those are added at send time. Reference what was actually discussed. Stay grounded in the product knowledge; never invent features/pricing/links.",
+              "Plain-text email body, ALWAYS in English (the agent reviews/edits in English; it is translated to the contact's language at send time — see the language rule). No greeting line and no signature — those are added at send time. Write like a human peer following up, not a chatbot. Requirements: (1) Reference at least one specific, concrete thing from THIS call — a question they raised, an objection, a vehicle/workflow they mentioned, or a commitment made — so it's obviously not a template. (2) Match the call outcome and sentiment: 'interested' → propose the concrete next step discussed; 'callback_scheduled' → confirm the agreed time; 'closed' → warm welcome + the one thing to do first; 'not_interested' → gracious, low-pressure, leave the door open; 'no_answer'/'left_voicemail' → brief nudge referencing the voicemail. (3) Keep it tight (2-4 sentences) with exactly one soft CTA. (4) Stay grounded in the product knowledge; never invent features, pricing, stats, or links.",
           },
-          reason: { type: "string", description: "Why this email (or why not, if not recommended)." },
+          reason: { type: "string", description: "Why this email (or why not, if not recommended). One sentence." },
         },
         required: ["recommended", "subject", "body", "reason"],
       },
@@ -141,6 +156,7 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
     required: [
       "summary",
       "summary_native",
+      "contact_language",
       "key_takeaways",
       "sentiment",
       "suggested_outcome",
@@ -170,8 +186,9 @@ Stay grounded in the canonical product knowledge below — never invent features
 
 LANGUAGE RULE (important):
 - ${contactSwedishness}
-- If the contact is Swedish: write \`summary_native\` as the Swedish version of the summary, AND write the follow-up email (subject + body) in Swedish.
-- If the contact is NOT Swedish: set \`summary_native\` to an empty string "", AND write the follow-up email in English.
+- Set \`contact_language\` to the contact's language as a 2-letter ISO code — the language the follow-up email will be sent in. Use the hint above and the language actually spoken in the transcript.
+- The follow-up email (subject + body) is ALWAYS written in English. The agent reviews and edits it in English, and it is automatically translated to \`contact_language\` at send time. Do NOT pre-translate it yourself.
+- If the contact is Swedish: also write \`summary_native\` as the Swedish version of the summary (a reading aid for the agent). Otherwise set \`summary_native\` to an empty string "".
 - \`summary\` and \`key_takeaways\` are ALWAYS in English regardless.
 
 === WRENCHLANE PRODUCT KNOWLEDGE (authoritative) ===
@@ -209,6 +226,14 @@ Today's date is ${ctx.today}. Call the record_call_analysis tool exactly once wi
       analysis.suggested_outcome = "interested";
     }
     if (typeof analysis.summary_native !== "string") analysis.summary_native = "";
+    // Normalize the language code to a 2-letter lowercase ISO; default to the
+    // hint (or English) if the model omitted or malformed it.
+    const rawLang =
+      typeof analysis.contact_language === "string"
+        ? analysis.contact_language.slice(0, 2).toLowerCase()
+        : "";
+    analysis.contact_language =
+      rawLang || (ctx.languageHint === "sv" ? "sv" : "en");
     return { ok: true, analysis, model: MODEL };
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : "analyzeCall failed" };
