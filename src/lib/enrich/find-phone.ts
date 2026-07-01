@@ -74,23 +74,54 @@ const CONTACT_PATHS = [
   "/hitta-hit",
 ];
 
-async function fetchHtml(url: string, signal: AbortSignal): Promise<string | null> {
+interface FetchOutcome {
+  html: string | null;
+  /** HTTP status, or "abort"/"error" when the request never completed. */
+  status: number | string;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Fetch one page with browser-like headers, following redirects. Retries once on
+// a transient failure (5xx / 429 / network error) — small Nordic hosts (Loopia,
+// One.com, etc.) often throttle server-side traffic, and a single retry clears
+// most of it.
+async function fetchHtml(
+  url: string,
+  signal: AbortSignal,
+  attempt = 0,
+): Promise<FetchOutcome> {
   try {
     const res = await fetch(url, {
       method: "GET",
       redirect: "follow",
       signal,
       headers: {
+        // Look like a real browser: some hosts 403 anything that doesn't send a
+        // full header set (UA + Accept-Language + Referer).
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "sv-SE,sv;q=0.9,en;q=0.8",
+        Referer: "https://www.google.com/",
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if ((res.status >= 500 || res.status === 429) && attempt < 1 && !signal.aborted) {
+        await sleep(500);
+        return fetchHtml(url, signal, attempt + 1);
+      }
+      return { html: null, status: res.status };
+    }
     const text = await res.text();
-    return text.slice(0, 200_000);
-  } catch {
-    return null;
+    return { html: text.slice(0, 200_000), status: 200 };
+  } catch (err) {
+    const aborted = signal.aborted || (err instanceof Error && err.name === "AbortError");
+    if (!aborted && attempt < 1) {
+      await sleep(500);
+      return fetchHtml(url, signal, attempt + 1);
+    }
+    return { html: null, status: aborted ? "abort" : "error" };
   }
 }
 
@@ -217,34 +248,50 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
   const sites = Array.from(
     new Set((input.websites ?? []).map(normalizeUrl).filter((u): u is string => !!u)),
   );
+  // Per-page fetch outcomes, surfaced in `reasoning` so a host that refuses our
+  // server-side requests reads as "fetch blocked" instead of "no numbers".
+  const fetchLog: { url: string; status: number | string }[] = [];
   if (sites.length) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25_000);
-    try {
-      // Cap the crawl: at most the first 2 sites × the contact paths, ~10 pages.
-      const targets: string[] = [];
-      for (const site of sites.slice(0, 2)) {
-        for (const path of CONTACT_PATHS) targets.push(`${site}${path}`);
+
+    const harvest = (url: string, outcome: FetchOutcome) => {
+      fetchLog.push({ url, status: outcome.status });
+      if (!outcome.html) return;
+      for (const raw of extractPhonesFromHtml(outcome.html)) {
+        const e164 = normalizePhone(raw, hint);
+        if (!e164) continue;
+        add({
+          number: e164,
+          raw: raw.trim().replace(/\s+/g, " "),
+          label: null,
+          source: "website",
+          sourceUrl: url,
+          confidence: "high",
+        });
       }
-      const pages = await Promise.all(
-        targets.slice(0, 10).map(async (url) => ({
-          url,
-          html: await fetchHtml(url, controller.signal),
-        })),
-      );
-      for (const { url, html } of pages) {
-        if (!html) continue;
-        for (const raw of extractPhonesFromHtml(html)) {
-          const e164 = normalizePhone(raw, hint);
-          if (!e164) continue;
-          add({
-            number: e164,
-            raw: raw.trim().replace(/\s+/g, " "),
-            label: null,
-            source: "website",
-            sourceUrl: url,
-            confidence: "high",
-          });
+    };
+
+    try {
+      // Hit each site's homepage FIRST and serially — footers are where the
+      // numbers live, and a single browser-like request is far less likely to
+      // be throttled than a 10-way parallel burst against a small host.
+      const subPaths: string[] = [];
+      for (const site of sites.slice(0, 2)) {
+        harvest(site, await fetchHtml(site, controller.signal));
+        for (const path of CONTACT_PATHS) if (path) subPaths.push(`${site}${path}`);
+      }
+
+      // Only crawl the contact/about sub-pages if the homepages gave us nothing,
+      // and then only a few, in small batches of 3, so we never flood the host.
+      if (byNumber.size === 0) {
+        const targets = subPaths.slice(0, 8);
+        for (let i = 0; i < targets.length; i += 3) {
+          const batch = targets.slice(i, i + 3);
+          const outcomes = await Promise.all(
+            batch.map(async (url) => ({ url, outcome: await fetchHtml(url, controller.signal) })),
+          );
+          for (const { url, outcome } of outcomes) harvest(url, outcome);
         }
       }
     } finally {
@@ -326,14 +373,24 @@ Rules:
     (c.confidence === "high" ? 10 : c.confidence === "medium" ? 5 : 0);
   const phones = Array.from(byNumber.values()).sort((a, b) => order(b) - order(a));
 
+  // If the website was reachable neither with a 200 nor an honest 404, the host
+  // is likely refusing our server-side requests — call that out explicitly.
+  const blocked = fetchLog.filter((f) => f.status !== 200 && f.status !== 404);
+  const fetchNote =
+    !phones.length && sites.length && blocked.length && blocked.length === fetchLog.length
+      ? ` Could not read the website (${Array.from(new Set(blocked.map((b) => String(b.status)))).join(
+          ", ",
+        )}) — the host may be blocking server-side requests.`
+      : "";
+
   const reasoning = phones.length
     ? `Found ${phones.length} number${phones.length === 1 ? "" : "s"}${
         sites.length ? " (website + web search)" : " (web search)"
       }.`
-    : searchReasoning ||
-      (sites.length || searchSubject
-        ? "No phone numbers could be found for this contact."
-        : "No website or name to search with.");
+    : (searchReasoning ||
+        (sites.length || searchSubject
+          ? "No phone numbers could be found for this contact."
+          : "No website or name to search with.")) + fetchNote;
 
   return { found: phones.length > 0, phones, reasoning };
 }
