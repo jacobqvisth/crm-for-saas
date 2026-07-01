@@ -19,7 +19,7 @@ type Job = {
   attempts: number | null;
 };
 
-export async function POST(request: NextRequest) {
+async function handle(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -104,4 +104,12 @@ export async function POST(request: NextRequest) {
   );
 
   return NextResponse.json({ claimed: jobs.length, done, errored });
+}
+
+// Vercel Cron invokes the path with GET; allow POST too for manual triggering.
+export async function GET(request: NextRequest) {
+  return handle(request);
+}
+export async function POST(request: NextRequest) {
+  return handle(request);
 }
