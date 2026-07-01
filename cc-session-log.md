@@ -4890,3 +4890,75 @@ he's recently answered.
 Migration must be applied to prod BEFORE/with the deploy — the reply route's post-send
 UPDATE and the new tabs reference the new columns. Classifier blocked CC from applying
 the DDL directly (expected); Jacob to apply `20260630170000_inbox_reply_state.sql`.
+
+## "Find numbers" reliability + background phone-enrichment queue — 2026-07-01 — PRs #451, #454, #455, #462, #467
+
+Reported symptom: "Find numbers" found nothing for contacts whose number is plainly
+on their website (Haninge Bilpark, Mibra Bilservice), and "took forever". Traced the
+whole path, fixed it end-to-end, and built the background queue Jacob asked for.
+
+### Root cause (found via Vercel runtime logs)
+`POST /api/enrich/find-phone` was hitting the **180 s Vercel function timeout (504)**.
+The website scrape finds the number in ~2 s, but the code then **always ran the slow AI
+web-search leg too** — that loop could exceed 180 s, so the function was killed and
+returned nothing, discarding the number the scrape had already found. That's both the
+"finds nothing" and the "takes forever".
+
+### What was built / changed
+- **PR #451 — fetch hardening** (`src/lib/enrich/find-phone.ts`): browser-like headers
+  (UA + `Accept-Language: sv-SE` + Referer), homepage-first serial fetch instead of a
+  10-way parallel burst, retry-once on 5xx/429/network, and surfaces "host may be
+  blocking server-side requests" in the reasoning instead of a silent miss.
+- **PR #454 — reliable AI report + diagnostics**: the web-search leg made a single model
+  call and silently returned zero if the model paused (`pause_turn`) or answered in
+  prose; now it loops through pauses and **forces `report_phones`**. Added a
+  `FindPhonesDebug` object + one structured `[find-phone] {...}` console line per run
+  (fetch statuses, apiKeyPresent, webSearchTurns, reportCalled, webPhoneCount,
+  searchError) so a "found nothing" is explainable in Vercel logs.
+- **PR #462 — the actual timeout fix**: **skip the AI web-search entirely when the site
+  scrape already found a number** (`byNumber.size === 0` guard); + a 90 s wall-clock
+  budget on the web-search phase and turn cap 4→3, so even the scrape-empty path can
+  never reach the 180 s limit. Common case (number is on the site) now returns in a few
+  seconds.
+- **PR #452 — website-first + UI**: new shared lib `src/lib/enrich/find-phone-for-contact.ts`
+  (`findPhonesForRecord` + `saveFoundPhones`): if a record has no website, find one
+  (email-domain or web search) and persist it before scraping. Added an info (ⓘ) popover
+  on the contact Phone Numbers panel explaining the 4 steps, and a "Find missing numbers"
+  button on the Call Planner.
+- **PR #455 — background queue + search tracking**:
+  - `contacts.phone_searched_at` + `phone_search_outcome` (`found`/`none`/`blocked`/
+    `error`), stamped by `findPhonesForRecord` on every run (best-effort). Call Planner
+    shows a per-row "searched · none / site blocked / error" chip so dead ends aren't
+    re-searched.
+  - `phone_enrichment_jobs` table + cron worker (`/api/cron/phone-enrichment`, every
+    2 min) that runs the finder server-side and saves numbers as found.
+  - `/api/enrich/find-phone/enqueue` (Call Planner "Find missing numbers" now enqueues
+    instead of looping in the browser — you can leave the page; skips contacts searched
+    <14 days ago, with a "re-search" toggle) + `/api/enrich/find-phone/queue-status`
+    (live "finding in background — N remaining" banner; list auto-refreshes as numbers
+    land).
+  - Migration `20260701120000_phone_enrichment.sql` (applied to prod by Jacob via Studio).
+- **PR #467 — cron GET fix**: the worker was POST-only, but **Vercel Cron invokes with
+  GET → 405**, so the queue never drained (16× 405 in logs). Now exports both GET and
+  POST. Confirmed in logs the cron is processing jobs after this.
+- `database.types.ts` updated for `phone_enrichment_jobs` + the two `contacts` columns.
+
+### Decisions / notes
+- AI web-search is now a *fallback*, only when scraping finds nothing — trades the odd
+  "second line" miss for speed and no 504s.
+- Person-only contacts with no website/company site legitimately find nothing (no public
+  number to scrape) — the fix makes it fast + correct, not magic.
+- Prod DDL + live-key materialization are hard-blocked by the auto-mode classifier;
+  Jacob applied the migration in the Supabase SQL editor. The editor mangled a pasted
+  multi-statement block once — paste a compact comment-free version and verify before Run.
+
+### Checks
+Each PR: CI "Build & Lint" green (local `tsc`/`build` couldn't run — sandbox OOM-kills
+Node). Root-caused directly from Vercel runtime logs (`get_runtime_logs`) + live `curl`
+of target sites. Cron confirmed running under GET post-deploy.
+
+### Open
+- Visual confirm that a company-linked contact (e.g. Mibra) now returns its number in
+  seconds via the single-contact button (expected: +46 73 766 88 45).
+- The call-list detail bulk button (#453, another session) is still on the synchronous
+  path; only the Call Planner was switched to the background queue.
