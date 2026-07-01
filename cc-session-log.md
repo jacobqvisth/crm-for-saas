@@ -5030,3 +5030,33 @@ Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
 - Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
   compose English, Preview in Swedish, send, verify recipient gets Swedish and
   the timeline activity retains the English (`body_en` / `sent_language`).
+
+---
+
+## Post-call follow-up email — send-language selector + smarter English-first email
+**Date:** 2026-07-01 · **PR:** #478 · **Branch:** worktree-call-followup-lang → main (d9f3796)
+
+Brought the contact-compose-modal language feature (#471) to the AI **Suggested
+follow-up email** in the call review card, and made that email smarter.
+
+- **Supersedes #412's bilingual email:** the follow-up is now written **always in
+  English** (the agent reviews/edits in English) and auto-translated to the
+  contact's language at send — the same flow as the compose modal.
+- `src/lib/calls/ai-summary.ts`: new `contact_language` output (2-letter ISO,
+  inferred from the language hint + the language spoken in the transcript) →
+  defaults the "Send in" selector. Prompt upgraded: the email must reference a
+  concrete detail from THIS call, and tone + CTA adapt to the call outcome and
+  sentiment (interested / callback_scheduled / closed / not_interested /
+  no_answer). Subject must be specific, not "Following up".
+- `src/components/calls/call-drawer.tsx` `FollowupEmail`: "Send in" selector,
+  English editing, side-by-side "Recipient sees (Language)" preview via
+  `/api/ai/translate-email` (debounced), `targetLanguage` passed to send-email.
+  `workspaceId` via `useWorkspace()` (CallProvider mounts inside WorkspaceProvider).
+
+**Checks:** `tsc --noEmit`, `lint` (0 errors), `build` all pass (post-rebase too).
+Rebased onto main after #477 (DTMF keypad) landed — sole conflict was the lucide
+import (kept Grid3x3 + Languages). Build needs Homebrew node (Codex node OOMs).
+
+Note: this PR also carries the PROJECT-STATUS.md rows for #471 and #478 (the
+earlier standalone docs PR #473 was closed as superseded — classifier kept
+blocking its self-merge).
