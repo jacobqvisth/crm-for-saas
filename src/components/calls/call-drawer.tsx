@@ -7,7 +7,7 @@
 // same drawer without an import cycle. This file holds NO call lifecycle state —
 // it just renders a `Session` plus optional live WebRTC controls.
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   Phone,
@@ -25,10 +25,13 @@ import {
   MicOff,
   PhoneOff,
   Grid3x3,
+  Languages,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { WebrtcState } from "@/lib/calls/webrtc-client";
+import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/i18n/languages";
 
 /** Which leg rings as the agent: their mobile (bridge) or the browser (webrtc). */
 export type CallMode = "bridge" | "webrtc";
@@ -61,6 +64,7 @@ type FeedbackItem = {
 type AiJson = {
   summary: string;
   summary_native?: string;
+  contact_language?: string;
   key_takeaways: string[];
   sentiment: "positive" | "neutral" | "negative";
   suggested_outcome: CallOutcome;
@@ -299,7 +303,11 @@ export function CallDrawer({
                 </details>
               )}
 
-              <FollowupEmail target={target} suggested={ai.suggested_followup_email} />
+              <FollowupEmail
+                target={target}
+                suggested={ai.suggested_followup_email}
+                defaultLanguage={ai.contact_language}
+              />
 
               {ai.suggested_tasks.length > 0 && (
                 <SuggestedTasks target={target} tasks={ai.suggested_tasks} />
@@ -414,14 +422,80 @@ function WebrtcCallCard({ webrtc }: { webrtc: WebrtcControls }) {
 function FollowupEmail({
   target,
   suggested,
+  defaultLanguage,
 }: {
   target: CallNowTarget;
   suggested: SuggestedEmail;
+  /** Contact language (ISO) the AI detected on the call; selector defaults to it. */
+  defaultLanguage?: string;
 }) {
+  const { workspaceId } = useWorkspace();
   const [subject, setSubject] = useState(suggested.subject);
   const [body, setBody] = useState(suggested.body);
+  const [language, setLanguage] = useState<string>(
+    (defaultLanguage || "en").toLowerCase()
+  );
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+
+  // Translated preview (what the recipient receives). The agent composes in
+  // English; the send path re-translates server-side, so a stale preview never
+  // determines what ships. Mirrors the contact compose modal.
+  const [showPreview, setShowPreview] = useState(false);
+  const [translated, setTranslated] = useState<{ subject: string; body: string } | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const translatedKeyRef = useRef<string | null>(null);
+
+  const fetchTranslation = useCallback(async () => {
+    if (language === "en" || !workspaceId) return;
+    if (!subject.trim() && !body.trim()) {
+      setTranslated(null);
+      translatedKeyRef.current = null;
+      return;
+    }
+    const key = `${language} ${subject} ${body}`;
+    if (translatedKeyRef.current === key) return;
+    setTranslating(true);
+    setTranslateError(null);
+    try {
+      const res = await fetch("/api/ai/translate-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          subject,
+          bodyHtml: textToHtml(body),
+          targetLanguage: language,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTranslateError(data.error || "Translation failed");
+        return;
+      }
+      setTranslated({ subject: data.subject || "", body: data.bodyHtml || "" });
+      translatedKeyRef.current = key;
+    } catch {
+      setTranslateError("Network error while translating");
+    } finally {
+      setTranslating(false);
+    }
+  }, [language, subject, body, workspaceId]);
+
+  // Invalidate + hide the preview when the target language changes.
+  useEffect(() => {
+    setTranslated(null);
+    setTranslateError(null);
+    translatedKeyRef.current = null;
+  }, [language]);
+
+  // Keep the preview fresh while it's open (debounced).
+  useEffect(() => {
+    if (!showPreview || language === "en") return;
+    const t = setTimeout(() => void fetchTranslation(), 600);
+    return () => clearTimeout(t);
+  }, [showPreview, language, subject, body, fetchTranslation]);
 
   const send = async () => {
     if (!subject.trim() || !body.trim()) {
@@ -433,11 +507,19 @@ function FollowupEmail({
       const res = await fetch(`/api/contacts/${target.contactId}/send-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: subject.trim(), bodyHtml: textToHtml(body.trim()) }),
+        body: JSON.stringify({
+          subject: subject.trim(),
+          bodyHtml: textToHtml(body.trim()),
+          targetLanguage: language,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to send");
-      toast.success("Follow-up email sent");
+      toast.success(
+        language === "en"
+          ? "Follow-up email sent"
+          : `Follow-up email sent in ${languageLabel(language)}`
+      );
       setSent(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send");
@@ -454,20 +536,93 @@ function FollowupEmail({
           <span className="font-normal text-slate-400">— AI didn&apos;t think one is needed</span>
         )}
       </div>
-      <input
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-        placeholder="Subject"
-        className="mb-2 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
-      />
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        rows={5}
-        className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
-      />
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-slate-400">{suggested.reason}</span>
+
+      {/* Send-language row: compose in English, translate at send. */}
+      <div className="mb-2 flex items-center gap-2">
+        <label className="text-xs font-medium text-slate-500">Send in</label>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          className="rounded border border-slate-200 px-2 py-1 text-sm bg-white"
+          title="You edit in English; it's translated to this language when you send."
+        >
+          {LANGUAGE_OPTIONS.map((l) => (
+            <option key={l.code} value={l.code}>{l.label}</option>
+          ))}
+        </select>
+        {language !== "en" && (
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            className="ml-auto inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+          >
+            <Languages className="h-3.5 w-3.5" />
+            {showPreview ? "Edit English" : `Preview in ${languageLabel(language)}`}
+          </button>
+        )}
+      </div>
+
+      {showPreview && language !== "en" ? (
+        <div className="rounded border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-2 py-1.5 bg-indigo-50 border-b border-indigo-100 text-xs text-indigo-700">
+            <span className="inline-flex items-center gap-1 font-medium">
+              <Languages className="h-3.5 w-3.5" />
+              Recipient sees ({languageLabel(language)})
+            </span>
+            {translating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          </div>
+          {translateError ? (
+            <div className="px-2 py-3 text-sm text-red-600">
+              {translateError}{" "}
+              <button
+                onClick={() => {
+                  translatedKeyRef.current = null;
+                  void fetchTranslation();
+                }}
+                className="underline hover:text-red-700"
+              >
+                Retry
+              </button>
+            </div>
+          ) : translated ? (
+            <>
+              <div className="px-2 py-1.5 bg-slate-50 border-b border-slate-100 text-xs text-slate-600">
+                <span className="font-medium">Subject:</span>{" "}
+                {translated.subject || <span className="text-slate-400">(empty)</span>}
+              </div>
+              <div
+                className="prose prose-sm max-w-none px-2 py-2 text-sm text-slate-800"
+                dangerouslySetInnerHTML={{ __html: translated.body || "<p class='text-slate-400'>(empty)</p>" }}
+              />
+            </>
+          ) : (
+            <div className="px-2 py-6 text-center text-sm text-slate-400">
+              {translating ? `Translating to ${languageLabel(language)}…` : "Nothing to translate yet."}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Subject"
+            className="mb-2 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+          />
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={5}
+            className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+          />
+        </>
+      )}
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-slate-400">
+          {language !== "en"
+            ? `You edit in English — sent in ${languageLabel(language)}.`
+            : suggested.reason}
+        </span>
         <button
           onClick={send}
           disabled={sending || sent}
