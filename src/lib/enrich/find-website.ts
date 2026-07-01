@@ -28,6 +28,11 @@ export interface FindWebsiteInput {
   extraEmails?: string[] | null;
   city?: string | null;
   country?: string | null;
+  /** The business's trade/industry (e.g. "Automotive", "auto repair"). Used to
+   *  reject a site that clearly belongs to a business in a different line of
+   *  work — the main guard against matching a random namesake. */
+  industry?: string | null;
+  category?: string | null;
 }
 
 export interface FindWebsiteResult {
@@ -301,6 +306,21 @@ export async function findWebsite(input: FindWebsiteInput): Promise<FindWebsiteR
 
   const location = [input.city, input.country].filter(Boolean).join(", ");
   const emailHint = input.email ? ` Their email is ${input.email}.` : "";
+  const trade = [input.category, input.industry]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(" / ");
+  // A free/personal email provider (no custom domain) + a person's name is the
+  // hardest, most error-prone case — it's easy to match a random namesake. We
+  // knew this above when customDomain came back null but an email was present.
+  const freeEmail = !!input.email && !customDomain;
+
+  const tradeRule = trade
+    ? `\n- This business is in this line of work: ${trade}. The site you return MUST plausibly belong to a business in that trade. If the only site you can find for this name is in an unrelated industry, it is NOT the right one — set found=false.`
+    : "";
+  const personalRule = freeEmail
+    ? `\n- This contact uses a personal/free email provider and may simply be a private individual, not a business. A person's name on its own is NOT enough to claim a business website. Only return a site if the name, town${trade ? ", and trade" : ""} clearly line up; otherwise set found=false rather than guessing.`
+    : "";
 
   const system = `You find the official, CURRENTLY-LIVE website for a specific business or person. Use the web_search tool to look them up, then call report_website.
 
@@ -310,12 +330,13 @@ Rules:
 - Do NOT return: parked/expired/placeholder domains, "no active website" / "domain for sale" pages, or directory/listing pages (Google Maps, Eniro, hitta.fi, Fonecta, Yelp). A Facebook/Instagram page is an acceptable LAST resort (low confidence) only if there is clearly no own website.
 - An email's domain is a hint, but it may be dead — verify by finding the working site, don't just echo the email domain.
 - If a candidate you found is reported back to you as parked/dead, find a DIFFERENT live site; never re-propose a rejected domain.
-- If you cannot find a live site for THIS specific business, set found=false rather than guessing.
+- If you cannot find a live site for THIS specific business, set found=false rather than guessing.${tradeRule}${personalRule}
 - Keep reasoning to one short sentence.`;
 
   const baseMsg =
     `Find the official live website for:\n` +
     `Name: ${name}\n` +
+    (trade ? `Trade: ${trade}\n` : "") +
     (location ? `Location: ${location}\n` : "") +
     emailHint;
 

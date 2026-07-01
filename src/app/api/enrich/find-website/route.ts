@@ -45,6 +45,8 @@ export async function POST(request: NextRequest) {
   let extraEmails: string[] | null = null;
   let city: string | null = null;
   let country: string | null = null;
+  let industry: string | null = null;
+  let category: string | null = null;
 
   if (contactId) {
     const { data: contact } = await supabase
@@ -62,12 +64,13 @@ export async function POST(request: NextRequest) {
     city = contact.city;
     country = contact.country;
 
-    // A person's name alone is rarely searchable — borrow the company name &
-    // location so the search has a real business to find.
+    // A person's name alone is rarely searchable — borrow the company name,
+    // trade & location so the search has a real business to find (and can
+    // reject a namesake in the wrong industry).
     if (contact.company_id) {
       const { data: company } = await supabase
         .from("companies")
-        .select("name, city, country")
+        .select("name, city, country, industry, category")
         .eq("id", contact.company_id)
         .eq("workspace_id", workspaceId)
         .maybeSingle();
@@ -75,12 +78,14 @@ export async function POST(request: NextRequest) {
         if (company.name) name = name ? `${name} (${company.name})` : company.name;
         city = city || company.city;
         country = country || company.country;
+        industry = company.industry;
+        category = company.category;
       }
     }
   } else if (companyId) {
     const { data: company } = await supabase
       .from("companies")
-      .select("name, city, country")
+      .select("name, city, country, industry, category")
       .eq("id", companyId)
       .eq("workspace_id", workspaceId)
       .single();
@@ -90,8 +95,10 @@ export async function POST(request: NextRequest) {
     name = company.name;
     city = company.city;
     country = company.country;
+    industry = company.industry;
+    category = company.category;
   }
 
-  const result = await findWebsite({ name, email, extraEmails, city, country });
+  const result = await findWebsite({ name, email, extraEmails, city, country, industry, category });
   return NextResponse.json(result);
 }

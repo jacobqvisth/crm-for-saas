@@ -34,8 +34,12 @@ export interface FindPhonesInput {
   country?: string | null;
   /** ISO alpha-2 hint used to expand national numbers (e.g. "SE"). */
   countryCode?: string | null;
+  /** The business's trade/industry (e.g. "Automotive", "auto repair"). Used by
+   *  the web-search leg to avoid returning a namesake in the wrong industry. */
+  industry?: string | null;
+  category?: string | null;
   /** Numbers already on the record — excluded from the results so we only
-   *  surface NEW finds. */
+   *  surface NEW finds. Includes user-rejected ("not correct") numbers. */
   existing?: (string | null | undefined)[];
 }
 
@@ -341,13 +345,23 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     const client = new Anthropic({ apiKey });
     const location = [input.city, input.country].filter(Boolean).join(", ");
 
+    const trade = [input.category, input.industry]
+      .map((s) => (s || "").trim())
+      .filter(Boolean)
+      .join(" / ");
+    const tradeRule = trade
+      ? `\n- This business is in this line of work: ${trade}. Only report numbers for a business in that trade. If the name matches a person or a business in a DIFFERENT industry, it is the wrong entity — do not report it.`
+      : "";
+    // Guard the hardest case: a person's name with no real business behind it.
+    const personalRule = `\n- If this is a private individual and you cannot find a genuine business${trade ? ` in ${trade}` : ""} matching the name and town, report an EMPTY list — never guess a stranger's personal number.`;
+
     const system = `You find ALL the phone numbers for a specific business (and the person, if named). Use the web_search tool to look them up, then call report_phones with every number you find.
 
 Rules:
 - Return numbers that belong to THIS specific business/person — match on name, town, and trade.
 - Prefer the business's own website, then reputable directories (hitta.se, eniro, Google Business). Avoid unrelated listings.
 - Include all distinct lines: main/reception, mobile, service desk, etc. Label them when the source says what they are.
-- Give each a confidence based on how sure you are it's the right entity.
+- Give each a confidence based on how sure you are it's the right entity.${tradeRule}${personalRule}
 - If you genuinely can't find any, call report_phones with an empty phones array and explain in reasoning.
 - Keep reasoning to one short sentence.
 - You MUST finish by calling report_phones — do not answer in plain text.`;
@@ -356,6 +370,7 @@ Rules:
       `Find all phone numbers for:\n` +
       (input.companyName ? `Company: ${input.companyName}\n` : "") +
       (input.name && input.name !== input.companyName ? `Person: ${input.name}\n` : "") +
+      (trade ? `Trade: ${trade}\n` : "") +
       (location ? `Location: ${location}\n` : "") +
       (sites.length ? `Known website: ${sites[0]}\n` : "");
 

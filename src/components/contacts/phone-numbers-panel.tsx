@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Star, Trash2, Plus, Loader2, Sparkles, ExternalLink, X, Check, Pencil, Tag, Info,
+  Star, Trash2, Plus, Loader2, Sparkles, ExternalLink, X, Check, Pencil, Tag, Info, Ban,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
@@ -64,6 +64,7 @@ export function PhoneNumbersPanel({
   const [labelDraft, setLabelDraft] = useState('');
   const [finding, setFinding] = useState(false);
   const [found, setFound] = useState<FoundPhone[] | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
 
   const onChangeRef = useRef(onChange);
@@ -169,6 +170,37 @@ export function PhoneNumbersPanel({
     await supabase.from('phone_numbers').delete().eq('id', row.id);
     setBusy(false);
     await load();
+  };
+
+  /** Mark a found number as "not correct" so future searches never surface it.
+   *  Persists to the record's custom_fields.rejected_phones and drops it from
+   *  the picker locally. */
+  const rejectFound = async (p: FoundPhone) => {
+    if (rejecting) return;
+    setRejecting(p.number);
+    try {
+      const res = await fetch('/api/enrich/reject-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId,
+          contactId: contactId ?? undefined,
+          companyId: contactId ? undefined : companyId ?? undefined,
+          number: p.number,
+          countryCode: defaultCountry,
+        }),
+      });
+      if (!res.ok) { toast.error('Could not save'); return; }
+      toast.success("Marked as not correct — won't suggest it again");
+      setFound((prev) => {
+        const next = (prev ?? []).filter((x) => x.number !== p.number);
+        return next.length ? next : null;
+      });
+    } catch {
+      toast.error('Could not save');
+    } finally {
+      setRejecting(null);
+    }
   };
 
   const handleFind = async () => {
@@ -402,13 +434,24 @@ export function PhoneNumbersPanel({
                   {saved ? (
                     <span className="text-xs font-medium text-green-600 flex-shrink-0">Saved</span>
                   ) : (
-                    <button
-                      onClick={() => add(p.number, p.label, p.source)}
-                      disabled={busy}
-                      className="flex-shrink-0 text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      Add
-                    </button>
+                    <div className="flex flex-shrink-0 items-center gap-1">
+                      <button
+                        onClick={() => add(p.number, p.label, p.source)}
+                        disabled={busy || rejecting === p.number}
+                        className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                      <button
+                        onClick={() => rejectFound(p)}
+                        disabled={busy || rejecting === p.number}
+                        title="Not correct — this number isn't for this contact. Won't be suggested again."
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 text-slate-500 border border-slate-200 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50"
+                      >
+                        {rejecting === p.number ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ban className="w-3 h-3" />}
+                        Not correct
+                      </button>
+                    </div>
                   )}
                 </li>
               );
