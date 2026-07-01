@@ -341,7 +341,14 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
 
   const webBefore = byNumber.size;
 
-  if (searchSubject && apiKey) {
+  // Only run the (slow) AI web-search when the website scrape came up empty.
+  // If the site already gave us a number, returning it in ~2s beats spending up
+  // to a minute of web search — and, critically, avoids the 180s function
+  // timeout that was killing the request and discarding the scraped number.
+  if (searchSubject && apiKey && byNumber.size === 0) {
+    // Hard wall-clock budget for the web-search phase so it can never consume
+    // the whole serverless limit (scrape already used up to 25s).
+    const webDeadline = Date.now() + 90_000;
     const client = new Anthropic({ apiKey });
     const location = [input.city, input.country].filter(Boolean).join(", ");
 
@@ -411,7 +418,8 @@ Rules:
       // Drive the server-tool loop: the model runs web_search, and may hand back
       // a `pause_turn` (its search loop hit the limit) that we must re-send to
       // continue. Stop once it calls report_phones or finishes its turn.
-      for (let turn = 0; turn < 4 && !report; turn++) {
+      for (let turn = 0; turn < 3 && !report; turn++) {
+        if (Date.now() > webDeadline) break; // out of budget → force a report below
         const resp = await client.messages.create({ model: MODEL, max_tokens: 1500, system, tools, messages });
         debug.webSearchTurns++;
         report = findReport(resp.content);
