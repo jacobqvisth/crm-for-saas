@@ -82,6 +82,8 @@ const contact = {
   owner_auto: true,
   owner_updated_at: null,
   primary_owner_source: null,
+  phone_searched_at: null,
+  phone_search_outcome: null,
 } satisfies Contact;
 
 const company: Company = {
@@ -166,6 +168,8 @@ const company: Company = {
   owner_auto: true,
   owner_updated_at: null,
   primary_owner_source: null,
+  phone_searched_at: null,
+  phone_search_outcome: null,
 };
 
 // ---------------------------------------------------------------------------
