@@ -9,7 +9,7 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { Modal } from '@/components/ui/modal';
 import { FilterBuilder } from './filter-builder';
 import toast from 'react-hot-toast';
-import { buildFilterQuery } from '@/lib/lists/filter-query';
+import { buildFilterQuery, resolveListContactIds, isCompleteFilter } from '@/lib/lists/filter-query';
 import type { Tables } from '@/lib/database.types';
 import type { ListFilter } from '@/lib/lists/filter-query';
 
@@ -98,6 +98,12 @@ export function ListTable() {
     if (!workspaceId || !createName.trim()) return;
     setCreating(true);
 
+    // Only run filters that are fully specified. For a static list these seed
+    // the initial membership once (a snapshot) — they are NOT stored, so there
+    // is no live filter to edit afterward (HubSpot's static-list model). For a
+    // dynamic list they're stored and re-evaluated on every read.
+    const validFilters = createFilters.filter(isCompleteFilter);
+
     const { data, error } = await supabase
       .from('contact_lists')
       .insert({
@@ -105,7 +111,9 @@ export function ListTable() {
         name: createName.trim(),
         description: createDesc.trim() || null,
         is_dynamic: createType === 'dynamic',
-        filters: createType === 'dynamic' ? (createFilters as unknown as Tables<'contact_lists'>['filters']) : null,
+        filters: createType === 'dynamic'
+          ? (validFilters as unknown as Tables<'contact_lists'>['filters'])
+          : null,
       })
       .select('id')
       .single();
@@ -116,7 +124,41 @@ export function ListTable() {
       return;
     }
 
-    toast.success('List created');
+    // Static list seeded with filters: resolve the matches now and snapshot
+    // them into contact_list_members. After this the filters are gone — the
+    // list is managed manually.
+    if (createType === 'static' && validFilters.length > 0) {
+      try {
+        const contactIds = await resolveListContactIds(supabase, {
+          id: data.id,
+          workspace_id: workspaceId,
+          is_dynamic: true, // resolve via filters, not the (empty) member table
+          filters: validFilters,
+        });
+
+        if (contactIds.length > 0) {
+          const CHUNK = 500;
+          for (let i = 0; i < contactIds.length; i += CHUNK) {
+            const { error: memberError } = await supabase
+              .from('contact_list_members')
+              .insert(
+                contactIds.slice(i, i + CHUNK).map((contact_id) => ({
+                  list_id: data.id,
+                  contact_id,
+                })),
+              );
+            if (memberError) throw memberError;
+          }
+        }
+        toast.success(`List created — ${contactIds.length} contact${contactIds.length === 1 ? '' : 's'} added`);
+      } catch {
+        // The list exists; only the snapshot failed. Let the user add manually.
+        toast.error('List created, but adding contacts from the filter failed');
+      }
+    } else {
+      toast.success('List created');
+    }
+
     setShowCreate(false);
     setCreateName('');
     setCreateDesc('');
@@ -398,7 +440,7 @@ export function ListTable() {
                   <Users className="w-4 h-4" />
                   Static
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Manually add contacts</p>
+                <p className="text-xs text-slate-500 mt-1">Snapshot now — filter and/or add manually</p>
               </button>
               <button
                 onClick={() => setCreateType('dynamic')}
@@ -417,14 +459,22 @@ export function ListTable() {
             </div>
           </div>
 
-          {createType === 'dynamic' && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Filters</label>
-              <div className="border border-slate-200 rounded-lg p-3">
-                <FilterBuilder filters={createFilters} onChange={setCreateFilters} />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {createType === 'dynamic' ? 'Filters' : 'Add contacts by filter'}
+              {createType === 'static' && (
+                <span className="font-normal text-slate-400"> (optional)</span>
+              )}
+            </label>
+            <p className="text-xs text-slate-500 mb-2">
+              {createType === 'dynamic'
+                ? 'Membership updates automatically as contacts match or stop matching.'
+                : 'Contacts matching these filters are added once, now. The filters are not saved — afterward you manage the list manually.'}
+            </p>
+            <div className="border border-slate-200 rounded-lg p-3">
+              <FilterBuilder filters={createFilters} onChange={setCreateFilters} />
             </div>
-          )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <button
