@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildFilterQuery, type ListFilter } from "@/lib/lists/filter-query";
 import { PLAYBOOKS, BOUNCED_SUB_STATUSES, type Playbook } from "@/lib/calls/playbooks";
-import { scoreContact, isFreshToCall, type ScoreableContact } from "@/lib/calls/scoring";
+import {
+  scoreContact,
+  isFreshToCall,
+  PAID_PLANS,
+  type ScoreableContact,
+} from "@/lib/calls/scoring";
+import { isDealAccountEmail } from "@/lib/calls/deal-accounts";
+import { listReps } from "@/lib/reps/list";
 
 // How many ranked contacts to surface as "today's top".
 const TOP_LIMIT = 30;
@@ -31,6 +38,8 @@ type CandidateRow = {
   phone: string | null;
   company_id: string | null;
   lead_status: string | null;
+  country_code: string | null;
+  primary_owner_id: string | null;
   user_plan_type: string | null;
   user_subscription_status: string | null;
   user_stripe_customer_id: string | null;
@@ -47,7 +56,7 @@ type CandidateRow = {
 // GET /api/calls/planner — the "who to call today" intelligence:
 //  - topContacts: scored & ranked app users worth calling now
 //  - playbooks: each segment with live total + with-phone counts
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -58,6 +67,30 @@ export async function GET(_request: NextRequest) {
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const now = Date.now();
+
+  // ---- Optional filters for "today's top contacts" -----------------------
+  // These narrow the candidate pool *before* scoring, so the list you turn
+  // into a call list (via "Start calling these") inherits them. Playbooks are
+  // purpose-built segments and are intentionally left unfiltered.
+  const params = request.nextUrl.searchParams;
+  const parseList = (v: string | null) =>
+    (v ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  const countryFilter = new Set(parseList(params.get("countries")).map((c) => c.toUpperCase()));
+  const excludePaying = params.get("excludePaying") === "1";
+  const excludeDeals = params.get("excludeDeals") === "1";
+  // Owner tokens to drop: canonical rep user_ids and/or the literal "unassigned".
+  const excludeOwnerTokens = new Set(parseList(params.get("excludeOwners")));
+
+  // Reps drive the owner filter UI and let us map any stored owner id back to
+  // its canonical rep (one person may have several user_ids).
+  const reps = await listReps(supabase);
+  const ownerIdToCanonical = new Map<string, string>();
+  for (const rep of reps) {
+    for (const uid of rep.userIds) ownerIdToCanonical.set(uid, rep.userId);
+  }
 
   // 1. Stripe customers with a bounced/failed payment (drives the
   //    payment_bounced playbook + the scoring flag). dashboard_subscriptions
@@ -77,7 +110,7 @@ export async function GET(_request: NextRequest) {
     const { data, error } = await supabase
       .from("contacts")
       .select(
-        "id, first_name, last_name, email, phone, company_id, lead_status, user_plan_type, user_subscription_status, user_stripe_customer_id, signed_up_at, diagnostics_total, diagnostics_last_30d, login_count, last_active_at, credits_remaining, last_contacted_at, companies(name)",
+        "id, first_name, last_name, email, phone, company_id, lead_status, country_code, primary_owner_id, user_plan_type, user_subscription_status, user_stripe_customer_id, signed_up_at, diagnostics_total, diagnostics_last_30d, login_count, last_active_at, credits_remaining, last_contacted_at, companies(name)",
       )
       .eq("workspace_id", workspaceId)
       .not("wl_user_id", "is", null)
@@ -88,8 +121,26 @@ export async function GET(_request: NextRequest) {
     if (page.length < PAGE) break;
   }
 
+  // Countries present in the pool — offered as filter options (from the full
+  // pool, so deselecting one never removes it from the picker).
+  const availableCountries = Array.from(
+    new Set(candidates.map((c) => c.country_code).filter((c): c is string => !!c)),
+  ).sort();
+
+  // Apply the optional filters to the candidate pool.
+  const ownerToken = (c: CandidateRow) =>
+    c.primary_owner_id ? (ownerIdToCanonical.get(c.primary_owner_id) ?? c.primary_owner_id) : "unassigned";
+  const filtered = candidates.filter((c) => {
+    if (countryFilter.size > 0 && !(c.country_code && countryFilter.has(c.country_code.toUpperCase())))
+      return false;
+    if (excludePaying && c.user_plan_type && PAID_PLANS.has(c.user_plan_type)) return false;
+    if (excludeDeals && isDealAccountEmail(c.email)) return false;
+    if (excludeOwnerTokens.size > 0 && excludeOwnerTokens.has(ownerToken(c))) return false;
+    return true;
+  });
+
   // 3. Score the fresh-to-call candidates and rank them.
-  const scored = candidates
+  const scored = filtered
     .filter((c) => isFreshToCall(c, now, FRESH_CUTOFF_DAYS))
     .map((c) => {
       const snapshot: ScoreableContact = {
@@ -166,9 +217,12 @@ export async function GET(_request: NextRequest) {
   return NextResponse.json({
     topContacts: top,
     topWithPhone,
-    candidateCount: candidates.length,
+    candidateCount: filtered.length,
+    totalCandidateCount: candidates.length,
     freshCutoffDays: FRESH_CUTOFF_DAYS,
     playbooks: playbookResults,
+    reps: reps.map((r) => ({ userId: r.userId, number: r.number, name: r.name })),
+    availableCountries,
   });
 }
 

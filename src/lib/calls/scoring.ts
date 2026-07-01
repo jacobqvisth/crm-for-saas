@@ -42,7 +42,7 @@ export interface ScoreResult {
   priority: "high" | "medium" | "low";
 }
 
-const PAID_PLANS = new Set([
+export const PAID_PLANS = new Set([
   "one_monthly",
   "small_monthly",
   "small_yearly",
