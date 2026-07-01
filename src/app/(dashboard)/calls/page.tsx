@@ -40,25 +40,57 @@ type CallList = {
   memberCount: number;
 };
 
+const PAGE_SIZE = 50;
+
+type CallFilter = "today" | "yesterday" | "last7";
+
+const CALL_FILTERS: { id: CallFilter; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "last7", label: "Last 7 days" },
+];
+
+// Date range for a filter, in the browser's local timezone (Stockholm for this team).
+// Returns ISO (UTC) strings suitable for the /api/calls since/until params.
+function rangeFor(filter: CallFilter): { since: string; until?: string } {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysBefore = (d: Date, days: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() - days);
+    return x;
+  };
+  // 1ms before today's midnight — exclusive upper bound so a 00:00 call isn't double-counted.
+  const endOfYesterday = new Date(startOfToday.getTime() - 1).toISOString();
+  if (filter === "today") return { since: startOfToday.toISOString() };
+  if (filter === "yesterday")
+    return { since: daysBefore(startOfToday, 1).toISOString(), until: endOfYesterday };
+  // last7: the 7 full days before today (not including today)
+  return { since: daysBefore(startOfToday, 7).toISOString(), until: endOfYesterday };
+}
+
 export default function CallsOverviewPage() {
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
   const [calls, setCalls] = useState<CallRow[]>([]);
+  const [callsTotal, setCallsTotal] = useState(0);
   const [lists, setLists] = useState<CallList[]>([]);
   const [loading, setLoading] = useState(true);
+  const [callsLoading, setCallsLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [callFilter, setCallFilter] = useState<CallFilter>("today");
   const [showNew, setShowNew] = useState(false);
   const [openCall, setOpenCall] = useState<OpenCall | null>(null);
 
+  // Stats + call lists load once.
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, c, l] = await Promise.all([
+      const [s, l] = await Promise.all([
         fetch("/api/calls/stats").then((r) => r.json()),
-        fetch("/api/calls?limit=15").then((r) => r.json()),
         fetch("/api/calls/lists").then((r) => r.json()),
       ]);
       setStats(s);
-      setCalls(c.calls ?? []);
       setLists(l.lists ?? []);
     } catch {
       toast.error("Failed to load calls");
@@ -67,9 +99,38 @@ export default function CallsOverviewPage() {
     }
   }, []);
 
+  // Recent calls reload when the date filter changes; paginate via offset.
+  const loadCalls = useCallback(async (filter: CallFilter, offset: number) => {
+    const append = offset > 0;
+    if (append) setLoadingMore(true);
+    else setCallsLoading(true);
+    try {
+      const { since, until } = rangeFor(filter);
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+        since,
+      });
+      if (until) params.set("until", until);
+      const res = await fetch(`/api/calls?${params.toString()}`).then((r) => r.json());
+      const rows: CallRow[] = res.calls ?? [];
+      setCalls((prev) => (append ? [...prev, ...rows] : rows));
+      setCallsTotal(res.total ?? 0);
+    } catch {
+      toast.error("Failed to load recent calls");
+    } finally {
+      if (append) setLoadingMore(false);
+      else setCallsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadCalls(callFilter, 0);
+  }, [callFilter, loadCalls]);
 
   const cards = stats
     ? [
@@ -155,15 +216,37 @@ export default function CallsOverviewPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <Phone className="h-4 w-4" /> Recent calls
-          </h2>
-          {calls.length === 0 && !loading && (
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Phone className="h-4 w-4" /> Recent calls
+            </h2>
+            {!callsLoading && (
+              <span className="text-xs text-slate-400">
+                {callsTotal} {callsTotal === 1 ? "call" : "calls"}
+              </span>
+            )}
+          </div>
+          <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+            {CALL_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setCallFilter(f.id)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  callFilter === f.id
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {calls.length === 0 && !callsLoading && (
             <p className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-              No calls logged yet.
+              No calls in this period.
             </p>
           )}
-          <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+          <div className="max-h-[70vh] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white">
             {calls.map((c) => {
               const name =
                 [c.contacts?.first_name, c.contacts?.last_name].filter(Boolean).join(" ").trim() ||
@@ -232,6 +315,17 @@ export default function CallsOverviewPage() {
               );
             })}
           </div>
+          {calls.length < callsTotal && (
+            <div className="mt-3 flex justify-center">
+              <button
+                onClick={() => loadCalls(callFilter, calls.length)}
+                disabled={loadingMore}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {loadingMore ? "Loading…" : `Load more (${callsTotal - calls.length} left)`}
+              </button>
+            </div>
+          )}
         </section>
       </div>
 
