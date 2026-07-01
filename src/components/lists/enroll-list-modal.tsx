@@ -5,7 +5,8 @@ import { Loader2, Send } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { Modal } from '@/components/ui/modal';
-import { buildFilterQuery, type ListFilter } from '@/lib/lists/filter-query';
+import { type ListFilter } from '@/lib/lists/filter-query';
+import { resolveListContactIdsViaApi } from '@/lib/lists/resolve-client';
 import toast from 'react-hot-toast';
 import type { Tables } from '@/lib/database.types';
 
@@ -43,25 +44,8 @@ export function EnrollListModal({ open, onClose, listId, isDynamic, filters, con
     setEnrolling(true);
 
     try {
-      let contactIds: string[] = [];
-
-      if (isDynamic) {
-        const { data, error } = await buildFilterQuery(
-          supabase,
-          workspaceId,
-          filters,
-          'id',
-        );
-        if (error) throw error;
-        contactIds = (data || []).map((c: Record<string, unknown>) => c.id as string);
-      } else {
-        const { data, error } = await supabase
-          .from('contact_list_members')
-          .select('contact_id')
-          .eq('list_id', listId);
-        if (error) throw error;
-        contactIds = (data || []).map(m => m.contact_id);
-      }
+      // Resolve via the server so the list's exclusions are applied.
+      const contactIds = await resolveListContactIdsViaApi(listId);
 
       if (contactIds.length === 0) {
         toast.error('No contacts in this list');

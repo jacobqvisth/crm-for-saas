@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveListContactIds } from "@/lib/lists/filter-query";
+import {
+  ALWAYS_ON_CALLING,
+  mergeExclusions,
+  parseListExclusions,
+  resolveExcludedContactIds,
+} from "@/lib/lists/exclusions";
 
 // Keep .in() lists short — PostgREST encodes them in the URL and long lists
 // 414 / silently truncate. Chunk every id-based fetch.
@@ -22,7 +28,7 @@ export async function GET(
 
   const { data: list, error: listErr } = await supabase
     .from("contact_lists")
-    .select("id, name, description, is_dynamic, filters, workspace_id, purpose")
+    .select("id, name, description, is_dynamic, filters, workspace_id, purpose, exclusions")
     .eq("id", listId)
     .maybeSingle();
   if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 });
@@ -40,7 +46,15 @@ export async function GET(
   const limit = Math.min(Number(searchParams.get("limit")) || 100, 200);
   const offset = Number(searchParams.get("offset")) || 0;
 
-  const allIds = await resolveListContactIds(supabase, list);
+  // Calling worklist: always drop the never-call list, plus whatever exclusion
+  // sources this list opted into. Excludes are subtracted from the FULL member
+  // set (before pagination) so `total` and paging stay correct.
+  const resolvedIds = await resolveListContactIds(supabase, list);
+  const exclusions = mergeExclusions(ALWAYS_ON_CALLING, parseListExclusions(list.exclusions));
+  const excluded = await resolveExcludedContactIds(supabase, list.workspace_id, exclusions, {
+    excludeSelfListId: list.id,
+  });
+  const allIds = excluded.size > 0 ? resolvedIds.filter((id) => !excluded.has(id)) : resolvedIds;
   const total = allIds.length;
   const pageIds = allIds.slice(offset, offset + limit);
 

@@ -6,7 +6,12 @@ import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { FilterBuilder } from "@/components/lists/filter-builder";
+import { ExclusionSelector } from "@/components/lists/exclusion-selector";
 import { buildFilterQuery, type ListFilter } from "@/lib/lists/filter-query";
+import {
+  serializeListExclusions,
+  type ListExclusions,
+} from "@/lib/lists/exclusion-types";
 
 type Preset = {
   key: string;
@@ -101,6 +106,21 @@ export function NewCallListModal({
   const [saving, setSaving] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  // Never-call is always-on for call lists; pre-checked and locked in the UI.
+  const [exclusions, setExclusions] = useState<ListExclusions>({ groups: ["never_call"], lists: [] });
+  const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from("contact_lists")
+      .select("id, name")
+      .eq("workspace_id", workspaceId)
+      .order("name")
+      .then(({ data }) => {
+        if (data) setAvailableLists(data as { id: string; name: string }[]);
+      });
+  }, [workspaceId, supabase]);
 
   const effectiveFilters = useMemo(
     () => (phoneOnly ? [...filters, PHONE_FILTER] : filters),
@@ -162,6 +182,7 @@ export function NewCallListModal({
           description: description.trim() || null,
           isDynamic: smart,
           filters: smart ? effectiveFilters : undefined,
+          exclusions: serializeListExclusions(exclusions),
         }),
       });
       const json = await res.json();
@@ -275,6 +296,15 @@ export function NewCallListModal({
               </p>
             </>
           )}
+
+          <div className="rounded-lg border border-slate-200 p-3">
+            <ExclusionSelector
+              value={exclusions}
+              onChange={setExclusions}
+              availableLists={availableLists}
+              lockedGroups={["never_call"]}
+            />
+          </div>
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
