@@ -24,11 +24,14 @@ import {
   HeartHandshake,
   Target,
   Search,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PLAYBOOKS } from "@/lib/calls/playbooks";
 import { PLAN_TYPE_LABELS } from "@/lib/lists/filter-query";
+import { COUNTRY_NAMES } from "@/lib/countries";
+import { DEAL_ACCOUNT_DOMAINS } from "@/lib/calls/deal-accounts";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import type { ReasonTone } from "@/lib/calls/scoring";
 import { CallNowButton } from "@/components/calls/call-now";
@@ -99,13 +102,20 @@ type TopContact = {
 
 type PlaybookCount = { key: string; count: number; withPhone: number };
 
+type Rep = { userId: string; number: number; name: string };
+
 type PlannerData = {
   topContacts: TopContact[];
   topWithPhone: number;
   candidateCount: number;
+  totalCandidateCount: number;
   freshCutoffDays: number;
   playbooks: PlaybookCount[];
+  reps: Rep[];
+  availableCountries: string[];
 };
+
+const UNASSIGNED_TOKEN = "unassigned";
 
 export default function CallPlannerPage() {
   const router = useRouter();
@@ -119,10 +129,25 @@ export default function CallPlannerPage() {
   const [queue, setQueue] = useState<{ queued: number; processing: number } | null>(null);
   const [watching, setWatching] = useState(false);
 
+  // ---- Call-list filters (narrow "today's top contacts" before it's built)
+  const [showFilters, setShowFilters] = useState(false);
+  const [countryFilter, setCountryFilter] = useState<string[]>([]);
+  const [excludePaying, setExcludePaying] = useState(false);
+  const [excludeDeals, setExcludeDeals] = useState(false);
+  // Owner tokens to *exclude* (canonical rep userId or UNASSIGNED_TOKEN). Empty
+  // = include everyone, so no data-dependent initialisation is needed.
+  const [excludedOwners, setExcludedOwners] = useState<Set<string>>(new Set());
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/calls/planner");
+      const params = new URLSearchParams();
+      if (countryFilter.length) params.set("countries", countryFilter.join(","));
+      if (excludePaying) params.set("excludePaying", "1");
+      if (excludeDeals) params.set("excludeDeals", "1");
+      if (excludedOwners.size) params.set("excludeOwners", [...excludedOwners].join(","));
+      const qs = params.toString();
+      const res = await fetch(`/api/calls/planner${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
       setData(await res.json());
     } catch {
@@ -130,7 +155,33 @@ export default function CallPlannerPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [countryFilter, excludePaying, excludeDeals, excludedOwners]);
+
+  const toggleOwner = (token: string) =>
+    setExcludedOwners((prev) => {
+      const next = new Set(prev);
+      if (next.has(token)) next.delete(token);
+      else next.add(token);
+      return next;
+    });
+
+  const toggleCountry = (code: string) =>
+    setCountryFilter((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+
+  const activeFilterCount =
+    (countryFilter.length > 0 ? 1 : 0) +
+    (excludePaying ? 1 : 0) +
+    (excludeDeals ? 1 : 0) +
+    (excludedOwners.size > 0 ? 1 : 0);
+
+  const clearFilters = () => {
+    setCountryFilter([]);
+    setExcludePaying(false);
+    setExcludeDeals(false);
+    setExcludedOwners(new Set());
+  };
 
   useEffect(() => {
     load();
@@ -267,18 +318,142 @@ export default function CallPlannerPage() {
           <Target className="h-5 w-5 text-indigo-600" />
           <h1 className="text-xl font-semibold text-slate-900">Call Planner</h1>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm disabled:opacity-50 ${
+              showFilters || activeFilterCount > 0
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-slate-200 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <SlidersHorizontal className="h-4 w-4" /> Filters
+            {activeFilterCount > 0 && (
+              <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
       <p className="mt-1 text-sm text-slate-500">
         Who to call today, ranked by relevance — and ready-made segments you can turn into a call
         list in one click. People you&apos;ve already called drop off automatically.
       </p>
+
+      {data && showFilters && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Refine who to call
+            </h3>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearFilters}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Applies to Today&apos;s top contacts and the list you build with &ldquo;Start calling
+            these&rdquo;.
+          </p>
+
+          {/* Countries */}
+          {data.availableCountries.length > 0 && (
+            <div className="mt-3">
+              <div className="text-xs font-medium text-slate-600">Countries</div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {data.availableCountries.map((code) => {
+                  const on = countryFilter.includes(code);
+                  return (
+                    <button
+                      key={code}
+                      onClick={() => toggleCountry(code)}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${
+                        on
+                          ? "border-indigo-300 bg-indigo-100 text-indigo-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {COUNTRY_NAMES[code] ?? code}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                {countryFilter.length === 0
+                  ? "All countries"
+                  : `Only ${countryFilter.length} selected`}
+              </p>
+            </div>
+          )}
+
+          {/* Toggles */}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:gap-6">
+            <label className="flex items-center gap-2 text-xs text-slate-700">
+              <input
+                type="checkbox"
+                checked={excludePaying}
+                onChange={(e) => setExcludePaying(e.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              Exclude paying customers
+            </label>
+            <label
+              className="flex items-center gap-2 text-xs text-slate-700"
+              title={`Skip contacts at ${DEAL_ACCOUNT_DOMAINS.join(", ")} — Hans is working these as direct deals`}
+            >
+              <input
+                type="checkbox"
+                checked={excludeDeals}
+                onChange={(e) => setExcludeDeals(e.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              Exclude Hans&apos;s deal accounts ({DEAL_ACCOUNT_DOMAINS.join(", ")})
+            </label>
+          </div>
+
+          {/* Owner assignment */}
+          <div className="mt-3">
+            <div className="text-xs font-medium text-slate-600">Assigned to</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {[
+                ...data.reps.map((r) => ({ token: r.userId, label: r.name })),
+                { token: UNASSIGNED_TOKEN, label: "Unassigned" },
+              ].map(({ token, label }) => {
+                const included = !excludedOwners.has(token);
+                return (
+                  <button
+                    key={token}
+                    onClick={() => toggleOwner(token)}
+                    title={included ? "Included — click to exclude" : "Excluded — click to include"}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      included
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white text-slate-400 line-through"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Click a name to drop contacts owned by that rep (or with no owner).
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading && !data && (
         <div className="mt-10 flex items-center justify-center text-slate-400">
@@ -297,7 +472,12 @@ export default function CallPlannerPage() {
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {data.topContacts.length} ranked · {callableTop} have a phone ·{" "}
-                  {data.candidateCount} app users analysed
+                  {data.candidateCount}
+                  {activeFilterCount > 0 && data.totalCandidateCount !== data.candidateCount
+                    ? ` of ${data.totalCandidateCount}`
+                    : ""}{" "}
+                  app users analysed
+                  {activeFilterCount > 0 ? " (filtered)" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2">
