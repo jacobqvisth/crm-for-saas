@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { findPhones } from "@/lib/enrich/find-phone";
+import { findPhonesForRecord } from "@/lib/enrich/find-phone-for-contact";
 
-// Website scraping + web search can take a while.
+// Website discovery + scraping + web search can take a while.
 export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
@@ -40,77 +40,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let name: string | null = null;
-  let companyName: string | null = null;
-  const websites: (string | null | undefined)[] = [];
-  let city: string | null = null;
-  let country: string | null = null;
-  let countryCode: string | null = null;
-  const existing: (string | null | undefined)[] = [];
-
-  if (contactId) {
-    const { data: contact } = await supabase
-      .from("contacts")
-      .select(
-        "first_name, last_name, phone, all_phones, website, city, country, country_code, company_id",
-      )
-      .eq("id", contactId)
-      .eq("workspace_id", workspaceId)
-      .single();
-    if (!contact) {
-      return NextResponse.json({ error: "Contact not found" }, { status: 404 });
-    }
-    name = [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim() || null;
-    websites.push(contact.website);
-    city = contact.city;
-    country = contact.country;
-    countryCode = contact.country_code;
-    existing.push(contact.phone, ...((contact.all_phones as string[] | null) ?? []));
-
-    // Borrow the company name + website + location so the search can resolve.
-    if (contact.company_id) {
-      const { data: company } = await supabase
-        .from("companies")
-        .select("name, website, phone, city, country, country_code")
-        .eq("id", contact.company_id)
-        .eq("workspace_id", workspaceId)
-        .maybeSingle();
-      if (company) {
-        companyName = company.name;
-        websites.push(company.website);
-        city = city || company.city;
-        country = country || company.country;
-        countryCode = countryCode || company.country_code;
-        existing.push(company.phone);
-      }
-    }
-  } else if (companyId) {
-    const { data: company } = await supabase
-      .from("companies")
-      .select("name, website, phone, city, country, country_code")
-      .eq("id", companyId)
-      .eq("workspace_id", workspaceId)
-      .single();
-    if (!company) {
-      return NextResponse.json({ error: "Company not found" }, { status: 404 });
-    }
-    name = company.name;
-    companyName = company.name;
-    websites.push(company.website);
-    city = company.city;
-    country = company.country;
-    countryCode = company.country_code;
-    existing.push(company.phone);
-  }
-
-  const result = await findPhones({
-    name,
-    companyName,
-    websites,
-    city,
-    country,
-    countryCode,
-    existing,
-  });
+  const result = await findPhonesForRecord(supabase, { workspaceId, contactId, companyId });
   return NextResponse.json(result);
 }
