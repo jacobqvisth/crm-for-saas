@@ -235,14 +235,22 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
 
   const handleSaveFilters = async () => {
     if (!list) return;
+    const serializedExclusions = serializeListExclusions(editExclusions);
     const { error } = await supabase
       .from('contact_lists')
-      .update({ filters: editFilters as unknown as Tables<'contact_lists'>['filters'] })
+      .update({
+        filters: editFilters as unknown as Tables<'contact_lists'>['filters'],
+        exclusions: serializedExclusions as unknown as Tables<'contact_lists'>['exclusions'],
+      })
       .eq('id', list.id);
 
     if (error) toast.error('Failed to update filters');
     else {
-      setList({ ...list, filters: editFilters as unknown as Tables<'contact_lists'>['filters'] });
+      setList({
+        ...list,
+        filters: editFilters as unknown as Tables<'contact_lists'>['filters'],
+        exclusions: serializedExclusions as unknown as Tables<'contact_lists'>['exclusions'],
+      });
       toast.success('Filters updated');
       setShowEditFilters(false);
       setPage(1);
@@ -418,7 +426,7 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
         <div className="flex items-center gap-2">
           {isDynamic ? (
             <button
-              onClick={() => { setEditFilters(filters); setShowEditFilters(true); }}
+              onClick={() => { setEditFilters(filters); setEditExclusions(exclusions); setShowEditFilters(true); }}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
             >
               <Filter className="w-4 h-4" />
@@ -507,7 +515,13 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
           )}
         </div>
         <button
-          onClick={() => { setEditExclusions(exclusions); setShowEditExclusions(true); }}
+          onClick={() => {
+            setEditExclusions(exclusions);
+            // Dynamic lists edit filters + exclusions in one modal; static lists
+            // have no filters, so they get the standalone exclusions modal.
+            if (isDynamic) { setEditFilters(filters); setShowEditFilters(true); }
+            else setShowEditExclusions(true);
+          }}
           className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           <Filter className="h-4 w-4" />
@@ -709,11 +723,19 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
       <Modal
         open={showEditFilters}
         onClose={() => setShowEditFilters(false)}
-        title="Edit Filters"
+        title="Edit filters & exclusions"
         maxWidth="max-w-2xl"
       >
         <div className="space-y-4">
           <FilterBuilder filters={editFilters} onChange={setEditFilters} />
+          <div className="border-t border-slate-200 pt-4">
+            <ExclusionSelector
+              value={editExclusions}
+              onChange={setEditExclusions}
+              availableLists={availableLists}
+              currentListId={listId}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
             <button
               onClick={() => setShowEditFilters(false)}
@@ -725,7 +747,7 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
               onClick={handleSaveFilters}
               className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
             >
-              Save Filters
+              Save
             </button>
           </div>
         </div>
