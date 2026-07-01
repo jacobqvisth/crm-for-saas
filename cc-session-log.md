@@ -13,6 +13,25 @@ updated: 2026-05-26
 
 ---
 
+## Computer calling: fix "call didn't reach this computer" from a non-presence tab — 2026-07-01 — fix/webrtc-single-tab
+
+Jacob reported "Talk from computer" **rings then errors "The call didn't reach this computer. Close any other CRM tabs…"** with two CRM tabs open (confirmed by screenshot). Diagnosed the gap left by #468:
+
+- #468 elects a **single presence tab** via a Web Lock (`wl-webrtc-presence`) so only one tab holds the shared 46elks WebRTC registration for **inbound**. Good.
+- **But the outbound path bypassed it:** `call-provider.startCall` → `ensureRegistered` registers *its own* tab regardless of which tab holds the presence lock. With 2 tabs you get two SIP registrations for the one WebRTC number; 46elks rings the presence tab (not the tab you dialed from), so the armed leg never arrives → 25s arm-watchdog → the error. Closing the extra tab was the only workaround.
+
+**Fix — a cross-tab "line claim" protocol in `webrtc-client.ts` (BroadcastChannel `wl-webrtc-line`):**
+- `claimLine()` — the calling tab announces itself as sole line holder; every other tab drops its registration (`teardownUA`) if not on a call. `call-provider.startCall` calls it right after `ensureRegistered`, before `arm()`, so 46elks rings the tab you dialed from.
+- `releaseLine()` + `setLineFreedHandler()` — when a non-presence caller tab's call ends (`cleanupSession`) it drops its one-off registration and broadcasts release; the presence tab reclaims the line for inbound. `setPresenceHolder(true/false)` marks which tab keeps its registration through a call.
+- Presence tab (`webrtc-presence.tsx`) also re-registers on `visibilitychange`/`focus` as a safety net if a release is missed.
+- Kept #468's Web Lock (baseline inbound single-tab), the 15s register timeout, 25s arm-watchdog, STUN via creds, and the re-emit-"registered" fix.
+
+Net: you can keep many CRM tabs open — the tab you call from always wins, and inbound still rings your presence tab. (Also confirms the earlier Phase A backdrop-minimize fix is live; a hard refresh picks it up.)
+
+**Checks:** `tsc` clean · `eslint src/` clean · `npm run build` ✅ · smoke+api E2E **8/8**. **Not browser-tested** (WebRTC needs Jacob's owner session + mic + a real phone; single-owner endpoint returns unavailable to test users) — Jacob to place one computer call with a second CRM tab open to confirm.
+
+---
+
 ## Reopen the call panel mid-call — app-level CallProvider (Phase A) — 2026-07-01 — worktree-feature+call-provider-reopen
 
 Jacob, on a live call, clicked through to the customer profile and the right-hand call panel closed with **no way to reopen it** — he feared the recording was lost. Verified against prod it wasn't: the WebRTC session lives on a tab-level singleton and recording/Deepgram/summary all run server-side (46elks → hangup webhook → `processCallSession`), so his call to **Saltsjöbadens Rekond & Biltvätt** (114s) was fully processed + logged. The bug was purely UI: `CallNowButton`/`CallDrawer` owned the active-call state **per page**, so navigation unmounted the panel.

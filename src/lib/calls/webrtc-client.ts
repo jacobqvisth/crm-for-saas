@@ -72,6 +72,17 @@ class WebrtcPhone {
   private armTimer: ReturnType<typeof setTimeout> | null = null;
   private credsKey: string | null = null;
   private iceServers: RTCIceServer[] = [];
+  /** Unique per browser tab — identifies our own messages on the cross-tab channel. */
+  private tabId = Math.random().toString(36).slice(2);
+  /** Cross-tab channel so only ONE tab holds the shared 46elks WebRTC
+   *  registration at a time (the number allows a single SIP registration). */
+  private channel: BroadcastChannel | null = null;
+  /** Fired when another tab releases the line, so a presence tab can re-register. */
+  private lineFreedHandler: (() => void) | null = null;
+  /** True in the tab that holds the persistent inbound presence registration.
+   *  Such a tab keeps its registration after an outbound call; a non-presence
+   *  tab that grabbed the line for one call drops it again afterwards. */
+  private isPresenceHolder = false;
 
   /** Subscribe to state/error events. Returns an unsubscribe fn. */
   subscribe(h: WebrtcHandlers): () => void {
@@ -82,6 +93,75 @@ class WebrtcPhone {
   /** Set the handler that surfaces un-armed incoming calls (inbound presence). */
   setIncomingHandler(fn: ((info: IncomingInfo) => void) | null) {
     this.incomingHandler = fn;
+  }
+
+  /** Listen for cross-tab line claims/releases. Idempotent; safe on every call. */
+  private ensureChannel() {
+    if (this.channel || typeof BroadcastChannel === "undefined") return;
+    this.channel = new BroadcastChannel("wl-webrtc-line");
+    this.channel.onmessage = (ev: MessageEvent) => {
+      const m = ev.data as { type?: string; tabId?: string } | null;
+      if (!m || m.tabId === this.tabId) return;
+      if (m.type === "claim" && !this.inCall()) {
+        // Another tab took the shared line — drop our registration so exactly
+        // one tab holds it and 46elks rings the tab that's actually calling.
+        this.teardownUA();
+        this.emit("idle");
+      } else if (m.type === "release") {
+        // The other tab finished with the line; a presence tab reclaims it.
+        this.lineFreedHandler?.();
+      }
+    };
+  }
+
+  /** Register a callback fired when another tab releases the shared line
+   *  (used by the presence tab to re-register for inbound calls). */
+  setLineFreedHandler(fn: (() => void) | null) {
+    this.ensureChannel();
+    this.lineFreedHandler = fn;
+  }
+
+  /** Mark this tab as the persistent inbound-presence holder (see field doc). */
+  setPresenceHolder(v: boolean) {
+    this.isPresenceHolder = v;
+  }
+
+  /** Announce this tab as the sole holder of the shared WebRTC line so other
+   *  tabs drop their registration. Call after ensureRegistered(), before a call. */
+  claimLine() {
+    this.ensureChannel();
+    try {
+      this.channel?.postMessage({ type: "claim", tabId: this.tabId });
+    } catch {
+      /* channel closed */
+    }
+  }
+
+  /** Tell other tabs the line is free again (our call ended) so a presence tab
+   *  can reclaim it for inbound calls. */
+  releaseLine() {
+    this.ensureChannel();
+    try {
+      this.channel?.postMessage({ type: "release", tabId: this.tabId });
+    } catch {
+      /* channel closed */
+    }
+  }
+
+  /** Tear down the SIP UA (release the registration) WITHOUT ending an active
+   *  call. Used when another tab claims the shared line. */
+  private teardownUA() {
+    this.clearArmTimer();
+    this.armed = false;
+    if (this.ua) {
+      try {
+        this.ua.stop();
+      } catch {
+        /* ignore */
+      }
+      this.ua = null;
+    }
+    this.credsKey = null;
   }
 
   private emit(state: WebrtcState) {
@@ -96,6 +176,7 @@ class WebrtcPhone {
   /** Lazily create + register the shared UA. Resolves once registered. */
   async ensureRegistered(creds: WebrtcCreds): Promise<void> {
     this.iceServers = creds.iceServers ?? [];
+    this.ensureChannel();
     const key = `${creds.wsUri}|${creds.uri}`;
     // Already registered with these creds — re-emit "registered" so callers that
     // optimistically set "connecting" don't get stuck on a stale label.
@@ -281,6 +362,13 @@ class WebrtcPhone {
   private cleanupSession(finalState: WebrtcState) {
     if (this.audioEl) this.audioEl.srcObject = null;
     this.session = null;
+    // A non-presence tab only grabbed the line for this one call — drop its
+    // registration and let the presence tab reclaim it for inbound calls. The
+    // presence holder keeps its registration.
+    if (!this.isPresenceHolder) {
+      this.teardownUA();
+      this.releaseLine();
+    }
     this.emit(finalState);
   }
 
@@ -292,11 +380,18 @@ class WebrtcPhone {
 
   hangup() {
     if (this.session && !this.session.isEnded()) {
+      // Ending the session fires "ended" → cleanupSession, which drops the line
+      // for a non-presence tab and lets the presence tab reclaim it.
       try {
         this.session.terminate();
       } catch {
         /* ignore */
       }
+    } else if (!this.isPresenceHolder) {
+      // No active session (e.g. the call failed before connecting) but this tab
+      // may have grabbed the line — release it so a presence tab reclaims it.
+      this.teardownUA();
+      this.releaseLine();
     }
     this.armed = false;
     this.clearArmTimer();
