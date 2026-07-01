@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findPhones, type FindPhonesResult, type PhoneCandidate } from "@/lib/enrich/find-phone";
 import { findWebsite } from "@/lib/enrich/find-website";
+import { rejectedPhonesFrom } from "@/lib/enrich/rejected-phones";
 
 export type PhoneSearchOutcome = "found" | "none" | "blocked" | "error";
 
@@ -52,6 +53,8 @@ export async function findPhonesForRecord(
   let city: string | null = null;
   let country: string | null = null;
   let countryCode: string | null = null;
+  let industry: string | null = null;
+  let category: string | null = null;
   const existing: (string | null | undefined)[] = [];
 
   // For website discovery, when it's missing.
@@ -64,7 +67,7 @@ export async function findPhonesForRecord(
     const { data: contact } = await supabase
       .from("contacts")
       .select(
-        "first_name, last_name, email, all_emails, phone, all_phones, website, city, country, country_code, company_id",
+        "first_name, last_name, email, all_emails, phone, all_phones, website, city, country, country_code, company_id, custom_fields",
       )
       .eq("id", contactId)
       .eq("workspace_id", workspaceId)
@@ -88,11 +91,13 @@ export async function findPhonesForRecord(
     countryCode = contact.country_code;
     resolvedCompanyId = contact.company_id ?? null;
     existing.push(contact.phone, ...((contact.all_phones as string[] | null) ?? []));
+    // Numbers the user marked "not correct" on this contact — never re-surface.
+    existing.push(...rejectedPhonesFrom(contact.custom_fields));
 
     if (contact.company_id) {
       const { data: company } = await supabase
         .from("companies")
-        .select("name, website, phone, city, country, country_code")
+        .select("name, website, phone, city, country, country_code, industry, category, custom_fields")
         .eq("id", contact.company_id)
         .eq("workspace_id", workspaceId)
         .maybeSingle();
@@ -102,13 +107,16 @@ export async function findPhonesForRecord(
         city = city || company.city;
         country = country || company.country;
         countryCode = countryCode || company.country_code;
+        industry = company.industry;
+        category = company.category;
         existing.push(company.phone);
+        existing.push(...rejectedPhonesFrom(company.custom_fields));
       }
     }
   } else if (companyId) {
     const { data: company } = await supabase
       .from("companies")
-      .select("name, website, phone, city, country, country_code")
+      .select("name, website, phone, city, country, country_code, industry, category, custom_fields")
       .eq("id", companyId)
       .eq("workspace_id", workspaceId)
       .single();
@@ -128,7 +136,10 @@ export async function findPhonesForRecord(
     city = company.city;
     country = company.country;
     countryCode = company.country_code;
+    industry = company.industry;
+    category = company.category;
     existing.push(company.phone);
+    existing.push(...rejectedPhonesFrom(company.custom_fields));
   } else {
     return {
       found: false,
@@ -144,7 +155,7 @@ export async function findPhonesForRecord(
   let websiteAdded: string | null = null;
   const haveWebsite = websites.some((w) => (w || "").trim());
   if (autoFindWebsite && !haveWebsite) {
-    const site = await findWebsite({ name, email, extraEmails, city, country });
+    const site = await findWebsite({ name, email, extraEmails, city, country, industry, category });
     // Only trust + persist a confident find; a low-confidence guess would just
     // send the scraper at the wrong domain.
     if (site.found && site.website && (site.confidence === "high" || site.confidence === "medium")) {
@@ -174,6 +185,8 @@ export async function findPhonesForRecord(
     city,
     country,
     countryCode,
+    industry,
+    category,
     existing,
   });
 
