@@ -8,7 +8,6 @@ import {
   PAID_PLANS,
   type ScoreableContact,
 } from "@/lib/calls/scoring";
-import { isDealAccountEmail } from "@/lib/calls/deal-accounts";
 import { listReps } from "@/lib/reps/list";
 
 // How many ranked contacts to surface as "today's top".
@@ -80,7 +79,6 @@ export async function GET(request: NextRequest) {
       .filter(Boolean);
   const countryFilter = new Set(parseList(params.get("countries")).map((c) => c.toUpperCase()));
   const excludePaying = params.get("excludePaying") === "1";
-  const excludeDeals = params.get("excludeDeals") === "1";
   // Owner tokens to drop: canonical rep user_ids and/or the literal "unassigned".
   const excludeOwnerTokens = new Set(parseList(params.get("excludeOwners")));
 
@@ -91,6 +89,28 @@ export async function GET(request: NextRequest) {
   for (const rep of reps) {
     for (const uid of rep.userIds) ownerIdToCanonical.set(uid, rep.userId);
   }
+
+  // Managed "never call" list (domains / emails / companies) — always applied.
+  const { data: exclusionRows } = await supabase
+    .from("call_exclusions")
+    .select("kind, value")
+    .eq("workspace_id", workspaceId);
+  const excludedDomains = new Set<string>();
+  const excludedEmails = new Set<string>();
+  const excludedCompanies = new Set<string>();
+  for (const e of exclusionRows ?? []) {
+    if (e.kind === "domain") excludedDomains.add(e.value.toLowerCase());
+    else if (e.kind === "email") excludedEmails.add(e.value.toLowerCase());
+    else if (e.kind === "company") excludedCompanies.add(e.value);
+  }
+  const isExcluded = (c: CandidateRow) => {
+    if (c.company_id && excludedCompanies.has(c.company_id)) return true;
+    const email = c.email?.toLowerCase();
+    if (!email) return false;
+    if (excludedEmails.has(email)) return true;
+    const domain = email.split("@")[1];
+    return !!domain && excludedDomains.has(domain);
+  };
 
   // 1. Stripe customers with a bounced/failed payment (drives the
   //    payment_bounced playbook + the scoring flag). dashboard_subscriptions
@@ -127,14 +147,18 @@ export async function GET(request: NextRequest) {
     new Set(candidates.map((c) => c.country_code).filter((c): c is string => !!c)),
   ).sort();
 
-  // Apply the optional filters to the candidate pool.
+  // Contacts hidden by the always-on exclusion list (reported separately so the
+  // UI can show "N hidden by your exclusion list").
+  const afterExclusions = candidates.filter((c) => !isExcluded(c));
+  const excludedByListCount = candidates.length - afterExclusions.length;
+
+  // Apply the optional (session) filters on top of the exclusion list.
   const ownerToken = (c: CandidateRow) =>
     c.primary_owner_id ? (ownerIdToCanonical.get(c.primary_owner_id) ?? c.primary_owner_id) : "unassigned";
-  const filtered = candidates.filter((c) => {
+  const filtered = afterExclusions.filter((c) => {
     if (countryFilter.size > 0 && !(c.country_code && countryFilter.has(c.country_code.toUpperCase())))
       return false;
     if (excludePaying && c.user_plan_type && PAID_PLANS.has(c.user_plan_type)) return false;
-    if (excludeDeals && isDealAccountEmail(c.email)) return false;
     if (excludeOwnerTokens.size > 0 && excludeOwnerTokens.has(ownerToken(c))) return false;
     return true;
   });
@@ -219,6 +243,7 @@ export async function GET(request: NextRequest) {
     topWithPhone,
     candidateCount: filtered.length,
     totalCandidateCount: candidates.length,
+    excludedByListCount,
     freshCutoffDays: FRESH_CUTOFF_DAYS,
     playbooks: playbookResults,
     reps: reps.map((r) => ({ userId: r.userId, number: r.number, name: r.name })),

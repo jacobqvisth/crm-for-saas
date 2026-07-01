@@ -25,14 +25,20 @@ import {
   Target,
   Search,
   SlidersHorizontal,
+  Ban,
+  X,
+  Plus,
+  Building2,
+  AtSign,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PLAYBOOKS } from "@/lib/calls/playbooks";
 import { PLAN_TYPE_LABELS } from "@/lib/lists/filter-query";
 import { COUNTRY_NAMES } from "@/lib/countries";
-import { DEAL_ACCOUNT_DOMAINS } from "@/lib/calls/deal-accounts";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { createClient } from "@/lib/supabase/client";
 import type { ReasonTone } from "@/lib/calls/scoring";
 import { CallNowButton } from "@/components/calls/call-now";
 
@@ -109,13 +115,23 @@ type PlannerData = {
   topWithPhone: number;
   candidateCount: number;
   totalCandidateCount: number;
+  excludedByListCount: number;
   freshCutoffDays: number;
   playbooks: PlaybookCount[];
   reps: Rep[];
   availableCountries: string[];
 };
 
+type ExclusionKind = "domain" | "email" | "company";
+type Exclusion = { id: string; kind: ExclusionKind; value: string; label: string | null };
+type CompanyHit = { id: string; name: string };
+
 const UNASSIGNED_TOKEN = "unassigned";
+const EXCLUSION_ICON: Record<ExclusionKind, LucideIcon> = {
+  domain: Globe,
+  email: AtSign,
+  company: Building2,
+};
 
 export default function CallPlannerPage() {
   const router = useRouter();
@@ -133,10 +149,15 @@ export default function CallPlannerPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [countryFilter, setCountryFilter] = useState<string[]>([]);
   const [excludePaying, setExcludePaying] = useState(false);
-  const [excludeDeals, setExcludeDeals] = useState(false);
   // Owner tokens to *exclude* (canonical rep userId or UNASSIGNED_TOKEN). Empty
   // = include everyone, so no data-dependent initialisation is needed.
   const [excludedOwners, setExcludedOwners] = useState<Set<string>>(new Set());
+
+  // ---- Managed exclusion list (persistent "never call" domains/emails/companies)
+  const [exclusions, setExclusions] = useState<Exclusion[]>([]);
+  const [exclInput, setExclInput] = useState("");
+  const [companyHits, setCompanyHits] = useState<CompanyHit[]>([]);
+  const [savingExcl, setSavingExcl] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,7 +165,6 @@ export default function CallPlannerPage() {
       const params = new URLSearchParams();
       if (countryFilter.length) params.set("countries", countryFilter.join(","));
       if (excludePaying) params.set("excludePaying", "1");
-      if (excludeDeals) params.set("excludeDeals", "1");
       if (excludedOwners.size) params.set("excludeOwners", [...excludedOwners].join(","));
       const qs = params.toString();
       const res = await fetch(`/api/calls/planner${qs ? `?${qs}` : ""}`);
@@ -155,7 +175,20 @@ export default function CallPlannerPage() {
     } finally {
       setLoading(false);
     }
-  }, [countryFilter, excludePaying, excludeDeals, excludedOwners]);
+  }, [countryFilter, excludePaying, excludedOwners]);
+
+  const loadExclusions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/calls/exclusions");
+      if (!res.ok) return;
+      setExclusions((await res.json()).exclusions ?? []);
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+  useEffect(() => {
+    loadExclusions();
+  }, [loadExclusions]);
 
   const toggleOwner = (token: string) =>
     setExcludedOwners((prev) => {
@@ -173,15 +206,77 @@ export default function CallPlannerPage() {
   const activeFilterCount =
     (countryFilter.length > 0 ? 1 : 0) +
     (excludePaying ? 1 : 0) +
-    (excludeDeals ? 1 : 0) +
     (excludedOwners.size > 0 ? 1 : 0);
 
   const clearFilters = () => {
     setCountryFilter([]);
     setExcludePaying(false);
-    setExcludeDeals(false);
     setExcludedOwners(new Set());
   };
+
+  // Add an exclusion, then reload the planner so the newly-excluded rows drop.
+  const addExclusion = async (kind: ExclusionKind, value: string, label?: string) => {
+    if (savingExcl) return;
+    setSavingExcl(true);
+    try {
+      const res = await fetch("/api/calls/exclusions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, value, label }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to add");
+      setExclInput("");
+      setCompanyHits([]);
+      await loadExclusions();
+      await load();
+      toast.success(`Excluded ${json.exclusion?.label ?? value}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add");
+    } finally {
+      setSavingExcl(false);
+    }
+  };
+
+  const removeExclusion = async (id: string) => {
+    try {
+      const res = await fetch(`/api/calls/exclusions?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      setExclusions((prev) => prev.filter((e) => e.id !== id));
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove");
+    }
+  };
+
+  // A free-typed value is a domain or email; company matches come from a live
+  // search of the workspace's companies (browser client, RLS-scoped).
+  const typed = exclInput.trim();
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typed);
+  const looksLikeDomain = !looksLikeEmail && /^[^\s@]+\.[^\s@]+$/.test(typed.replace(/^https?:\/\//, ""));
+
+  useEffect(() => {
+    const q = exclInput.trim();
+    if (!workspaceId || q.length < 2 || q.includes("@")) {
+      setCompanyHits([]);
+      return;
+    }
+    let active = true;
+    const t = setTimeout(async () => {
+      const supabase = createClient();
+      const { data: rows } = await supabase
+        .from("companies")
+        .select("id, name")
+        .eq("workspace_id", workspaceId)
+        .ilike("name", `%${q}%`)
+        .limit(6);
+      if (active) setCompanyHits((rows ?? []).filter((r) => r.name) as CompanyHit[]);
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [exclInput, workspaceId]);
 
   useEffect(() => {
     load();
@@ -409,18 +504,6 @@ export default function CallPlannerPage() {
               />
               Exclude paying customers
             </label>
-            <label
-              className="flex items-center gap-2 text-xs text-slate-700"
-              title={`Skip contacts at ${DEAL_ACCOUNT_DOMAINS.join(", ")} — Hans is working these as direct deals`}
-            >
-              <input
-                type="checkbox"
-                checked={excludeDeals}
-                onChange={(e) => setExcludeDeals(e.target.checked)}
-                className="h-3.5 w-3.5"
-              />
-              Exclude Hans&apos;s deal accounts ({DEAL_ACCOUNT_DOMAINS.join(", ")})
-            </label>
           </div>
 
           {/* Owner assignment */}
@@ -451,6 +534,86 @@ export default function CallPlannerPage() {
             <p className="mt-1 text-[11px] text-slate-400">
               Click a name to drop contacts owned by that rep (or with no owner).
             </p>
+          </div>
+
+          {/* Managed exclusion list — always applied to every call list */}
+          <div className="mt-4 border-t border-slate-200 pt-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <Ban className="h-3.5 w-3.5 text-rose-500" /> Never call — excluded from all lists
+            </div>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              Domains, emails, or companies here are always dropped from Today&apos;s top contacts
+              {data.excludedByListCount > 0 ? ` (${data.excludedByListCount} hidden right now)` : ""}.
+            </p>
+
+            {/* Search + add */}
+            <div className="relative mt-2 max-w-md">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <input
+                  value={exclInput}
+                  onChange={(e) => setExclInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (looksLikeEmail || looksLikeDomain)) {
+                      e.preventDefault();
+                      addExclusion(looksLikeEmail ? "email" : "domain", typed);
+                    }
+                  }}
+                  placeholder="Add a domain, email, or company to exclude…"
+                  className="w-full text-sm outline-none placeholder:text-slate-400"
+                />
+                {savingExcl && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+              </div>
+              {typed.length >= 1 && (looksLikeEmail || looksLikeDomain || companyHits.length > 0) && (
+                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                  {(looksLikeEmail || looksLikeDomain) && (
+                    <button
+                      onClick={() => addExclusion(looksLikeEmail ? "email" : "domain", typed)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-slate-400" />
+                      Exclude {looksLikeEmail ? "email" : "domain"}{" "}
+                      <span className="font-medium">{typed.replace(/^https?:\/\//, "").replace(/^www\./, "")}</span>
+                    </button>
+                  )}
+                  {companyHits.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => addExclusion("company", c.id, c.name)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    >
+                      <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                      Exclude company <span className="font-medium">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Current exclusions */}
+            {exclusions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {exclusions.map((e) => {
+                  const Icon = EXCLUSION_ICON[e.kind];
+                  return (
+                    <span
+                      key={e.id}
+                      className="flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700"
+                    >
+                      <Icon className="h-3 w-3" />
+                      {e.label ?? e.value}
+                      <button
+                        onClick={() => removeExclusion(e.id)}
+                        title="Remove"
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-rose-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
