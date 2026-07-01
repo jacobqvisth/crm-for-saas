@@ -55,6 +55,11 @@ export async function findPhonesForRecord(
   let countryCode: string | null = null;
   let industry: string | null = null;
   let category: string | null = null;
+  let placeId: string | null = null;
+  // Whether the company already carries website / place_id, so we only backfill
+  // when they're missing (never overwrite a real value).
+  let companyHasWebsite = false;
+  let companyHasPlaceId = false;
   const existing: (string | null | undefined)[] = [];
 
   // For website discovery, when it's missing.
@@ -97,7 +102,7 @@ export async function findPhonesForRecord(
     if (contact.company_id) {
       const { data: company } = await supabase
         .from("companies")
-        .select("name, website, phone, city, country, country_code, industry, category, custom_fields")
+        .select("name, website, phone, city, country, country_code, industry, category, google_place_id, custom_fields")
         .eq("id", contact.company_id)
         .eq("workspace_id", workspaceId)
         .maybeSingle();
@@ -109,6 +114,9 @@ export async function findPhonesForRecord(
         countryCode = countryCode || company.country_code;
         industry = company.industry;
         category = company.category;
+        placeId = company.google_place_id ?? null;
+        companyHasWebsite = !!(company.website && String(company.website).trim());
+        companyHasPlaceId = !!company.google_place_id;
         existing.push(company.phone);
         existing.push(...rejectedPhonesFrom(company.custom_fields));
       }
@@ -116,7 +124,7 @@ export async function findPhonesForRecord(
   } else if (companyId) {
     const { data: company } = await supabase
       .from("companies")
-      .select("name, website, phone, city, country, country_code, industry, category, custom_fields")
+      .select("name, website, phone, city, country, country_code, industry, category, google_place_id, custom_fields")
       .eq("id", companyId)
       .eq("workspace_id", workspaceId)
       .single();
@@ -138,6 +146,9 @@ export async function findPhonesForRecord(
     countryCode = company.country_code;
     industry = company.industry;
     category = company.category;
+    placeId = company.google_place_id ?? null;
+    companyHasWebsite = !!(company.website && String(company.website).trim());
+    companyHasPlaceId = !!company.google_place_id;
     existing.push(company.phone);
     existing.push(...rejectedPhonesFrom(company.custom_fields));
   } else {
@@ -187,8 +198,55 @@ export async function findPhonesForRecord(
     countryCode,
     industry,
     category,
+    placeId,
     existing,
   });
+
+  // Backfill the company's website + Google place_id from what the Google-Maps
+  // leg discovered, when they're missing — never overwriting a real value. This
+  // makes the record self-improving: next time the scrape leg has a real site to
+  // hit, and a stored place_id makes future lookups exact. Best-effort.
+  if (resolvedCompanyId && (result.discoveredWebsite || result.discoveredPlaceId)) {
+    const compUpd: { website?: string; google_place_id?: string } = {};
+    if (!companyHasWebsite && result.discoveredWebsite) {
+      compUpd.website = result.discoveredWebsite;
+      websiteAdded = websiteAdded || result.discoveredWebsite;
+    }
+    if (!companyHasPlaceId && result.discoveredPlaceId) {
+      compUpd.google_place_id = result.discoveredPlaceId;
+    }
+    if (Object.keys(compUpd).length) {
+      try {
+        await supabase
+          .from("companies")
+          .update(compUpd)
+          .eq("id", resolvedCompanyId)
+          .eq("workspace_id", workspaceId);
+      } catch {
+        /* backfill is best-effort — never break the finder */
+      }
+    }
+  }
+  // Mirror a discovered website onto the contact too, when it has none.
+  if (resolvedContactId && result.discoveredWebsite) {
+    try {
+      const { data: c } = await supabase
+        .from("contacts")
+        .select("website")
+        .eq("id", resolvedContactId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      if (c && !(c.website && String(c.website).trim())) {
+        await supabase
+          .from("contacts")
+          .update({ website: result.discoveredWebsite })
+          .eq("id", resolvedContactId)
+          .eq("workspace_id", workspaceId);
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
 
   // Record the attempt on the searched record so we can show "searched — none
   // found" everywhere and skip re-searching. Best-effort: if the columns aren't
@@ -262,7 +320,7 @@ export async function saveFoundPhones(
       label: p.label,
       country_code: countryCode ?? null,
       is_primary: isPrimary,
-      source: p.source === "website" ? "website" : "web-search",
+      source: p.source,
     });
     if (error) continue;
     saved += 1;
