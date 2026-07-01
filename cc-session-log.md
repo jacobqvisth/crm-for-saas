@@ -31,6 +31,20 @@ Diagnosed against prod: the primary-owner side already worked (both `call` activ
 
 ---
 
+## Investigation: "name-from-email" suggestion not showing on a contact — 2026-07-01 — no code change
+
+Jacob (from a contact profile for `sethbarnes8808@gmail.com`, showing "Unnamed Contact" with empty First/Last Name): "what happened to the find-or-add-the-name feature that used to be next to the name? If the user has a name in the email it should add it to the fields."
+
+**Finding: the feature is intact and working — it deliberately declined for this email.**
+
+- The "✨ Use *First Last* from email" button lives in `src/components/contacts/contact-detail-client.tsx:583-593`. It renders only when **both** name fields are empty (`nameSuggestion` guard at :509-511) and `parseNameFromEmail(contact.email)` returns non-null. Clicking it calls `applyNameSuggestion` (:313) to fill both fields.
+- `src/lib/contacts/parse-name-from-email.ts` is intentionally conservative — it fires only on the high-confidence `firstname.lastname@domain` shape: local part must split into **exactly two** letters-only tokens (`isNameToken` requires ≥2 chars, `/^\p{L}+$/u`), and role locals (info@, sales@, kundservice@, …) are rejected.
+- `sethbarnes8808@gmail.com` fails two guards: the local `sethbarnes8808` is a **single** token (no `.`/`_`/`-` separator → 1 token, not 2) **and** contains digits (`8808`). So `parseNameFromEmail` returns null → no button. This is by design, to avoid guessing garbage on opaque locals. `seth.barnes@gmail.com` *would* show "Use Seth Barnes from email."
+
+**No change made.** Offered Jacob a low-risk enhancement (strip trailing digits before parsing so `seth.barnes8808@` → "Seth Barnes", keeping the two-token safety rule); splitting glued-together locals like `sethbarnes` was flagged as too risky. Awaiting his call on whether to loosen the parser.
+
+---
+
 ## Mark a list as a call list — 2026-06-30 — PR #442 (feature/mark-call-list)
 
 Jacob, from the list detail page: "I want to be able to tag or mark a list as a call list."
