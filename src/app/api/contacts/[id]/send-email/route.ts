@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/gmail/send";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables } from "@/lib/sequences/variables";
+import { translateOutboundEmail } from "@/lib/inbox/translate-outbound";
 import { insertActivity } from "@/lib/activities/insert";
 import type { Tables } from "@/lib/database.types";
 
@@ -16,6 +17,13 @@ type SendOneOffRequest = {
   bodyHtml?: string;
   /** Optional explicit sender; falls back to round-robin getNextSender */
   senderAccountId?: string;
+  /**
+   * Language to send in (ISO code, e.g. "sv"). The composer edits English; if
+   * this is set and not "en" we translate the English subject/body (preserving
+   * HTML + {{merge}} tokens) before resolving variables and sending. Defaults
+   * to "en" (no translation) when omitted.
+   */
+  targetLanguage?: string;
 };
 
 /**
@@ -45,8 +53,9 @@ export async function POST(
   const { id: contactId } = await params;
   const body = (await request.json()) as SendOneOffRequest;
 
-  const subject = body.subject?.trim();
-  const bodyHtml = body.bodyHtml?.trim();
+  let subject = body.subject?.trim();
+  let bodyHtml = body.bodyHtml?.trim();
+  const targetLanguage = body.targetLanguage?.trim().toLowerCase() || "en";
   if (!subject) {
     return NextResponse.json({ error: "Subject is required" }, { status: 400 });
   }
@@ -147,6 +156,29 @@ export async function POST(
     );
   }
 
+  // The composer edits English; translate to the recipient's language before
+  // anything else touches the copy. We translate the raw authored HTML (with
+  // {{merge}} tokens intact) so the variable-resolution + tracking pipeline
+  // below runs identically on the translated output. Keep the English around
+  // for the activity audit trail.
+  const subjectEn = subject;
+  const bodyEn = bodyHtml;
+  if (targetLanguage !== "en") {
+    const translation = await translateOutboundEmail({
+      subject,
+      bodyHtml,
+      targetLanguage,
+    });
+    if (!translation.ok) {
+      return NextResponse.json(
+        { error: `Translation to ${targetLanguage} failed: ${translation.reason}` },
+        { status: 502 }
+      );
+    }
+    subject = translation.subject.trim() || subject;
+    bodyHtml = translation.bodyHtml.trim() || bodyHtml;
+  }
+
   // Resolve merge variables against the live contact + company. The tracking
   // pixel/link wrapping is applied inside sendEmail using this tracking_id.
   const trackingId = randomUUID();
@@ -236,6 +268,11 @@ export async function POST(
       sender_account_id: senderId,
       sender_email: senderAccount?.email_address ?? null,
       sender_name: senderAccount?.display_name ?? null,
+      // Language audit: what shipped vs. the English the rep composed.
+      sent_language: targetLanguage,
+      ...(targetLanguage !== "en"
+        ? { subject_en: subjectEn, body_en: bodyEn }
+        : {}),
     },
   });
 
