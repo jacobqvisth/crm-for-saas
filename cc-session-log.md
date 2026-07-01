@@ -4962,3 +4962,34 @@ of target sites. Cron confirmed running under GET post-deploy.
   seconds via the single-contact button (expected: +46 73 766 88 45).
 - The call-list detail bulk button (#453, another session) is still on the synchronous
   path; only the Call Planner was switched to the background queue.
+
+---
+
+## Compose modal — per-email send language (compose in English, translate at send)
+**Date:** 2026-07-01 · **PR:** #471 · **Branch:** worktree-compose-language → main (2d1d7d3)
+
+Added a "Send in" language selector to the one-off contact **Email** modal
+(`compose-email-modal.tsx`). Mirrors the inbox reply flow: the rep always
+composes/edits in **English**, and when the target language isn't English the
+email is auto-translated at send.
+
+- Selector defaults to the contact's stored `language` field (Swedish contact →
+  Swedish), falls back to English, overridable per email.
+- Side-by-side **"Recipient sees (Language)"** preview via new
+  `/api/ai/translate-email` route (debounced). Send re-translates fresh
+  server-side so a stale preview never decides what ships.
+- New `translateOutboundEmail()` in `src/lib/inbox/translate-outbound.ts`
+  translates subject + HTML body while preserving HTML tags and `{{merge}}`
+  tokens → existing variable-resolution + tracking pipeline runs unchanged.
+- `send-email` route accepts `targetLanguage`, translates before
+  `resolveVariables`, logs English + `sent_language` in activity metadata (audit).
+- Language labels/options extracted to client-safe `src/lib/i18n/languages.ts`
+  (single source of truth; no Anthropic import).
+
+**Checks:** `tsc --noEmit`, `lint`, `build` all pass. Deploy live (307 → /login).
+Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
+
+### Open / to verify manually
+- Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
+  compose English, Preview in Swedish, send, verify recipient gets Swedish and
+  the timeline activity retains the English (`body_en` / `sent_language`).
