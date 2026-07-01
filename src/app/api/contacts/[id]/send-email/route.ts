@@ -117,8 +117,13 @@ export async function POST(
     company = (data as Company) ?? null;
   }
 
-  // Pick the sender: caller's choice (validated to an active account in the
-  // workspace) or the round-robin least-used account.
+  // Pick the sender: caller's explicit choice (validated to an active account
+  // in the workspace) or, failing that, the logged-in user's OWN account.
+  // This is an interactive send (one-off "Email" button / post-call follow-up)
+  // so it should go out from the rep who is acting — e.g. if Jacob just called
+  // the contact, the follow-up is "from Jacob", not from whichever teammate's
+  // account happens to have the lowest daily send count. Only falls back to the
+  // round-robin least-used account if the acting user has no eligible account.
   let senderId = body.senderAccountId ?? null;
   if (senderId) {
     const { data: chosen } = await supabase
@@ -132,7 +137,7 @@ export async function POST(
     }
   }
   if (!senderId) {
-    const next = await getNextSender(workspaceId);
+    const next = await getNextSender(workspaceId, undefined, user.id);
     senderId = next?.id ?? null;
   }
   if (!senderId) {

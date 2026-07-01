@@ -17,6 +17,7 @@ type Sender = {
   email_address: string;
   display_name: string | null;
   status: string;
+  user_id: string | null;
 };
 
 type PersonaAngle = "shop_owner" | "service_advisor" | "technician";
@@ -87,8 +88,17 @@ export function ComposeEmailModal({
         if (!res.ok) return;
         const data: Sender[] = await res.json();
         setSenders(data);
+        // Default to the logged-in user's OWN account (so a one-off email is
+        // "from me"), falling back to the first active account otherwise.
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const own =
+          user &&
+          data.find((s) => s.status === "active" && s.user_id === user.id);
         const firstActive = data.find((s) => s.status === "active");
-        if (firstActive) setSenderId(firstActive.id);
+        const chosen = own || firstActive;
+        if (chosen) setSenderId(chosen.id);
       } catch {
         /* non-fatal: server falls back to round-robin if none chosen */
       }
