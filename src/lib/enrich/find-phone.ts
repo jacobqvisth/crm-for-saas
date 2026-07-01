@@ -39,10 +39,27 @@ export interface FindPhonesInput {
   existing?: (string | null | undefined)[];
 }
 
+/** Diagnostics so a "found nothing" result is explainable instead of silent. */
+export interface FindPhonesDebug {
+  /** Per-page website fetch outcomes (HTTP status, or "abort"/"error"). */
+  fetchLog: { url: string; status: number | string }[];
+  /** Whether the AI web-search step could run (ANTHROPIC_API_KEY present). */
+  apiKeyPresent: boolean;
+  /** How many model turns the web-search step took. */
+  webSearchTurns: number;
+  /** Whether the model ended up calling report_phones (directly or when forced). */
+  reportCalled: boolean;
+  /** Numbers the web-search step contributed (before dedupe). */
+  webPhoneCount: number;
+  /** Error message from the web-search step, if it threw. */
+  searchError: string | null;
+}
+
 export interface FindPhonesResult {
   found: boolean;
   phones: PhoneCandidate[];
   reasoning: string | null;
+  debug?: FindPhonesDebug;
 }
 
 // --- URL helpers -------------------------------------------------------------
@@ -308,6 +325,18 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
   const apiKey = process.env.ANTHROPIC_API_KEY;
   let searchReasoning: string | null = null;
 
+  // Diagnostics for this run.
+  const debug: FindPhonesDebug = {
+    fetchLog,
+    apiKeyPresent: !!apiKey,
+    webSearchTurns: 0,
+    reportCalled: false,
+    webPhoneCount: 0,
+    searchError: null,
+  };
+
+  const webBefore = byNumber.size;
+
   if (searchSubject && apiKey) {
     const client = new Anthropic({ apiKey });
     const location = [input.city, input.country].filter(Boolean).join(", ");
@@ -320,7 +349,8 @@ Rules:
 - Include all distinct lines: main/reception, mobile, service desk, etc. Label them when the source says what they are.
 - Give each a confidence based on how sure you are it's the right entity.
 - If you genuinely can't find any, call report_phones with an empty phones array and explain in reasoning.
-- Keep reasoning to one short sentence.`;
+- Keep reasoning to one short sentence.
+- You MUST finish by calling report_phones — do not answer in plain text.`;
 
     const msg =
       `Find all phone numbers for:\n` +
@@ -329,43 +359,90 @@ Rules:
       (location ? `Location: ${location}\n` : "") +
       (sites.length ? `Known website: ${sites[0]}\n` : "");
 
-    try {
-      const resp = await client.messages.create({
-        model: MODEL,
-        max_tokens: 1500,
-        system,
-        tools: [
-          { type: "web_search_20260209", name: "web_search", max_uses: 5 } as unknown as Anthropic.Tool,
-          REPORT_TOOL,
-        ],
-        messages: [{ role: "user", content: msg }],
-      });
+    const tools = [
+      { type: "web_search_20260209", name: "web_search", max_uses: 5 } as unknown as Anthropic.Tool,
+      REPORT_TOOL,
+    ];
 
-      const report = resp.content.find(
+    const findReport = (content: Anthropic.ContentBlock[]) =>
+      content.find(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_phones",
       );
-      if (report) {
-        const out = report.input as ReportInput;
-        searchReasoning = out.reasoning ?? null;
-        for (const p of out.phones ?? []) {
-          const e164 = normalizePhone(p.number, hint);
-          if (!e164) continue;
-          add({
-            number: e164,
-            raw: (p.number || "").trim().replace(/\s+/g, " ") || e164,
-            label: p.label?.trim() || null,
-            source: "web-search",
-            sourceUrl: normalizeUrl(p.source_url) || null,
-            confidence: ["high", "medium", "low"].includes(p.confidence ?? "")
-              ? (p.confidence as string)
-              : "medium",
-          });
-        }
+
+    const ingestReport = (report: Anthropic.ToolUseBlock) => {
+      debug.reportCalled = true;
+      const out = report.input as ReportInput;
+      searchReasoning = out.reasoning ?? searchReasoning;
+      for (const p of out.phones ?? []) {
+        const e164 = normalizePhone(p.number, hint);
+        if (!e164) continue;
+        add({
+          number: e164,
+          raw: (p.number || "").trim().replace(/\s+/g, " ") || e164,
+          label: p.label?.trim() || null,
+          source: "web-search",
+          sourceUrl: normalizeUrl(p.source_url) || null,
+          confidence: ["high", "medium", "low"].includes(p.confidence ?? "")
+            ? (p.confidence as string)
+            : "medium",
+        });
       }
+    };
+
+    try {
+      const messages: Anthropic.MessageParam[] = [{ role: "user", content: msg }];
+      let report: Anthropic.ToolUseBlock | undefined;
+
+      // Drive the server-tool loop: the model runs web_search, and may hand back
+      // a `pause_turn` (its search loop hit the limit) that we must re-send to
+      // continue. Stop once it calls report_phones or finishes its turn.
+      for (let turn = 0; turn < 4 && !report; turn++) {
+        const resp = await client.messages.create({ model: MODEL, max_tokens: 1500, system, tools, messages });
+        debug.webSearchTurns++;
+        report = findReport(resp.content);
+        if (report) break;
+        messages.push({ role: "assistant", content: resp.content });
+        if (resp.stop_reason !== "pause_turn") break; // end_turn / text answer → force below
+      }
+
+      // If it never called report_phones (answered in prose, or stopped early),
+      // force the structured report so its research isn't thrown away.
+      if (!report) {
+        messages.push({
+          role: "user",
+          content:
+            "Now call report_phones with every phone number you found in your research. " +
+            "If you found none, call it with an empty phones array and say so in reasoning.",
+        });
+        const forced = await client.messages.create({
+          model: MODEL,
+          max_tokens: 800,
+          system,
+          tools,
+          tool_choice: { type: "tool", name: "report_phones" },
+          messages,
+        });
+        debug.webSearchTurns++;
+        report = findReport(forced.content);
+      }
+
+      if (report) ingestReport(report);
     } catch (err) {
-      searchReasoning = err instanceof Error ? err.message : "Web search failed.";
+      debug.searchError = err instanceof Error ? err.message : "Web search failed.";
+      searchReasoning = debug.searchError;
     }
   }
+
+  debug.webPhoneCount = Math.max(0, byNumber.size - webBefore);
+  // One structured log line so production failures are visible in Vercel logs.
+  console.log(
+    "[find-phone]",
+    JSON.stringify({
+      subject: searchSubject || null,
+      sites: sites.length,
+      ...debug,
+    }),
+  );
 
   // 3. Rank: website > web-search, then confidence.
   const order = (c: PhoneCandidate) =>
@@ -392,5 +469,5 @@ Rules:
           ? "No phone numbers could be found for this contact."
           : "No website or name to search with.")) + fetchNote;
 
-  return { found: phones.length > 0, phones, reasoning };
+  return { found: phones.length > 0, phones, reasoning, debug };
 }
