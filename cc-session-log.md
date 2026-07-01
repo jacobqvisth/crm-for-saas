@@ -13,6 +13,24 @@ updated: 2026-05-26
 
 ---
 
+## Reopen the call panel mid-call — app-level CallProvider (Phase A) — 2026-07-01 — worktree-feature+call-provider-reopen
+
+Jacob, on a live call, clicked through to the customer profile and the right-hand call panel closed with **no way to reopen it** — he feared the recording was lost. Verified against prod it wasn't: the WebRTC session lives on a tab-level singleton and recording/Deepgram/summary all run server-side (46elks → hangup webhook → `processCallSession`), so his call to **Saltsjöbadens Rekond & Biltvätt** (114s) was fully processed + logged. The bug was purely UI: `CallNowButton`/`CallDrawer` owned the active-call state **per page**, so navigation unmounted the panel.
+
+**Fix (Phase A of the "in-call assist" plan): lift the active call to app level.**
+- **`src/components/calls/call-provider.tsx`** (new) — `<CallProvider>` mounted once in the dashboard layout. Owns `activeCall` (target/mode/startedAt/sessionId/onLogged), the polled `Session`, WebRTC state, mute, and `panelOpen`. Exposes `useCall().startCall(target, opts)`. Renders the live `CallDrawer` **and** a persistent bottom-right **"call in progress" pill** with an **Open** button (the reopen affordance), a live timer, and Mute/Hang-up for computer calls. Polls `/api/calls/session/[id]` even while minimized, so a minimized call still lands its recording + AI summary (pill shows "Call summary ready → Open").
+- **Key behavior change — minimize ≠ hang up:** the drawer X / backdrop now **minimizes** to the pill (call keeps running); only the explicit **Hang up** ends a WebRTC call. Previously closing the drawer hung up the call.
+- **`src/components/calls/call-drawer.tsx`** (new) — extracted the presentational `CallDrawer` + shared types (`Session`, `CallNowTarget`, `CallNumber`, `CallMode`) + `FollowupEmail`/`SuggestedTasks` out of `call-now.tsx`, so the provider and the past-call viewer share one drawer with no import cycle.
+- **`src/components/calls/call-now.tsx`** — `CallNowButton` is now a thin trigger (keeps the ring-my-phone / talk-from-computer / number picker) that calls `useCall().startCall()`. `CallDetailDrawer` (past-call viewer) + `CallSettingsHint` unchanged; types re-exported for compat.
+- **`src/components/calls/webrtc-presence.tsx`** — added a `mineRef` guard so the presence widget only pops its in-call bar for **inbound** calls it surfaced; outbound calls are the CallProvider pill's job (no more double bar).
+- **`src/app/(dashboard)/layout.tsx`** — wraps children in `<CallProvider>`.
+
+No API/DB/env/cron changes. `call_sessions.transcript`/`live_tips` remain reserved for **Phase B** (live ambient AI sales assist — real-time Deepgram + streaming Claude tips, WebRTC-only). Plan file: `~/.claude-wrenchlane/plans/sparkling-wibbling-parrot.md`.
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `npm run build` ✅ · smoke+api E2E **8/8 pass**. (Local build needed `npm install` first — `jssip` was in package.json but missing from the stale local node_modules; same pre-existing env gap noted in #456. Also had to prepend `/opt/homebrew/bin` to PATH — Codex.app's node was shadowing brew node and silently OOM-killing the build.) **Not yet live-tested in a real browser mid-call.**
+
+---
+
 ## Interactive emails send from the acting rep's own account — 2026-07-01 — PR #456 (worktree-fix-call-email-sender)
 
 Jacob: "if I call a contact as Jacob, after the call the email sender should also be Jacob." His post-call follow-up to **Azad @ Gävle Bilexpert** went out **from Magnus/matteo** instead.

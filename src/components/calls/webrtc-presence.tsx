@@ -23,6 +23,10 @@ export function WebrtcPresence() {
   const [from, setFrom] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const credsRef = useRef<WebrtcCreds | null>(null);
+  // True only for calls this presence surfaced (inbound). Outbound calls placed
+  // from the Call button are owned by CallProvider's pill — we must not also pop
+  // an in-call bar for them, or the two widgets collide.
+  const mineRef = useRef(false);
 
   // Read the per-device preference once (default on).
   useEffect(() => {
@@ -56,6 +60,7 @@ export function WebrtcPresence() {
   }, []);
 
   const incomingHandler = useCallback((info: IncomingInfo) => {
+    mineRef.current = true;
     setFrom(info.from);
     setMuted(false);
     setPhase("incoming");
@@ -70,9 +75,14 @@ export function WebrtcPresence() {
     const unsub = phone.subscribe({
       onState: (s) => {
         if (s === "in_call") {
-          setPhase("in_call");
-          setMuted(false);
+          // Only surface the in-call bar for calls WE brought in (inbound).
+          // Outbound calls are the CallProvider pill's job.
+          if (mineRef.current) {
+            setPhase("in_call");
+            setMuted(false);
+          }
         } else if (s === "ended" || s === "error") {
+          mineRef.current = false;
           setPhase("idle");
           setFrom(null);
         }
@@ -130,6 +140,7 @@ export function WebrtcPresence() {
   const accept = () => getWebrtcPhone().acceptIncoming();
   const decline = () => {
     getWebrtcPhone().declineIncoming();
+    mineRef.current = false;
     setPhase("idle");
     setFrom(null);
   };
