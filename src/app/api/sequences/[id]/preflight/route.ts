@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildFilterQuery } from "@/lib/lists/filter-query";
 import type { ListFilter } from "@/lib/lists/filter-query";
+import { parseListExclusions, resolveExcludedContactIds } from "@/lib/lists/exclusions";
 
 export async function GET(
   request: NextRequest,
@@ -63,7 +64,7 @@ export async function GET(
   // 3. Get list metadata, then resolve contacts (dynamic or static)
   const { data: listData } = await supabase
     .from("contact_lists")
-    .select("is_dynamic, filters")
+    .select("is_dynamic, filters, exclusions")
     .eq("id", listId)
     .eq("workspace_id", workspaceId)
     .single();
@@ -88,6 +89,16 @@ export async function GET(
     rawContacts = ((memberData ?? []) as { contacts: ContactRow | null }[])
       .map((m) => m.contacts)
       .filter((c): c is ContactRow => c !== null);
+  }
+
+  // Drop contacts excluded by the list's own exclusion sources, so the preflight
+  // numbers match what enrollment (via /api/lists/[id]/resolve) will actually send.
+  const exclusions = parseListExclusions(listData?.exclusions);
+  const excludedIds = await resolveExcludedContactIds(supabase, workspaceId, exclusions, {
+    excludeSelfListId: listId,
+  });
+  if (excludedIds.size > 0) {
+    rawContacts = rawContacts.filter((c) => !excludedIds.has(c.id));
   }
 
   const listMemberCount = rawContacts.length;

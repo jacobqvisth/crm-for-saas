@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { buildFilterQuery, resolveListContactIds } from "@/lib/lists/filter-query";
+import { buildFilterQuery } from "@/lib/lists/filter-query";
+import { resolveListContactIdsViaApi } from "@/lib/lists/resolve-client";
 import { X, CheckCircle, AlertTriangle, XCircle, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
@@ -132,12 +133,9 @@ export function LaunchCampaignModal({
 
     let contactIds: string[];
     try {
-      contactIds = await resolveListContactIds(supabase, {
-        id: selectedList.id,
-        workspace_id: workspaceId,
-        is_dynamic: selectedList.is_dynamic,
-        filters: selectedList.filters,
-      });
+      // Resolve via the server so the list's exclusions (never-call / internal
+      // testers / excluded lists) are applied before enrollment.
+      contactIds = await resolveListContactIdsViaApi(selectedList.id);
     } catch {
       toast.error("Failed to resolve list contacts");
       setLaunching(false);

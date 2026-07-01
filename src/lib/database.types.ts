@@ -1257,6 +1257,7 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          exclusions: Json | null
           filters: Json | null
           id: string
           is_dynamic: boolean | null
@@ -1268,6 +1269,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           description?: string | null
+          exclusions?: Json | null
           filters?: Json | null
           id?: string
           is_dynamic?: boolean | null
@@ -1279,6 +1281,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           description?: string | null
+          exclusions?: Json | null
           filters?: Json | null
           id?: string
           is_dynamic?: boolean | null

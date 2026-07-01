@@ -9,6 +9,11 @@ import {
   type ScoreableContact,
 } from "@/lib/calls/scoring";
 import { listReps } from "@/lib/reps/list";
+import {
+  applyNeverCallNegativeFilters,
+  loadNeverCallSets,
+  type NeverCallSets,
+} from "@/lib/lists/exclusions";
 
 // How many ranked contacts to surface as "today's top".
 const TOP_LIMIT = 30;
@@ -233,9 +238,12 @@ export async function GET(request: NextRequest) {
 
   const topWithPhone = top.filter((t) => t.hasPhone).length;
 
-  // 4. Playbook counts (total + with-phone), all in parallel.
+  // 4. Playbook counts (total + with-phone), all in parallel. The always-on
+  //    never-call list is subtracted here too, so a playbook's headline count
+  //    matches the worklist you get after turning it into a call list.
+  const neverCallSets = await loadNeverCallSets(supabase, workspaceId);
   const playbookResults = await Promise.all(
-    PLAYBOOKS.map(async (pb) => countPlaybook(supabase, workspaceId, pb, bouncedCustomerIds)),
+    PLAYBOOKS.map(async (pb) => countPlaybook(supabase, workspaceId, pb, bouncedCustomerIds, neverCallSets)),
   );
 
   return NextResponse.json({
@@ -256,33 +264,46 @@ async function countPlaybook(
   workspaceId: string,
   pb: Playbook,
   bouncedCustomerIds: Set<string>,
+  neverCall: NeverCallSets,
 ): Promise<{ key: string; count: number; withPhone: number }> {
   if (pb.special === "payment_bounced") {
     const ids = [...bouncedCustomerIds];
     if (ids.length === 0) return { key: pb.key, count: 0, withPhone: 0 };
     const [{ count }, { count: withPhone }] = await Promise.all([
-      supabase
-        .from("contacts")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .in("user_stripe_customer_id", ids),
-      supabase
-        .from("contacts")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .in("user_stripe_customer_id", ids)
-        .not("phone", "is", null),
+      applyNeverCallNegativeFilters(
+        supabase
+          .from("contacts")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .in("user_stripe_customer_id", ids),
+        neverCall,
+      ),
+      applyNeverCallNegativeFilters(
+        supabase
+          .from("contacts")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .in("user_stripe_customer_id", ids)
+          .not("phone", "is", null),
+        neverCall,
+      ),
     ]);
     return { key: pb.key, count: count ?? 0, withPhone: withPhone ?? 0 };
   }
 
   const filters = pb.filters ?? [];
   const [{ count }, { count: withPhone }] = await Promise.all([
-    buildFilterQuery(supabase, workspaceId, filters, "id", { count: "exact", head: true }),
-    buildFilterQuery(supabase, workspaceId, [...filters, PHONE_FILTER], "id", {
-      count: "exact",
-      head: true,
-    }),
+    applyNeverCallNegativeFilters(
+      buildFilterQuery(supabase, workspaceId, filters, "id", { count: "exact", head: true }),
+      neverCall,
+    ),
+    applyNeverCallNegativeFilters(
+      buildFilterQuery(supabase, workspaceId, [...filters, PHONE_FILTER], "id", {
+        count: "exact",
+        head: true,
+      }),
+      neverCall,
+    ),
   ]);
   return { key: pb.key, count: count ?? 0, withPhone: withPhone ?? 0 };
 }
