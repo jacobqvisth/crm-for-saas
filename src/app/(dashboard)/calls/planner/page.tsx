@@ -23,13 +23,20 @@ import {
   PlugZap,
   HeartHandshake,
   Target,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PLAYBOOKS } from "@/lib/calls/playbooks";
 import { PLAN_TYPE_LABELS } from "@/lib/lists/filter-query";
+import { useWorkspace } from "@/lib/hooks/use-workspace";
 import type { ReasonTone } from "@/lib/calls/scoring";
 import { CallNowButton } from "@/components/calls/call-now";
+
+// The bulk find-numbers endpoint caps each request at 6 contacts; chunk to match.
+const FIND_BATCH = 6;
+// Don't fan out over an unbounded list in one click.
+const FIND_CAP = 30;
 
 const ICONS: Record<string, LucideIcon> = {
   CreditCard,
@@ -96,10 +103,12 @@ type PlannerData = {
 
 export default function CallPlannerPage() {
   const router = useRouter();
+  const { workspaceId } = useWorkspace();
   const [data, setData] = useState<PlannerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState<string | null>(null);
   const [topN, setTopN] = useState(20);
+  const [findingNumbers, setFindingNumbers] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,8 +169,61 @@ export default function CallPlannerPage() {
     }
   };
 
+  // Bulk-find phone numbers for the top contacts that don't have one yet. The
+  // finder discovers each contact's website first (if missing), scrapes it, then
+  // web-searches — and saves the best number so they become callable. Runs in
+  // small batches so we stay inside the serverless time limit.
+  const findMissingNumbers = async () => {
+    if (!data || findingNumbers) return;
+    if (!workspaceId) {
+      toast.error("No workspace loaded — reload the page");
+      return;
+    }
+    const missing = data.topContacts.filter((c) => !c.hasPhone).slice(0, FIND_CAP);
+    if (missing.length === 0) {
+      toast("All your top contacts already have a phone number");
+      return;
+    }
+    setFindingNumbers(true);
+    const toastId = toast.loading(`Finding numbers… 0/${missing.length}`);
+    let done = 0;
+    let saved = 0;
+    let withNumbers = 0;
+    try {
+      for (let i = 0; i < missing.length; i += FIND_BATCH) {
+        const batch = missing.slice(i, i + FIND_BATCH).map((c) => c.contactId);
+        const res = await fetch("/api/enrich/find-phone/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId, contactIds: batch }),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          saved += json.savedTotal ?? 0;
+          withNumbers += json.withNumbers ?? 0;
+        }
+        done += batch.length;
+        toast.loading(`Finding numbers… ${done}/${missing.length}`, { id: toastId });
+      }
+      if (saved > 0) {
+        toast.success(
+          `Found numbers for ${withNumbers} contact${withNumbers === 1 ? "" : "s"} (${saved} saved)`,
+          { id: toastId },
+        );
+      } else {
+        toast.error("No new phone numbers found for these contacts", { id: toastId });
+      }
+      await load();
+    } catch {
+      toast.error("Find numbers failed", { id: toastId });
+    } finally {
+      setFindingNumbers(false);
+    }
+  };
+
   const countFor = (key: string) => data?.playbooks.find((p) => p.key === key);
   const callableTop = data?.topContacts.filter((c) => c.hasPhone).length ?? 0;
+  const missingTop = data ? data.topContacts.filter((c) => !c.hasPhone).length : 0;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -207,6 +269,21 @@ export default function CallPlannerPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {missingTop > 0 && (
+                  <button
+                    onClick={findMissingNumbers}
+                    disabled={findingNumbers}
+                    title="Find websites + phone numbers for the top contacts that don't have one yet"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {findingNumbers ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                    Find missing numbers
+                  </button>
+                )}
                 <label className="text-xs text-slate-500">Top</label>
                 <input
                   type="number"
@@ -234,7 +311,8 @@ export default function CallPlannerPage() {
             {callableTop < data.topContacts.length && (
               <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 {data.topContacts.length - callableTop} of your top contacts have no phone number yet
-                — open a contact to find a number, or they&apos;ll be skipped when you start calling.
+                — hit <span className="font-medium">Find missing numbers</span> to look them up
+                automatically, or they&apos;ll be skipped when you start calling.
               </p>
             )}
 

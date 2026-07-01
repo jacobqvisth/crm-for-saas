@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Star, Trash2, Plus, Loader2, Sparkles, ExternalLink, X, Check, Pencil, Tag,
+  Star, Trash2, Plus, Loader2, Sparkles, ExternalLink, X, Check, Pencil, Tag, Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
@@ -64,6 +64,7 @@ export function PhoneNumbersPanel({
   const [labelDraft, setLabelDraft] = useState('');
   const [finding, setFinding] = useState(false);
   const [found, setFound] = useState<FoundPhone[] | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -182,6 +183,10 @@ export function PhoneNumbersPanel({
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Search failed', { id: toastId }); return; }
+      // If the contact had no website, the finder discovered + saved one first.
+      if (data.websiteAdded) {
+        toast.success(`Found website ${data.websiteAdded}`);
+      }
       if (data.found && data.phones?.length) {
         toast.success(`Found ${data.phones.length} number${data.phones.length === 1 ? '' : 's'}`, { id: toastId });
         setFound(data.phones as FoundPhone[]);
@@ -198,14 +203,56 @@ export function PhoneNumbersPanel({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-slate-500">
-          {scope === 'company' ? 'Phone Numbers' : 'Phone Numbers'}
-        </label>
+        <div className="flex items-center gap-1">
+          <label className="block text-xs font-medium text-slate-500">Phone Numbers</label>
+          {enableFind && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowInfo((v) => !v)}
+                onBlur={() => setTimeout(() => setShowInfo(false), 150)}
+                title="How does 'Find numbers' work?"
+                className="flex items-center text-slate-400 hover:text-slate-600"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+              {showInfo && (
+                <div className="absolute left-0 top-6 z-20 w-72 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg">
+                  <p className="mb-1.5 font-semibold text-slate-700">How “Find numbers” works</p>
+                  <ol className="list-decimal space-y-1 pl-4">
+                    <li>
+                      <span className="font-medium text-slate-700">Find the website first.</span> Uses
+                      the site saved on this contact and its company. If none is saved, it finds one
+                      from the email domain or a web search and saves it to the profile.
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-700">Scrape the site.</span> Reads the
+                      homepage and contact/about pages for <code>tel:</code> links and listed numbers.
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-700">AI web search.</span> Looks the
+                      business up by name, town and trade across its own site and directories
+                      (hitta.se, eniro, Google Business).
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-700">Clean up.</span> Normalises to
+                      +46 format, de-dupes, drops numbers already saved, and shows the rest for you to
+                      add.
+                    </li>
+                  </ol>
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    No third-party data brokers — just the public web.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {enableFind && (
           <button
             onClick={handleFind}
             disabled={finding}
-            title="Search the company website and the web for phone numbers"
+            title="Find the website, scrape it, and web-search for phone numbers"
             className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-50"
           >
             {finding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
