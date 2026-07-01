@@ -29,6 +29,7 @@ import toast from "react-hot-toast";
 import { PLAYBOOKS } from "@/lib/calls/playbooks";
 import { PLAN_TYPE_LABELS } from "@/lib/lists/filter-query";
 import type { ReasonTone } from "@/lib/calls/scoring";
+import { CallNowButton } from "@/components/calls/call-now";
 
 const ICONS: Record<string, LucideIcon> = {
   CreditCard,
@@ -293,12 +294,15 @@ export default function CallPlannerPage() {
                   </div>
                   <div className="shrink-0">
                     {c.phone ? (
-                      <a
-                        href={`tel:${c.phone}`}
-                        className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
-                      >
-                        <Phone className="h-3.5 w-3.5" /> {c.phone}
-                      </a>
+                      <CallNowButton
+                        target={{
+                          contactId: c.contactId,
+                          contactName: c.name,
+                          phone: c.phone,
+                          companyId: c.companyId,
+                          companyName: c.companyName,
+                        }}
+                      />
                     ) : (
                       <Link
                         href={`/contacts/${c.contactId}`}
