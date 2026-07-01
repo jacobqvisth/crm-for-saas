@@ -13,6 +13,22 @@ updated: 2026-05-26
 
 ---
 
+## Calls: inbound/outbound direction label on Recent calls rows — 2026-07-01 — PR #482 — feature/call-direction-label
+
+Follow-up to the Recent-calls date tabs (#474): Jacob spotted an inbound call in the list and asked to label inbound vs outbound.
+
+**What shipped (`src/app/(dashboard)/calls/page.tsx`):** each Recent calls row now shows a direction badge derived from `metadata.direction`:
+- `"inbound"` → green pill, `PhoneIncoming` icon, "Inbound"
+- anything else → subtle grey pill, `PhoneOutgoing` icon, "Outbound"
+
+Inbound calling is a newer feature (46elks inbound webhook → `call_sessions.direction="inbound"` → `processCallSession` writes `metadata.direction`), so legacy activity rows with no `metadata.direction` default to **Outbound** (correct — dial-out + manual `logCall` always set `"outbound"`). The name line was changed to a flex row so the direction + Customer badges aren't clipped by name truncation. No API/schema change — `/api/calls` already returns `metadata`.
+
+**Checks:** `npx tsc --noEmit` clean, `npm run lint` clean. Local `next build` skipped (bg sandbox OOMs).
+
+**Deploy:** merged to main as `0361e19`. Heavy parallel merging today (#478/#480/#481 landed around the same time); confirmed `0361e19` is an ancestor of the live prod HEAD `bfebf32` (#481), deploy `dpl_G78hhWmZGWHsbZuDGvWbFonondoX` **READY**, `/calls` returns 200. No code conflict — the interleaved PRs touched disjoint files.
+
+---
+
 ## Calls: date-filter tabs (Today / Yesterday / Last 7 days) on Recent calls — 2026-07-01 — PR #474 — feature/recent-calls-date-tabs
 
 Jacob asked (from a screenshot of `/calls`) to add tabs above the **Recent calls** list to filter by **Today / Yesterday / Last 7 days (excluding today)**, and to show the full list (scroll) with pagination.
