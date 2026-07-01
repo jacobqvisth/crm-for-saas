@@ -3,13 +3,19 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight } from "lucide-react";
+import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight, Search } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { CallLogger, type CallLoggerTarget } from "@/components/calls/call-logger";
 import { CallNowButton } from "@/components/calls/call-now";
 import { ContactCallPanel } from "@/components/calls/contact-call-panel";
+import { useWorkspace } from "@/lib/hooks/use-workspace";
+
+// The bulk find-numbers endpoint caps each request at 6 contacts; chunk to match.
+const FIND_BATCH = 6;
+// Don't fan out over an unbounded list in one click.
+const FIND_CAP = 30;
 
 export type QueueRow = {
   contactId: string;
@@ -49,6 +55,7 @@ type Filter = "all" | "prospects" | "customers" | "uncalled";
 export default function CallListPage() {
   const params = useParams<{ id: string }>();
   const listId = params.id;
+  const { workspaceId } = useWorkspace();
   const [list, setList] = useState<ListInfo | null>(null);
   const [queue, setQueue] = useState<QueueRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -56,6 +63,7 @@ export default function CallListPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [active, setActive] = useState<CallLoggerTarget | null>(null);
   const [openRow, setOpenRow] = useState<QueueRow | null>(null);
+  const [findingNumbers, setFindingNumbers] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +100,63 @@ export default function CallListPage() {
   const calledCount = queue.filter((r) => r.lastCall).length;
   const progress = queue.length > 0 ? Math.round((calledCount / queue.length) * 100) : 0;
 
+  // Contacts on this list with no callable number (neither their own nor their
+  // company's) — the ones the finder can help with.
+  const missingPhone = queue.filter((r) => !r.phone && !r.companyPhone);
+
+  // Bulk-find phone numbers for the contacts on this list that don't have one.
+  // The finder discovers each contact's website first (if missing), scrapes it,
+  // then web-searches — saving the best number so they become callable. Runs in
+  // small batches so we stay inside the serverless time limit. Mirrors the Call
+  // Planner's "Find missing numbers" action.
+  const findMissingNumbers = async () => {
+    if (findingNumbers) return;
+    if (!workspaceId) {
+      toast.error("No workspace loaded — reload the page");
+      return;
+    }
+    const missing = missingPhone.slice(0, FIND_CAP);
+    if (missing.length === 0) {
+      toast("Everyone on this list already has a phone number");
+      return;
+    }
+    setFindingNumbers(true);
+    const toastId = toast.loading(`Finding numbers… 0/${missing.length}`);
+    let done = 0;
+    let saved = 0;
+    let withNumbers = 0;
+    try {
+      for (let i = 0; i < missing.length; i += FIND_BATCH) {
+        const batch = missing.slice(i, i + FIND_BATCH).map((c) => c.contactId);
+        const res = await fetch("/api/enrich/find-phone/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId, contactIds: batch }),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          saved += json.savedTotal ?? 0;
+          withNumbers += json.withNumbers ?? 0;
+        }
+        done += batch.length;
+        toast.loading(`Finding numbers… ${done}/${missing.length}`, { id: toastId });
+      }
+      if (saved > 0) {
+        toast.success(
+          `Found numbers for ${withNumbers} contact${withNumbers === 1 ? "" : "s"} (${saved} saved)`,
+          { id: toastId },
+        );
+      } else {
+        toast.error("No new phone numbers found for these contacts", { id: toastId });
+      }
+      await load();
+    } catch {
+      toast.error("Find numbers failed", { id: toastId });
+    } finally {
+      setFindingNumbers(false);
+    }
+  };
+
   const tabs: { key: Filter; label: string }[] = [
     { key: "all", label: `All (${queue.length})` },
     { key: "uncalled", label: "Not called" },
@@ -110,12 +175,32 @@ export default function CallListPage() {
           <h1 className="text-xl font-semibold text-slate-900">{list?.name ?? "Call list"}</h1>
           {list?.description && <p className="mt-0.5 text-sm text-slate-500">{list.description}</p>}
         </div>
-        <Link
-          href={`/lists/${listId}`}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Manage contacts
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {missingPhone.length > 0 && (
+            <button
+              onClick={findMissingNumbers}
+              disabled={findingNumbers}
+              title={`Find websites + phone numbers for the ${missingPhone.length} contact${missingPhone.length === 1 ? "" : "s"} on this list without one${missingPhone.length > FIND_CAP ? ` (up to ${FIND_CAP} per run)` : ""}`}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {findingNumbers ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              Find numbers
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                {Math.min(missingPhone.length, FIND_CAP)}
+              </span>
+            </button>
+          )}
+          <Link
+            href={`/lists/${listId}`}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Manage contacts
+          </Link>
+        </div>
       </div>
 
       <div className="mt-4">
