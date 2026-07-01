@@ -28,7 +28,18 @@ export interface WebrtcCreds {
   uri: string;
   /** The WebRTC number's SIP password. */
   password: string;
+  /** ICE servers (STUN/TURN) for media negotiation. Without at least a STUN
+   *  server, a laptop behind NAT can only offer host candidates and audio may
+   *  never flow. Served from the credentials endpoint so it's configurable. */
+  iceServers?: RTCIceServer[];
 }
+
+/** How long to wait for SIP registration before giving up (ms). */
+const REGISTER_TIMEOUT_MS = 15_000;
+/** How long an armed outbound leg may take to reach the browser (ms). If 46elks
+ *  never rings this tab — e.g. another tab/device holds the single shared
+ *  registration — we surface an error instead of spinning on "Connecting…". */
+const ARM_TIMEOUT_MS = 25_000;
 
 export type WebrtcState =
   | "idle"
@@ -58,7 +69,9 @@ class WebrtcPhone {
   private incomingHandler: ((info: IncomingInfo) => void) | null = null;
   /** When true, the next inbound session (our own outbound leg) auto-answers. */
   private armed = false;
+  private armTimer: ReturnType<typeof setTimeout> | null = null;
   private credsKey: string | null = null;
+  private iceServers: RTCIceServer[] = [];
 
   /** Subscribe to state/error events. Returns an unsubscribe fn. */
   subscribe(h: WebrtcHandlers): () => void {
@@ -82,8 +95,14 @@ class WebrtcPhone {
 
   /** Lazily create + register the shared UA. Resolves once registered. */
   async ensureRegistered(creds: WebrtcCreds): Promise<void> {
+    this.iceServers = creds.iceServers ?? [];
     const key = `${creds.wsUri}|${creds.uri}`;
-    if (this.ua && this.ua.isRegistered() && this.credsKey === key) return;
+    // Already registered with these creds — re-emit "registered" so callers that
+    // optimistically set "connecting" don't get stuck on a stale label.
+    if (this.ua && this.ua.isRegistered() && this.credsKey === key) {
+      this.emit("registered");
+      return;
+    }
     if (this.ua && this.credsKey !== key) {
       try {
         this.ua.stop();
@@ -110,6 +129,12 @@ class WebrtcPhone {
     ua.on("newRTCSession", (e: RTCSessionEvent) => this.onNewSession(e));
 
     await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(
+          new Error("Timed out connecting your computer — check your network and try again."),
+        );
+      }, REGISTER_TIMEOUT_MS);
       const ok = () => {
         cleanup();
         this.emit("registered");
@@ -120,6 +145,7 @@ class WebrtcPhone {
         reject(new Error("WebRTC registration failed — check the SIP credentials."));
       };
       const cleanup = () => {
+        clearTimeout(timer);
         ua.removeListener("registered", ok);
         ua.removeListener("registrationFailed", bad);
         ua.removeListener("disconnected", bad);
@@ -136,9 +162,28 @@ class WebrtcPhone {
     return !!this.ua && this.ua.isRegistered();
   }
 
-  /** Arm so the next inbound leg (our outbound call) is auto-answered. */
+  /** Arm so the next inbound leg (our outbound call) is auto-answered. A
+   *  watchdog fires if 46elks never rings this tab (e.g. another tab/device
+   *  holds the single shared registration) so the UI doesn't hang forever. */
   arm() {
     this.armed = true;
+    this.clearArmTimer();
+    this.armTimer = setTimeout(() => {
+      if (this.armed && !this.inCall()) {
+        this.armed = false;
+        this.fail(
+          "The call didn't reach this computer. Close any other CRM tabs or devices " +
+            "(only one can take computer calls at a time), then try again.",
+        );
+      }
+    }, ARM_TIMEOUT_MS);
+  }
+
+  private clearArmTimer() {
+    if (this.armTimer) {
+      clearTimeout(this.armTimer);
+      this.armTimer = null;
+    }
   }
 
   private onNewSession(e: RTCSessionEvent) {
@@ -147,6 +192,7 @@ class WebrtcPhone {
     // Outbound: this is the agent leg of a call we just placed — auto-answer.
     if (this.armed) {
       this.armed = false;
+      this.clearArmTimer();
       this.session = e.session;
       this.emit("ringing");
       this.wireSession(e.session);
@@ -175,7 +221,7 @@ class WebrtcPhone {
     try {
       session.answer({
         mediaConstraints: { audio: true, video: false },
-        pcConfig: { rtcpMuxPolicy: "require", iceServers: [] },
+        pcConfig: { rtcpMuxPolicy: "require", iceServers: this.iceServers },
       });
     } catch (err) {
       this.fail(err instanceof Error ? err.message : "Failed to answer the call");
@@ -253,6 +299,7 @@ class WebrtcPhone {
       }
     }
     this.armed = false;
+    this.clearArmTimer();
   }
 
   inCall(): boolean {

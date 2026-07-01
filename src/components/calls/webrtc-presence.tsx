@@ -39,7 +39,12 @@ export function WebrtcPresence() {
         const res = await fetch("/api/calls/webrtc-credentials");
         const json = await res.json();
         if (cancelled || !res.ok || !json.available) return;
-        credsRef.current = { wsUri: json.wsUri, uri: json.uri, password: json.password };
+        credsRef.current = {
+          wsUri: json.wsUri,
+          uri: json.uri,
+          password: json.password,
+          iceServers: json.iceServers,
+        };
         setAvailable(true);
       } catch {
         /* not available — stay silent */
@@ -58,8 +63,9 @@ export function WebrtcPresence() {
 
   // Register (or detach) based on availability + the device toggle.
   useEffect(() => {
-    if (!available || !credsRef.current) return;
+    if (!available || !credsRef.current || !enabled) return;
     const phone = getWebrtcPhone();
+    const creds = credsRef.current;
 
     const unsub = phone.subscribe({
       onState: (s) => {
@@ -73,19 +79,41 @@ export function WebrtcPresence() {
       },
     });
 
-    if (enabled) {
+    // Elect a single presence tab. The 46elks WebRTC number allows only ONE SIP
+    // registration at a time, so if several open CRM tabs each held one they'd
+    // steal it from each other and the ringing leg could land on the wrong tab
+    // (leaving the caller stuck on "Connecting…"). A cross-tab Web Lock ensures
+    // exactly one tab holds the live registration; the rest wait for the lock.
+    const ac = new AbortController();
+    const hold = async () => {
       phone.setIncomingHandler(incomingHandler);
       // Hold a live registration so 46elks can ring this browser.
-      void phone.ensureRegistered(credsRef.current).catch(() => {
+      await phone.ensureRegistered(creds).catch(() => {
         /* registration failure is non-fatal; the cell still rings */
       });
+      // Keep the lock (and the registration) until this tab releases it.
+      await new Promise<void>((resolve) => {
+        if (ac.signal.aborted) resolve();
+        else ac.signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    };
+
+    const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+    if (locks?.request) {
+      void locks
+        .request("wl-webrtc-presence", { signal: ac.signal }, hold)
+        .catch(() => {
+          /* aborted before we acquired the lock — another tab has presence */
+        });
     } else {
-      // Stay registered (outbound may still want it) but reject inbound legs.
-      phone.setIncomingHandler(null);
+      // No Web Locks support — best-effort: just register in this tab.
+      void hold();
     }
 
     return () => {
+      ac.abort();
       unsub();
+      phone.setIncomingHandler(null);
     };
   }, [available, enabled, incomingHandler]);
 
