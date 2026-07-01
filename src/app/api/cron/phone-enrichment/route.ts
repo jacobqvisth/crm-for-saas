@@ -9,7 +9,10 @@ import {
 // Each contact does website discovery + scrape + AI web search — slow. Claim a
 // small batch per run and let the schedule drain the queue over time.
 export const maxDuration = 300;
-const BATCH = 9;
+// Each job now does scrape → Google Maps (Apify, ~45s cap) → AI web search only
+// if both miss (~90s cap). Worst case is ~135s/contact; at CONCURRENCY 3 that's
+// ~2 sequential per worker, so keep the batch at 6 to stay under maxDuration.
+const BATCH = 6;
 const CONCURRENCY = 3;
 
 type Job = {

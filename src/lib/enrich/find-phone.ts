@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { normalizePhone } from "@/lib/calls/phone";
+import { findPhonesViaGoogleMaps } from "@/lib/enrich/find-phone-gmaps";
 
 // Auxiliary AI-helper endpoint — uses the project's standard helper model
 // (claude-sonnet-4-6, same as find-website / inbox drafts / call summaries).
 // Manually triggered, low volume, so Sonnet + web search is the right point.
 const MODEL = "claude-sonnet-4-6";
 
-export type PhoneSource = "website" | "web-search";
+export type PhoneSource = "website" | "google-maps" | "web-search";
 
 export interface PhoneCandidate {
   /** Normalized E.164 — the dialable form, also the dedupe key. */
@@ -38,6 +39,8 @@ export interface FindPhonesInput {
    *  the web-search leg to avoid returning a namesake in the wrong industry. */
   industry?: string | null;
   category?: string | null;
+  /** Google place_id when known — lets the Google-Maps leg match exactly. */
+  placeId?: string | null;
   /** Numbers already on the record — excluded from the results so we only
    *  surface NEW finds. Includes user-rejected ("not correct") numbers. */
   existing?: (string | null | undefined)[];
@@ -64,6 +67,10 @@ export interface FindPhonesResult {
   phones: PhoneCandidate[];
   reasoning: string | null;
   debug?: FindPhonesDebug;
+  /** Business website discovered by the Google-Maps leg (for backfill). */
+  discoveredWebsite?: string | null;
+  /** Google place_id discovered by the Google-Maps leg (for backfill). */
+  discoveredPlaceId?: string | null;
 }
 
 // --- URL helpers -------------------------------------------------------------
@@ -320,6 +327,30 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     }
   }
 
+  // 1b. Google Maps (via Apify) — the fast, structured primary source. Runs only
+  // when the website scrape came up empty (most of our market has no website on
+  // file). Returns a trade-verified number plus the business's website/place_id,
+  // and — like the scrape — lets us skip the slow AI web search when it hits.
+  let discoveredWebsite: string | null = null;
+  let discoveredPlaceId: string | null = null;
+  let gmapsReasoning: string | null = null;
+  if (byNumber.size === 0) {
+    const gmaps = await findPhonesViaGoogleMaps({
+      name: input.name,
+      companyName: input.companyName,
+      city: input.city,
+      country: input.country,
+      countryCode: input.countryCode,
+      placeId: input.placeId,
+    });
+    if (gmaps) {
+      gmapsReasoning = gmaps.reasoning;
+      discoveredWebsite = gmaps.website;
+      discoveredPlaceId = gmaps.placeId;
+      for (const c of gmaps.candidates) add(c);
+    }
+  }
+
   // 2. Web search via Claude — needs something searchable.
   const searchSubject =
     [input.name, input.companyName].filter(Boolean).join(" / ").trim() ||
@@ -463,13 +494,14 @@ Rules:
     JSON.stringify({
       subject: searchSubject || null,
       sites: sites.length,
+      gmaps: gmapsReasoning,
       ...debug,
     }),
   );
 
-  // 3. Rank: website > web-search, then confidence.
+  // 3. Rank: website > google-maps > web-search, then confidence.
   const order = (c: PhoneCandidate) =>
-    (c.source === "website" ? 100 : 0) +
+    (c.source === "website" ? 100 : c.source === "google-maps" ? 60 : 0) +
     (c.confidence === "high" ? 10 : c.confidence === "medium" ? 5 : 0);
   const phones = Array.from(byNumber.values()).sort((a, b) => order(b) - order(a));
 
@@ -484,13 +516,19 @@ Rules:
       : "";
 
   const reasoning = phones.length
-    ? `Found ${phones.length} number${phones.length === 1 ? "" : "s"}${
-        sites.length ? " (website + web search)" : " (web search)"
-      }.`
+    ? `Found ${phones.length} number${phones.length === 1 ? "" : "s"} (${phones[0].source}).`
     : (searchReasoning ||
+        gmapsReasoning ||
         (sites.length || searchSubject
           ? "No phone numbers could be found for this contact."
           : "No website or name to search with.")) + fetchNote;
 
-  return { found: phones.length > 0, phones, reasoning, debug };
+  return {
+    found: phones.length > 0,
+    phones,
+    reasoning,
+    debug,
+    discoveredWebsite,
+    discoveredPlaceId,
+  };
 }
