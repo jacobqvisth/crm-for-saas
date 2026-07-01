@@ -3,22 +3,41 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Phone, ArrowLeft, Loader2, Check } from "lucide-react";
+import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { CallLogger, type CallLoggerTarget } from "@/components/calls/call-logger";
 import { CallNowButton } from "@/components/calls/call-now";
+import { ContactCallPanel } from "@/components/calls/contact-call-panel";
 
-type QueueRow = {
+export type QueueRow = {
   contactId: string;
   name: string;
   email: string;
   phone: string | null;
+  allPhones: string[];
+  allEmails: string[];
+  title: string | null;
+  city: string | null;
+  country: string | null;
+  countryCode: string | null;
+  language: string | null;
   leadStatus: string | null;
+  tags: string[];
+  notes: string | null;
   companyId: string | null;
   companyName: string | null;
+  companyPhone: string | null;
+  companyCity: string | null;
   isCustomer: boolean;
+  appRole: string | null;
+  planType: string | null;
+  subscriptionStatus: string | null;
+  diagnosticsTotal: number | null;
+  diagnosticsLast30d: number | null;
+  lastActiveAt: string | null;
+  lastLoginAt: string | null;
   lastContactedAt: string | null;
   lastCall: { outcome: string | null; created_at: string | null } | null;
 };
@@ -36,6 +55,7 @@ export default function CallListPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [active, setActive] = useState<CallLoggerTarget | null>(null);
+  const [openRow, setOpenRow] = useState<QueueRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +76,11 @@ export default function CallListPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Keep the open side panel in sync with refreshed queue data (e.g. after a call is logged).
+  useEffect(() => {
+    setOpenRow((cur) => (cur ? queue.find((r) => r.contactId === cur.contactId) ?? cur : cur));
+  }, [queue]);
 
   const filtered = queue.filter((r) => {
     if (filter === "prospects") return !r.isCustomer;
@@ -125,7 +150,10 @@ export default function CallListPage() {
             <p className="p-6 text-center text-sm text-slate-500">No contacts match this filter.</p>
           )}
           {filtered.map((r) => (
-            <div key={r.contactId} className="flex items-center gap-3 px-4 py-3">
+            <div
+              key={r.contactId}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 ${openRow?.contactId === r.contactId ? "bg-indigo-50/60" : ""}`}
+            >
               {r.lastCall ? (
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                   <Check className="h-3.5 w-3.5" />
@@ -134,35 +162,63 @@ export default function CallListPage() {
                 <span className="h-6 w-6 shrink-0 rounded-full border border-dashed border-slate-300" />
               )}
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/contacts/${r.contactId}`}
-                    className="truncate text-sm font-medium text-slate-900 hover:text-indigo-600"
-                  >
-                    {r.name}
-                  </Link>
-                  {r.isCustomer && (
-                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">Customer</span>
-                  )}
-                  {r.leadStatus && !r.isCustomer && (
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{r.leadStatus}</span>
-                  )}
+              {/* Clickable info area → opens contact side panel */}
+              <button
+                type="button"
+                onClick={() => setOpenRow(r)}
+                className="group flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-slate-900 group-hover:text-indigo-600">{r.name}</span>
+                    {r.isCustomer && (
+                      <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">Customer</span>
+                    )}
+                    {r.leadStatus && !r.isCustomer && (
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{r.leadStatus}</span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                    {(r.title || r.companyName) && (
+                      <span className="inline-flex max-w-full items-center gap-1 truncate">
+                        <Building2 className="h-3 w-3 shrink-0 text-slate-400" />
+                        <span className="truncate">{[r.title, r.companyName].filter(Boolean).join(" · ")}</span>
+                      </span>
+                    )}
+                    {r.city && (
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
+                        {r.city}
+                      </span>
+                    )}
+                    {r.isCustomer && r.diagnosticsTotal != null && (
+                      <span className="inline-flex items-center gap-1">
+                        <Wrench className="h-3 w-3 shrink-0 text-slate-400" />
+                        {r.diagnosticsTotal} diag
+                      </span>
+                    )}
+                    {r.lastCall?.outcome && (
+                      <span className="text-slate-600">
+                        {CALL_OUTCOME_LABEL[r.lastCall.outcome as CallOutcome] ?? r.lastCall.outcome}
+                        {r.lastCall.created_at && ` · ${formatDistanceToNow(new Date(r.lastCall.created_at), { addSuffix: true })}`}
+                      </span>
+                    )}
+                    {!r.title && !r.companyName && !r.city && !r.lastCall && (
+                      <span className="truncate">{r.email}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="truncate text-xs text-slate-500">
-                  {r.companyName ?? r.email}
-                  {r.lastCall?.outcome && (
-                    <>
-                      {" · "}
-                      <span className="text-slate-600">{CALL_OUTCOME_LABEL[r.lastCall.outcome as CallOutcome] ?? r.lastCall.outcome}</span>
-                      {r.lastCall.created_at && ` ${formatDistanceToNow(new Date(r.lastCall.created_at), { addSuffix: true })}`}
-                    </>
-                  )}
-                </div>
-              </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-indigo-400" />
+              </button>
 
-              {r.phone && (
-                <span className="hidden shrink-0 text-xs text-slate-500 sm:block">{r.phone}</span>
+              {(r.phone || r.companyPhone) && (
+                <a
+                  href={`tel:${r.phone ?? r.companyPhone}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hidden shrink-0 text-xs text-slate-500 hover:text-teal-700 sm:block"
+                >
+                  {r.phone ?? r.companyPhone}
+                </a>
               )}
               <CallNowButton
                 target={{
@@ -195,6 +251,26 @@ export default function CallListPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {openRow && (
+        <ContactCallPanel
+          row={openRow}
+          listId={listId}
+          onClose={() => setOpenRow(null)}
+          onCallLogged={load}
+          onLog={() =>
+            setActive({
+              contactId: openRow.contactId,
+              name: openRow.name,
+              phone: openRow.phone,
+              companyId: openRow.companyId,
+              companyName: openRow.companyName,
+              isCustomer: openRow.isCustomer,
+              listId,
+            })
+          }
+        />
       )}
 
       {active && (
