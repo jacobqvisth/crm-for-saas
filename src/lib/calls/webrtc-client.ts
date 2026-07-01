@@ -378,6 +378,22 @@ class WebrtcPhone {
     else this.session.unmute({ audio: true });
   }
 
+  /**
+   * Send a DTMF digit (0-9, *, #) to the far end so the agent can navigate an
+   * IVR phone menu ("press 1 for the workshop, 2 for reception"). JsSIP sends
+   * RFC 2833 telephone-events inline in the RTP stream (falling back to SIP
+   * INFO); 46elks relays these to the PSTN. Only meaningful once connected.
+   */
+  sendDTMF(tone: string) {
+    if (this.session && !this.session.isEnded()) {
+      try {
+        this.session.sendDTMF(tone, { duration: 160, interToneGap: 80 });
+      } catch {
+        /* ignore — a tone that can't be sent shouldn't break the call */
+      }
+    }
+  }
+
   hangup() {
     if (this.session && !this.session.isEnded()) {
       // Ending the session fires "ended" → cleanupSession, which drops the line

@@ -24,6 +24,7 @@ import {
   Mic,
   MicOff,
   PhoneOff,
+  Grid3x3,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -100,6 +101,20 @@ const WEBRTC_COPY: Record<WebrtcState, string> = {
   error: "Computer call failed",
 };
 
+/** In-browser controls for a live computer (WebRTC) call. Shared between the
+ *  drawer and the provider that constructs it so the two never drift. */
+export type WebrtcControls = {
+  state: WebrtcState;
+  muted: boolean;
+  onToggleMute: () => void;
+  onHangup: () => void;
+  /** Send a DTMF digit (0-9, *, #) to navigate the far end's phone menu. */
+  onSendDtmf: (tone: string) => void;
+};
+
+/** Keypad layout for IVR navigation, in phone order. */
+const DTMF_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"];
+
 const SENTIMENT_TONE: Record<string, string> = {
   positive: "bg-emerald-100 text-emerald-700",
   neutral: "bg-slate-100 text-slate-600",
@@ -128,12 +143,7 @@ export function CallDrawer({
   /** When set, shows a "View contact" link in the header (used by the detail drawer). */
   contactHref?: string;
   /** Present for an active computer (WebRTC) call — renders in-browser controls. */
-  webrtc?: {
-    state: WebrtcState;
-    muted: boolean;
-    onToggleMute: () => void;
-    onHangup: () => void;
-  };
+  webrtc?: WebrtcControls;
 }) {
   const status = session?.status ?? "dialing";
   const ai = session?.ai_json ?? null;
@@ -179,34 +189,7 @@ export function CallDrawer({
 
         <div className="space-y-5 px-5 py-4">
           {/* In-browser call controls (computer calling) */}
-          {webrtcLive && webrtc && (
-            <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-teal-800">
-                {webrtc.state === "in_call" ? (
-                  <Laptop className="h-4 w-4 shrink-0" />
-                ) : (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                )}
-                <span>{WEBRTC_COPY[webrtc.state]}</span>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={webrtc.onToggleMute}
-                  disabled={webrtc.state !== "in_call"}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {webrtc.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                  {webrtc.muted ? "Unmute" : "Mute"}
-                </button>
-                <button
-                  onClick={webrtc.onHangup}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
-                >
-                  <PhoneOff className="h-4 w-4" /> Hang up
-                </button>
-              </div>
-            </div>
-          )}
+          {webrtcLive && webrtc && <WebrtcCallCard webrtc={webrtc} />}
 
           {/* Live status (hidden during a live computer call — the controls card covers it) */}
           {!webrtcLive && (
@@ -341,6 +324,89 @@ export function CallDrawer({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Live controls for an in-browser (WebRTC) call: connection status, Mute, an
+ * expandable DTMF keypad, and Hang up. The keypad lets the agent answer phone
+ * menus mid-call ("press 1 for the workshop, 2 for reception") — DTMF is only
+ * meaningful once the call is actually connected ("in_call").
+ */
+function WebrtcCallCard({ webrtc }: { webrtc: WebrtcControls }) {
+  const [keypadOpen, setKeypadOpen] = useState(false);
+  const [dialed, setDialed] = useState("");
+  const connected = webrtc.state === "in_call";
+
+  const press = (digit: string) => {
+    webrtc.onSendDtmf(digit);
+    setDialed((s) => (s + digit).slice(-24));
+  };
+
+  return (
+    <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-teal-800">
+        {connected ? (
+          <Laptop className="h-4 w-4 shrink-0" />
+        ) : (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        )}
+        <span>{WEBRTC_COPY[webrtc.state]}</span>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={webrtc.onToggleMute}
+          disabled={!connected}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {webrtc.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          {webrtc.muted ? "Unmute" : "Mute"}
+        </button>
+        <button
+          onClick={() => setKeypadOpen((v) => !v)}
+          disabled={!connected}
+          title="Keypad — press digits to navigate a phone menu"
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50 ${
+            keypadOpen
+              ? "border-teal-400 bg-teal-100 text-teal-800"
+              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <Grid3x3 className="h-4 w-4" /> Keypad
+        </button>
+        <button
+          onClick={webrtc.onHangup}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
+        >
+          <PhoneOff className="h-4 w-4" /> Hang up
+        </button>
+      </div>
+
+      {keypadOpen && connected && (
+        <div className="mt-3">
+          <div className="mb-2 flex h-5 items-center text-xs text-teal-700">
+            {dialed ? (
+              <>
+                Pressed: <span className="ml-1 font-mono tracking-widest text-teal-900">{dialed}</span>
+              </>
+            ) : (
+              <span className="text-teal-700/60">Tap a digit to answer the phone menu</span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {DTMF_KEYS.map((d) => (
+              <button
+                key={d}
+                onClick={() => press(d)}
+                className="rounded-lg border border-teal-200 bg-white py-2.5 text-lg font-semibold text-slate-700 hover:bg-teal-100 active:bg-teal-200"
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
