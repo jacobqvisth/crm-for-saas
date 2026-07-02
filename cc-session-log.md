@@ -5063,3 +5063,16 @@ Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
 - Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
   compose English, Preview in Swedish, send, verify recipient gets Swedish and
   the timeline activity retains the English (`body_en` / `sent_language`).
+
+---
+
+## Static lists: seed with filters at creation (HubSpot-style) — 2026-07-02
+
+- **PR:** #485 (squash-merged) · **branch:** `worktree-static-list-filter-seed`
+- **What:** Create List modal now shows the filter builder for **both** Static and Dynamic lists (was Dynamic-only). Matches HubSpot's model:
+  - **Static** — filters run **once** at creation and snapshot matching contacts into `contact_list_members`; filters are **not stored**, so there's no live rule to edit afterward (list is then managed manually).
+  - **Dynamic** — unchanged (filters stored, resolved live).
+- **Files:** `src/components/lists/list-table.tsx` (filter builder for both types + type-aware copy; `handleCreate` resolves + chunk-inserts a membership snapshot for static lists, best-effort with toast/count); `src/lib/lists/filter-query.ts` (new `isCompleteFilter()` guard so a half-filled row can't snapshot every contact).
+- **Checks:** `npx tsc --noEmit` ✅ · lint ✅ · `next build` ✅ (prerendered `/lists`, `/login`).
+- **Deploy:** verified live — https://crm-for-saas.vercel.app (307 → /login).
+- **Notes:** Reused existing `resolveListContactIds` for the snapshot. No schema change (contact_list_members already exists). Exclusions not wired into the create-time snapshot (kept scope tight; they apply at resolve/enroll time as before).
