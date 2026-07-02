@@ -80,6 +80,7 @@ export default function CallsOverviewPage() {
   const [callsLoading, setCallsLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [callFilter, setCallFilter] = useState<CallFilter>("today");
+  const [activeTab, setActiveTab] = useState<"lists" | "calls">("lists");
   const [showNew, setShowNew] = useState(false);
   const [openCall, setOpenCall] = useState<OpenCall | null>(null);
 
@@ -145,7 +146,7 @@ export default function CallsOverviewPage() {
     : [];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
+    <div className="mx-auto max-w-7xl px-6 py-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Phone className="h-5 w-5 text-indigo-600" />
@@ -182,11 +183,36 @@ export default function CallsOverviewPage() {
         ))}
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <ListChecks className="h-4 w-4" /> Call lists
-          </h2>
+      <div className="mt-6 flex items-center gap-1 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("lists")}
+          className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            activeTab === "lists"
+              ? "border-indigo-600 text-indigo-700"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <ListChecks className="h-4 w-4" /> Call lists
+          {lists.length > 0 && (
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
+              {lists.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("calls")}
+          className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            activeTab === "calls"
+              ? "border-indigo-600 text-indigo-700"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <Phone className="h-4 w-4" /> Recent calls
+        </button>
+      </div>
+
+      <div className="mt-4">
+        <section className={activeTab === "lists" ? "" : "hidden"}>
           {lists.length === 0 && !loading && (
             <p className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">
               No call lists yet. Create one to start working a calling queue.
@@ -197,50 +223,51 @@ export default function CallsOverviewPage() {
               <Link
                 key={l.id}
                 href={`/calls/lists/${l.id}`}
-                className="block rounded-lg border border-slate-200 bg-white p-3 hover:border-indigo-300 hover:bg-indigo-50/30"
+                className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-indigo-300 hover:bg-indigo-50/30"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-900">{l.name}</span>
-                  <span className="text-xs text-slate-500">
-                    {l.memberCount} {l.memberCount === 1 ? "contact" : "contacts"}
-                  </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-slate-900">{l.name}</span>
+                    {l.is_dynamic && (
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        Dynamic
+                      </span>
+                    )}
+                  </div>
+                  {l.description && (
+                    <p className="mt-0.5 truncate text-xs text-slate-500">{l.description}</p>
+                  )}
                 </div>
-                {l.description && <p className="mt-0.5 text-xs text-slate-500">{l.description}</p>}
-                {l.is_dynamic && (
-                  <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                    Dynamic
-                  </span>
-                )}
+                <span className="shrink-0 text-xs font-medium text-slate-500">
+                  {l.memberCount} {l.memberCount === 1 ? "contact" : "contacts"}
+                </span>
               </Link>
             ))}
           </div>
         </section>
 
-        <section>
+        <section className={activeTab === "calls" ? "" : "hidden"}>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Phone className="h-4 w-4" /> Recent calls
-            </h2>
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+              {CALL_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setCallFilter(f.id)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    callFilter === f.id
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
             {!callsLoading && (
               <span className="text-xs text-slate-400">
                 {callsTotal} {callsTotal === 1 ? "call" : "calls"}
               </span>
             )}
-          </div>
-          <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-            {CALL_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setCallFilter(f.id)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  callFilter === f.id
-                    ? "bg-indigo-600 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
           </div>
           {calls.length === 0 && !callsLoading && (
             <p className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">
