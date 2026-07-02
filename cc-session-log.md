@@ -5205,3 +5205,22 @@ all pass. Squash-merged; deploy verification in flight.
 
 **Checks:** `tsc --noEmit` exit 0, eslint clean on both files. Docs-only follow-up
 skips the Vercel build (ignoreCommand). Feature deploy live (307 → /login).
+
+---
+
+## Contact profile — hide Social Links, move App User to right column
+**Date:** 2026-07-02 · **PR:** #487 · **Branch:** worktree-contact-profile-tweaks
+
+- **Hid the Social Links section** on the contact profile (`/contacts/[id]`) —
+  removed the LinkedIn / Instagram / Facebook block from the left contact-info
+  form, plus the now-unused `SocialLinkField` component and its orphaned
+  `ExternalLink` import. DB columns untouched, just no longer surfaced in UI.
+- **Moved the App User block** (role, username, logins, credits, diagnostics,
+  plan/sub) out of the left form column into the top of the right "Associations"
+  column, above Company. Restyled as a standalone card to match the other
+  right-column cards.
+
+**Checks:** `tsc --noEmit` exit 0, eslint clean, `npm run build` exit 0.
+Merged (d37da9a). Prod deploy Ready, live (307 → /login).
+**Note:** local build needed `PATH=/opt/homebrew/bin:$PATH` — bare `node`
+resolves to Codex.app's binary and SIGKILLs the Next build instantly.
