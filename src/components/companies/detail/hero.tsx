@@ -7,19 +7,21 @@ import {
 } from 'lucide-react';
 import type { Company } from './types';
 import { OUTREACH_LABEL, OUTREACH_COLOR, type OutreachStatus } from './status';
+import { CountryFlag, countryFromPhone } from '@/components/contacts/phone-field';
+import { RepOwnerControl, type OwnerState } from '@/components/reps/rep-owner-control';
 
 interface HeroProps {
   company: Company;
   outreachStatus: OutreachStatus;
   onUpdate: (field: keyof Company, value: string | null) => void;
   onAddContact: () => void;
-  onAddDeal: () => void;
   onLogActivity: () => void;
   onDelete: () => void;
+  onOwnerChange?: (next: OwnerState) => void;
 }
 
 export function CompanyHero({
-  company, outreachStatus, onUpdate, onAddContact, onAddDeal, onLogActivity, onDelete,
+  company, outreachStatus, onUpdate, onAddContact, onLogActivity, onDelete, onOwnerChange,
 }: HeroProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const faviconUrl = company.domain
@@ -74,16 +76,33 @@ export function CompanyHero({
             ) : null}
             {company.phone && <span>·</span>}
             {company.phone && (
-              <InlineEditable
-                value={company.phone}
-                onSave={(v) => onUpdate('phone', v.trim() || null)}
-                className="text-slate-500"
-                inputClassName="text-sm"
-                ariaLabel="Phone"
-              />
+              <span className="inline-flex items-center gap-1.5">
+                <CountryFlag country={countryFromPhone(company.phone, company.country_code)} />
+                <InlineEditable
+                  value={company.phone}
+                  onSave={(v) => onUpdate('phone', v.trim() || null)}
+                  className="text-slate-500"
+                  inputClassName="text-sm"
+                  ariaLabel="Phone"
+                />
+              </span>
             )}
           </div>
           <Badges company={company} outreachStatus={outreachStatus} />
+          <div className="mt-2">
+            <RepOwnerControl
+              entityType="company"
+              entityId={company.id}
+              value={{
+                primaryOwnerId: company.primary_owner_id,
+                secondaryOwnerId: company.secondary_owner_id,
+                ownerAuto: company.owner_auto,
+                ownerUpdatedAt: company.owner_updated_at,
+                primaryOwnerSource: company.primary_owner_source,
+              }}
+              onChange={onOwnerChange}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -93,13 +112,6 @@ export function CompanyHero({
           >
             <Pencil className="w-3.5 h-3.5" />
             Log activity
-          </button>
-          <button
-            onClick={onAddDeal}
-            className="hidden md:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Deal
           </button>
           <button
             onClick={onAddContact}
@@ -162,6 +174,7 @@ function Badges({ company, outreachStatus }: { company: Company; outreachStatus:
     const stage = company.lifecycle_stage;
     const cls =
       stage === 'paying'       ? 'bg-emerald-100 text-emerald-700' :
+      stage === 'freemium'     ? 'bg-teal-100 text-teal-700' :
       stage === 'trial'        ? 'bg-amber-100 text-amber-700' :
       stage === 'churned'      ? 'bg-red-100 text-red-700' :
       stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :

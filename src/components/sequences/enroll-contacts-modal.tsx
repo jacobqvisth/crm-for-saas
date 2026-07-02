@@ -6,7 +6,7 @@ import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { Modal } from "@/components/ui/modal";
 import { Search, Users, UserPlus, Loader2, AlertTriangle, Settings } from "lucide-react";
 import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
-import { resolveListContactIds } from "@/lib/lists/filter-query";
+import { resolveListContactIdsViaApi } from "@/lib/lists/resolve-client";
 import toast from "react-hot-toast";
 import type { Tables, SequenceSettings } from "@/lib/database.types";
 
@@ -125,7 +125,9 @@ export function EnrollContactsModal({
         return;
       }
       try {
-        contactIds = await resolveListContactIds(supabase, list);
+        // Resolve via the server so the list's exclusions (never-call / internal
+        // testers / excluded lists) are applied before enrollment.
+        contactIds = await resolveListContactIdsViaApi(list.id);
       } catch {
         toast.error("Failed to resolve list contacts");
         setEnrolling(false);

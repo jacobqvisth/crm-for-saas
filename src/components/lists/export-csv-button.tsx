@@ -6,6 +6,7 @@ import Papa from 'papaparse';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { buildFilterQuery, type ListFilter } from '@/lib/lists/filter-query';
+import { resolveListContactIdsViaApi } from '@/lib/lists/resolve-client';
 import toast from 'react-hot-toast';
 
 interface ExportCsvButtonProps {
@@ -47,6 +48,15 @@ export function ExportCsvButton({ listId, listName, isDynamic, filters }: Export
           .eq('list_id', listId);
         if (error) throw error;
         contacts = ((data || []) as unknown as { contacts: Record<string, unknown> }[]).map((m) => m.contacts).filter(Boolean) as Record<string, unknown>[];
+      }
+
+      // Drop contacts excluded by the list's exclusion sources (resolved
+      // server-side so internal-testers are included).
+      try {
+        const kept = new Set(await resolveListContactIdsViaApi(listId));
+        contacts = contacts.filter((c) => kept.has(c.id as string));
+      } catch {
+        // If resolution fails, fall back to exporting the unfiltered set.
       }
 
       const csvData = contacts.map((c: Record<string, unknown>) => ({

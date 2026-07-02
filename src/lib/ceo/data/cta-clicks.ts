@@ -1,9 +1,15 @@
+import { unstable_cache } from "next/cache";
 import { addUtcDays, toIsoDate } from "@/lib/ceo/dates";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { hasGoogleApiCredentials } from "@/lib/ceo/sync/google-auth";
 import { runGa4Report, type Ga4Row } from "@/lib/ceo/sync/ga4-client";
 import { TABLES } from "@/lib/ceo/tables";
-import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
+import {
+  type ResolvedDashboardRange,
+  normalizeDashboardTimeRangeKey,
+  resolveDashboardTimeRange,
+} from "@/lib/ceo/time-ranges";
 
 export type CtaClicksHostFilter = "all" | "app" | "marketing";
 
@@ -207,7 +213,24 @@ function numericValue(v: number | string | null): number {
  * after deploy, before the first sync, or if the cron is down — falls
  * back to live GA4 so the page still works.
  */
-export async function getCtaClicksData(
+const getCtaClicksDataCached = unstable_cache(
+  (rangeKey: string, hostnameFilter: CtaClicksHostFilter) =>
+    getCtaClicksDataUncached(
+      resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+      hostnameFilter,
+    ),
+  ["ceo-cta-clicks"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getCtaClicksData(
+  range: ResolvedDashboardRange,
+  hostnameFilter: CtaClicksHostFilter,
+): Promise<CtaClicksData> {
+  return getCtaClicksDataCached(range.key, hostnameFilter);
+}
+
+async function getCtaClicksDataUncached(
   range: ResolvedDashboardRange,
   hostnameFilter: CtaClicksHostFilter,
 ): Promise<CtaClicksData> {

@@ -16,6 +16,7 @@ import {
 } from "./cluster-rank";
 import { fetchEngagementSignals } from "./engagement";
 import { resolveListContactIds } from "@/lib/lists/filter-query";
+import { parseListExclusions, resolveExcludedContactIds } from "@/lib/lists/exclusions";
 import { geocodeAddressWithMeta, makeGeocodeCache } from "./geocode";
 import { isUnavailable, type UnavailableReason } from "./profile";
 import { optimizeRoute, type LatLng } from "./routes-api";
@@ -1200,14 +1201,20 @@ async function fetchListCompanyIds(
 ): Promise<string[] | null> {
   const { data: list, error } = await supabase
     .from("contact_lists")
-    .select("id, workspace_id, is_dynamic, filters")
+    .select("id, workspace_id, is_dynamic, filters, exclusions")
     .eq("id", listId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) throw new Error(`list lookup failed: ${error.message}`);
   if (!list) return null;
 
-  const contactIds = await resolveListContactIds(supabase, list);
+  const resolvedIds = await resolveListContactIds(supabase, list);
+  const exclusions = parseListExclusions(list.exclusions);
+  const excluded = await resolveExcludedContactIds(supabase, workspaceId, exclusions, {
+    excludeSelfListId: list.id,
+  });
+  const contactIds =
+    excluded.size > 0 ? resolvedIds.filter((id) => !excluded.has(id)) : resolvedIds;
   if (contactIds.length === 0) return [];
 
   const companyIds = new Set<string>();

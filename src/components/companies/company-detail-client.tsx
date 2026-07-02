@@ -16,12 +16,12 @@ import { AboutPanel } from './detail/about-panel';
 import { EditDrawer } from './detail/edit-drawer';
 import { CompanyTabs } from './detail/tabs';
 import { AddContactModal } from './detail/add-contact-modal';
-import { AddDealModal } from './detail/add-deal-modal';
 import { LogActivityModal } from './detail/log-activity-modal';
+import { PhoneNumbersPanel } from '@/components/contacts/phone-numbers-panel';
 import { deriveOutreachStatus } from './detail/status';
 import type {
   Company, Contact, Activity, Subscription, UsageEvent, DiscoveredShop,
-  DealRow, CompanyRef, TabId,
+  CompanyRef, TabId,
 } from './detail/types';
 
 export function CompanyDetailClient({ companyId }: { companyId: string }) {
@@ -31,7 +31,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
 
   const [company, setCompany] = useState<Company | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [deals, setDeals] = useState<DealRow[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [allCompanies, setAllCompanies] = useState<CompanyRef[]>([]);
   const [childCompanies, setChildCompanies] = useState<CompanyRef[]>([]);
@@ -43,9 +42,9 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
-  const [addDealOpen, setAddDealOpen] = useState(false);
   const [logActivityOpen, setLogActivityOpen] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
+  const [findingWebsite, setFindingWebsite] = useState(false);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -72,7 +71,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       setCustomFields((companyData.custom_fields as Record<string, string>) || {});
 
       const [
-        companiesRes, childRes, contactsRes, dealsRes,
+        companiesRes, childRes, contactsRes,
         subsRes, usageRes, shopRes,
       ] = await Promise.all([
         supabase.from('companies').select('id, name')
@@ -80,8 +79,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
         supabase.from('companies').select('id, name')
           .eq('workspace_id', workspaceId!).eq('parent_company_id', companyId).order('name'),
         supabase.from('contacts').select('*')
-          .eq('workspace_id', workspaceId!).eq('company_id', companyId).order('created_at', { ascending: false }),
-        supabase.from('deals').select('id, name, amount, stage, owner_id, expected_close_date')
           .eq('workspace_id', workspaceId!).eq('company_id', companyId).order('created_at', { ascending: false }),
         supabase.from('subscriptions').select('*')
           .eq('workspace_id', workspaceId!).eq('company_id', companyId).order('created_at', { ascending: false }),
@@ -97,7 +94,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       if (childRes.data) setChildCompanies(childRes.data);
       const contactsData = contactsRes.data ?? [];
       setContacts(contactsData);
-      if (dealsRes.data) setDeals(dealsRes.data);
       if (subsRes.data) setSubscriptions(subsRes.data);
       if (usageRes.data) setUsageEvents(usageRes.data);
       if (shopRes.data) setDiscoveredShop(shopRes.data);
@@ -141,6 +137,39 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       return;
     }
     setCompany((prev) => (prev ? { ...prev, [field]: value } as Company : null));
+  };
+
+  const handleFindWebsite = async () => {
+    if (!company || !workspaceId || findingWebsite) return;
+    setFindingWebsite(true);
+    const toastId = toast.loading('Searching for website…');
+    try {
+      const res = await fetch('/api/enrich/find-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, companyId: company.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Search failed', { id: toastId });
+        return;
+      }
+      if (data.found && data.website) {
+        await supabase
+          .from('companies')
+          .update({ website: data.website } as Record<string, unknown>)
+          .eq('id', company.id)
+          .eq('workspace_id', workspaceId);
+        setCompany((prev) => (prev ? { ...prev, website: data.website } as Company : null));
+        toast.success(`Found ${data.website}`, { id: toastId });
+      } else {
+        toast.error(data.reasoning || 'No website found', { id: toastId });
+      }
+    } catch {
+      toast.error('Search failed', { id: toastId });
+    } finally {
+      setFindingWebsite(false);
+    }
   };
 
   const updatePatch = async (patch: Partial<Company>) => {
@@ -224,17 +253,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     return next;
   };
 
-  const refetchDeals = async () => {
-    if (!workspaceId) return;
-    const { data } = await supabase
-      .from('deals')
-      .select('id, name, amount, stage, owner_id, expected_close_date')
-      .eq('workspace_id', workspaceId)
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    if (data) setDeals(data);
-  };
-
   const refetchActivities = async (latestContacts?: Contact[]) => {
     if (!workspaceId) return;
     const cs = latestContacts ?? contacts;
@@ -256,12 +274,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
     const next = await refetchContacts();
     await refetchActivities(next);
     setActiveTab('contacts');
-  };
-
-  const handleDealCreated = async () => {
-    await refetchDeals();
-    await refetchActivities();
-    setActiveTab('deals');
   };
 
   const handleActivityLogged = async () => {
@@ -293,9 +305,16 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
         outreachStatus={outreachStatus}
         onUpdate={updateField}
         onAddContact={() => setAddContactOpen(true)}
-        onAddDeal={() => setAddDealOpen(true)}
         onLogActivity={() => setLogActivityOpen(true)}
         onDelete={() => setShowDeleteConfirm(true)}
+        onOwnerChange={(next) => setCompany((prev) => (prev ? {
+          ...prev,
+          primary_owner_id: next.primaryOwnerId,
+          secondary_owner_id: next.secondaryOwnerId,
+          owner_auto: next.ownerAuto,
+          owner_updated_at: next.ownerUpdatedAt,
+          primary_owner_source: next.primaryOwnerSource,
+        } as Company : null))}
       />
 
       <CompanySignals company={company} contacts={contacts} />
@@ -303,7 +322,7 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
       {discoveredShop && <DiscoveryStrip shop={discoveredShop} />}
 
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="w-full lg:w-[280px] flex-shrink-0">
+        <div className="w-full lg:w-[280px] flex-shrink-0 space-y-4">
           <AboutPanel
             company={company}
             parentCompany={parentCompany}
@@ -313,7 +332,25 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             onUpdateTags={updateTags}
             onUpdateNotes={(notes) => updateField('notes', notes)}
             onUpdateFollowupFlags={updateFollowupFlags}
+            onFindWebsite={handleFindWebsite}
+            findingWebsite={findingWebsite}
           />
+
+          {/* Shared phone-number pool — every number on the company and its
+              contacts, labelled (Stockholm, Malmö, …) with one primary. */}
+          {workspaceId && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <PhoneNumbersPanel
+                workspaceId={workspaceId}
+                scope="company"
+                companyId={company.id}
+                defaultCountry={company.country_code}
+                onChange={({ primary }) =>
+                  setCompany((prev) => (prev ? { ...prev, phone: primary } as Company : prev))
+                }
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -323,7 +360,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             company={company}
             outreachStatus={outreachStatus}
             contacts={contacts}
-            deals={deals}
             activities={activities}
             subscriptions={subscriptions}
             usageEvents={usageEvents}
@@ -350,14 +386,6 @@ export function CompanyDetailClient({ companyId }: { companyId: string }) {
             companyName={company.name}
             workspaceId={workspaceId}
             onCreated={handleContactCreated}
-          />
-          <AddDealModal
-            open={addDealOpen}
-            onClose={() => setAddDealOpen(false)}
-            companyId={company.id}
-            companyName={company.name}
-            workspaceId={workspaceId}
-            onCreated={handleDealCreated}
           />
           <LogActivityModal
             open={logActivityOpen}

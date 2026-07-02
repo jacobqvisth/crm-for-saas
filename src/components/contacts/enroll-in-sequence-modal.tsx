@@ -35,6 +35,7 @@ export function EnrollInSequenceModal({
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [senderAccountId, setSenderAccountId] = useState<string | null>(null);
+  const [allowCustomers, setAllowCustomers] = useState(false);
   const [loading, setLoading] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
 
@@ -43,6 +44,7 @@ export function EnrollInSequenceModal({
 
     setLoading(true);
     setSelectedId(null);
+    setAllowCustomers(false);
 
     (async () => {
       const { data } = await supabase
@@ -70,6 +72,7 @@ export function EnrollInSequenceModal({
         contactIds: [contactId],
         workspaceId,
         senderAccountId,
+        allowCustomers,
       }),
     });
 
@@ -81,10 +84,28 @@ export function EnrollInSequenceModal({
       } else {
         toast.error(result.error || "Enrollment failed");
       }
-    } else {
-      toast.success(`Enrolled in sequence`);
+      setEnrolling(false);
+      return;
+    }
+
+    // HTTP 200 does NOT mean the contact was enrolled — enrollContacts can
+    // silently skip (already enrolled, unsubscribed, customer/app-user, etc).
+    // Reflect the real outcome instead of always claiming success.
+    if (result.enrolled > 0) {
+      toast.success("Enrolled in sequence");
       onEnrolled?.();
       onClose();
+    } else {
+      const reason = result.reasons?.[0]?.split(": ").slice(1).join(": ");
+      if (result.skippedCustomer > 0 && !allowCustomers) {
+        toast.error(
+          "This contact is an existing customer / app user. Tick “Enroll customers anyway” below to include them.",
+          { duration: 7000 }
+        );
+        setAllowCustomers(true);
+      } else {
+        toast.error(reason ? `Not enrolled — ${reason}` : "Contact was not enrolled");
+      }
     }
 
     setEnrolling(false);
@@ -149,6 +170,24 @@ export function EnrollInSequenceModal({
             />
           </div>
         )}
+
+        <label className="flex items-start gap-2 cursor-pointer text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={allowCustomers}
+            onChange={(e) => setAllowCustomers(e.target.checked)}
+            className="mt-0.5 border-slate-300 text-indigo-600 rounded"
+          />
+          <span>
+            Enroll customers anyway
+            <span className="block text-xs text-slate-400">
+              By default, existing app users / customer workshops are skipped (and
+              their emails cancelled at send time). Tick this to mark the sequence
+              as a customer follow-up so the email actually sends — e.g. a
+              post-call “thanks for the conversation” message.
+            </span>
+          </span>
+        </label>
 
         <div className="flex justify-end gap-2 pt-1">
           <button

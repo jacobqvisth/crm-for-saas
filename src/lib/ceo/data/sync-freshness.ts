@@ -1,8 +1,16 @@
+import { unstable_cache } from "next/cache";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { TABLES } from "@/lib/ceo/tables";
 
-export async function getCoreAppLastSyncedAt(): Promise<string | null> {
+export const getCoreAppLastSyncedAt = unstable_cache(
+  getCoreAppLastSyncedAtUncached,
+  ["ceo-core-app-last-synced"],
+  CEO_CACHE_OPTIONS,
+);
+
+async function getCoreAppLastSyncedAtUncached(): Promise<string | null> {
   if (!hasSupabaseConfig()) return null;
   const supabase = createSupabaseServiceClient();
   if (!supabase) return null;

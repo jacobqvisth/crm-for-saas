@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import { SlideOver } from '@/components/ui/slide-over';
 import type { Company, CompanyRef } from './types';
 import { INDUSTRIES, CATEGORIES } from './types';
+import { PhoneInputControl } from '@/components/contacts/phone-field';
+import { countryNameFromIso, isoFromCountryName } from '@/lib/geo/country';
 
 type DraftCompany = Pick<
   Company,
@@ -50,6 +52,13 @@ export function EditDrawer({
     setDraft((d) => ({ ...d, [key]: value }));
   };
 
+  // Keep country_code (ISO) + country (name) consistent when either changes.
+  const syncCountry = (rawIso: string | null) => {
+    const iso = rawIso?.trim().toUpperCase() || null;
+    const name = iso ? countryNameFromIso(iso) : null;
+    setDraft((d) => ({ ...d, country_code: iso, ...(name ? { country: name } : {}) }));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     const patch = diff(toDraft(company), draft);
@@ -89,7 +98,12 @@ export function EditDrawer({
           </Row>
           <Row>
             <Field label="Phone">
-              <input type="tel" value={draft.phone || ''} onChange={(e) => set('phone', e.target.value || null)} className={input} />
+              <PhoneInputControl
+                value={draft.phone || null}
+                defaultCountry={draft.country_code}
+                onChange={(v) => set('phone', v)}
+                onCountryChange={(iso) => syncCountry(iso)}
+              />
             </Field>
             <Field label="Website">
               <input type="url" value={draft.website || ''} onChange={(e) => set('website', e.target.value || null)} className={input} placeholder="https://..." />
@@ -154,10 +168,23 @@ export function EditDrawer({
           </Row>
           <Row>
             <Field label="Country">
-              <input type="text" value={draft.country || ''} onChange={(e) => set('country', e.target.value || null)} className={input} />
+              <input
+                type="text"
+                value={draft.country || ''}
+                onChange={(e) => set('country', e.target.value || null)}
+                onBlur={(e) => { const iso = isoFromCountryName(e.target.value); if (iso) syncCountry(iso); }}
+                className={input}
+              />
             </Field>
             <Field label="Country code">
-              <input type="text" value={draft.country_code || ''} onChange={(e) => set('country_code', e.target.value || null)} className={input} maxLength={2} placeholder="SE" />
+              <input
+                type="text"
+                value={draft.country_code || ''}
+                onChange={(e) => syncCountry(e.target.value || null)}
+                className={input}
+                maxLength={2}
+                placeholder="SE"
+              />
             </Field>
           </Row>
         </Section>

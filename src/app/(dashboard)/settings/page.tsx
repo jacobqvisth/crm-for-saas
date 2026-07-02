@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { GitBranch, Mail, MapPin, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
+import { Mail, MapPin, Phone, PhoneCall, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -11,12 +11,6 @@ const settingsItems = [
     description: 'Your name, title, and email signature applied to outgoing sequences',
     href: '/settings/profile',
     icon: UserIcon,
-  },
-  {
-    title: 'Pipelines',
-    description: 'Manage your sales pipelines, stages, and probabilities',
-    href: '/settings/pipelines',
-    icon: GitBranch,
   },
   {
     title: 'Email Integration',
@@ -35,6 +29,18 @@ const settingsItems = [
     description: 'Auto-enroll companies in a sequence after a field-route stop is logged',
     href: '/settings/field-visits',
     icon: MapPin,
+  },
+  {
+    title: 'Calling',
+    description: 'Place recorded, AI-summarized calls from the CRM — set your phone & caller ID',
+    href: '/settings/calls',
+    icon: Phone,
+  },
+  {
+    title: 'Phone System',
+    description: 'How calling works, the 46elks numbers on the account, and who calls from what',
+    href: '/settings/phone-system',
+    icon: PhoneCall,
   },
   {
     title: 'AI Product Knowledge',

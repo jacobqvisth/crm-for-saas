@@ -1,19 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Mail, MailOpen, Eye, MousePointerClick, FileText, Phone, Calendar, UserPlus, ArrowRight,
-  Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, Wand2, X,
-  Activity as ActivityIcon, Wrench, Clock, BadgeCheck,
+  Trash2, Plus, Loader2, ShieldOff, ExternalLink, ShieldCheck, X,
+  Activity as ActivityIcon, Wrench, Clock, BadgeCheck, Globe, Sparkles,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/hooks/use-workspace';
-import { LeadStatusBadge, ContactStatusBadge, DealStageBadge } from '@/components/ui/badge';
+import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
+import { AddToCallListModal } from '@/components/contacts/add-to-call-list-modal';
+import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
+import { ActivityDetailModal } from '@/components/contacts/activity-detail-modal';
+import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
+import { PhoneNumbersPanel, type PhonePoolState, type PhoneNumber } from '@/components/contacts/phone-numbers-panel';
+import { RepOwnerControl } from '@/components/reps/rep-owner-control';
+import { countryNameFromIso, languageFromIso, isoFromCountryName } from '@/lib/geo/country';
+import { parseNameFromEmail, type ParsedName } from '@/lib/contacts/parse-name-from-email';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -71,12 +79,36 @@ function getActivityTitle(activity: Activity): string {
     case 'email_opened': return `Opened: ${activity.subject || 'No subject'}`;
     case 'email_clicked': return `Clicked link in: ${activity.subject || 'No subject'}`;
     case 'note': return 'Note';
-    case 'call': return 'Call logged';
+    case 'call': {
+      const meta = (activity.metadata ?? {}) as Record<string, unknown>;
+      const who = typeof meta.agent_name === 'string' ? meta.agent_name : null;
+      if (meta.direction === 'inbound') {
+        return who ? `Inbound call — answered by ${who}` : 'Inbound call';
+      }
+      return who ? `Call logged by ${who}` : 'Call logged';
+    }
     case 'meeting': return `Meeting: ${activity.subject || ''}`;
     case 'contact_created': return 'Contact created';
     case 'deal_stage_change': return `Deal moved to ${(activity.metadata as Record<string, string>)?.stage || 'new stage'}`;
     default: return activity.subject || activity.type;
   }
+}
+
+const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  email_sent: 'Email sent',
+  email_received: 'Reply received',
+  email_opened: 'Email opened',
+  email_clicked: 'Link clicked',
+  note: 'Note',
+  call: 'Call',
+  meeting: 'Meeting',
+  contact_created: 'Contact created',
+  deal_stage_change: 'Deal stage change',
+  task: 'Task',
+};
+
+function getActivityTypeLabel(type: string): string {
+  return ACTIVITY_TYPE_LABELS[type] ?? type.replace(/_/g, ' ');
 }
 
 export function ContactDetailClient({ contactId }: { contactId: string }) {
@@ -90,8 +122,8 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [hasMoreActivities, setHasMoreActivities] = useState(false);
   const [activitiesPage, setActivitiesPage] = useState(0);
-  const [deals, setDeals] = useState<{ id: string; name: string; amount: number | null; stage: string }[]>([]);
-  const [contactLists, setContactLists] = useState<{ id: string; name: string }[]>([]);
+  const [contactLists, setContactLists] = useState<{ id: string; name: string; purpose: string | null }[]>([]);
+  const [showAddToCallList, setShowAddToCallList] = useState(false);
   const [sequences, setSequences] = useState<{ id: string; name: string; status: string; current_step: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editField, setEditField] = useState<string | null>(null);
@@ -100,15 +132,26 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [showForgetConfirm, setShowForgetConfirm] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [showEnrollInSequence, setShowEnrollInSequence] = useState(false);
-  const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
+  const [showComposeModal, setShowComposeModal] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [showLogCall, setShowLogCall] = useState(false);
+  const [openCallSession, setOpenCallSession] = useState<string | null>(null);
+  const [openActivity, setOpenActivity] = useState<Activity | null>(null);
   const [noteText, setNoteText] = useState('');
   const [callSubject, setCallSubject] = useState('');
   const [callNotes, setCallNotes] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [newFieldKey, setNewFieldKey] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
+  const [findingWebsite, setFindingWebsite] = useState(false);
+  // Shared company phone pool (numbers + primary), surfaced by PhoneNumbersPanel
+  // and used to default + populate the Call button's number picker.
+  const [poolNumbers, setPoolNumbers] = useState<PhoneNumber[]>([]);
+  const [poolPrimary, setPoolPrimary] = useState<string | null>(null);
+  const onPhonePoolChange = useCallback((s: PhonePoolState) => {
+    setPoolNumbers(s.numbers);
+    setPoolPrimary(s.primary);
+  }, []);
 
   const fetchActivities = useCallback(async (pageNum: number) => {
     if (!workspaceId) return;
@@ -157,6 +200,10 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
           .eq('id', contactData.company_id)
           .single();
         if (companyData) setCompany(companyData);
+      } else {
+        // Clear any stale company from a previously-viewed contact so the
+        // right-side card stays in sync with this contact's company_id.
+        setCompany(null);
       }
 
       // Fetch all companies for dropdown
@@ -170,20 +217,6 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
       // Fetch activities
       await fetchActivities(0);
 
-      // Fetch deals via junction table
-      const { data: dealContacts } = await supabase
-        .from('deal_contacts')
-        .select('deal_id')
-        .eq('contact_id', contactId);
-      if (dealContacts && dealContacts.length > 0) {
-        const dealIds = dealContacts.map(dc => dc.deal_id);
-        const { data: dealsData } = await supabase
-          .from('deals')
-          .select('id, name, amount, stage')
-          .in('id', dealIds);
-        if (dealsData) setDeals(dealsData);
-      }
-
       // Fetch lists
       const { data: listMembers } = await supabase
         .from('contact_list_members')
@@ -193,9 +226,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         const listIds = listMembers.map(lm => lm.list_id);
         const { data: listsData } = await supabase
           .from('contact_lists')
-          .select('id, name')
+          .select('id, name, purpose')
           .in('id', listIds);
         if (listsData) setContactLists(listsData);
+      } else {
+        setContactLists([]);
       }
 
       // Fetch sequences
@@ -243,6 +278,24 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, contactId]);
 
+  // One-time: backfill a missing Country (name) from an existing country_code
+  // (or vice-versa) so the three identity fields are consistent on open.
+  const countrySynced = useRef(false);
+  useEffect(() => {
+    if (!contact || countrySynced.current) return;
+    if (contact.country_code && !contact.country) {
+      countrySynced.current = true;
+      syncCountry(contact.country_code);
+    } else if (!contact.country_code && contact.country) {
+      const iso = isoFromCountryName(contact.country);
+      if (iso) {
+        countrySynced.current = true;
+        syncCountry(iso);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact]);
+
   const updateField = async (field: string, value: string | boolean | null) => {
     if (!contact || !workspaceId) return;
     const { error } = await supabase
@@ -257,6 +310,81 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
       toast.success('Updated');
     }
     setEditField(null);
+  };
+
+  // Fill First/Last Name from a firstname.lastname email (one-click suggestion
+  // shown only when both name fields are empty). Writes both fields at once.
+  const applyNameSuggestion = async (name: ParsedName) => {
+    if (!contact || !workspaceId) return;
+    const { error } = await supabase
+      .from('contacts')
+      .update({ first_name: name.firstName, last_name: name.lastName })
+      .eq('id', contact.id)
+      .eq('workspace_id', workspaceId);
+
+    if (error) toast.error('Failed to update');
+    else {
+      setContact(prev => prev ? { ...prev, first_name: name.firstName, last_name: name.lastName } : null);
+      toast.success('Name filled from email');
+    }
+  };
+
+  // Keep country_code (ISO), country (name) and language in sync. Driven by the
+  // ISO code (from the phone picker or the Country Code field). Never overwrites
+  // an existing language — only fills it when empty.
+  const syncCountry = async (rawIso: string | null) => {
+    if (!contact || !workspaceId) return;
+    const iso = rawIso?.trim().toUpperCase() || null;
+    const updates: Record<string, unknown> = { country_code: iso };
+    const name = iso ? countryNameFromIso(iso) : null;
+    if (name) updates.country = name;
+    if (iso && !contact.language) {
+      const lang = languageFromIso(iso);
+      if (lang) updates.language = lang;
+    }
+    const { error } = await supabase
+      .from('contacts')
+      .update(updates as Record<string, unknown>)
+      .eq('id', contact.id)
+      .eq('workspace_id', workspaceId);
+    if (error) toast.error('Failed to update');
+    else {
+      setContact(prev => prev ? { ...prev, ...updates } as typeof prev : null);
+    }
+    setEditField(null);
+  };
+
+  const handleFindWebsite = async () => {
+    if (!contact || !workspaceId || findingWebsite) return;
+    setFindingWebsite(true);
+    const toastId = toast.loading('Searching for website…');
+    try {
+      const res = await fetch('/api/enrich/find-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, contactId: contact.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Search failed', { id: toastId });
+        return;
+      }
+      if (data.found && data.website) {
+        await supabase
+          .from('contacts')
+          .update({ website: data.website })
+          .eq('id', contact.id)
+          .eq('workspace_id', workspaceId);
+        setContact(prev => prev ? { ...prev, website: data.website } : null);
+        toast.success(`Found ${data.website}`, { id: toastId });
+      } else {
+        toast.error(data.reasoning || 'No website found', { id: toastId });
+      }
+    } catch {
+      toast.error('Search failed', { id: toastId });
+    } finally {
+      setFindingWebsite(false);
+    }
   };
 
   const updateArrayField = async (field: string, newArray: string[]) => {
@@ -380,8 +508,12 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
   const initials = [contact.first_name?.[0], contact.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
   const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unnamed Contact';
+  // Offer to fill the name from the email (e.g. timo.larsson@ → Timo Larsson)
+  // only when we have nothing to lose — both name fields empty.
+  const nameSuggestion = !contact.first_name && !contact.last_name
+    ? parseNameFromEmail(contact.email)
+    : null;
   const allEmails = (contact.all_emails as string[] | null) || [];
-  const allPhones = (contact.all_phones as string[] | null) || [];
   const tags = (contact.tags as string[] | null) || [];
 
   return (
@@ -427,10 +559,43 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   />
                 )}
               </div>
+              <div className="mt-3 flex justify-center">
+                <RepOwnerControl
+                  entityType="contact"
+                  entityId={contact.id}
+                  value={{
+                    primaryOwnerId: contact.primary_owner_id,
+                    secondaryOwnerId: contact.secondary_owner_id,
+                    ownerAuto: contact.owner_auto,
+                    ownerUpdatedAt: contact.owner_updated_at,
+                    primaryOwnerSource: contact.primary_owner_source,
+                  }}
+                  onChange={(next) => setContact(prev => prev ? {
+                    ...prev,
+                    primary_owner_id: next.primaryOwnerId,
+                    secondary_owner_id: next.secondaryOwnerId,
+                    owner_auto: next.ownerAuto,
+                    owner_updated_at: next.ownerUpdatedAt,
+                    primary_owner_source: next.primaryOwnerSource,
+                  } : null)}
+                />
+              </div>
             </div>
 
             {/* Contact Info */}
             <div className="space-y-3">
+              {nameSuggestion && (
+                <button
+                  onClick={() => applyNameSuggestion(nameSuggestion)}
+                  title="Fill the name fields from the email address"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="text-left">
+                    Use <strong>{nameSuggestion.firstName} {nameSuggestion.lastName}</strong> from email
+                  </span>
+                </button>
+              )}
               <EditableField
                 label="First Name"
                 value={contact.first_name || ''}
@@ -461,16 +626,18 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onSave={() => updateField('email', editValue)}
                 onCancel={() => setEditField(null)}
               />
-              <EditableField
-                label="Phone"
-                value={contact.phone || ''}
-                isEditing={editField === 'phone'}
-                onEdit={() => { setEditField('phone'); setEditValue(contact.phone || ''); }}
-                editValue={editValue}
-                onEditValueChange={setEditValue}
-                onSave={() => updateField('phone', editValue || null)}
-                onCancel={() => setEditField(null)}
-              />
+              {workspaceId && (
+                <PhoneNumbersPanel
+                  workspaceId={workspaceId}
+                  scope="contact"
+                  contactId={contact.id}
+                  companyId={contact.company_id}
+                  contactName={fullName !== 'Unnamed Contact' ? fullName : null}
+                  defaultCountry={contact.country_code}
+                  enableFind
+                  onChange={onPhonePoolChange}
+                />
+              )}
               <EditableField
                 label="Title"
                 value={contact.title || ''}
@@ -480,6 +647,17 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onEditValueChange={setEditValue}
                 onSave={() => updateField('title', editValue || null)}
                 onCancel={() => setEditField(null)}
+              />
+              <WebsiteField
+                value={contact.website || ''}
+                isEditing={editField === 'website'}
+                onEdit={() => { setEditField('website'); setEditValue(contact.website || ''); }}
+                editValue={editValue}
+                onEditValueChange={setEditValue}
+                onSave={() => updateField('website', editValue.trim() || null)}
+                onCancel={() => setEditField(null)}
+                onFind={handleFindWebsite}
+                finding={findingWebsite}
               />
 
               {/* Primary contact toggle (only when company is set) */}
@@ -514,7 +692,14 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   className="w-full text-sm px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">No company</option>
-                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {/* The companies list is capped by PostgREST's row limit, so the
+                      contact's linked company may be absent from it. Prepend it
+                      explicitly so the dropdown reflects the real company_id
+                      instead of falling back to "No company". */}
+                  {(company && !companies.some(c => c.id === company.id)
+                    ? [company, ...companies]
+                    : companies
+                  ).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
@@ -583,7 +768,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onEdit={() => { setEditField('country'); setEditValue(contact.country || ''); }}
                 editValue={editValue}
                 onEditValueChange={setEditValue}
-                onSave={() => updateField('country', editValue || null)}
+                onSave={() => {
+                  const iso = isoFromCountryName(editValue);
+                  if (iso) syncCountry(iso);
+                  else updateField('country', editValue || null);
+                }}
                 onCancel={() => setEditField(null)}
               />
               <EditableField
@@ -593,7 +782,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 onEdit={() => { setEditField('country_code'); setEditValue(contact.country_code || ''); }}
                 editValue={editValue}
                 onEditValueChange={setEditValue}
-                onSave={() => updateField('country_code', editValue || null)}
+                onSave={() => syncCountry(editValue || null)}
                 onCancel={() => setEditField(null)}
               />
               <div>
@@ -609,9 +798,9 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               </div>
             </div>
 
-            {/* Additional Emails & Phones */}
+            {/* Additional Emails */}
             <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
-              <h3 className="text-sm font-medium text-slate-700">Additional Emails &amp; Phones</h3>
+              <h3 className="text-sm font-medium text-slate-700">Additional Emails</h3>
               <ArrayChipsField
                 label="Additional Emails"
                 values={allEmails}
@@ -622,17 +811,6 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   updateArrayField('all_emails', arr);
                 }}
                 placeholder="Add email..."
-              />
-              <ArrayChipsField
-                label="Additional Phones"
-                values={allPhones}
-                onAdd={(v) => updateArrayField('all_phones', [...allPhones, v])}
-                onRemove={(i) => {
-                  const arr = [...allPhones];
-                  arr.splice(i, 1);
-                  updateArrayField('all_phones', arr);
-                }}
-                placeholder="Add phone..."
               />
             </div>
 
@@ -890,12 +1068,27 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
               <div className="flex items-center gap-2">
+                <CallNowButton
+                  target={{
+                    contactId: contact.id,
+                    contactName: fullName,
+                    phone: poolPrimary ?? contact.phone ?? null,
+                    companyId: contact.company_id ?? null,
+                    companyName: company?.name ?? null,
+                  }}
+                  numbers={poolNumbers.map((n) => ({
+                    number: n.number,
+                    label: n.label,
+                    isPrimary: n.is_primary,
+                  }))}
+                  onLogged={() => { setActivitiesPage(0); fetchActivities(0); }}
+                />
                 <button
-                  onClick={() => setShowPersonalizeModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50"
+                  onClick={() => setShowComposeModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
                 >
-                  <Wand2 className="w-4 h-4" />
-                  Personalize email
+                  <Mail className="w-4 h-4" />
+                  Email
                 </button>
                 <button
                   onClick={() => setShowAddNote(!showAddNote)}
@@ -960,22 +1153,49 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
               <p className="text-sm text-slate-400 py-8 text-center">No activity yet</p>
             ) : (
               <div className="space-y-0">
-                {activities.map((activity) => (
-                  <div key={activity.id} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
-                    <div className="mt-0.5 flex-shrink-0">
-                      {activityIcons[activity.type] || <FileText className="w-4 h-4 text-slate-400" />}
+                {activities.map((activity) => {
+                  const callSessionId =
+                    activity.type === 'call'
+                      ? ((activity.metadata as Record<string, unknown> | null)?.call_session_id as
+                          | string
+                          | undefined)
+                      : undefined;
+                  return (
+                    <div
+                      key={activity.id}
+                      onClick={
+                        callSessionId
+                          ? () => setOpenCallSession(callSessionId)
+                          : () => setOpenActivity(activity)
+                      }
+                      className="group flex gap-3 py-3 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded-lg"
+                    >
+                      <div className="mt-0.5 flex-shrink-0">
+                        {activityIcons[activity.type] || <FileText className="w-4 h-4 text-slate-400" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-900">
+                          {getActivityTitle(activity)}
+                          {callSessionId ? (
+                            <span className="ml-2 text-xs font-normal text-indigo-600">
+                              View call →
+                            </span>
+                          ) : (
+                            <span className="ml-2 text-xs font-normal text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                              View details →
+                            </span>
+                          )}
+                        </p>
+                        {activity.body && (
+                          <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
+                        )}
+                        <p className="text-xs text-slate-400 mt-1">
+                          {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900">{getActivityTitle(activity)}</p>
-                      {activity.body && (
-                        <p className="text-sm text-slate-500 mt-0.5 line-clamp-2">{activity.body}</p>
-                      )}
-                      <p className="text-xs text-slate-400 mt-1">
-                        {formatDistanceToNow(new Date(activity.created_at ?? Date.now()), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {hasMoreActivities && (
                   <button
                     onClick={() => {
@@ -1009,35 +1229,30 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             )}
           </div>
 
-          {/* Deals */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Deals</h3>
-            {deals.length === 0 ? (
-              <p className="text-sm text-slate-400">No deals</p>
-            ) : (
-              <div className="space-y-2">
-                {deals.map(deal => (
-                  <div key={deal.id} className="p-2 rounded-lg bg-slate-50">
-                    <p className="text-sm font-medium text-slate-900">{deal.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {deal.amount && <span className="text-xs text-slate-600">${deal.amount.toLocaleString()}</span>}
-                      <DealStageBadge stage={deal.stage} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Lists */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Lists</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-700">Lists</h3>
+              <button
+                onClick={() => setShowAddToCallList(true)}
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                <Plus className="w-3 h-3" />
+                Add to call list
+              </button>
+            </div>
             {contactLists.length === 0 ? (
               <p className="text-sm text-slate-400">Not in any lists</p>
             ) : (
               <div className="space-y-1">
                 {contactLists.map(list => (
-                  <div key={list.id} className="text-sm text-slate-700 py-1">{list.name}</div>
+                  <Link
+                    key={list.id}
+                    href={list.purpose === 'calling' ? `/calls/lists/${list.id}` : `/lists/${list.id}`}
+                    className="block text-sm text-indigo-600 hover:text-indigo-700 hover:underline py-1"
+                  >
+                    {list.name}
+                  </Link>
                 ))}
               </div>
             )}
@@ -1105,15 +1320,71 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         }}
       />
 
-      {/* Personalize Email Modal */}
-      {showPersonalizeModal && workspaceId && (
-        <PersonalizeModal
+      {/* Add to Call List Modal */}
+      <AddToCallListModal
+        open={showAddToCallList}
+        onClose={() => setShowAddToCallList(false)}
+        contactId={contactId}
+        contactName={fullName}
+        onAdded={() => {
+          // Reload the Lists section
+          (async () => {
+            const { data: listMembers } = await supabase
+              .from('contact_list_members')
+              .select('list_id')
+              .eq('contact_id', contactId);
+            if (listMembers && listMembers.length > 0) {
+              const listIds = listMembers.map(lm => lm.list_id);
+              const { data: listsData } = await supabase
+                .from('contact_lists')
+                .select('id, name, purpose')
+                .in('id', listIds);
+              if (listsData) setContactLists(listsData);
+            } else {
+              setContactLists([]);
+            }
+          })();
+        }}
+      />
+
+      {/* Compose Email Modal */}
+      {showComposeModal && workspaceId && (
+        <ComposeEmailModal
           contact={contact}
           workspaceId={workspaceId}
-          companyName={company?.name}
-          onClose={() => setShowPersonalizeModal(false)}
+          company={company}
+          onClose={() => setShowComposeModal(false)}
+          onSent={() => { setActivitiesPage(0); fetchActivities(0); }}
         />
       )}
+
+      {/* Call detail drawer (recording + transcript + AI summary) */}
+      {openCallSession && (
+        <CallDetailDrawer
+          sessionId={openCallSession}
+          target={{
+            contactId: contact.id,
+            contactName: fullName,
+            phone: contact.phone ?? null,
+            companyId: contact.company_id ?? null,
+            companyName: company?.name ?? null,
+          }}
+          onClose={() => { setOpenCallSession(null); setActivitiesPage(0); fetchActivities(0); }}
+        />
+      )}
+
+      {/* Activity detail modal (full subject/body/metadata for any non-call activity) */}
+      <ActivityDetailModal
+        activity={openActivity}
+        title={openActivity ? getActivityTitle(openActivity) : ''}
+        icon={
+          openActivity
+            ? activityIcons[openActivity.type] || <FileText className="w-4 h-4 text-slate-400" />
+            : null
+        }
+        typeLabel={openActivity ? getActivityTypeLabel(openActivity.type) : ''}
+        onClose={() => setOpenActivity(null)}
+      />
 
       {/* Delete Modal */}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Contact">
@@ -1231,135 +1502,67 @@ function SocialLinkField({
   );
 }
 
-type EmailTemplate = Tables<'email_templates'>;
-
-function PersonalizeModal({
-  contact,
-  workspaceId,
-  companyName,
-  onClose,
+// Website field — clickable link when set; "Find" (auto-discovery) when empty.
+function WebsiteField({
+  value, isEditing, onEdit, editValue, onEditValueChange, onSave, onCancel, onFind, finding,
 }: {
-  contact: Contact;
-  workspaceId: string;
-  companyName?: string;
-  onClose: () => void;
+  value: string; isEditing: boolean;
+  onEdit: () => void; editValue: string; onEditValueChange: (v: string) => void;
+  onSave: () => void; onCancel: () => void;
+  onFind: () => void; finding: boolean;
 }) {
-  const supabase = createClient();
-  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<{ subject: string; body: string } | null>(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('email_templates')
-        .select('*')
-        .eq('workspace_id', workspaceId)
-        .order('name');
-      setTemplates(data || []);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
-
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
-
-  const handlePersonalize = async () => {
-    if (!selectedTemplate) return;
-    setGenerating(true);
-    setError('');
-    try {
-      const res = await fetch('/api/ai/generate-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId,
-          personaAngle: 'shop_owner',
-          contactContext: {
-            firstName: contact.first_name || undefined,
-            lastName: contact.last_name || undefined,
-            title: contact.title || undefined,
-            company: companyName,
-            city: contact.city || undefined,
-            country: contact.country || undefined,
-          },
-          stepNumber: 1,
-          existingTemplate: {
-            subject: selectedTemplate.subject,
-            body: selectedTemplate.body_html,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Personalization failed');
-        return;
-      }
-      setResult({ subject: data.subject, body: data.body });
-    } catch {
-      setError('Network error. Try again.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const firstName = contact.first_name || 'this contact';
-
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-base font-semibold text-slate-900 mb-4">
-          Personalize email for {firstName}
-        </h3>
-
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Template</label>
-          <select
-            value={selectedTemplateId}
-            onChange={(e) => setSelectedTemplateId(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1">Website</label>
+      {isEditing ? (
+        <input
+          type="url"
+          value={editValue}
+          onChange={(e) => onEditValueChange(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
+          autoFocus
+          placeholder="https://..."
+          className="w-full text-sm px-2 py-1.5 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      ) : value ? (
+        <div className="flex items-center gap-1 px-2 py-1.5">
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 truncate"
           >
-            <option value="">Select a template...</option>
-            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </div>
-
-        {selectedTemplate && (
-          <div className="mb-4 p-3 bg-slate-50 rounded-lg">
-            <p className="text-xs font-medium text-slate-600 mb-1">Subject: {selectedTemplate.subject}</p>
-            <div
-              className="text-xs text-slate-500 line-clamp-3"
-              dangerouslySetInnerHTML={{ __html: selectedTemplate.body_html || '' }}
-            />
-          </div>
-        )}
-
-        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-
-        {result && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-xs font-medium text-green-800 mb-1">Subject: {result.subject}</p>
-            <p className="text-xs text-green-700 whitespace-pre-wrap">{result.body}</p>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50">
-            Close
+            <Globe className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{value.replace(/^https?:\/\//, '')}</span>
+          </a>
+          <button onClick={onEdit} className="ml-auto text-xs text-slate-400 hover:text-slate-600">
+            Edit
           </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <p
+            onClick={onEdit}
+            className="flex-1 text-sm text-slate-400 cursor-pointer hover:bg-slate-50 px-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200"
+          >
+            —
+          </p>
           <button
-            onClick={handlePersonalize}
-            disabled={!selectedTemplateId || generating}
-            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            onClick={onFind}
+            disabled={finding}
+            title="Find the website automatically from the name and email"
+            className="inline-flex items-center gap-1 text-xs px-2 py-1.5 bg-slate-100 border border-slate-200 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-50 flex-shrink-0"
           >
-            {generating ? 'Generating...' : result ? 'Regenerate' : 'Personalize'}
+            {finding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {finding ? 'Finding…' : 'Find'}
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
 
 function VerifyEmailButton({
   contact,

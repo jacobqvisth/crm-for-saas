@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
   isInternalTestUserOrWorkshopWith,
   isInternalTestWorkshopIdWith,
@@ -202,7 +204,10 @@ function mapMember(
     role: asString(user.metadata?.user_role),
     companyName: asString(user.metadata?.company_name),
     emailDomain: asString(user.metadata?.email_domain),
-    createdAt: user.created_at,
+    // signed_up_at covers ~100% of users (fallback chain incl. workshop
+    // creation); created_at only the ~8% whose export row carries
+    // user_created_at. Prefer the field that actually has data.
+    createdAt: user.signed_up_at ?? user.created_at,
     lastSeenAt: user.last_seen_at,
     customerIoId: user.customer_io_id,
     subscriptionStatus: asString(user.metadata?.subscription_status),
@@ -380,7 +385,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
         supabase
           .from(TABLES.workshops)
           .select(
-            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, is_internal_test, churned_at, metadata",
           )
           .order("workshop_id", { ascending: true })
           .range(from, to),
@@ -389,7 +394,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
         supabase
           .from(TABLES.users)
           .select(
-            "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+            "internal_user_id, workshop_id, customer_io_id, created_at, signed_up_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
           )
           .order("internal_user_id", { ascending: true })
           .range(from, to),
@@ -398,7 +403,7 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
         supabase
           .from(TABLES.subscriptions)
           .select(
-            "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
+            "workshop_id, stripe_customer_id, status, plan_key, mrr_amount_cents, currency, current_period_start, current_period_end, trial_end, cancel_at, canceled_at, metadata",
           )
           .order("stripe_customer_id", { ascending: true })
           .range(from, to),
@@ -459,7 +464,20 @@ async function fetchWarehouseTables(options: { includeInternal?: boolean } = {})
   };
 }
 
-export async function getWorkshopDrilldownList(
+const getWorkshopDrilldownListCached = unstable_cache(
+  (includeInternal: boolean) =>
+    getWorkshopDrilldownListUncached({ includeInternal }),
+  ["ceo-workshop-list"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getWorkshopDrilldownList(
+  options: { includeInternal?: boolean } = {},
+) {
+  return getWorkshopDrilldownListCached(options.includeInternal ?? false);
+}
+
+async function getWorkshopDrilldownListUncached(
   options: { includeInternal?: boolean } = {},
 ) {
   const tables = await fetchWarehouseTables(options);
@@ -473,7 +491,23 @@ export async function getWorkshopDrilldownList(
   );
 }
 
-export async function getWorkshopDetail(
+const getWorkshopDetailCached = unstable_cache(
+  (workshopId: string) => getWorkshopDetailUncached(workshopId),
+  ["ceo-workshop-detail"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getWorkshopDetail(
+  workshopId: string,
+  options: { includeInternal?: boolean } = {},
+) {
+  // Detail always loads the workshop regardless of the internal toggle, so the
+  // cache key is just the workshopId.
+  void options;
+  return getWorkshopDetailCached(workshopId);
+}
+
+async function getWorkshopDetailUncached(
   workshopId: string,
   options: { includeInternal?: boolean } = {},
 ) {

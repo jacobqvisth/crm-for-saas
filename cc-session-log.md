@@ -10,7 +10,244 @@ updated: 2026-05-26
 
 > Running log of all Claude Code sessions. Most recent first.
 > CC should append a new entry here at the end of every session.
+
+---
+
+## Calls: inbound/outbound direction label on Recent calls rows — 2026-07-01 — PR #482 — feature/call-direction-label
+
+Follow-up to the Recent-calls date tabs (#474): Jacob spotted an inbound call in the list and asked to label inbound vs outbound.
+
+**What shipped (`src/app/(dashboard)/calls/page.tsx`):** each Recent calls row now shows a direction badge derived from `metadata.direction`:
+- `"inbound"` → green pill, `PhoneIncoming` icon, "Inbound"
+- anything else → subtle grey pill, `PhoneOutgoing` icon, "Outbound"
+
+Inbound calling is a newer feature (46elks inbound webhook → `call_sessions.direction="inbound"` → `processCallSession` writes `metadata.direction`), so legacy activity rows with no `metadata.direction` default to **Outbound** (correct — dial-out + manual `logCall` always set `"outbound"`). The name line was changed to a flex row so the direction + Customer badges aren't clipped by name truncation. No API/schema change — `/api/calls` already returns `metadata`.
+
+**Checks:** `npx tsc --noEmit` clean, `npm run lint` clean. Local `next build` skipped (bg sandbox OOMs).
+
+**Deploy:** merged to main as `0361e19`. Heavy parallel merging today (#478/#480/#481 landed around the same time); confirmed `0361e19` is an ancestor of the live prod HEAD `bfebf32` (#481), deploy `dpl_G78hhWmZGWHsbZuDGvWbFonondoX` **READY**, `/calls` returns 200. No code conflict — the interleaved PRs touched disjoint files.
+
+---
+
+## Calls: date-filter tabs (Today / Yesterday / Last 7 days) on Recent calls — 2026-07-01 — PR #474 — feature/recent-calls-date-tabs
+
+Jacob asked (from a screenshot of `/calls`) to add tabs above the **Recent calls** list to filter by **Today / Yesterday / Last 7 days (excluding today)**, and to show the full list (scroll) with pagination.
+
+**What shipped (frontend only — `src/app/(dashboard)/calls/page.tsx`):**
+- Three-tab segmented control above the Recent calls feed: **Today** (default), **Yesterday**, **Last 7 days**. "Last 7 days" = the 7 full days *before* today, not including today.
+- Date bounds computed in the browser's local (Stockholm) timezone via a `rangeFor()` helper and passed to the existing `/api/calls` `since`/`until` params (`until` is 1 ms before today's midnight so the boundary isn't double-counted).
+- Replaced the old fixed `?limit=15` snapshot with paginated loading: `PAGE_SIZE=50`, list is scrollable (`max-h-[70vh] overflow-y-auto`), and a **Load more (N left)** button appends the next 50 using `res.total` from the API.
+- Header shows a live per-period count. Split the single `load()` into `load()` (stats + lists, once) and `loadCalls(filter, offset)` (reloads on tab change).
+- No API/schema change — `/api/calls` already supported `since`/`until`/`limit`/`offset` and returns `{ calls, total }`.
+
+**Checks:** `npx tsc --noEmit` clean, `npm run lint` clean, GitHub Actions **Build & Lint** passed. Local `next build` couldn't run in the bg sandbox (OOM / exit 137) — relied on GH Actions + Vercel prod build. Vercel *preview* check was red for a **pre-existing, project-wide** reason (Supabase env not set on the Preview environment → `/calls/feedback` prerender fails); every PR preview is ERROR while every push-to-prod build is READY. Merged past it.
+
+**Deploy:** merged to main as `f2042c5`; prod deployment `dpl_AEdBzWkDf6eZW9E9Dm6kHX7sE6jF` **READY**, `/calls` returns 200 on `crm-for-saas.vercel.app`. No build conflict — the only PR merged in between (#475, WebRTC multi-tab) touched disjoint files; branch rebased cleanly.
+
+---
+
+## Computer calling: fix "call didn't reach this computer" from a non-presence tab — 2026-07-01 — fix/webrtc-single-tab
+
+Jacob reported "Talk from computer" **rings then errors "The call didn't reach this computer. Close any other CRM tabs…"** with two CRM tabs open (confirmed by screenshot). Diagnosed the gap left by #468:
+
+- #468 elects a **single presence tab** via a Web Lock (`wl-webrtc-presence`) so only one tab holds the shared 46elks WebRTC registration for **inbound**. Good.
+- **But the outbound path bypassed it:** `call-provider.startCall` → `ensureRegistered` registers *its own* tab regardless of which tab holds the presence lock. With 2 tabs you get two SIP registrations for the one WebRTC number; 46elks rings the presence tab (not the tab you dialed from), so the armed leg never arrives → 25s arm-watchdog → the error. Closing the extra tab was the only workaround.
+
+**Fix — a cross-tab "line claim" protocol in `webrtc-client.ts` (BroadcastChannel `wl-webrtc-line`):**
+- `claimLine()` — the calling tab announces itself as sole line holder; every other tab drops its registration (`teardownUA`) if not on a call. `call-provider.startCall` calls it right after `ensureRegistered`, before `arm()`, so 46elks rings the tab you dialed from.
+- `releaseLine()` + `setLineFreedHandler()` — when a non-presence caller tab's call ends (`cleanupSession`) it drops its one-off registration and broadcasts release; the presence tab reclaims the line for inbound. `setPresenceHolder(true/false)` marks which tab keeps its registration through a call.
+- Presence tab (`webrtc-presence.tsx`) also re-registers on `visibilitychange`/`focus` as a safety net if a release is missed.
+- Kept #468's Web Lock (baseline inbound single-tab), the 15s register timeout, 25s arm-watchdog, STUN via creds, and the re-emit-"registered" fix.
+
+Net: you can keep many CRM tabs open — the tab you call from always wins, and inbound still rings your presence tab. (Also confirms the earlier Phase A backdrop-minimize fix is live; a hard refresh picks it up.)
+
+**Checks:** `tsc` clean · `eslint src/` clean · `npm run build` ✅ · smoke+api E2E **8/8**. **Not browser-tested** (WebRTC needs Jacob's owner session + mic + a real phone; single-owner endpoint returns unavailable to test users) — Jacob to place one computer call with a second CRM tab open to confirm.
+
+---
+
+## Reopen the call panel mid-call — app-level CallProvider (Phase A) — 2026-07-01 — worktree-feature+call-provider-reopen
+
+Jacob, on a live call, clicked through to the customer profile and the right-hand call panel closed with **no way to reopen it** — he feared the recording was lost. Verified against prod it wasn't: the WebRTC session lives on a tab-level singleton and recording/Deepgram/summary all run server-side (46elks → hangup webhook → `processCallSession`), so his call to **Saltsjöbadens Rekond & Biltvätt** (114s) was fully processed + logged. The bug was purely UI: `CallNowButton`/`CallDrawer` owned the active-call state **per page**, so navigation unmounted the panel.
+
+**Fix (Phase A of the "in-call assist" plan): lift the active call to app level.**
+- **`src/components/calls/call-provider.tsx`** (new) — `<CallProvider>` mounted once in the dashboard layout. Owns `activeCall` (target/mode/startedAt/sessionId/onLogged), the polled `Session`, WebRTC state, mute, and `panelOpen`. Exposes `useCall().startCall(target, opts)`. Renders the live `CallDrawer` **and** a persistent bottom-right **"call in progress" pill** with an **Open** button (the reopen affordance), a live timer, and Mute/Hang-up for computer calls. Polls `/api/calls/session/[id]` even while minimized, so a minimized call still lands its recording + AI summary (pill shows "Call summary ready → Open").
+- **Key behavior change — minimize ≠ hang up:** the drawer X / backdrop now **minimizes** to the pill (call keeps running); only the explicit **Hang up** ends a WebRTC call. Previously closing the drawer hung up the call.
+- **`src/components/calls/call-drawer.tsx`** (new) — extracted the presentational `CallDrawer` + shared types (`Session`, `CallNowTarget`, `CallNumber`, `CallMode`) + `FollowupEmail`/`SuggestedTasks` out of `call-now.tsx`, so the provider and the past-call viewer share one drawer with no import cycle.
+- **`src/components/calls/call-now.tsx`** — `CallNowButton` is now a thin trigger (keeps the ring-my-phone / talk-from-computer / number picker) that calls `useCall().startCall()`. `CallDetailDrawer` (past-call viewer) + `CallSettingsHint` unchanged; types re-exported for compat.
+- **`src/components/calls/webrtc-presence.tsx`** — added a `mineRef` guard so the presence widget only pops its in-call bar for **inbound** calls it surfaced; outbound calls are the CallProvider pill's job (no more double bar).
+- **`src/app/(dashboard)/layout.tsx`** — wraps children in `<CallProvider>`.
+
+No API/DB/env/cron changes. `call_sessions.transcript`/`live_tips` remain reserved for **Phase B** (live ambient AI sales assist — real-time Deepgram + streaming Claude tips, WebRTC-only). Plan file: `~/.claude-wrenchlane/plans/sparkling-wibbling-parrot.md`.
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `npm run build` ✅ · smoke+api E2E **8/8 pass**. (Local build needed `npm install` first — `jssip` was in package.json but missing from the stale local node_modules; same pre-existing env gap noted in #456. Also had to prepend `/opt/homebrew/bin` to PATH — Codex.app's node was shadowing brew node and silently OOM-killing the build.) **Not yet live-tested in a real browser mid-call.**
+
+---
+
+## Interactive emails send from the acting rep's own account — 2026-07-01 — PR #456 (worktree-fix-call-email-sender)
+
+Jacob: "if I call a contact as Jacob, after the call the email sender should also be Jacob." His post-call follow-up to **Azad @ Gävle Bilexpert** went out **from Magnus/matteo** instead.
+
+Diagnosed against prod: the primary-owner side already worked (both `call` activities correctly attributed to Jacob via the `activities` AFTER-INSERT rep-ownership trigger). The real bug was **sender selection**. The one-off "Email" button and the call's "Suggested follow-up" both POST to `/api/contacts/[id]/send-email`, which chose the sender via `getNextSender()` = the account with the **lowest daily send count**. Jacob had 18 sends today, so Magnus (`e8cf0456`, 1 send) and matteo (`1ecf295a`, 1 send) won. Both problem emails were confirmed one-off sends (`email_queue.enrollment_id` NULL). Side effect: a foreign `email_sent` is a *newer* rep-touch than the call, so under `owner_auto=true` it would flip the primary owner away from the caller (why Jacob had locked Azad to himself manually).
+
+- **`src/lib/gmail/sender-rotation.ts`** — `getNextSender(workspaceId, allowedAccountIds?, preferredUserId?)`. Extracted a pure, exported `selectSender(accounts, preferredUserId?)` policy: prefer the acting user's own active account **with capacity**, else fall back to the historical lowest-count round-robin.
+- **`src/app/api/contacts/[id]/send-email/route.ts`** — passes the logged-in `user.id` as `preferredUserId`. Explicit `senderAccountId` still wins.
+- **`src/components/contacts/compose-email-modal.tsx`** — sender dropdown now defaults to the logged-in user's own account (still overridable).
+- **`src/app/api/inbox/senders/route.ts`** — now returns `user_id` so the modal can match.
+- **`src/lib/gmail/sender-rotation.test.ts`** (new) — 5 tests incl. the exact Jacob-vs-Magnus scenario, at-capacity fallback, unknown-user fallback.
+
+**Deliberately out of scope:** cold **sequence enrollment** stays on round-robin across the rotation pool — forcing every contact onto its owner's single account (Hans owns ~4,600) would blow per-account daily caps and defeat deliverability/warmup.
+
+**Checks:** 5/5 new unit tests pass · `tsc --noEmit` + `eslint src/` clean on changed files (local `jssip` module-not-found in `webrtc-client.ts` is a pre-existing env gap — jssip in package.json but not installed in the local node_modules; Vercel installs fresh). **Deploy:** merged to main (`9a00252`); current prod build `cbe44bd` (includes #456 + #455) live, https://crm-for-saas.vercel.app 200. No migration, no env var, no cron.
+
+---
+
+## Investigation: "name-from-email" suggestion not showing on a contact — 2026-07-01 — no code change
+
+Jacob (from a contact profile for `sethbarnes8808@gmail.com`, showing "Unnamed Contact" with empty First/Last Name): "what happened to the find-or-add-the-name feature that used to be next to the name? If the user has a name in the email it should add it to the fields."
+
+**Finding: the feature is intact and working — it deliberately declined for this email.**
+
+- The "✨ Use *First Last* from email" button lives in `src/components/contacts/contact-detail-client.tsx:583-593`. It renders only when **both** name fields are empty (`nameSuggestion` guard at :509-511) and `parseNameFromEmail(contact.email)` returns non-null. Clicking it calls `applyNameSuggestion` (:313) to fill both fields.
+- `src/lib/contacts/parse-name-from-email.ts` is intentionally conservative — it fires only on the high-confidence `firstname.lastname@domain` shape: local part must split into **exactly two** letters-only tokens (`isNameToken` requires ≥2 chars, `/^\p{L}+$/u`), and role locals (info@, sales@, kundservice@, …) are rejected.
+- `sethbarnes8808@gmail.com` fails two guards: the local `sethbarnes8808` is a **single** token (no `.`/`_`/`-` separator → 1 token, not 2) **and** contains digits (`8808`). So `parseNameFromEmail` returns null → no button. This is by design, to avoid guessing garbage on opaque locals. `seth.barnes@gmail.com` *would* show "Use Seth Barnes from email."
+
+**No change made.** Offered Jacob a low-risk enhancement (strip trailing digits before parsing so `seth.barnes8808@` → "Seth Barnes", keeping the two-token safety rule); splitting glued-together locals like `sethbarnes` was flagged as too risky. Awaiting his call on whether to loosen the parser.
+
+---
+
+## Mark a list as a call list — 2026-06-30 — PR #442 (feature/mark-call-list)
+
+Jacob, from the list detail page: "I want to be able to tag or mark a list as a call list."
+
+The backend already existed — `contact_lists.purpose` (`'email'` default / `'calling'`, migration `20260527000100`), the emerald **Call list** badge in both the list index and detail views, and the `/calls/lists/[id]` worklist that `/api/calls/lists` powers by filtering `purpose='calling'`. The only missing piece was a UI to *set* `purpose`. This wires it up — no schema change.
+
+- **`src/components/lists/list-detail-client.tsx`** — `handleTogglePurpose()` flips `purpose` between `'calling'` and `'email'`; new header button toggles `Mark as Call list` ↔ `Call list ✓` (emerald when active). Activating it makes the existing badge appear + link to the worklist.
+- **`src/components/lists/list-table.tsx`** — `handleTogglePurpose(list)` + a `Mark as call list` / `Unmark call list` item at the top of the per-row `⋯` action menu (menu widened to `w-44`); updates local state optimistically.
+
+**Checks:** `npx tsc --noEmit` clean, `eslint` clean on both files, prod `next build` **Ready** on Vercel (local build's only failure was prerendering `/calls/feedback` for lack of Supabase env vars — pre-existing, prod has them). **Deploy:** auto-deployed, production deployment Ready ~2s after merge (`crm-for-saas-onegljyui`), https://crm-for-saas.vercel.app live (307→/login). No migration, no env var, no cron.
+> Follow-up idea offered to Jacob: also expose the call-list toggle in the Create List modal (set at creation time).
+
+---
+
+## WebRTC outbound calling — "Talk from computer" (PR A) — 2026-06-30 — feature/webrtc-outbound-calling
+
+Jacob asked whether the click-to-call has to ring his iPhone first or whether he can talk through the computer. It can — 46elks ships WebRTC (JsSIP), and his account already has a WebRTC number `+4600120210` (confirmed enabled in the 46elks dashboard). This PR adds computer-calling as a **per-call option on the Call button**, without disturbing the existing phone bridge.
+
+**Design (no client-initiated SIP, no support ticket):** the browser registers as the WebRTC number; the dial API places a normal 46elks call with `to=<webrtc-number>` (instead of the agent's mobile) and `voice_start.connect=<contact>`; 46elks rings the registered browser leg, which auto-answers, and bridges to the contact. Recording/Deepgram/Claude pipeline is byte-for-byte identical — only the ring leg changed. Caller ID shown to the contact is unchanged (the 46elks caller-ID number); the agent's personal number is never involved.
+
+- **`src/lib/calls/webrtc-client.ts`** (new): browser-only singleton wrapping JsSIP (lazy `import("jssip")` so it never hits the server bundle). Registers once per tab, arms to auto-answer the inbound leg, attaches remote audio to a hidden `<audio>`, exposes mute/hangup + a state machine (idle→connecting→registered→ringing→in_call→ended/error).
+- **`src/app/api/calls/webrtc-credentials/route.ts`** (new): auth-gated GET returning `{wsUri, uri, password}` from env (`ELKS_WEBRTC_USERNAME`/`ELKS_WEBRTC_PASSWORD`, ws/host overridable). Returns `{available:false}` when unconfigured so the UI hides the option. A SIP client authenticates from the browser, so this credential necessarily reaches the client — gated to authed members with calling enabled.
+- **`src/lib/calls/elks.ts`**: `placeBridgeCall` param `agentPhone`→`ring` (the leg to ring — mobile or WebRTC number). Only caller is the dial route.
+- **`src/app/api/calls/dial/route.ts`**: accepts `mode: 'bridge'|'webrtc'`. `webrtc` rings `ELKS_WEBRTC_NUMBER` (400 `webrtc_unavailable` if unset) and skips the mobile requirement; `bridge` unchanged. `call_sessions.agent_number` stores whichever leg was rung.
+- **`src/components/calls/call-now.tsx`**: Call button now always shows an options caret → "Ring my phone" / "Talk from computer" (+ number picker when a pool exists). Computer mode registers JsSIP + arms before POSTing dial; the drawer shows in-browser controls (Mute / Hang up) + live state. Falls back with a clear toast when WebRTC isn't configured.
+- **`settings/calls/page.tsx`**: copy mentions the computer-calling option.
+- **`package.json`**: + `jssip@^3.13.8` (ships its own types).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · 45/45 calls unit tests pass · `next build` compiles+bundles clean (local prerender fails only on missing Supabase env, the usual preview limitation — CI Build&Lint is the gate).
+
+**NOT merged / NOT yet live-tested** — the WebRTC audio leg can only be verified in a real browser with a mic. Inert until env vars are set (without them the option hides and `mode=webrtc` 400s; the phone bridge is unchanged). **Deploy steps for Jacob:**
+1. Set Vercel env (Production): `ELKS_WEBRTC_NUMBER=+4600120210`, `ELKS_WEBRTC_USERNAME=4600120210`, `ELKS_WEBRTC_PASSWORD=<from 46elks Edit page>`.
+2. Merge → Vercel deploys.
+3. On a contact, Call ▾ → "Talk from computer", allow mic, confirm two-way audio + recording/transcript logs as usual.
+4. (Optional) rotate the WebRTC SIP password in 46elks afterward, since it appeared in chat.
+
+**Next:** PR B — inbound "ring my computer too" on callback (small change to `buildInboundActions`: primary `connect` becomes `"<webrtc-number>,<cell>"` — rings both, answer whichever, degrades to phone when the tab's offline).
+
+---
+
+## WebRTC inbound — "ring my computer too" on callback (PR B) — 2026-06-30 — same branch feature/webrtc-outbound-calling
+
+Stacked on PR A (same branch/PR #445 → retitled to cover outbound + inbound). When a customer calls back, ring the agent's **browser in parallel with their mobile** — answer on whichever; if the laptop's closed it silently degrades to phone (the existing PR #441 cell→failover→voicemail tree is untouched).
+
+**No DDL (deliberate).** A per-user opt-in column would need prod DDL (classifier-blocked, and `.env.local` is off-limits for psql). Instead: the single shared WebRTC number maps to ONE owner via env `ELKS_WEBRTC_OWNER_USER_ID` (only that agent's callbacks ring the browser; unset = any owner — fine for single-user). Per-device on/off is `localStorage` (`wl_webrtc_presence_enabled`, default on). Multi-agent later = one WebRTC number per agent + a real column.
+
+- **`src/lib/calls/inbound-actions.ts`**: `buildInboundActions` gains optional `computerNumber` → primary `connect` becomes `"<webrtc-number>,<cell>"` (46elks comma list = simultaneous ring, first-answer-wins). +2 unit tests (47/47 pass).
+- **`src/app/api/calls/webhook/inbound/route.ts`**: passes `computerNumber = ELKS_WEBRTC_NUMBER` when the call's owner === `ELKS_WEBRTC_OWNER_USER_ID` (or unset). 46elks numbers need NO reconfig — the inbound webhook already drives them.
+- **`src/lib/calls/webrtc-client.ts`**: evolved to support a persistent presence — multi-listener `subscribe()` (replaces single `setHandlers`; PR A's call-now.tsx updated), `setIncomingHandler` + `acceptIncoming`/`declineIncoming`, new `incoming` state, best-effort caller-number extraction from the SIP From header. Armed (outbound) auto-answer still takes priority over inbound surfacing.
+- **`src/components/calls/webrtc-presence.tsx`** (new): mounted once in `(dashboard)/layout.tsx`. If this user is the WebRTC owner (creds endpoint returns available) and the device toggle is on, it holds a live SIP registration and shows an Accept/Decline card on incoming + a Mute/Hang-up in-call bar + a small bottom-left presence toggle.
+- **`/api/calls/webrtc-credentials`**: now also gates on `ELKS_WEBRTC_OWNER_USER_ID` (so only the owner can register the shared number, in or out).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · 47/47 calls tests · `next build` "Compiled successfully" (prerender-only env failure as usual).
+
+**Extra deploy step for PR B:** set Vercel prod `ELKS_WEBRTC_OWNER_USER_ID=<Jacob's auth user id>` (so only his callbacks ring his browser). Then a callback to his dedicated number rings both his iPhone and the CRM tab; answer either. Still NOT live-tested (needs real callback + browser+mic).
+
+---
+
+## Mailbox sync — backfill + ongoing email logging — 2026-06-30 — PR (feature/mailbox-sync)
+
+Jacob: "what about all the emails Hans sent from his Google email that aren't logged in our CRM? HubSpot has a plugin for this — can we do it better?" We can: we already hold the Gmail OAuth (`gmail.readonly`+`modify`), so this is a server-side sync — no browser plugin, no BCC, and we can backfill full history (HubSpot's plugin only logs going forward).
+
+`check-replies` only ingests replies to *sequence* emails. This adds a general mailbox-sync cron that logs ALL correspondence between connected mailboxes and CRM contacts.
+
+- **`supabase/migrations/20260630120000_mailbox_sync.sql`** — `gmail_sync_state` (per-account cursor: backfill pageToken, `backfill_done_at`, `last_synced_at`) + partial UNIQUE index `activities((metadata->>'gmail_message_id')) WHERE synced_from='mailbox_sync'` (outbound idempotency) + partial index on `email_queue(gmail_message_id)` (sequence-send dedup).
+- **`src/lib/contacts/match.ts`** — shared `findContactByEmail` (exact → `all_emails` → domain→company), `autoCreateContactFromMail` (race-safe), generic-domain + role/no-reply detection.
+- **`src/lib/gmail/messages.ts`** — shared header/body parse helpers + `isAutoReply` (extracted reusable versions; check-replies keeps its private copies).
+- **`src/app/api/cron/mailbox-sync/route.ts`** — per account: backfill walks `threads.list` newest→oldest one page/run (resumable via cursor), then incremental via `after:<epoch>`. Per thread: pass-1 computes genuine **two-way** counterparties; pass-2 logs inbound (→ `inbox_messages` + `email_received` activity) and outbound (→ `email_sent` activity, skipping sequence sends). **Auto-create gate (per Jacob): known contacts always logged; unknown externals auto-created only when two-way AND not role/no-reply.** Idempotency: inbound gated on fresh `inbox_messages` insert (dedups vs check-replies); outbound/activity gated on the partial unique index (swallows 23505).
+- **`vercel.json`** — cron at `15,45 * * * *` (interleaved with check-replies).
+- **Decisions:** no `direction` column / no Inbox-UI change (kept blast radius minimal — outbound lives only as an activity); `last_contacted_at` never moved backwards by old backfill mail; one `email_sent` per outbound attributed to first matched recipient (multi-contact recipients in metadata).
+
+**Checks:** `tsc --noEmit` clean, `eslint` clean on new files, `npm run build` exit 0 (route in manifest). **Deploy TODO:** apply the migration to prod (`psql -f supabase/migrations/20260630120000_mailbox_sync.sql`) at merge — the cron is harmless until then (no `gmail_sync_state` table = it no-ops). The cron auto-deploys from `vercel.json` and uses the existing `CRON_SECRET`.
 > Cowork reads this at session start instead of relying on Jacob pasting summaries.
+
+---
+
+## 2026-06-29 — Find phone numbers for a contact (PR #429)
+
+**Branch:** `worktree-feature+find-phone` → main (squash `81a2dc9`). Phone-number auto-discovery on the contact profile, modeled on the Find-website feature (#417).
+
+- **`src/lib/enrich/find-phone.ts`** (new): `findPhones()` scrapes the contact's/company's website (homepage + Nordic contact paths `/kontakt`, `/kontakta-oss`, `/contact`, `/om-oss`, …) for `tel:` links + phone-like visible text (text matcher requires leading `+`/`00`/`0` to skip org numbers/years), then runs a `claude-sonnet-4-6` `web_search` by name+company+location returning numbers via a `report_phones` tool. Normalizes all via `normalizePhone`→E.164, drops numbers already on the record, dedupes, ranks website > web-search then by confidence.
+- **`POST /api/enrich/find-phone`** (new): workspace-scoped, `maxDuration=180`, mirrors find-website; loads contact + linked company (name/website/location/existing phones). Also accepts `companyId`. No DB write — client persists.
+- **`contact-detail-client.tsx`**: "Find numbers" button under the Phone field → results picker modal (number, label, confidence badge, source link) with Set-primary / Add-to-additional actions; already-saved numbers show "Saved".
+
+**Checks:** `npx tsc --noEmit` ✅, `npm run lint` ✅, `next build --webpack` ✅ (route `ƒ /api/enrich/find-phone` present). Prod verified: endpoint returns 401 unauth like the find-website baseline. Note: contact/company need a website for the scrape leg to fire; web-search leg works from name+location alone.
+
+---
+
+## 2026-06-03 — Active Users page: per-column header info hints
+
+**Branch:** `worktree-active-users-col-info` → main (squash merge). Follow-up to #334: every table column header now has a hover info (ⓘ) explaining the source + how it's calculated.
+
+- Added `COLUMN_INFO` map (title/body/sources) in `active-users-content.tsx`; wrapped all 19 `<th>` labels in `<span className="table-heading-info">…<InfoHint/></span>` (reusing the existing app-usage header pattern + InfoHint popover).
+- CSS: `.active-users-table .table-heading-info { text-transform: none }` (keep normal casing vs the shared uppercase default) and right-align the label+icon on numeric headers.
+- Note: worktree had to be fast-forwarded onto origin/main first — it had branched from a stale local origin/main ref (pre-#334). Verified no other session's work was at risk (checked all worktrees + the Codex worktree; main checkout was merely behind).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `next build --webpack` builds `/ceo/active-users` · 8/8 smoke tests pass.
+
+---
+
+## 2026-06-03 — Active Users page: wider/scrollable table + 11 more per-user columns
+
+**Branch:** `worktree-active-users-columns` → main (squash merge). Follow-up to the page below, per Jacob's request to widen the table, make it side-scrollable, and surface more per-user info.
+
+**UI:** Table is now horizontally scrollable with a **pinned User column** (CSS `.active-users-table` in ceo-legacy.css: `min-width:1680px`, `white-space:nowrap` per cell, `position:sticky;left:0` on `.col-user`, `.col-actions` allowed to wrap within 240–320px). Each column fits on one line now instead of wrapping.
+
+**New columns / data:** Added GA4 `userEngagementDuration` (→ "Engaged" column + a 5th "Engaged time" KPI). Expanded the contacts select and added a company firmographics pass, surfacing: Plan (company.plan ?? user_plan_type), Subscription (user_subscription_status ?? company.customer_status), Lifecycle (company.lifecycle_stage), Location (city, country), Diag. lifetime (diagnostics_total), Logins (login_count), Credits (credits_remaining), Signed up (created_at). Title is fetched into the row data but not yet shown. Null-safe rendering ("—").
+
+**Files:** `src/lib/ceo/data/active-users.ts` (types + queries + mapping), `src/components/ceo/active-users-content.tsx` (columns + duration/date formatters + KPI), `src/app/(ceo)/ceo-legacy.css` (table CSS append).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `next build --webpack` builds `/ceo/active-users` · 8/8 smoke tests pass.
+
+---
+
+## 2026-06-03 — Active Users page: per-user logged-in activity on app.wrenchlane.com (/ceo/active-users)
+
+**Branch:** `worktree-ceo-active-users` → main (squash merge).
+**What:** New `/ceo/active-users` CEO-dashboard section. Lists logged-in users and their actions in a date range (default **yesterday**), unioning two data sources side by side per the ask:
+- **GA4 engagement** — `customUser:crm_user_id` × (`sessions`, `screenPageViews`, `eventCount`) and × `eventName` (top actions), filtered `hostName = app.wrenchlane.com`, dropping `(not set)`/empty ids. Read live each render via `runGa4Report`.
+- **App business events** — diagnostics count per user from `dashboard_diagnostics.internal_user_id` (same Cognito sub).
+
+Merge key is the Cognito sub (`crm_user_id` = `contacts.wl_user_id` = `internal_user_id`). Rows resolve to CRM contacts (name / email / company / app_role / lead_status / last_active_at); unmatched app users show a truncated id + "Not in CRM yet". Internal-test accounts excluded via `loadInternalTestSets()`. Sorted by event volume. KPI cards: Active users, Sessions, Events (+page views), Diagnostics run.
+
+**Files:**
+- `src/lib/ceo/data/active-users.ts` — loader + types; `unstable_cache` (CEO_CACHE_OPTIONS) keyed by range; page default range = `yesterday`. Contacts + companies resolved in two batched `.in()` passes (chunked at 100 to dodge the PostgREST URL limit); diagnostics paged via `pageAll`. GA4 wrapped in try/catch → `ga4Available=false` + note on failure.
+- `src/components/ceo/active-users-content.tsx` — KPI grid + per-user table (ceo-legacy.css classes).
+- `src/app/(ceo)/ceo/active-users/{page.tsx,actions.ts}` — streamed panel behind `CeoPanelSkeleton`; refresh action runs `core_app` sync + busts CEO cache tag.
+- `src/components/ceo/dashboard-sections.tsx` — new `active-users` section key + nav entry (after Usage).
+- `src/components/ceo/dashboard-shell.tsx` — added optional `defaultRangeKey` prop so the time-range pills respect a per-page default (here: yesterday) without breaking the bare-URL convention on other pages.
+
+**Pre-merge validation (this session):** confirmed the GA4 pipe is live — probed the Data API with prod creds: `customUser:crm_user_id` has 258 real Cognito-sub values over 7d, `user_identified` fires daily, and 3/4 sampled ids joined to real contacts. So the page has real data to show (back to 2026-05-25 when the custom dim was registered).
+
+**Checks:** `tsc --noEmit` clean · `eslint src/` clean · `next build --webpack` (brew Node + webpack per worktree gotcha) built the `/ceo/active-users` route · 8/8 smoke tests pass.
 
 ---
 
@@ -4224,3 +4461,605 @@ Session closed.
 - **No behaviour change:** URL param key stays `"all"`; existing links unaffected.
 - **Checks:** tsc ✅ · eslint (changed files) ✅ · vitest app-usage.test.ts 7/7 ✅
 - **Deploy:** Vercel auto-deploy on merge to main.
+
+## 2026-06-02 — Speed up all /ceo/* pages (caching + streaming)
+
+- **Branch:** perf/ceo-cache-streaming
+- **Problem:** Every /ceo/* page was `dynamic = "force-dynamic"` with zero caching, so each navigation re-ran the shared `getDashboardData()` (6 parallel Supabase reads, 3 of them unbounded pageAll loops) plus heavy per-page loaders (GA4 runReport, conversions RPC, 5-table workshop scans). Several seconds per page.
+- **Caching:** Wrapped 9 CEO data loaders in `unstable_cache` (5-min TTL, shared `ceo-data` tag) via new `src/lib/ceo/cache.ts`. Range-taking loaders cache by the stable `range.key` string (resolve range inside the cached fn) so keys stay primitive and public signatures are unchanged. Loaders: getDashboardData, getAppUsageData, getConversionsData, getNewUsersData, getWorkshopDrilldownList, getWorkshopDetail, getPilotStatsData, getCtaClicksData, getAllDomainHealthData, getCoreAppLastSyncedAt.
+- **Cache busting:** The 5 refresh server actions (app-usage/new-users/cta-clicks/pilot-stats/settings) now call `updateTag("ceo-data")` so the "Update" button forces fresh data immediately (Next 16's single-arg, server-action-only, read-your-own-writes invalidator — `revalidateTag` now requires a 2nd `profile` arg).
+- **Streaming:** Added route-group `src/app/(ceo)/ceo/loading.tsx` skeleton (instant nav feedback; sidebar persists from layout). Refactored the 8 heavy pages to `await getDashboardData` (cached/fast) → render shell → stream the heavy panel inside `<Suspense fallback={<CeoPanelSkeleton/>}>` (new `src/components/ceo/panel-skeleton.tsx`). Section pages (overview/acquisition/lifecycle/product/operations/revenue/organic-search/data-health) get instant loads from caching alone — no Suspense needed.
+- **No data/behaviour change:** caching/streaming only; numbers unchanged. Decisions: 5-min window + streaming (confirmed with Jacob).
+- **Checks:** tsc ✅ · eslint ✅ · vitest src/lib/ceo/data 18/18 ✅ · next build ✅ (all /ceo routes ƒ dynamic).
+
+## 2026-06-02 — New /roadmap page: Miro/Jira-style Gantt timeline (PR #322)
+
+- **Branch:** feature/roadmap-pr1-schema · **PR:** #322 (squash-merged)
+- **What:** Brand-new `/roadmap` page Jacob requested from Miro screenshots — a timeline (Gantt) board with swimlane groups and color-coded date bars you **drag to move** and **drag the edges to resize** (snap to whole days, optimistic persist). Click a bar → slide-over detail panel (Title, Description, Status, Owner, Start/End, Phase, Priority, Team, color). Add/delete items & groups, collapse/rename/recolor swimlanes, Day/Week/Month zoom, Today marker, multiple named boards with picker + inline rename.
+- **Seed:** a default "WL Marketing" board is **lazily seeded on first GET** (Email/Ads/Social Media/Reaction videos/Reviews/Lifecycle) recreating the screenshot — fully editable.
+- **Approach:** custom Gantt on Tailwind + native Pointer Events — **no new deps**, no Gantt lib (@hello-pangea/dnd is list-reorder, not time-axis drag).
+- **Schema (migration `20260602095000_roadmap_tables.sql`, APPLIED to prod):** `roadmaps` / `roadmap_groups` / `roadmap_items`, workspace-scoped RLS (`get_user_workspace_ids()`), indexes, updated_at triggers, `end_date >= start_date` CHECK. Tables hand-added to `database.types.ts`. Applied via psql over the `aws-1-eu-north-1` session pooler with `SUPABASE_DB_PASSWORD`.
+- **Code:** API `src/app/api/roadmap/**` (boards/groups/items CRUD + Zod + `resolveWorkspace` guard); lib `src/lib/roadmap/{types,colors,scale,seed,server}.ts`; UI `src/app/(dashboard)/roadmap/page.tsx` + `src/components/roadmap/{roadmap-client,gantt-timeline,roadmap-bar,item-detail-panel}.tsx`; sidebar "Roadmap" entry; `/roadmap` added to middleware `protectedRoutes`. Test `e2e/roadmap.spec.ts`.
+- **Checks:** tsc ✅ · eslint ✅ · `next build` ✅ (6 /api/roadmap routes + /roadmap page compiled; Homebrew node on PATH to dodge the Codex.app SWC-bindings issue).
+- **Deploy:** Vercel auto-deploy on merge; `/roadmap` verified live (consistent 307 → /login when unauthenticated = route present + protected).
+
+## 2026-06-02 — Roadmap AI "Update" button (PR #324)
+
+- **Branch:** feature/roadmap-update-button · **PR:** #324 (squash-merged)
+- **What:** Added an "Update" button to the /roadmap header. It reads real internal CRM data and proposes a progress status + note for every plan item; the user reviews them in a modal and applies the ones they want.
+- **Evidence sweep** (`src/lib/roadmap/evidence.ts`, read-only, via the service-role client `createSupabaseServiceClient` — needed because `dashboard_review_snapshots` isn't in the generated types): review-platform snapshots (Google Business/Trustpilot/G2/…), total emails sent, per-country + per-language outreach (`contacts.last_contacted_at` + `country_code`/`language`), `dashboard_source_accounts` integration status, app users + activation counts.
+- **Reasoning:** `POST /api/roadmap/suggest-updates` feeds items+evidence to **Claude Sonnet 4.6** (`claude-sonnet-4-6`, validated against the API; plain-JSON parse like the other `/api/ai/*` routes), returns per-item `{suggested_status, progress_note, confidence}`, validated against the item set + status enum. Grounded only in evidence → social items with no signal stay "Not started".
+- **UI:** Update button (Sparkles) → `update-suggestions-modal.tsx` (current→suggested status, editable note, confidence chip, select/clear, apply). Optimistic apply via item PATCH (`Promise.allSettled`). Bars now show a status dot; detail panel has a Progress note field; `statusStyle()` added to `src/lib/roadmap/colors.ts`.
+- **Schema (migration `20260602114700_roadmap_progress_note.sql`, APPLIED to prod via psql/aws-1 pooler):** `roadmap_items.progress_note` + `progress_updated_at`; item PATCH accepts `progress_note` and stamps `progress_updated_at`.
+- **Checks:** tsc ✅ · eslint ✅ · `next build` ✅ (`/api/roadmap/suggest-updates` compiled). Sonnet model id + ANTHROPIC_API_KEY verified live (HTTP 200).
+- **Deploy:** Vercel auto-deploy on merge; verified live (suggest-updates GET→405 = route present, /roadmap→307).
+
+## 2026-06-02 — Roadmap Kanban view toggle (PR #327)
+
+- **Branch:** feature/roadmap-kanban-view · **PR:** #327 (squash-merged)
+- **What:** Added a Timeline ↔ Kanban toggle to the /roadmap header. Kanban shows every plan item as a card in a column per status (Not started / In progress / Done / Blocked); dragging a card to another column updates the item's `status` (optimistic + persisted via item PATCH).
+- **Impl:** `src/components/roadmap/roadmap-kanban.tsx` (columns + cards via `@hello-pangea/dnd`, same pattern as the deals pipeline board). Items with null/unknown status fall into "Not started" and get an explicit status on drag. `roadmap-client.tsx`: `view` state persisted to `localStorage` (`roadmap:view`), header toggle (GanttChart/Columns3), zoom+Today are timeline-only, `onChangeStatus → saveItem(id,{status})`. Cards show swimlane + dates + AI progress note; click opens the shared detail panel.
+- **No schema change** — reuses `roadmap_items.status` (pairs with the AI Update button which sets statuses).
+- **Checks:** tsc ✅ · eslint ✅ · `next build` ✅. `e2e/roadmap.spec.ts` extended with a Kanban-toggle test.
+- **Deploy:** Vercel auto-deploy on merge (frontend-only; /roadmap stays healthy).
+
+## 2026-06-02 — Roadmap "New item" header button (PR #329)
+
+- **Branch:** feature/roadmap-add-item-button · **PR:** #329 (squash-merged)
+- **What:** Added a top-level "New item" button to the /roadmap header. Creates an item in the first swimlane (default 1-week dates) and opens the detail panel for immediate title/swimlane editing. Works in Timeline + Kanban; disabled when no groups. "Add group" demoted to a secondary button. Reuses existing `addItem(groupId)`. No schema change.
+- **Checks:** tsc ✅ · eslint ✅ · next build ✅. Deploy: Vercel auto-deploy (frontend-only).
+
+## 2026-06-02 — Roadmap Kanban tweaks (PR #331)
+
+- **PR:** #331 (squash-merged). Removed the "Blocked" column from the Kanban (blocked items fold into Not started; Blocked still selectable in the detail panel) and widened columns w-72 → w-96. Frontend-only. tsc/lint/build ✅.
+
+## 2026-06-03 — New `freemium` lifecycle stage: fix "Paying / Free" contradiction (PR #336)
+
+- **Branch:** feature/freemium-lifecycle-stage · **PR:** #336 (squash-merged, commit d042eab)
+- **What:** Jacob spotted Contacts/Companies rows showing **Lifecycle="Paying"** next to **Plan="Free"**. Root cause: `deriveLifecycleStage()` (`src/lib/wl-sync/matching.ts`) mapped *any* `active` subscription to `paying` regardless of plan. Fix splits it: active + paid plan → `paying`; active + free/unknown → new **`freemium`** stage (added `isPaidPlan()` helper).
+- **Key gotcha found:** NO sync path re-derived `lifecycle_stage` for already-linked companies — `discover-new.ts` skips them ("propagator owns them"), and `propagate-to-crm.ts` never wrote the field. So ~357 active+free rows were frozen at `paying`. Fix makes **`propagate-to-crm.ts` maintain `lifecycle_stage` on the hourly ceo-sync**, applied only when the derivation is conclusive (`past_due`/unknown preserve the existing stage). No manual backfill — rows self-heal on the next hourly run.
+- **UI:** `freemium` added to lifecycle filter dropdowns (`contacts-page-client.tsx` + `companies-page-client.tsx`), the company-detail status editor (`statuses-tab.tsx`), and the badge color ladders (`hero.tsx` + both tables) — teal, distinct from paying-emerald / trial-amber. Allowlist in `api/companies/bulk-update/route.ts` + `matching.test.ts` updated.
+- **Untouched:** 2 `paying`+null-plan rows (PBZ AB Uppsala, Mekonomen Södermalm) are `source:manual` with no Stripe link — not wl-linked, so the sync leaves them alone.
+- **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · vitest matching.test.ts 23/23 ✅ (Homebrew node on PATH to dodge the Codex.app native-bindings issue).
+- **Deploy:** Vercel auto-deploy on merge; prod deploy `d042eab` READY. **Verified healed in prod:** 0 `paying`+`free` rows remain; 473 active free users now read `freemium`; `paying` is paid-plans only (+ the 2 manual rows preserved).
+
+## 2026-06-04 — CEO `/ceo/toplists` leaderboard page (top users + top cars)
+
+- **Branch:** feature/ceo-toplists (worktree) · **PR:** (see PR link in session)
+- **What:** New `/ceo/toplists` page under the CEO dashboard with two ranked, sortable leaderboards: (1) **Top users by activity** — diagnoses (first-party), GA4 events / sessions / page views / engaged time, plus each user's most-fired event types ("Top actions" = where car selects, button clicks, etc. surface). (2) **Top cars by diagnoses** — make+model with distinct users/workshops, completion rate, avg AI causes, and top fault codes (DTCs).
+- **Impl (all reuse, minimal new query surface):**
+  - `src/lib/ceo/data/toplists.ts` — loader. Top users **reuse `getActiveUsersData`** (GA4 customUser:crm_user_id × eventName on app.wrenchlane.com, unioned with dashboard_diagnostics, internal-test excluded, already cached). Top cars = own paged query over `dashboard_diagnostics` aggregating by `metadata.car_make` + `car_model` (year = most-common + span; DTCs from `metadata.dtcs`), internal-test filtered via `isInternalTestUserOrWorkshopWith`. Wrapped in `unstable_cache` w/ `CEO_CACHE_OPTIONS`.
+  - `src/components/ceo/toplists-content.tsx` — client component; both tables sortable by clicking any numeric header (re-sorts + re-ranks, medals 🥇🥈🥉 for top 3). 5 KPI cards incl. Top user / Top car.
+  - `src/app/(ceo)/ceo/toplists/{page.tsx,actions.ts}` — mirrors active-users page (Suspense + skeleton + UpdateButton; refresh runs `core_app` sync + `updateTag(ceo-data)`).
+  - `dashboard-sections.tsx` — added `"toplists"` section key + nav entry ("Top Lists", glyph TL) right after Active Users.
+  - `ceo-legacy.css` — `.toplist-sort` / `.toplist-rank` / `.toplist-subtle` styles.
+- **Default range:** `last_30_days` (leaderboard = cumulative window; all ranges incl. all_time selectable).
+- **Design note / limitation:** GA4 events carry **no vehicle dimension**, so per-car *click* counts aren't possible — the cars leaderboard is diagnostics-driven (made explicit in the panel copy). User-level clicks/selects are surfaced via the live per-user eventName breakdown rather than guessed hardcoded event names (the codeoc app only pushes user_identified/sign_up/begin_checkout/purchase as custom dataLayer events; the rest are GA4 auto-collected).
+- **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (route ƒ /ceo/toplists). No schema change.
+
+## 2026-06-04 — Internal-test exclusions panel on /ceo/toplists + shared component (PR follow-up to #338)
+
+- **Branch:** worktree-toplists-exclusions
+- **What:** Jacob asked that the Top Lists page show the "What's filtered out of these numbers" panel at the bottom (like /ceo/app-usage), listing the excluded internal/test workshops + users. Confirmed the toplists page already *filters* internal users from both leaderboards (top cars via `isInternalTestUserOrWorkshopWith`; top users via the reused active-users loader's crm_user_id filter) — it was just missing the visible disclosure panel.
+- **Impl:**
+  - Extracted the inline exclusions panel from `app-usage-content.tsx` into a shared `src/components/ceo/internal-test-exclusions.tsx` (`InternalTestExclusionsPanel`, optional `description` override; default = the GA4-aggregate caveat). app-usage now renders the shared component (no behavior change).
+  - `toplists-content.tsx` renders the panel at the bottom with a toplists-accurate description: Top users is keyed on crm_user_id so internal accounts are dropped from the GA4 engagement columns too (not just diagnoses), and Top cars excludes internal user/workshop diagnoses.
+  - `toplists/page.tsx` now loads `listInternalTestUsers()` + `listInternalTestWorkshops()` and passes them through.
+- **Note:** other `/ceo/*` pages that filter internal traffic can now drop in `<InternalTestExclusionsPanel>` the same way.
+- **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (ƒ /ceo/toplists, ƒ /ceo/app-usage). No schema change.
+
+## 2026-06-04 — Roll out internal-test exclusions panel to all filtered /ceo pages (follow-up to #339)
+
+- **Branch:** worktree-ceo-exclusions-rollout
+- **What:** Jacob: "yes on all" — add the `InternalTestExclusionsPanel` to every `/ceo/*` page whose numbers exclude internal/test traffic. Mapped all 20 routes; 4 filtered internal users but lacked the panel: **active-users, diagnostics, new-users, workshops** (app-usage + toplists already had it; the 8 getDashboardData-only section pages + cta-clicks/conversions/reviews/etc. don't filter internal users, so left alone).
+- **Impl:** Each page's panel/loader now also `Promise.all`s `listInternalTestUsers()` + `listInternalTestWorkshops()` and wraps `<Content/>` + `<InternalTestExclusionsPanel>` in a `section-stack` div (content components untouched — `.section-stack` is grid+gap so nesting is safe). Per-page accurate copy:
+  - active-users: keyed on crm_user_id → internal accounts dropped from GA4 engagement columns too.
+  - diagnostics + workshops: have a `showInternal` toggle → panel rendered only when `!showInternal`.
+  - new-users: first-party counts filtered; iOS/Android downloads + web first-visits are GA4/app-store aggregates that can't be mapped to the list (noted).
+- **Checks:** tsc ✅ · eslint ✅ (0 errors) · `npm run build` ✅ (ƒ active-users/diagnostics/new-users/workshops). No schema change.
+
+## CEO active-users / toplists — app-user identity fallback (2026-06-09)
+
+- **Branch:** worktree-ceo-app-user-identity → PR TBD
+- **Why:** CEO asked "who is doing what" — active app users with no CRM contact (e.g. workshop sub-users) rendered as a bare `crm_user_id` hex + "Not in CRM yet", hiding the person and their workshop.
+- **What:** Added a 3-tier identity resolution to the active-users loader (reused by Top Lists):
+  1. `contact` — matched `contacts.wl_user_id` (unchanged).
+  2. `app` (NEW) — no contact, but the Cognito sub exists in `dashboard_users`; surface `metadata.username` + `user_role` + `company_name`, keyed to `workshop_id`.
+  3. `none` — bare sub, still "Not in CRM yet".
+  - New `resolveAppUsers()` in `active-users.ts`; new row fields `identitySource`, `appUsername`, `workshopId` (also on `TopUserRow`).
+  - UI: `userLabel` shows `username` / "App user · {role}"; Company cell now links to `/dashboard/workshops/{workshopId}` for both contacts and app-only users.
+  - Coverage: 774/776 active users have a `company_name`, 684/685 workshops resolve — so nearly every active row now shows a person + linked workshop.
+- **No schema change.** Two batched `.in()` reads (dashboard_users + existing companies), same paging pattern.
+- **Checks:** `tsc --noEmit` ✅, `eslint` (changed files) ✅, `next build --webpack` ✅ (Homebrew node — Codex node can't dlopen swc).
+
+## Activation Plan page /activation (2026-06-10)
+
+- **Branch:** feature/activation-plan → PR #348 (merged), migration applied to prod, deploy verified
+- **What:** New sidebar page "Activation Plan" — roadmap-style Gantt on a relative **days-since-signup** axis (day 0 = signup) mapping every post-signup touchpoint, so free→paying activation work is visible and editable in one place.
+- **Schema:** `activation_plans` / `activation_plan_groups` / `activation_plan_items` (mirrors roadmap trio; RLS + updated_at triggers). Items: `day_start`/`day_end` ints (inclusive, CHECK ≥0 and ordered), `trigger_type` `day_offset`|`event`, `anchor_event`, `status`, `cio_campaign_id`, `link_url`. Migration `20260610100000_activation_plan_tables.sql` applied via Management API.
+- **API:** `/api/activation` (+`[id]`, `groups`, `groups/[id]`, `items`, `items/[id]`) — same resolveWorkspace + Zod pattern as `/api/roadmap/*`. GET lazy-seeds a "User Activation" board.
+- **UI:** `src/components/activation/*` cloned-and-adapted from roadmap (decision: clone, don't refactor shared lib — zero regression risk on /roadmap). Day-offset scale lib `src/lib/activation/scale.ts`; drag/resize clamped at day 0; event-triggered items dashed + ⚡; statuses Live/Planned/Idea/Paused with header legend; reuses roadmap color tokens + SlideOver.
+- **Seed:** audited inventory (codeoc-web-form + Customer.io + backend research): 5 channels / 17 touchpoints incl. gaps marked Idea — notably **no review-ask prompt exists in the app today**.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node). `/activation` live on prod (307→login unauthenticated).
+- **Next (PR 2):** Customer.io campaign import + per-item metrics from `dashboard_metric_snapshots`, drift flag for paused/deleted campaigns. Optional PR 3: behavioral overlay (median days-to-first-diagnosis, trial-end markers).
+
+## Activation Plan — journey scenario simulations (2026-06-11)
+
+- **Branch:** feature/activation-scenarios → PR #350 (merged), migration applied to prod, deploy verified
+- **What:** Scenario chips above the /activation timeline filter the board to one user journey with **step numbers in day order** (bars + left column), so a journey reads 1→2→3. Six seeded journeys: Happy path free→paying · Abandoned checkout · Signs up never activates · Power free user hits limits · Trial ends without converting · Paying user→advocate.
+- **Schema:** `activation_plan_scenarios` (name/description/color/sort, RLS) + `activation_plan_items.scenario_ids UUID[]` — membership array, not FK; scenario DELETE prunes ids from items. Migration `20260611090000_activation_plan_scenarios.sql` applied via Management API (Jacob approved in chat).
+- **API:** `/api/activation/scenarios` (+`[id]`); items accept `scenario_ids`; GET lazy-seeds the 6 defaults per plan when it has items but no scenarios — tags items by seed title, and inserts 3 journey touchpoints missing from the board: Checkout started (Live), Abandoned-checkout recovery email (Idea — gap), Trial-ending reminder email (Idea — gap). Deleting every scenario resets to defaults on next load (documented behavior).
+- **UI:** chip bar with description + step count; active journey hides empty lanes + re-fits range; scenario ⋯ menu (rename/description/color/delete); membership checkboxes in touchpoint panel; touchpoints created while a journey is open are auto-tagged to it.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node). Deploy verified via 405 on GET /api/activation/scenarios (route exists only in new build).
+
+## 2026-06-11 — Feature Usage page + new user_stats export ingestion (PR #352)
+
+- **Branch:** `feature/feature-usage-page` · squash-merged as PR #352
+- **Why:** CTO expanded the codeoc S3 export's `user_stats.json.gz` (detected by diffing against the 2026-06-03 baseline): `login_history` (last 30 login timestamps/user, 693/786 users, events back to 2025-03), per-feature snapshot counters (diagnostics, chat, **AI search**, **VRM lookups**, **InfoPro vehicles** — most-used feature at 299 users, **Motor vehicles** — all four brand-new dimensions), `churned_at` (250 users), `has_used_trial`. Also **removed**: legacy `created_at` alias + `workshop_activated_at` (the latter was never populated, so no-op).
+- **Incident found & hardened:** the removal of `created_at` silently wiped `dashboard_users.created_at` for 751/818 users over two hourly syncs — the upsert's wholesale metadata replace cleared `user_created_at_source`, so the next merge treated the preserved value as non-canonical. `signed_up_at` survived (earliest-wins). `mergeExistingUserCreatedAt` now re-stamps `user_created_at_source`/`signed_up_at_source` from the *merged* values (regression tests added). The wiped created_at values are unrecoverable, but nothing user-facing reads them anymore (workshops member list switched to `signed_up_at`; active-users already read `contacts.created_at`; new-users uses `signed_up_at`).
+- **Schema:** `20260611120000_feature_usage_and_user_logins.sql` applied to prod via Management API — `dashboard_user_logins` (PK user+timestamp, insert-ignore accumulation), `dashboard_feature_usage` (PK user+feature+granularity+period, last-write-wins within a period), `churned_at` on dashboard_users + dashboard_workshops.
+- **Sync:** core-app connector parses all new fields; `buildUserLoginRows` + `buildFeatureUsageRows` builders; workshop `churned_at` = owner-only (mechanic churn must not mark the workshop); propagate-to-crm copies workshop churned_at → `companies.churned_at` (first real feed for the Field Routes lapsed pool).
+- **New page:** `/dashboard/feature-usage` (sidebar: "Feature Usage", glyph FU) — login-users vs feature-events bars per bucket, per-feature adoption bar list, per-bucket table, sortable top-50 users drilldown (links to /dashboard/workshops), sparse monthly InfoPro/Motor panel. Internal-test exclusion (flagged users + internal workshops). Stockholm ranges, seeded buckets, 5-min ceo-data cache. Client-safe constants split into `src/lib/ceo/feature-usage-shared.ts` (loader graph pulls googleapis → can't be imported from "use client").
+- **Semantics caveat (by construction):** export counters are "count on the user's last active day per feature" — hourly syncs capture effectively every active day going forward, but **feature history starts 2026-06-11**; logins backfill ~14 months.
+- **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · vitest 85/85 ✅. Deploy verified + manual core_app sync triggered via the pg_cron job command.
+- **For the CTO:** `user_created_at` is now only 8% populated (same 67 rows that have name/phone/trial_end — looks like a partial join in the new export); ask to populate it for all users. `symptoms` still 0%. `organization_number` is dirty (contains phone numbers). `email_verified` + signup IP still not exported.
+
+## Activation Plan — Miro-style timeline redesign (2026-06-11)
+
+- **Branch:** feature/activation-timeline-redesign → PR #354 (merged). UI-only, no schema/API changes.
+- **Why:** Jacob: the Gantt/swimlane layout read like a planning tool; /activation is an as-is overview of actions actually firing at users. Reference: Miro timeline template screenshot.
+- **What:** New `ActivationCanvas` replaces the Gantt — one central days-since-signup axis; single-day touchpoints = cards floating above/below the axis, stem-connected to colored dots on their day (greedy alternating-side level packing, no overlaps); multi-day touchpoints = phase bands in a strip under the axis (row packing). "Day 0 · Signup" origin marked. Drag-editing removed entirely — day edits via modal only.
+- **Modal:** clicking any card/band opens a **centered modal** (`ActivationItemModal`) replacing the right slide-over: read view (title, channel chip, status pill, day, trigger w/ anchor event, description, member scenarios, cio id, link) with Edit behind a button; brand-new touchpoints open straight in edit mode; Escape closes.
+- **Channels:** moved to a legend cluster in the scenario strip — chips open the existing rename/recolor/delete popover; per-lane add buttons + "Add channel" header button gone. Scenario chips/step numbers/zoom/Day 0 unchanged.
+- **Removed:** activation-timeline.tsx, activation-bar.tsx, activation-item-panel.tsx.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (Homebrew node).
+
+## 2026-06-11 — CORRECTION to the PR #352 entry (created_at "wipe" never happened)
+
+- Jacob's CTO disputed the "export removed created_at" claim. Verified against `dashboard_raw_metric_rows` (raw user_stats payloads captured every hourly sync since 2026-04-24): **`created_at` and `workshop_activated_at` were NEVER present in the export** — 0 payloads carry either key in the entire recorded history. They are legacy optional fields in the CRM's own `UserStatsRecord` type, not fields the CTO removed.
+- Consequently **no wipe occurred**: `dashboard_users.created_at` at 67/818 is its steady state, exactly tracking `user_created_at`'s sparse population (0 in April → ~50 from May 4 → 67 now). The "751/818 users wiped" claim in the PR #352 description/commit message is wrong; misleading code comments corrected in this PR.
+- Also corrected: the CTO's expansion (login_history + feature counters) first appears in payloads on **2026-06-10**, not 06-11.
+- Everything else in the PR #352 entry stands: new tables + page + sync verified with real data; the merge-hardening stays as a defensive guard (the two-sync stamp-clobber wipe is mechanically real if a source field ever vanishes — it just never has); the workshops member list switch to `signed_up_at` is an improvement over a column that was always ~92% empty, not a regression fix.
+
+## Calls overview — call lists, logging, feedback triage (2026-06-11)
+
+- **Branch:** worktree-calls-page-pr1-schema → PR #356 (merged). Built 2026-05-27 in a worktree, shipped today after sitting unmerged for two weeks (rediscovered via memory when Jacob asked about the "call list" page).
+- **What:** "Field Routes for the phone" — `/calls` overview (stat cards + recent-call feed + call-lists grid), `/calls/lists/[id]` worklist (`tel:` links, progress, prospect/customer/uncalled filters), `/calls/feedback` triage, call-logger drawer (outcome chips, notes, duration, callback, customer-only feedback sub-form), sidebar Phone entry. Backend: `logCall` mirrors `logVisit` (activity insert → last_contacted_at/lead_status bump → not_interested DNC → callback task → feedback rows → enroll-on-outcome via `enrollContacts`), 7 `/api/calls/*` routes. Pure decision helpers in `src/lib/calls/decision.ts` (20 vitest tests).
+- **Schema (applied to prod via Management API):** `20260527000000_activities_outcome.sql` (promotes orphaned outcome column into history + widens CHECK with left_voicemail/callback_scheduled/wrong_number — prod had 0 non-null outcomes so the swap was safe), `20260527000100_contact_lists_purpose.sql` (purpose default 'email'), `20260527000200_call_feedback.sql` (new table + RLS). All three verified present.
+- **Rebase note:** ~40 PRs behind; only conflict was lucide imports in sidebar.tsx. database.types.ts auto-merged.
+- **Behavior note:** enroll-on-outcome only fires if `workspace.settings.calls.sequence_by_outcome` is configured; otherwise calls just log + bump status. Deferred (future PR): `call_sessions` + VoIP webhook (logCall reserves metadata.provider/provider_call_id/recording_url).
+- **Checks:** `next build` ✅ · tsc ✅ · eslint ✅ · vitest 20/20 ✅ · `/calls` HTTP 200 on prod.
+
+## Activation Plan — 4-week view, provenance notes, Customer.io email content (2026-06-11)
+
+- **Branch:** feature/activation-source-and-cio → PR #360 (merged), migration applied to prod (backfill verified: 20/20 items noted), deploy verified
+- **4-week view:** computeRange anchors on point touchpoints + span starts, 4-week minimum (was 6); long spans clipped at the visible edge with a "→ day N" marker instead of stretching the axis.
+- **Provenance:** new `activation_plan_items.source_note` (migration `20260611130000_activation_item_source_note.sql` + title-matched backfill, NULL-guarded). Modal shows "Where this info comes from"; editable in edit mode; seeds carry notes for fresh workspaces. Categories: verified-in-app-code (file refs) / verified data milestone / inferred backend / assumed Customer.io journey / Suggested-by-Claude (all Planned+Idea items are explicit Claude proposals from the 2026-06-10 audit).
+- **Customer.io content:** read-only App API helpers `src/lib/activation/cio.ts` (reuses CUSTOMER_IO_APP_API_KEY/_REGION from the metrics sync) + routes `/api/activation/cio/campaigns` (list) and `/[id]` (email actions w/ subject/from/body + fly.customer.io deep link via /workspaces). Modal: edit mode has a campaign picker (text fallback when API unavailable); read view renders live subject + sandboxed-iframe body + "Open in Customer.io". Never writes to Customer.io.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅. Deploy verified via 401 on the new-only /api/activation/cio/campaigns route.
+
+## Smart call lists — app-usage filters + warm-lead presets (2026-06-11)
+
+- **Branch:** feature/smart-call-lists → PR #362 (merged). Follows the Calls ship (PR #356) same day.
+- **Why:** Jacob wants one-click call lists of really warm contacts — e.g. "signed up 14 days ago, free trial just ended" — plus arbitrary filters on plan / days-since-signup / country / diagnoses / app events.
+- **Schema:** `20260611140000_contacts_signed_up_at.sql` applied to prod — `contacts.signed_up_at` + partial index, backfilled 792 rows from `dashboard_users.signed_up_at` (join on `internal_user_id = wl_user_id::text`). propagate-to-crm now refreshes it hourly (conditional spread — never nulls on a sparse payload).
+- **Filter engine:** `filter-query.ts` gains app-user fields (signed_up_at, user_plan_type, user_subscription_status, diagnostics_total, diagnostics_last_30d, login_count, credits_remaining, last_active_at), `phone` has/has-no, `wl_user_id` is-app-user, and `gte`/`lte` operators. PLAN_TYPE_OPTIONS / SUBSCRIPTION_STATUS_OPTIONS grounded in prod distinct values. FilterRow renders selects/numeric/date inputs for the new fields. These filters also work on `/lists` dynamic lists for free.
+- **UI:** new `src/components/calls/new-call-list-modal.tsx` replaces the bare inline modal — 6 smart presets (Free trial just ended 13–17d/still-free = 92 today; In trial now = 27; New signups 7d ≈ 163; Engaged free ≥3 diagnoses = 88; Gone quiet; Paying check-in), editable FilterBuilder, debounced live "N contacts match right now" count (client-side `buildFilterQuery` head+exact), "only contacts with a phone number" toggle. Creates `is_dynamic` lists so cohorts roll forward daily.
+- **Data gap for CTO:** only ~63/818 app users have a phone number on their contact (S3 export includes phone for ~67 users only) — call lists of app users are mostly phone-less until the export adds phone for everyone.
+- **Checks:** `next build` ✅ · tsc ✅ · eslint ✅ · vitest 285/285 ✅ (interpolation fixture updated for the new column) · migration + backfill verified on prod.
+
+## 2026-06-11 — Remove the Deals feature from the CRM UI (PR #357)
+
+- **Branch:** remove-deals-page (worktree) · **PR:** #357 (squash-merged, commit 5c519ee) · deploy READY, /deals 404s in prod
+- **Why:** Jacob: "remove the deals page from the crm … i am not sure it works or doing any good anyway" (screenshot showed the empty Deals pipeline page).
+- **What:** Full UI removal, not just the page — `/deals` kanban + all 7 `src/components/deals/*` components, sidebar nav item, `/deals` in middleware protectedRoutes, dashboard (email-campaigns) Pipeline Value card + Pipeline & Deals section + ~7 deals/pipelines queries in `/api/dashboard`, company-detail Deals tab + Add Deal button/modal, companies-list Deals column (saved column prefs self-heal via `loadColumnIds` filter), contact-detail Deals sidebar card, `/settings/pipelines` page + its /settings card, activity-feed Deals filter, default "Sales Pipeline" insert in the auth callback, `DealStageBadge`, `e2e/deals.spec.ts` (+ deals refs in smoke/dashboard specs).
+- **Kept deliberately:** DB tables `deals` / `pipelines` / `deal_contacts` untouched (no data loss, feature restorable from git). `tasks.deal_id` column + GDPR-forget `deal_contacts` cleanup stay (tables still exist). `merge_companies` RPC still moves deals rows (applied migration left alone). Historic `deal_stage_change` activities still render readable titles.
+- **Merge-race note:** PR #356 (Calls page) landed on main between branch-off and merge; squash 3-way merged cleanly — verified main has Calls nav AND no Deals.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅ (route list confirms /deals + /settings/pipelines gone) · prod smoke: /deals → 404, /contacts → 307 login redirect.
+
+## "Call list" badge on /lists (2026-06-11)
+
+- **Branch:** feature/call-list-badge → PR #365 (merged). Tiny UI follow-up to PR #362 after Jacob confirmed call lists should be reusable from /lists for sequences (they already are — same contact_lists table, /lists doesn't filter purpose).
+- Emerald "Call list" chip (Phone icon) next to Dynamic/Static: on the lists table rows, and on the list detail header where it links to the calling worklist `/calls/lists/[id]`.
+- **Checks:** `next build` ✅ · tsc ✅ · eslint ✅.
+
+## List filter dropdown on /contacts (2026-06-11)
+
+- **Branch:** feature/contacts-list-filter → PR #367 (squash-merged) · prod deploy verified.
+- **What:** Jacob wanted to scope the Contacts table by any contact list. Added a single-select **"All lists"** MultiSelect at the front of the `/contacts` filter row; picking a list narrows the table + count to that list's members, AND-combined with the other dropdowns.
+- **Impl (handles 10k+ member lists — no `.in(id,…)` URL blowup):**
+  - `lists/filter-query.ts` — extracted `applyListFilters(query, filters)` out of `buildFilterQuery` (pure refactor; buildFilterQuery now calls it) so the same dynamic-list semantics can layer onto any query.
+  - `contacts-page-client.tsx` — new `list_id: string[]` filter (single via `.slice(-1)`). In `fetchContacts`: **static** lists inner-join `contact_list_members!inner(list_id)` + `.eq(...)`; **dynamic** lists apply `applyListFilters` with the list's stored filters. Threaded into `currentFilters`, `hasActiveFilters`, deps (`filters.list_id`, `lists`). Had to keep `selectExpr` as string-literal branches (template literal widens to `string` and breaks Supabase's `.select()` row-shape inference) + cast `data` via `unknown` (the optional embed defeats the compile-time parser).
+  - `contacts-filter.ts` — added `list_id` to `ContactFilters`; `resolveContactIdsByFilters` fetches the list row and mirrors the same static-join / dynamic-filter constraint, so bulk "select all matching" stays consistent with the visible set.
+- **Decision:** single-select (one list at a time) — combining multiple dynamic lists' stored filters is ambiguous (AND vs OR).
+- **Checks:** tsc ✅ · eslint ✅ · GH Actions Build & Lint ✅. Local `next build` couldn't run (sandbox native-binary signing issue — Turbopack SWC / lightningcss); Vercel **Preview** check failed on the pre-existing project-wide `/calls/feedback` prerender error (Supabase env vars are Production-scoped, so every preview deploy errors) — unrelated to this diff; **Production** build is healthy and was verified post-merge.
+
+## Activation Plan — full-width canvas + inline Customer.io picker (2026-06-11)
+
+- **Branch:** feature/activation-fit-width → PR #369 (merged). UI-only.
+- **Fit-to-width:** ActivationCanvas measures its scroll container (ResizeObserver); effective px/day = max(zoom preset, containerWidth/rangeDays) so the 4-week window always fills the viewport — fixes the left-cramped timeline Jacob screenshotted. Zoom presets now act as a minimum density.
+- **Customer.io visibility fix:** the modal's Customer.io section only rendered when cio_campaign_id was already set — nothing was linked, so Jacob never saw it. Email-channel touchpoints (group name matches /email|customer/i) now render the section unlinked with an **inline campaign picker in the read view**; selecting saves cio_campaign_id immediately and the live subject/body + deep link load in place. Campaign list fetch now triggers on edit-mode OR unlinked-email read view; amber hint when the API is unavailable.
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅.
+
+## 2026-06-09 — Manual inbox replies exempt from send-interval rate limit (PR #344)
+
+- **Branch:** fix/inbox-reply-bypass-send-interval · **PR:** #344 (merged + deployed)
+- **What:** Jacob's manual replies from the inbox were hitting "Send rate limit: minimum 600 seconds between sends" — the per-account `min_send_interval_seconds` throttle in `sendEmail()` applied to every send path. Sequences should keep the throttle; human-paced replies shouldn't.
+- **Impl:**
+  - `src/lib/gmail/send.ts` — new opt-in `bypassSendInterval?: boolean` on `SendEmailParams` (default false ⇒ sequence sends unchanged); the interval guard is skipped when set. Daily cap (`max_daily_sends`) still applies to all sends.
+  - `src/app/api/inbox/[id]/reply/route.ts` — the only manual-send call site; now passes `bypassSendInterval: true`.
+- **Note:** `sendEmail()` has exactly two callers (inbox reply + process-emails cron), so the flag cleanly partitions manual vs automated. A manual reply still bumps `daily_sends_count`/`updated_at`, so it pushes the next *sequence* send out by the interval — pre-existing behavior, left alone.
+- **Checks:** tsc ✅ · eslint ✅ · `npm run build` ✅ · deploy verified live. No schema change.
+
+## Activation Plan — Check Customer.io reconciliation + campaign metrics (2026-06-11)
+
+- **Branch:** feature/activation-cio-verify → PR #373 (merged). No schema changes.
+- **Why:** Jacob linked "Trial-ending reminder" (marked Idea/doesn't-exist by the audit) to a RUNNING Customer.io campaign — the audit could read app code but not Customer.io, so email-side statuses were assumptions. The board now verifies itself.
+- **Verify route:** read-only `GET /api/activation/cio/verify?plan_id=` — linked items: campaign state vs board status (running→Live, draft→Planned, stopped/archived→Paused); unlinked email items: best-match suggestion via token-prefix scoring (`src/lib/activation/cio-verify.ts`, ≥0.3 threshold, suggestions never auto-applied); flags no-counterpart items + campaigns absent from the board.
+- **UI:** "Check Customer.io" header button → results modal (`activation-cio-check.tsx`): Fix / Link+fix-status / Add-to-board per row + Apply-all; fixes stamp source_note "Verified in Customer.io on <date>: campaign X is <state>"; imports land day 0 with a placement reminder. All writes via existing item CRUD.
+- **Metrics:** linked touchpoint modal shows sent/delivered/open%/click%/converted (last 90 days) aggregated from dashboard_metric_snapshots (RLS allows authenticated read — verified).
+- **Checks:** tsc ✅ · eslint ✅ · `next build --webpack` ✅.
+
+## Activation Plan — auto-apply Customer.io fixes + subject matching (2026-06-11)
+
+- **Branch:** feature/activation-auto-link → PR #375 (merged). No schema changes.
+- **Why:** Check Customer.io was suggest-only; Jacob: "why have you not linked them?" — the check should fix, not assign homework.
+- **What:** running the check now auto-applies state mismatches + link suggestions scoring ≥ AUTO_APPLY_SCORE (0.45), toasts "Auto-applied N fixes", pre-marks them done in the modal ("N auto-fixed · M to review"); matching upgraded to also score against each unclaimed campaign's live email subject lines (getCampaignEmails, ~5 min cache) so code-named campaigns ("P1") match via subject.
+- **Checks:** tsc ✅ · eslint ✅ · build ✅.
+
+## Activation Plan — re-audit on latest app code + fact corrections (2026-06-11)
+
+- **Why:** Jacob asked whether the in-app audit used latest GitHub code — it didn't: local codeoc-web-form clone was 125 commits / 4 weeks stale (HEAD 2026-05-12). Clone fast-forwarded to origin/main (2026-06-10, read-only fetch/ff).
+- **Re-audit verdict:** board essentially correct — paywalls, quotas core, trial redirect, GA4 events, InfoPro dialog unchanged; still NO review prompt (gap confirmed on latest code). New since audit: PostHog analytics (consent-gated autocapture, diagnostic_started/analyzed events, session replay) — analytics layer, no new touchpoint card.
+- **Corrections (Jacob approved, applied to prod rows + this seed fix):** Get Started dialog 6→10 sections; free quotas +20 AI searches/day; onboarding carousel 5→6 steps; source notes restamped "re-checked 2026-06-11 against latest GitHub main".
+- **Branch:** fix/activation-seed-reaudit → PR #377 (seed text + log).
+- **Process memory saved:** always fetch + compare local clones vs origin before code audits; stamp findings with audited commit.
+
+## Activation Plan — campaign trigger info in modal (2026-06-11)
+
+- **Branch:** feature/activation-cio-trigger → PR #378. No schema changes.
+- **Why:** Jacob asked whether "Trial ended, back to Free" (campaign 44) is configured in Customer.io to send after the 14-day trial — the modal showed content but not the trigger.
+- **What:** `getCampaignEmails` now returns `CioCampaignDetail` (event_name, trigger_segment_ids, first_started, created/updated from GET /v1/campaigns/{id}); modal renders "Starts when the app sends the event `X`" (or trigger segments), first-started date, and an explicit caveat that in-journey delays aren't exposed by the API (deep link is source of truth for timing).
+- **Checks:** tsc ✅ · eslint ✅ · build ✅.
+
+## PostHog — 8th sync source + Product Analytics dashboard page (2026-06-15/16)
+
+- **PRs:** #392 (connector, merged + deployed + cron live) · #394 (dashboard page, merged + deployed). #393 closed (conflicted after #392 squash; superseded by rebased #394).
+- **Discovery:** codeoc already streams events to **PostHog Cloud EU** (project 196292) from both the frontend (`posthog-js`) and a backend Python SDK, identifying on the **Cognito sub** (= `contacts.wl_user_id`) and grouping by `workshop_id` ($group_0). So PostHog persons join 1:1 to CRM contacts/companies — real per-user/per-account behaviour, unlike GA4 (anonymous) or core_app (DB outcomes).
+- **Connector (PR #392):** `src/lib/ceo/sync/sources/posthog.ts` — 8th `SourceConnector` via the HogQL Query API; daily events/active_users/pageviews/sessions (+ optional `POSTHOG_TRACKED_EVENTS` breakout). Registered in `sources.ts` + `sources/index.ts`. Hourly pg_cron `ceo-sync-posthog-hourly` at H:47 (applied to prod Supabase, reusing existing SYNC_SECRET server-side). Writes to `dashboard_metric_snapshots` + `dashboard_raw_metric_rows`. First run verified: success, real data.
+- **Env (Vercel):** `POSTHOG_API_KEY` (phx_ personal key, Query Read), `POSTHOG_PROJECT_ID=196292`. Gotcha: Vercel sanitizes spaces in Key names → must be exactly those names; Sensitive vars can't be `vercel env pull`'d.
+- **Page (PR #394):** `/dashboard/product-analytics` ("Product Analytics", nav glyph PH). **Live** HogQL loader `src/lib/ceo/data/product-analytics.ts` (queried at render, cached 5 min via CEO_CACHE_OPTIONS — not pre-synced; funnels too dimensional to flatten) + server content `src/components/ceo/product-analytics-content.tsx`. Exposes: overview KPIs + stickiness, diagnostic activation funnel (vehicle_selected→…→completed, live shows 4→1 drop-off), monetization activity (incl. upgrade_started = intent Stripe misses), per-workshop engagement (group_0 joined to `dashboard_workshops`), top events (incl. autocapture), `$exception` errors, segments by plan/country. **Staff excluded** via `coalesce(person.properties.privilege,'') NOT IN ('admin','staff')`. Extracted reusable `runPostHogQuery` from the connector.
+- **Deferred:** retention cohorts (only ~8 days history, data starts 2026-06-08); PostHog MCP not connected (needs `npx @posthog/wizard mcp add` + session restart); per-workshop drill-down + plan/country page filter.
+- **Checks:** tsc ✅ · eslint ✅ · connector tests 4/4 ✅ · `npm run build` ✅ (route compiled) · live HogQL preview returned real numbers · prod deploy verified (commit status success). Preview-build failures seen were the pre-existing `/calls/feedback` prerender bug (no Supabase env in preview), unrelated.
+
+---
+
+## In-CRM Calling Pipeline (Phase 1) — 2026-06-23 — branch feat/call-pipeline
+
+**What was built:** Click-to-call directly from the CRM with AI summarization, ported from the result-insurance (Kundbolaget/Hantverkarbolaget) stack — 46elks (telephony) + Deepgram (STT) + Claude (summary). Repos stay fully independent (code copied, not shared).
+
+- **Flow:** Click "Call" on a contact/worklist → 46elks rings the agent's own phone → bridges to the contact (caller ID = workspace number) → records → on hangup, Deepgram transcribes → Claude (Sonnet tool-use) returns summary + key takeaways + sentiment + suggested outcome + suggested follow-up email + suggested tasks + product feedback → auto-logs a `call` activity (non-destructive) and surfaces a review card.
+- **DB:** new `call_sessions` table (migration 20260623120000) — telephony + recording + transcript + ai_json; links to the `activities` row. RLS workspace-scoped. `transcript`/`live_tips` columns reserved for a future real-time in-call coaching phase. Applied to prod via pooler (aws-1-eu-north-1).
+- **API routes:** `POST /api/calls/dial` (places bridge call, respects nix_blocked/do_not_contact w/ override), `POST /api/calls/webhook/hangup` (public, secret-gated, service client, runs processing via `after()`), `POST /api/calls/process` (manual retry), `GET /api/calls/session/[id]` (UI poll), `GET/POST /api/settings/calls` (agent phone + caller ID + master switch, merged into settings.calls).
+- **Lib:** `src/lib/calls/{phone,elks,deepgram,ai-summary,process}.ts`; extended `decision.ts` CallSettings.
+- **UI:** `CallNowButton` + live drawer + AI review card (editable follow-up email → existing send-email endpoint; suggested tasks → /api/tasks). Wired into contact profile + call worklist. New `/settings/calls` page + settings card.
+- **Env (Vercel prod+dev):** ELKS_API_USERNAME/PASSWORD, DEEPGRAM_API_KEY copied from result-insurance; CRM_CALL_FROM_NUMBER=+46766860335 (dedicated to Wrenchlane CRM); CALL_WEBHOOK_SECRET generated. ANTHROPIC_API_KEY already present.
+- **Build:** `tsc --noEmit` clean, `eslint` clean, `next build` OK (all /api/calls/* routes compiled).
+
+**Needs Jacob:** set your cell number at /settings/calls before placing a live call. Known limitation: only ~63/818 app users have a phone in the CRM (export gap) — dialer works today for those; "call all users" scales once the backend export adds phones.
+
+**Phase 2+ (prepped, not built):** real-time in-call AI tips (streaming path — call_sessions.transcript/live_tips reserved); accept-outcome→sequence enrollment from the review card.
+
+---
+
+## In-CRM Calling — post-launch fixes (first real calls) — 2026-06-24
+
+Follow-ups after Jacob's first live calls on the Phase 1 pipeline above. All merged + deployed same day.
+
+- **Deepgram 401 / processing failed (no PR — env fix).** First call recorded fine but processing failed with `Deepgram HTTP 401 INVALID_AUTH`. Root cause: the `DEEPGRAM_API_KEY` copied from result-insurance's **Vercel** env was a stale 42-char value (RI's edge functions read the real key from **Supabase Vault**, so the Vercel copy was never exercised). The correct key is the clean 40-char Vault value (verified 200 against `GET api.deepgram.com/v1/projects`). Replaced `DEEPGRAM_API_KEY` in crm-for-saas Vercel (prod+dev) and redeployed. Lesson: for RI-sourced secrets, the Vault is the source of truth, not RI's Vercel env. (The auto-mode classifier blocks reading another project's `vault.decrypted_secrets` as "credential exploration" — Jacob ran the read himself with `!`.)
+- **PR #411 — Deepgram language fix (garbled Swedish).** First Swedish call transcribed as "fragmented Swedish/Dutch/English". Cause: Deepgram was on `nova-3` + `language=multi`, whose multi mode covers ~10 languages and **excludes Swedish**. Switched to **`nova-2`** (broadest coverage; RI's proven Swedish model), pin the contact's `language` when it maps to a supported Deepgram code (sv/da/no/fi/de/en/nl/fr/es/it/pt), else enable `detect_language=true`. `src/lib/calls/{deepgram,process}.ts`.
+- **PR #412 — bilingual AI output.** Per Jacob: Swedish for Swedish contacts, English for everyone else. `summary` is always English; new `summary_native` holds the Swedish version **only** for Swedish contacts (else ""); the suggested follow-up email is Swedish for Swedes / English otherwise; key takeaways stay English. "Swedishness" decided in `process.ts` from contact.language → country_code (contact then company) → else the model infers from the transcript. Review card renders an extra "Svenska" block. `src/lib/calls/{ai-summary,process}.ts`, `src/components/calls/call-now.tsx`.
+- **PR #413 — Recent calls → contact links.** Each row in the `/calls` overview "Recent calls" list now links to `/contacts/[id]` (when the call has a contact) so you can jump to the contact and see the full call log. `src/app/(dashboard)/calls/page.tsx`.
+
+**Checks:** each PR `tsc --noEmit` + `eslint` + `next build` clean; all merged via squash and verified live on production.
+
+---
+
+## Contact + Company website field, with AI auto-discovery — PR #417 — 2026-06-24
+
+Website was unsurfaced on both profiles. Companies had `website` (edit-drawer + hero when set) but no add-affordance when empty; contacts had no `website` column at all (so the contact in Jacob's screenshots — a Gmail address with "No company" — showed nothing).
+
+- **Migration `20260624130000_contacts_website.sql`** — `ALTER TABLE contacts ADD COLUMN website text`. Applied to prod via psql (pooler host `aws-1-eu-north-1.pooler.supabase.com`).
+- **`src/lib/enrich/find-website.ts`** — discovery helper. If the contact has a custom (non-free) email domain, that domain *is* the site (no API call). Otherwise Claude `claude-sonnet-4-6` + the `web_search` server tool finds the official site from name + city/country, returning `{found, website, confidence, reasoning}` via a `report_website` client tool. Free-provider domain list (gmail/hotmail/telia/etc.) gates the shortcut.
+- **`POST /api/enrich/find-website`** — workspace-scoped lookup for a contact or company (no DB write; the client persists the chosen result so a wrong guess is editable). For a contact, borrows the linked company's name + location to make the search resolvable. `maxDuration = 60`.
+- **Contact profile** — new **Website** field (clickable link / inline edit / **Find** button that auto-discovers + saves). `WebsiteField` component in `contact-detail-client.tsx`.
+- **Company About panel** — **Website** row in Details with the same **Find** button.
+
+Decision: used `claude-sonnet-4-6` to match the project's other AI-helper endpoints (call summaries, inbox drafts, forums) — low-volume manual lookups where Sonnet + web search is the right cost/quality point.
+
+**Checks:** `tsc --noEmit` clean, `eslint` clean, `next build --webpack` green (`/api/enrich/find-website` compiled), smoke 8/8. Merged squash (`440101e`), deploy verified live (root → 307 /login).
+
+---
+
+## Website auto-discovery — liveness verification fix — PR #425 — 2026-06-24
+
+Follow-up to PR #417 (same day). The **Find website** button returned a plausible-but-dead domain — for "Salon Tehoauto – Huoltokorjaamo Saari Oy" it filled `www.huoltosaari.fi` (expired cert / parked "No active website" placeholder) instead of the real live site `autokorjaamoturku.fi`.
+
+- **`checkLiveness(url)`** in `src/lib/enrich/find-website.ts` — fetches the candidate (https→http fallback, 9s timeout, realistic UA) and classifies `live` / `dead` / `unknown`. Dead = DNS/TLS/connection failure, 404/410/5xx, parked-page content signatures ("no active website on this domain", "domain for sale", host default pages), or expired-TLS + near-empty body. Unknown = 401/403/429 (bot-blocked) or empty body on a valid cert (possible SPA) — kept only as a low-confidence fallback.
+- **`findWebsite()`** verifies every candidate; dead domains go on a reject-list and the model searches again (≤4 attempts). The custom-email-domain shortcut is verified too.
+- **Gotcha (documented):** server-side `web_search` turns cannot be continued across messages — replaying the assistant turn + `tool_result` throws `container_id is required when there are pending tool uses generated by code execution with tools`. Fix: each retry is an **independent** `create()` call with the reject-list baked into the prompt, not a continued conversation.
+- Route `maxDuration` 60 → 180 (a reject + re-search cycle measured ~84s end-to-end).
+
+**Verified** end-to-end against the real case: huoltosaari.fi rejected, `https://www.autokorjaamoturku.fi/` returned with high confidence. `tsc` + `eslint` + `next build --webpack` clean. Merged squash (`c6bc9fc`), deploy live.
+
+---
+
+## Non-Swedish user check-in sequences + "finish in-progress only" feature — 2026-06-24 — PR #421
+
+A background-session thread that started as "email all non-Swedish app users who've had Wrenchlane >2 weeks, asking how they like it" and turned into a sequence-send-queue investigation + a new throttle-control feature.
+
+### 1. Two existing-user check-in sequences (prod data, no code)
+- Cohort: `contacts` with `wl_user_id` set (app users), `country_code` ≠ SE (and country not Sweden/Sverige), `signed_up_at` < 2026-06-08 (>2 weeks), `status='active'`, excluding 5 internal `@wrenchlane.com` test accounts → **476**.
+- **Validated all 476 via MillionVerifier** (`scripts/lib/email-verify.mjs`, `MILLIONVERIFIER_API_KEY`): 416 valid / 17 catch_all / 31 risky / 12 invalid. Only valid+catch_all (**433**) enrolled; 43 risky/invalid excluded.
+- Split by engagement into two DRAFT→then-started sequences (the original single combined seq `4d8fc02f` was deleted):
+  - **"Non-Swedish users — product check-in (active)"** `795c9a17-9b01-4391-a364-8518fa9ed8da` — 144 who ran ≥1 diagnosis.
+  - **"Non-Swedish users — getting started (no diagnosis yet)"** `b3798cfd-39af-468a-b631-c25bda3c2f6f` — 289 with 0 diagnoses.
+- Each: 3 steps (email → 4-day delay → follow-up), `allow_customers:true` (REQUIRED — targets are wl-app users; both the enroll guard and the send-time cron guard skip customers otherwise), sender pinned to jacob@wrenchlane.com, stop_on_reply. Greeting uses `{{first_name_optional}}` (most have no first name). Enrolled via `enrollContacts(..., serviceClient)` with `allowCustomers:true` (never SQL-insert). Lists at `~/nonse-active-diagnosed.csv`, `~/nonse-no-diagnosis.csv`, `~/nonse-excluded-undeliverable.csv`.
+
+### 2. Send-queue throughput investigation
+- After Jacob started them, nothing sent for the check-ins. Root cause = **head-of-line clog**: the `process-emails` cron pulls the **100 oldest** due `email_queue` rows (status=scheduled, scheduled_for<=now, sender has capacity) **globally, oldest-first**, then groups by sender. The per-account `min_send_interval_seconds` check keys off `gmail_accounts.updated_at`, and every send bumps it → **each account sends at most ONE email per 5-min run**. On rate-limit the row reschedules to `now+interval` → jumps to the BACK, so backdating a throttled sender does NOT durably jump the queue.
+- The whole system was stuck at ~15/hr against a 4,400+ backlog because **390 month-old (May 28) Sverige first-emails** sat on two slow `.co` accounts (`hans@wrenchlane.co`, `magnus@wrenchlane.co`, interval 1200s) that monopolized the oldest-100 window and starved the ~8 faster `.com` accounts (600s ≈ 6/hr each ≈ ~50-60/hr once unclogged).
+- Tuned jacob@wrenchlane.com sender to `min_send_interval_seconds=120`, `max_daily_sends=40`.
+
+### 3. "Finish in-progress only" — PR #421 (feature)
+Per Jacob: finish every contact already mid-sequence (got 1 of 2/3 emails) before starting any NEW contact; his existing-user check-ins stay exempt and keep sending to new contacts.
+- **`settings.pause_new_contacts`** bool (SequenceSettings type). When true, the cron demotes any first email (`enrollment.current_step === 0`) from `scheduled`→`pending` (out of the oldest-100 window, so it stops clogging and won't send); follow-ups (`current_step >= 1`) keep flowing.
+- **`POST /api/sequences/[id]/pause-new-contacts`** `{ paused }` — sets the flag and immediately demotes (pause) / promotes (resume) already-queued first emails, paginated + chunked like `resume-all`.
+- **Sequence settings panel** — "Finish in-progress only" toggle (calls the endpoint for instant effect). Also **fixed a latent bug**: the plain Save rebuilt `settings` from scratch and silently wiped `allow_customers` — now preserves both `allow_customers` and `pause_new_contacts`.
+- **Sequence header** — amber "New contacts paused" badge.
+- New sequences default to `pause_new_contacts` unset (= sends to new contacts immediately).
+
+### Prod data applied this session
+- 6 cold-outreach sequences (Sverige, UK, Czech, Lithuania, Estonia, Latvia) set `pause_new_contacts=true`; their ~1,633 not-started first-emails demoted `scheduled`→`pending`. The two check-in sequences left sending to new contacts. ~3,327 in-progress follow-ups across all sequences keep flowing.
+
+**Checks:** `tsc --noEmit` clean on changed files (only pre-existing `phone-field.tsx` missing-dep errors, local node_modules stale — CI green), `eslint` clean. Merged squash (`da72594`), Build & Lint ✅, production deploy status success.
+
+---
+
+## Auto-fill contact name from email — 2026-06-30 — PR #431
+
+Background-session task from a screenshot: a contact like `timo.larsson@icloud.com` had blank First/Last Name. Added a one-click suggestion to fill the name from the email.
+
+- **`src/lib/contacts/parse-name-from-email.ts`** — conservative parser. Only fires on the unambiguous two-token `first.last` shape (`.`/`_`/`-` separators); rejects role inboxes (`info@`, `sales@`, `kundservice@`, …), single-letter initials (`j.larsson`), digit-bearing tokens, and 1- or 3+-token locals. Unicode-aware so `jörgen.åkesson` → `Jörgen Åkesson`. 10 vitest cases.
+- **`contact-detail-client.tsx`** — when both name fields are empty and the email parses, a `Sparkles` chip ("Use **Timo Larsson** from email") renders above First Name; click writes `first_name`+`last_name` in one update. Non-destructive — never shown when a name already exists.
+- **Decision:** one-click suggestion rather than silent auto-write on load, to avoid polluting data on ambiguous cases. Easy to flip to auto-fill if wanted.
+
+**Checks:** vitest 10/10, `tsc --noEmit`, `eslint`, `npm run build` all clean. Merged squash (`0719bfb`), deploy live (root 307→login as expected).
+
+---
+
+## Send-time email verification gate — 2026-06-30 — PR #420
+
+Jacob asked, after seeing bounced addresses on the Compliance & DNC page: "can we send emails that bounce? I thought we verify every email before sending."
+
+### Finding
+Verification was **advisory only**. MillionVerifier writes `contacts.email_status`, but nothing on the send path read it:
+- Verify endpoint ✅ writes it
+- Enrollment (`enrollment.ts`) ❌ no gate
+- Preflight (`sequences/[id]/preflight`) ⚠️ warning count only
+- Send cron (`cron/process-emails`) ❌ never checked `email_status`
+- Bounce → suppression ✅ but only *after* the bounce, for *future* sends
+
+So `invalid` / never-verified addresses sent and bounced. (Caveat surfaced to Jacob: most bounces in his screenshot were `550 5.7.1xx` policy/reputation rejections, which verification cannot predict — this only eliminates the `550 5.1.1` "mailbox doesn't exist" class.)
+
+### Fix
+Added a verification gate in `process-emails`, as the last check before `sendEmail()` (right after the bounced/unsubscribed guard):
+- **`email_status='invalid'`** → cancel queue item + insert email-level suppression (`reason: invalid_email`) + mark enrollment `failed`. Permanent, mirroring how `check-replies` handles a hard bounce.
+- **never-verified** (`null`/`unknown`/`unverified`/`''`) → cancel queue item + set enrollment `paused` (recoverable, not suppressed). Safety net for un-verified bulk imports; the normal enrollment flow verifies first.
+- **`risky` / `catch_all` / `valid`** → send unchanged (out of scope; flagged the 27 queued `risky` to Jacob as a possible follow-up).
+
+### Blast radius (prod, scheduled queue items at the time)
+`valid` 5294 · `catch_all` 36 · `risky` 27 · `invalid` 6 · never-verified **0** — so the gate won't silently cancel live campaigns; it stops the 6 known-invalid sends going forward.
+
+**Checks:** `tsc --noEmit` clean on the changed file (only pre-existing `phone-field.tsx` missing-dep errors from the fresh worktree's stale node_modules), `eslint` clean. Merged squash (`3d74d9b`), Build & Lint ✅, production deploy Ready.
+
+---
+
+## Call Planner — "who to call today" dashboard — 2026-06-30
+
+Jacob asked for an analysis dashboard under /calls that surfaces *who to call today* — ranked by relevance — plus many ready-made segments (free-too-long, dropped-from-trial, bounced payment, …) each with a one-click "create call list → go to worklist" button. Same contact can land on several lists; dedup happens at call time.
+
+### What shipped (no schema changes — all data already on `contacts` + `dashboard_subscriptions`)
+- **`/calls/planner`** (`src/app/(dashboard)/calls/planner/page.tsx`) — client page with two sections:
+  - **Today's top contacts:** ranked queue (top 30), each row = priority badge + reason chips (the "why now") + plan badge + click-to-call/`Find number`. A `Top N` input + **"Start calling these"** turns the phone-having top N into a static snapshot list and routes to its worklist.
+  - **Playbooks grid:** 12 segment cards with live total + with-phone counts and a **"Create call list"** button.
+- **Scoring engine** (`src/lib/calls/scoring.ts`, pure + 11 vitest cases) — `scoreContact()` weights lifecycle urgency (payment bounced 55, paid trial 45, recently-canceled 40, trial-just-ended 38, never-activated/new-signup), engagement (diagnoses 30d, engaged-free upsell, power user, logins), churn-risk-save (was-engaged + quiet), low-credits upsell, paid-retention; emits explainable reasons. `isFreshToCall()` hides anyone contacted in the last 7d so the list rolls forward daily.
+- **Playbooks** (`src/lib/calls/playbooks.ts`) — 12 defs; 11 are pure-`contacts` dynamic filters (roll forward as dynamic lists), `payment_bounced` is special (joins `dashboard_subscriptions.status in past_due/unpaid/incomplete*` → static snapshot list).
+- **API:** `GET /api/calls/planner` (ranked contacts + per-playbook counts), `POST /api/calls/planner/create-list` (playbook→dynamic list, payment_bounced/today→static snapshot via contact_list_members). Reuses `contact_lists` (purpose='calling') so the existing worklist + call-logger just work.
+- Entry point: "Plan today's calls" button on the /calls overview header.
+
+### Prod data validated (psql)
+- `dashboard_subscriptions`: 6 `past_due` → 6 distinct matched contacts; RLS = `authenticated can read` so the user-scoped client reads it fine.
+- App-user contacts: **1,019 with `wl_user_id`, only 68 with a phone** → the planner shows a phone-coverage banner and a `Find number` CTA for phone-less top contacts; "Start calling" only enlists phone-having ones. (CTO phone export remains the real unlock; PR #434 shared phone pool mirrors into `contacts.phone`.)
+
+**Checks:** vitest 31/31 (calls), `tsc --noEmit`, `eslint`, `npm run build` all clean. Routes `/calls/planner`, `/api/calls/planner`, `/api/calls/planner/create-list` registered.
+
+---
+
+## Rep ownership (Primary / Secondary rep per contact & company) — 2026-06-30
+
+**Branch:** `worktree-rep-ownership` · PR: _pending_
+
+Track which sales rep (Hans, Jacob, …) owns each contact and company, auto-assigned by most-recent contact, manually lockable.
+
+### What was built
+- **Migration `20260630140000_rep_ownership.sql`** — adds `primary_owner_id`, `secondary_owner_id`, `owner_auto` (default true), `owner_updated_at`, `primary_owner_source` to `contacts` + `companies`.
+  - `rep_touches` view: unified attribution — email_sent/email_received → sending gmail account's `user_id` (resolved via `metadata.sender_account_id`, or `email_queue.sender_account_id` for replies); call/meeting/note/field_visit → `activities.user_id`.
+  - `recompute_contact_owner()` / `recompute_company_owner()`: Primary = most-recent distinct rep, Secondary = next. Company rolls up its own + its contacts' touches. Both skip rows where `owner_auto=false` (locked).
+  - `AFTER INSERT` trigger on `activities` recomputes the affected contact + company (calls log a `call` activity, so calls are covered — no separate call_sessions trigger).
+  - Set-based one-time backfill for existing contacts + companies.
+- **API:** `GET /api/reps` (reps from gmail_accounts, stable shorthand number by connect order); `POST /api/contacts/[id]/owner` + `POST /api/companies/[id]/owner` (`{auto:true}` → recompute; `{auto:false, primaryOwnerId, secondaryOwnerId}` → lock).
+- **UI:** `RepOwnerControl` badge + popover ("P ① Hans · S ② Jacob", Auto/Locked toggle, manual rep selects, explanatory copy). Wired into contact detail header and company hero.
+
+### Decisions (per Jacob)
+- Signals counted: outbound email, calls, replies received, manual notes/meetings (+ field visits).
+- Auto rule: **most recent contact wins** (Primary = latest, Secondary = next distinct rep).
+- Scope: contacts **and** companies. Reps derived from gmail accounts.
+- Shorthand numbers (①②) are stable per rep (connect order), shown alongside P/S role.
+
+### Modelling fix found in verification
+One person connects multiple mailboxes under **different auth user_ids** (Hans×2, Magnus×4). Added a `rep_identity` view that collapses a person's user_ids to a canonical id (earliest by display-name/email), and `rep_touches` resolves through it — so a rep is one human, not one mailbox. `listReps`/`resolveManualOwners`/the UI lookup all group by person too. Verified 0 rows where Primary == Secondary.
+
+### Applied to prod ✅
+Migration applied via psql (`20260630140000`). Backfill: **5,551 contacts**, **5,545 companies**. Primary-rep split — Hans 4,636 · Magnus 720 · Jacob 195.
+
+### Checks
+`tsc --noEmit` clean · `eslint` clean · `next build --webpack` ✅ · affected unit tests 22/22.
+
+---
+
+## Inbox reply-workflow tabs (Needs reply / Started replying / Recently answered)
+**Date:** 2026-06-30 · **PR:** (pending) · **Branch:** worktree-inbox-reply-tabs
+
+Hans asked for inbox tabs that split threads by where they are in the reply loop:
+the ones he still needs to answer, the ones he's started a draft on, and the ones
+he's recently answered.
+
+### What was built
+- **Migration `20260630170000_inbox_reply_state.sql`** — adds to `inbox_messages`:
+  - `replied_at` — set thread-wide when a reply is sent; backfilled from existing
+    `email_sent` activities (matched by `metadata->>'gmail_thread_id'`, only when the
+    send was at/after the message arrived).
+  - `reply_draft` / `reply_draft_updated_at` — the human reply-in-progress.
+    Deliberately distinct from `draft_en` (the AI auto-draft cache, which is
+    populated for every non-English thread on open and so can't mean "Hans started
+    replying"). Three partial indexes back the new tabs.
+- **`GET /api/inbox`** — three new filters: `needs_reply`
+  (`replied_at IS NULL AND reply_draft IS NULL`, excludes auto-replies / not-interested
+  / OOO), `started_replying` (`reply_draft IS NOT NULL AND replied_at IS NULL`),
+  `answered` (`replied_at IS NOT NULL`, sorted by `replied_at` desc).
+- **`POST /api/inbox/[id]/reply`** — after a successful send, stamps `replied_at` and
+  clears `reply_draft` on every still-unanswered message in the thread.
+- **`PATCH /api/inbox/[id]`** — accepts `reply_draft` (empty string clears it).
+- **`inbox-client.tsx`** — three new workflow tabs; composer autosaves the draft
+  (debounced 1s, flushed on message-switch and on unmount via keepalive); persisted
+  drafts are restored on select (and suppress the AI auto-draft); send clears the
+  draft + refetches; list rows show amber "Draft" / emerald "Replied" pills.
+- `database.types.ts` updated for the three new columns.
+
+### Decisions
+- "Started replying" keys off a human draft, NOT `draft_en`, so non-English threads
+  don't all falsely show as started.
+- `replied_at` is stamped thread-wide; a later inbound reply lands a fresh row with
+  `replied_at NULL` and resurfaces in "Needs reply" on its own.
+
+### Checks
+`tsc --noEmit` clean · `eslint` (changed files) clean · `next build --webpack` ✅
+
+### ⚠️ Deploy ordering
+Migration must be applied to prod BEFORE/with the deploy — the reply route's post-send
+UPDATE and the new tabs reference the new columns. Classifier blocked CC from applying
+the DDL directly (expected); Jacob to apply `20260630170000_inbox_reply_state.sql`.
+
+## "Find numbers" reliability + background phone-enrichment queue — 2026-07-01 — PRs #451, #454, #455, #462, #467
+
+Reported symptom: "Find numbers" found nothing for contacts whose number is plainly
+on their website (Haninge Bilpark, Mibra Bilservice), and "took forever". Traced the
+whole path, fixed it end-to-end, and built the background queue Jacob asked for.
+
+### Root cause (found via Vercel runtime logs)
+`POST /api/enrich/find-phone` was hitting the **180 s Vercel function timeout (504)**.
+The website scrape finds the number in ~2 s, but the code then **always ran the slow AI
+web-search leg too** — that loop could exceed 180 s, so the function was killed and
+returned nothing, discarding the number the scrape had already found. That's both the
+"finds nothing" and the "takes forever".
+
+### What was built / changed
+- **PR #451 — fetch hardening** (`src/lib/enrich/find-phone.ts`): browser-like headers
+  (UA + `Accept-Language: sv-SE` + Referer), homepage-first serial fetch instead of a
+  10-way parallel burst, retry-once on 5xx/429/network, and surfaces "host may be
+  blocking server-side requests" in the reasoning instead of a silent miss.
+- **PR #454 — reliable AI report + diagnostics**: the web-search leg made a single model
+  call and silently returned zero if the model paused (`pause_turn`) or answered in
+  prose; now it loops through pauses and **forces `report_phones`**. Added a
+  `FindPhonesDebug` object + one structured `[find-phone] {...}` console line per run
+  (fetch statuses, apiKeyPresent, webSearchTurns, reportCalled, webPhoneCount,
+  searchError) so a "found nothing" is explainable in Vercel logs.
+- **PR #462 — the actual timeout fix**: **skip the AI web-search entirely when the site
+  scrape already found a number** (`byNumber.size === 0` guard); + a 90 s wall-clock
+  budget on the web-search phase and turn cap 4→3, so even the scrape-empty path can
+  never reach the 180 s limit. Common case (number is on the site) now returns in a few
+  seconds.
+- **PR #452 — website-first + UI**: new shared lib `src/lib/enrich/find-phone-for-contact.ts`
+  (`findPhonesForRecord` + `saveFoundPhones`): if a record has no website, find one
+  (email-domain or web search) and persist it before scraping. Added an info (ⓘ) popover
+  on the contact Phone Numbers panel explaining the 4 steps, and a "Find missing numbers"
+  button on the Call Planner.
+- **PR #455 — background queue + search tracking**:
+  - `contacts.phone_searched_at` + `phone_search_outcome` (`found`/`none`/`blocked`/
+    `error`), stamped by `findPhonesForRecord` on every run (best-effort). Call Planner
+    shows a per-row "searched · none / site blocked / error" chip so dead ends aren't
+    re-searched.
+  - `phone_enrichment_jobs` table + cron worker (`/api/cron/phone-enrichment`, every
+    2 min) that runs the finder server-side and saves numbers as found.
+  - `/api/enrich/find-phone/enqueue` (Call Planner "Find missing numbers" now enqueues
+    instead of looping in the browser — you can leave the page; skips contacts searched
+    <14 days ago, with a "re-search" toggle) + `/api/enrich/find-phone/queue-status`
+    (live "finding in background — N remaining" banner; list auto-refreshes as numbers
+    land).
+  - Migration `20260701120000_phone_enrichment.sql` (applied to prod by Jacob via Studio).
+- **PR #467 — cron GET fix**: the worker was POST-only, but **Vercel Cron invokes with
+  GET → 405**, so the queue never drained (16× 405 in logs). Now exports both GET and
+  POST. Confirmed in logs the cron is processing jobs after this.
+- `database.types.ts` updated for `phone_enrichment_jobs` + the two `contacts` columns.
+
+### Decisions / notes
+- AI web-search is now a *fallback*, only when scraping finds nothing — trades the odd
+  "second line" miss for speed and no 504s.
+- Person-only contacts with no website/company site legitimately find nothing (no public
+  number to scrape) — the fix makes it fast + correct, not magic.
+- Prod DDL + live-key materialization are hard-blocked by the auto-mode classifier;
+  Jacob applied the migration in the Supabase SQL editor. The editor mangled a pasted
+  multi-statement block once — paste a compact comment-free version and verify before Run.
+
+### Checks
+Each PR: CI "Build & Lint" green (local `tsc`/`build` couldn't run — sandbox OOM-kills
+Node). Root-caused directly from Vercel runtime logs (`get_runtime_logs`) + live `curl`
+of target sites. Cron confirmed running under GET post-deploy.
+
+### Open
+- Visual confirm that a company-linked contact (e.g. Mibra) now returns its number in
+  seconds via the single-contact button (expected: +46 73 766 88 45).
+- The call-list detail bulk button (#453, another session) is still on the synchronous
+  path; only the Call Planner was switched to the background queue.
+
+---
+
+## Compose modal — per-email send language (compose in English, translate at send)
+**Date:** 2026-07-01 · **PR:** #471 · **Branch:** worktree-compose-language → main (2d1d7d3)
+
+Added a "Send in" language selector to the one-off contact **Email** modal
+(`compose-email-modal.tsx`). Mirrors the inbox reply flow: the rep always
+composes/edits in **English**, and when the target language isn't English the
+email is auto-translated at send.
+
+- Selector defaults to the contact's stored `language` field (Swedish contact →
+  Swedish), falls back to English, overridable per email.
+- Side-by-side **"Recipient sees (Language)"** preview via new
+  `/api/ai/translate-email` route (debounced). Send re-translates fresh
+  server-side so a stale preview never decides what ships.
+- New `translateOutboundEmail()` in `src/lib/inbox/translate-outbound.ts`
+  translates subject + HTML body while preserving HTML tags and `{{merge}}`
+  tokens → existing variable-resolution + tracking pipeline runs unchanged.
+- `send-email` route accepts `targetLanguage`, translates before
+  `resolveVariables`, logs English + `sent_language` in activity metadata (audit).
+- Language labels/options extracted to client-safe `src/lib/i18n/languages.ts`
+  (single source of truth; no Anthropic import).
+
+**Checks:** `tsc --noEmit`, `lint`, `build` all pass. Deploy live (307 → /login).
+Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
+
+### Open / to verify manually
+- Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
+  compose English, Preview in Swedish, send, verify recipient gets Swedish and
+  the timeline activity retains the English (`body_en` / `sent_language`).

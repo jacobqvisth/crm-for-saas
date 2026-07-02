@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { addUtcDays, startOfUtcDay, toIsoDate } from "@/lib/ceo/dates";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { pageAll } from "@/lib/supabase-paging";
@@ -173,7 +175,13 @@ function toNumber(value: number | string | null | undefined): number {
   return 0;
 }
 
-export async function getPilotStatsData(): Promise<PilotStatsData> {
+export const getPilotStatsData = unstable_cache(
+  getPilotStatsDataUncached,
+  ["ceo-pilot-stats"],
+  CEO_CACHE_OPTIONS,
+);
+
+async function getPilotStatsDataUncached(): Promise<PilotStatsData> {
   if (!hasSupabaseConfig()) {
     return emptyData();
   }

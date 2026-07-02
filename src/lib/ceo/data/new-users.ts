@@ -1,4 +1,8 @@
 import {
+  inCountryWith,
+  loadCountryFilterSets,
+} from "@/lib/ceo/countries";
+import {
   isInternalTestUserOrWorkshopWith,
   loadInternalTestSets,
 } from "@/lib/ceo/internal-test/loader";
@@ -9,11 +13,17 @@ import {
   formatBucketLabel,
   granularityFromRange,
 } from "@/lib/ceo/data/app-usage";
+import { unstable_cache } from "next/cache";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import { pageAll } from "@/lib/supabase-paging";
 import { TABLES } from "@/lib/ceo/tables";
-import type { ResolvedDashboardRange } from "@/lib/ceo/time-ranges";
+import {
+  type ResolvedDashboardRange,
+  normalizeDashboardTimeRangeKey,
+  resolveDashboardTimeRange,
+} from "@/lib/ceo/time-ranges";
 
 export type NewUsersGranularity = AppUsageGranularity;
 
@@ -21,7 +31,10 @@ export type NewUsersRow = {
   bucket: string;
   bucketLabel: string;
   bucketShortLabel: string;
-  iosDownloads: number;
+  // Store/GA4 aggregates have no per-user identity, so they go null (shown as
+  // "—") while a country filter is active rather than lying with the global
+  // number. iOS is also null when App Store Connect isn't configured.
+  iosDownloads: number | null;
   androidDownloads: number | null;
   webFirstVisits: number | null;
   signUps: number;
@@ -85,8 +98,29 @@ function emptyData(
   };
 }
 
-export async function getNewUsersData(
+// Cache by the range's stable key string (resolving a fresh range inside the
+// cached fn) so the cache key stays a clean primitive and the public
+// signature is unchanged. Tagged ceo-data so the Update button busts it.
+const getNewUsersDataCached = unstable_cache(
+  (rangeKey: string, country: string | null) =>
+    getNewUsersDataUncached(
+      resolveDashboardTimeRange(normalizeDashboardTimeRangeKey(rangeKey)),
+      country,
+    ),
+  ["ceo-new-users"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getNewUsersData(
   range: ResolvedDashboardRange,
+  country: string | null = null,
+): Promise<NewUsersData> {
+  return getNewUsersDataCached(range.key, country);
+}
+
+async function getNewUsersDataUncached(
+  range: ResolvedDashboardRange,
+  country: string | null,
 ): Promise<NewUsersData> {
   const granularity = granularityFromRange(range);
 
@@ -190,14 +224,19 @@ export async function getNewUsersData(
   // Activated, and Avg-days-to-activate all flow from these arrays. iOS /
   // Android / Web columns come from store + GA4 aggregates with no user
   // identity, so they're left alone.
-  const internalTestSets = await loadInternalTestSets();
+  const [internalTestSets, countrySets] = await Promise.all([
+    loadInternalTestSets(),
+    loadCountryFilterSets(country),
+  ]);
   const allUsers = allUsersRaw.filter(
     (u) =>
       !isInternalTestUserOrWorkshopWith(
         internalTestSets,
         u.internal_user_id,
         u.workshop_id,
-      ),
+      ) &&
+      (!countrySets ||
+        inCountryWith(countrySets, u.internal_user_id, u.workshop_id)),
   );
   const allDiagnostics = allDiagnosticsRaw.filter(
     (d) =>
@@ -205,7 +244,9 @@ export async function getNewUsersData(
         internalTestSets,
         d.internal_user_id,
         d.workshop_id,
-      ),
+      ) &&
+      (!countrySets ||
+        inCountryWith(countrySets, d.internal_user_id, d.workshop_id)),
   );
 
   const coverage = {
@@ -245,8 +286,10 @@ export async function getNewUsersData(
     if (!cur || t < cur) firstDiagByUser.set(d.internal_user_id, t);
   }
 
+  // `range.end` is exclusive (start of the day after the range), so use a
+  // strict `<` — a signup at exactly midnight belongs to the next day.
   const inRange = (date: Date) =>
-    date <= range.end && (!range.start || date >= range.start);
+    date < range.end && (!range.start || date >= range.start);
 
   const signUpsByBucket = new Map<string, number>();
   for (const [, signupAt] of signupAtByUser) {
@@ -335,6 +378,11 @@ export async function getNewUsersData(
     for (const k of m.keys()) allBuckets.add(k);
   }
 
+  // Download/first-visit columns are store + GA4 aggregates with no user
+  // identity — they can't be scoped to a workshop country, so they read "—"
+  // while a country filter is active instead of showing the global number.
+  const aggregatesApply = !countrySets;
+
   const rows: NewUsersRow[] = [...allBuckets]
     .sort()
     .map((bucket) => {
@@ -344,13 +392,15 @@ export async function getNewUsersData(
         bucket,
         bucketLabel: labels.label,
         bucketShortLabel: labels.shortLabel,
-        iosDownloads: iosByBucket.get(bucket) ?? 0,
-        androidDownloads: androidConfigured
-          ? (androidByBucket.get(bucket) ?? 0)
-          : null,
-        webFirstVisits: webConfigured
-          ? (webByBucket.get(bucket) ?? 0)
-          : null,
+        iosDownloads: aggregatesApply ? (iosByBucket.get(bucket) ?? 0) : null,
+        androidDownloads:
+          aggregatesApply && androidConfigured
+            ? (androidByBucket.get(bucket) ?? 0)
+            : null,
+        webFirstVisits:
+          aggregatesApply && webConfigured
+            ? (webByBucket.get(bucket) ?? 0)
+            : null,
         signUps: signUpsByBucket.get(bucket) ?? 0,
         activated: activatedByBucket.get(bucket) ?? 0,
         avgDaysToActivate: days ? days.sum / days.count : null,

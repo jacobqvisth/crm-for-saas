@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { pageAll } from "@/lib/supabase-paging";
-import type { PipelineStage } from "@/lib/database.types";
 
 type RangeKey = "1d" | "7d" | "30d" | "90d" | "all";
 
@@ -61,13 +60,6 @@ export async function GET(request: NextRequest) {
     emailsSentPrevResult,
     emailEventsResult,
     emailEventsPrevResult,
-    pipelinesResult,
-    dealsResult,
-    dealsClosingSoonResult,
-    dealsWonResult,
-    dealsLostResult,
-    dealsWonPrevResult,
-    dealsLostPrevResult,
     activitiesResult,
     sequenceEnrollmentsResult,
     unsubscribesResult,
@@ -152,60 +144,6 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: true })
         .range(from, to),
     ),
-    // Pipelines
-    supabase
-      .from("pipelines")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .limit(1),
-    // All deals
-    supabase
-      .from("deals")
-      .select("id, name, amount, stage, probability, company_id, expected_close_date, created_at")
-      .eq("workspace_id", workspaceId),
-    // Deals closing in next 30 days
-    supabase
-      .from("deals")
-      .select("id, name, amount, stage, expected_close_date, company_id")
-      .eq("workspace_id", workspaceId)
-      .not("stage", "in", '("Closed Won","Closed Lost")')
-      .gte("expected_close_date", new Date().toISOString().split("T")[0])
-      .lte(
-        "expected_close_date",
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-      )
-      .order("expected_close_date", { ascending: true })
-      .limit(10),
-    // Deals won in period
-    supabase
-      .from("deals")
-      .select("id, amount")
-      .eq("workspace_id", workspaceId)
-      .eq("stage", "Closed Won")
-      .gte("updated_at", startISO),
-    // Deals lost in period
-    supabase
-      .from("deals")
-      .select("id, amount")
-      .eq("workspace_id", workspaceId)
-      .eq("stage", "Closed Lost")
-      .gte("updated_at", startISO),
-    // Deals won in prev period
-    supabase
-      .from("deals")
-      .select("id, amount")
-      .eq("workspace_id", workspaceId)
-      .eq("stage", "Closed Won")
-      .gte("updated_at", prevStartISO)
-      .lt("updated_at", startISO),
-    // Deals lost in prev period
-    supabase
-      .from("deals")
-      .select("id, amount")
-      .eq("workspace_id", workspaceId)
-      .eq("stage", "Closed Lost")
-      .gte("updated_at", prevStartISO)
-      .lt("updated_at", startISO),
     // Activities
     supabase
       .from("activities")
@@ -245,23 +183,6 @@ export async function GET(request: NextRequest) {
     .select("id, name, status")
     .eq("workspace_id", workspaceId);
 
-  // Company names for deals closing soon
-  const companyIds = (dealsClosingSoonResult.data ?? [])
-    .map((d) => d.company_id)
-    .filter(Boolean) as string[];
-
-  let companiesMap: Record<string, string> = {};
-  if (companyIds.length > 0) {
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name")
-      .in("id", companyIds);
-    companiesMap = (companies ?? []).reduce(
-      (acc, c) => ({ ...acc, [c.id]: c.name }),
-      {} as Record<string, string>
-    );
-  }
-
   // --- Compute metrics ---
 
   const totalContacts = contactsTotalResult.count ?? 0;
@@ -292,44 +213,6 @@ export async function GET(request: NextRequest) {
     emailsSentPrevCount > 0 ? Math.round((prevOpens / emailsSentPrevCount) * 100) : 0;
   const prevReplyRate =
     emailsSentPrevCount > 0 ? Math.round((prevReplies / emailsSentPrevCount) * 100) : 0;
-
-  // Pipeline
-  const pipeline = pipelinesResult.data?.[0];
-  const stages = (pipeline?.stages as PipelineStage[]) ?? [];
-  const deals = dealsResult.data ?? [];
-
-  const openDeals = deals.filter(
-    (d) => d.stage !== "Closed Won" && d.stage !== "Closed Lost"
-  );
-  const pipelineValue = openDeals.reduce((sum, d) => sum + (d.amount ?? 0), 0);
-
-  // Pipeline chart data - deal count and value per stage
-  const pipelineChartData = stages
-    .filter((s) => s.name !== "Closed Won" && s.name !== "Closed Lost")
-    .map((stage) => {
-      const stageDeals = deals.filter((d) => d.stage === stage.name);
-      return {
-        name: stage.name,
-        count: stageDeals.length,
-        value: stageDeals.reduce((sum, d) => sum + (d.amount ?? 0), 0),
-        color: stage.color,
-      };
-    });
-
-  // Won / Lost
-  const wonDeals = dealsWonResult.data ?? [];
-  const lostDeals = dealsLostResult.data ?? [];
-  const wonCount = wonDeals.length;
-  const lostCount = lostDeals.length;
-  const wonValue = wonDeals.reduce((sum, d) => sum + (d.amount ?? 0), 0);
-  const lostValue = lostDeals.reduce((sum, d) => sum + (d.amount ?? 0), 0);
-  const winRate = wonCount + lostCount > 0 ? Math.round((wonCount / (wonCount + lostCount)) * 100) : 0;
-
-  // Deals closing soon with company names
-  const dealsClosingSoon = (dealsClosingSoonResult.data ?? []).map((d) => ({
-    ...d,
-    companyName: d.company_id ? companiesMap[d.company_id] ?? null : null,
-  }));
 
   // Email volume chart data (group by day or week).
   // Pre-seed with every interval in the range so days/weeks with zero
@@ -481,7 +364,6 @@ export async function GET(request: NextRequest) {
       openRateTrend,
       replyRate,
       replyRateTrend,
-      pipelineValue,
     },
     emailStats: {
       sent: emailsSentCount,
@@ -492,15 +374,6 @@ export async function GET(request: NextRequest) {
       unsubscribes: unsubscribesInEvents + (unsubscribesResult.count ?? 0),
     },
     emailVolumeChart,
-    pipelineChartData,
-    dealsClosingSoon,
-    wonLost: {
-      wonCount,
-      wonValue,
-      lostCount,
-      lostValue,
-      winRate,
-    },
     contactGrowthChart,
     leadStatusBreakdown: leadStatusCounts,
     sequencePerformance,

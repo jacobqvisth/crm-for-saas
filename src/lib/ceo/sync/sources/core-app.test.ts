@@ -3,6 +3,8 @@ import {
   aggregateMetricPoints,
   buildCostEntryRows,
   buildDiagnosticsRows,
+  buildFeatureUsageRows,
+  buildUserLoginRows,
   buildUserRows,
   buildWorkshopRows,
   classifyCustomerIoProfile,
@@ -484,5 +486,103 @@ describe("core app helpers", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.value).toBe(4);
+  });
+
+  it("builds one login row per valid login_history entry, deduped", () => {
+    const logins = buildUserLoginRows([
+      {
+        user_id: 101,
+        login_history: [
+          "2026-06-01T08:00:00.000Z",
+          "2026-06-01T08:00:00.000Z",
+          "2026-06-02T09:30:00+00:00",
+          "not-a-date",
+          null,
+        ],
+      },
+      { user_id: 102, login_history: "not-an-array" },
+      { login_history: ["2026-06-01T08:00:00.000Z"] },
+    ]);
+
+    expect(logins).toEqual([
+      { internal_user_id: "101", logged_in_at: "2026-06-01T08:00:00.000Z" },
+      { internal_user_id: "101", logged_in_at: "2026-06-02T09:30:00.000Z" },
+    ]);
+  });
+
+  it("builds feature usage rows from snapshot counters, skipping zero counts", () => {
+    const rows = buildFeatureUsageRows([
+      {
+        user_id: 101,
+        diagnostics_today_count: 3,
+        diagnostics_count_date: "2026-06-10",
+        chat_today_count: 0,
+        chat_count_date: "2026-06-05",
+        ai_search_today_count: 7,
+        ai_search_count_date: "2026-06-11",
+        infopro_vehicles_today_count: 2,
+        infopro_vehicles_today_date: "2026-06-11",
+        infopro_vehicles_month_count: 28,
+        infopro_vehicles_month: "2026-05",
+        motor_vehicles_month_count: 0,
+        motor_vehicles_month: "2026-05",
+      },
+      {
+        user_id: 102,
+        vrm_lookups_today_count: 4,
+        vrm_lookups_count_date: "garbage",
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        internal_user_id: "101",
+        feature_key: "diagnostics",
+        granularity: "day",
+        period_start: "2026-06-10",
+        usage_count: 3,
+      },
+      {
+        internal_user_id: "101",
+        feature_key: "ai_search",
+        granularity: "day",
+        period_start: "2026-06-11",
+        usage_count: 7,
+      },
+      {
+        internal_user_id: "101",
+        feature_key: "infopro_vehicles",
+        granularity: "day",
+        period_start: "2026-06-11",
+        usage_count: 2,
+      },
+      {
+        internal_user_id: "101",
+        feature_key: "infopro_vehicles",
+        granularity: "month",
+        period_start: "2026-05-01",
+        usage_count: 28,
+      },
+    ]);
+  });
+
+  it("rolls user churned_at up to the workshop owner-first", () => {
+    const workshops = buildWorkshopRows([
+      {
+        user_id: 1,
+        user_role: "mechanic",
+        workshop_id: 55,
+        churned_at: "2026-03-01T00:00:00.000Z",
+      },
+      {
+        user_id: 2,
+        user_role: "owner",
+        workshop_id: 55,
+        churned_at: "2026-05-05T00:00:00.000Z",
+      },
+    ]);
+
+    expect(workshops).toHaveLength(1);
+    expect(workshops[0]?.churned_at).toBe("2026-05-05T00:00:00.000Z");
   });
 });

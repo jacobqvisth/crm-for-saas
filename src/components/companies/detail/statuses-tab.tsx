@@ -107,6 +107,7 @@ function buildConcepts(company: Company, outreachStatus: OutreachStatus): Concep
       { value: 'mql',          label: 'mql',          activeCls: 'bg-slate-100 text-slate-700' },
       { value: 'sql',          label: 'sql',          activeCls: 'bg-slate-100 text-slate-700' },
       { value: 'trial',        label: 'trial',        activeCls: 'bg-amber-100 text-amber-700' },
+      { value: 'freemium',     label: 'freemium',     activeCls: 'bg-teal-100 text-teal-700' },
       { value: 'paying',       label: 'paying',       activeCls: 'bg-emerald-100 text-emerald-700' },
       { value: 'churned',      label: 'churned',      activeCls: 'bg-red-100 text-red-700' },
       { value: 'reactivation', label: 'reactivation', activeCls: 'bg-purple-100 text-purple-700' },

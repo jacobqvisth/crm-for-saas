@@ -5,27 +5,13 @@ const protectedRoutes = [
   "/dashboard",
   "/contacts",
   "/companies",
-  "/deals",
   "/sequences",
   "/lists",
+  "/roadmap",
+  "/activation",
   "/templates",
   "/settings",
-  "/ceo",
 ];
-
-const CEO_ALLOWED_EMAILS = (process.env.CEO_ALLOWED_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-
-function isCeoUser(email?: string | null): boolean {
-  if (!email) return false;
-  if (CEO_ALLOWED_EMAILS.length === 0) return false;
-  const normalized = email.toLowerCase();
-  return CEO_ALLOWED_EMAILS.some((entry) =>
-    entry.startsWith("@") ? normalized.endsWith(entry) : normalized === entry,
-  );
-}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -75,19 +61,6 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect authenticated users from login to dashboard
   if (user && pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
-
-  // Gate /ceo/* to allowlisted emails only — non-CEO authenticated users go
-  // back to the regular dashboard. The /api/ceo-sync/* cron routes are
-  // authenticated by SYNC_SECRET, not user session, so they bypass this gate.
-  if (
-    user &&
-    (pathname === "/ceo" || pathname.startsWith("/ceo/")) &&
-    !isCeoUser(user.email)
-  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

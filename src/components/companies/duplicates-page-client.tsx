@@ -195,7 +195,7 @@ export function DuplicatesPageClient() {
           </h1>
           <p className="text-sm text-slate-500">
             Pairs flagged by trigram similarity between 0.6 and 0.95. Pick the
-            row to keep — contacts, deals, and activities from the other row
+            row to keep — contacts and activities from the other row
             move over. Nothing is overwritten on the kept row except merged
             tags.
           </p>

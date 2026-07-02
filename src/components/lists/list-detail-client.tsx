@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, Users, Filter, Pencil, Trash2, Plus, Send, ChevronLeft, ChevronRight, Check, X,
+  ArrowLeft, Users, Filter, Pencil, Trash2, Plus, Send, ChevronLeft, ChevronRight, Check, X, Phone,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
@@ -12,10 +12,17 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { Modal } from '@/components/ui/modal';
 import { LeadStatusBadge } from '@/components/ui/badge';
 import { FilterBuilder } from './filter-builder';
+import { ExclusionSelector } from './exclusion-selector';
 import { AddContactsModal } from './add-contacts-modal';
 import { EnrollListModal } from './enroll-list-modal';
 import { ExportCsvButton } from './export-csv-button';
 import { buildFilterQuery, describeFilter, type ListFilter } from '@/lib/lists/filter-query';
+import {
+  EXCLUSION_GROUPS,
+  parseListExclusions,
+  serializeListExclusions,
+  type ListExclusions,
+} from '@/lib/lists/exclusion-types';
 import toast from 'react-hot-toast';
 import type { Tables } from '@/lib/database.types';
 
@@ -47,6 +54,9 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
   const [showDelete, setShowDelete] = useState(false);
   const [showEditFilters, setShowEditFilters] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showEditExclusions, setShowEditExclusions] = useState(false);
+  const [editExclusions, setEditExclusions] = useState<ListExclusions>({ groups: [], lists: [] });
+  const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
 
   // Editing
   const [editingName, setEditingName] = useState(false);
@@ -60,6 +70,21 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
     () => (list?.filters as unknown as ListFilter[]) || [],
     [list?.filters],
   );
+  const exclusions = useMemo(
+    () => parseListExclusions(list?.exclusions),
+    [list?.exclusions],
+  );
+  const exclusionSummary = useMemo(() => {
+    const parts = exclusions.groups.map(
+      (g) => EXCLUSION_GROUPS.find((e) => e.key === g)?.label ?? g,
+    );
+    if (exclusions.lists.length > 0) {
+      parts.push(
+        `${exclusions.lists.length} list${exclusions.lists.length > 1 ? 's' : ''}`,
+      );
+    }
+    return parts;
+  }, [exclusions]);
 
   // Load list
   useEffect(() => {
@@ -83,6 +108,19 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
       setLoading(false);
     })();
   }, [workspaceId, listId, supabase, router]);
+
+  // Other lists available to subtract ("exclude members of").
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from('contact_lists')
+      .select('id, name')
+      .eq('workspace_id', workspaceId)
+      .order('name')
+      .then(({ data }) => {
+        if (data) setAvailableLists(data as { id: string; name: string }[]);
+      });
+  }, [workspaceId, supabase]);
 
   // Load contacts
   const fetchContacts = useCallback(async () => {
@@ -197,17 +235,44 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
 
   const handleSaveFilters = async () => {
     if (!list) return;
+    const serializedExclusions = serializeListExclusions(editExclusions);
     const { error } = await supabase
       .from('contact_lists')
-      .update({ filters: editFilters as unknown as Tables<'contact_lists'>['filters'] })
+      .update({
+        filters: editFilters as unknown as Tables<'contact_lists'>['filters'],
+        exclusions: serializedExclusions as unknown as Tables<'contact_lists'>['exclusions'],
+      })
       .eq('id', list.id);
 
     if (error) toast.error('Failed to update filters');
     else {
-      setList({ ...list, filters: editFilters as unknown as Tables<'contact_lists'>['filters'] });
+      setList({
+        ...list,
+        filters: editFilters as unknown as Tables<'contact_lists'>['filters'],
+        exclusions: serializedExclusions as unknown as Tables<'contact_lists'>['exclusions'],
+      });
       toast.success('Filters updated');
       setShowEditFilters(false);
       setPage(1);
+    }
+  };
+
+  const handleSaveExclusions = async () => {
+    if (!list) return;
+    const serialized = serializeListExclusions(editExclusions);
+    const { error } = await supabase
+      .from('contact_lists')
+      .update({ exclusions: serialized as unknown as Tables<'contact_lists'>['exclusions'] })
+      .eq('id', list.id);
+
+    if (error) toast.error('Failed to update exclusions');
+    else {
+      setList({ ...list, exclusions: serialized as unknown as Tables<'contact_lists'>['exclusions'] });
+      toast.success('Exclusions updated');
+      setShowEditExclusions(false);
+      // Dynamic lists re-resolve against the filter query in the table preview,
+      // which doesn't itself subtract exclusions — exclusions apply when the list
+      // is used (calling worklist / enrollment / export). No refetch needed.
     }
   };
 
@@ -236,6 +301,21 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
 
     toast.success('Contact removed from list');
     fetchContacts();
+  };
+
+  const handleTogglePurpose = async () => {
+    if (!list) return;
+    const next = list.purpose === 'calling' ? 'email' : 'calling';
+    const { error } = await supabase
+      .from('contact_lists')
+      .update({ purpose: next })
+      .eq('id', list.id);
+
+    if (error) toast.error('Failed to update list');
+    else {
+      setList({ ...list, purpose: next });
+      toast.success(next === 'calling' ? 'Marked as call list' : 'Removed from call lists');
+    }
   };
 
   const handleDeleteList = async () => {
@@ -303,6 +383,16 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
               {isDynamic ? <Filter className="w-3 h-3" /> : <Users className="w-3 h-3" />}
               {isDynamic ? 'Dynamic' : 'Static'}
             </span>
+            {list?.purpose === 'calling' && (
+              <Link
+                href={`/calls/lists/${listId}`}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                title="Open the calling worklist"
+              >
+                <Phone className="w-3 h-3" />
+                Call list
+              </Link>
+            )}
           </div>
 
           {editingDesc ? (
@@ -336,7 +426,7 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
         <div className="flex items-center gap-2">
           {isDynamic ? (
             <button
-              onClick={() => { setEditFilters(filters); setShowEditFilters(true); }}
+              onClick={() => { setEditFilters(filters); setEditExclusions(exclusions); setShowEditFilters(true); }}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
             >
               <Filter className="w-4 h-4" />
@@ -351,6 +441,19 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
               Add Contacts
             </button>
           )}
+
+          <button
+            onClick={handleTogglePurpose}
+            title={list.purpose === 'calling' ? 'Remove from call lists' : 'Mark this list as a call list'}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border ${
+              list.purpose === 'calling'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <Phone className="w-4 h-4" />
+            {list.purpose === 'calling' ? 'Call list ✓' : 'Mark as Call list'}
+          </button>
 
           <button
             onClick={() => setShowEnroll(true)}
@@ -389,6 +492,42 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
           </div>
         </div>
       )}
+
+      {/* Exclusions summary */}
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/50 p-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wider text-rose-700">Exclusions</p>
+          {exclusionSummary.length > 0 ? (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {exclusionSummary.map((s, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center rounded border border-rose-200 bg-white px-2 py-0.5 text-xs text-rose-700"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">
+              No exclusions — this list uses everyone matching its {isDynamic ? 'filters' : 'members'}.
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => {
+            setEditExclusions(exclusions);
+            // Dynamic lists edit filters + exclusions in one modal; static lists
+            // have no filters, so they get the standalone exclusions modal.
+            if (isDynamic) { setEditFilters(filters); setShowEditFilters(true); }
+            else setShowEditExclusions(true);
+          }}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <Filter className="h-4 w-4" />
+          Edit exclusions
+        </button>
+      </div>
 
       {/* Contacts Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -584,11 +723,19 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
       <Modal
         open={showEditFilters}
         onClose={() => setShowEditFilters(false)}
-        title="Edit Filters"
+        title="Edit filters & exclusions"
         maxWidth="max-w-2xl"
       >
         <div className="space-y-4">
           <FilterBuilder filters={editFilters} onChange={setEditFilters} />
+          <div className="border-t border-slate-200 pt-4">
+            <ExclusionSelector
+              value={editExclusions}
+              onChange={setEditExclusions}
+              availableLists={availableLists}
+              currentListId={listId}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
             <button
               onClick={() => setShowEditFilters(false)}
@@ -600,7 +747,42 @@ export function ListDetailClient({ listId }: ListDetailClientProps) {
               onClick={handleSaveFilters}
               className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
             >
-              Save Filters
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Exclusions Modal */}
+      <Modal
+        open={showEditExclusions}
+        onClose={() => setShowEditExclusions(false)}
+        title="Edit exclusions"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Contacts from these sources are always dropped when this list is used — for calling,
+            sequence enrollment, and CSV export.
+          </p>
+          <ExclusionSelector
+            value={editExclusions}
+            onChange={setEditExclusions}
+            availableLists={availableLists}
+            currentListId={listId}
+          />
+          <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
+            <button
+              onClick={() => setShowEditExclusions(false)}
+              className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveExclusions}
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            >
+              Save exclusions
             </button>
           </div>
         </div>

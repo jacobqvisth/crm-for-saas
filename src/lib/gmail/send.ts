@@ -15,15 +15,29 @@ interface SendEmailParams {
   replyToThreadId?: string;
   /**
    * When true (default), append the sender's signature_html (from user_profiles)
-   * to the body. Auto-suppressed when replyToMessageId is set so signatures don't
-   * stack inside an existing thread.
+   * to the body. Applies to first touches AND thread replies/follow-ups — set
+   * to false (e.g. via a sequence step's include_signature column) to skip it.
    */
   includeSignature?: boolean;
+  /**
+   * When true, skip the per-account min_send_interval_seconds rate limit
+   * (the "minimum N seconds between sends" guard). Used for manual inbox
+   * replies, which are human-paced and shouldn't be throttled like automated
+   * sequence sends. The daily send cap (max_daily_sends) still applies.
+   */
+  bypassSendInterval?: boolean;
 }
 
 interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  /**
+   * Gmail thread ID for the sent message. For a brand-new email this is a
+   * fresh thread; callers persist it on email_queue.gmail_thread_id so the
+   * check-replies cron can detect replies (it only scans rows where
+   * gmail_thread_id IS NOT NULL).
+   */
+  threadId?: string;
   error?: string;
 }
 
@@ -154,7 +168,9 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
 
   // Check minimum send interval (per-account, configurable; default 60s).
-  if (account.updated_at) {
+  // Skipped for manual inbox replies (bypassSendInterval) — those are
+  // human-paced; only automated sequence sends need this throttle.
+  if (account.updated_at && !params.bypassSendInterval) {
     const intervalSeconds = account.min_send_interval_seconds ?? DEFAULT_MIN_SEND_INTERVAL_SECONDS;
     const intervalMs = intervalSeconds * 1000;
     const lastActivity = new Date(account.updated_at).getTime();
@@ -179,10 +195,14 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     : account.email_address;
 
   // Look up the sender's signature and append it to the body.
-  // Skip for thread replies — sigs stacking inside an existing thread is HubSpot-style noise.
+  // Honors the explicit includeSignature flag (default true) regardless of
+  // whether this is a thread reply — sequence bodies end on "Hälsningar," and
+  // rely on the signature to supply the sender name, so suppressing it on
+  // follow-up steps left a dangling sign-off. Callers that don't want a
+  // signature on a given send (or per-step) pass includeSignature: false.
   let finalHtmlBody = params.htmlBody;
   let finalTextBody = params.textBody;
-  const includeSignature = params.includeSignature !== false && !params.replyToMessageId;
+  const includeSignature = params.includeSignature !== false;
   if (includeSignature && account.user_id) {
     const { data: profile } = await supabase
       .from("user_profiles")
@@ -238,6 +258,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     return {
       success: true,
       messageId: response.data.id || undefined,
+      threadId: response.data.threadId || undefined,
     };
   } catch (err: unknown) {
     const error = err as { code?: number; message?: string };

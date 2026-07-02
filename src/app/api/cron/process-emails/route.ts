@@ -224,6 +224,31 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // --- Pause-new-contacts guard ---
+      // When a sequence is set to "finish in-progress only", hold the FIRST
+      // email of any not-yet-started contact (current_step === 0) by demoting
+      // it out of the scheduled pool to 'pending'. Follow-ups (current_step >= 1)
+      // for already-started contacts keep flowing. Demoting (rather than
+      // skipping in place) frees the oldest-100 send window so it isn't clogged
+      // by held first emails. Flipping the flag off via the pause-new-contacts
+      // endpoint promotes these back to 'scheduled'.
+      {
+        const seqSettings = (enrollment.sequences as unknown as {
+          settings?: SequenceSettings | null;
+        })?.settings;
+        if (
+          seqSettings?.pause_new_contacts === true &&
+          (enrollment.current_step ?? 0) === 0
+        ) {
+          await supabase
+            .from("email_queue")
+            .update({ status: "pending" as const })
+            .eq("id", item.id);
+          continue;
+        }
+      }
+      // --- End pause-new-contacts guard ---
+
       // --- Send-window guard ---
       // Defense in depth: refuse to send if the current moment is outside the
       // sequence's configured timezone/day/hour window. The jitter, retry, and
@@ -353,7 +378,7 @@ export async function POST(request: NextRequest) {
       // outreach to existing customers).
       const { data: contactStatus } = await supabase
         .from("contacts")
-        .select("status, wl_user_id, companies(wl_workshop_id)")
+        .select("status, wl_user_id, email_status, email_verified_at, companies(wl_workshop_id)")
         .eq("id", item.contact_id)
         .single();
 
@@ -365,10 +390,80 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Verification gate. MillionVerifier results were previously advisory only:
+      // neither enrollment nor this cron read email_status, so addresses we knew
+      // were undeliverable (or had never been verified) were still sent to — and
+      // bounced, surfacing in Compliance & DNC. Enforce verification here, the
+      // last gate before sendEmail().
+      const emailStatus = contactStatus?.email_status ?? null;
+
+      if (emailStatus === "invalid") {
+        // Known-bad mailbox → will bounce. Cancel and suppress permanently so it
+        // can't be re-queued or re-enrolled, mirroring how a hard bounce is
+        // handled by the check-replies cron.
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("id", item.id);
+
+        const emailDomainForSuppression = item.to_email.split("@")[1]?.toLowerCase();
+        const { data: existingInvalidSuppression } = await supabase
+          .from("suppressions")
+          .select("id")
+          .eq("workspace_id", item.workspace_id)
+          .eq("active", true)
+          .or(`email.eq.${item.to_email},domain.eq.${emailDomainForSuppression}`)
+          .limit(1)
+          .maybeSingle();
+        if (!existingInvalidSuppression) {
+          await supabase.from("suppressions").insert({
+            workspace_id: item.workspace_id,
+            email: item.to_email,
+            reason: "invalid_email",
+            source: "verification gate (process-emails cron): email_status=invalid",
+          });
+        }
+
+        if (item.enrollment_id) {
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "failed", completed_at: new Date().toISOString() })
+            .eq("id", item.enrollment_id);
+        }
+        continue;
+      }
+
+      const neverVerified =
+        emailStatus === null || ["unknown", "unverified", ""].includes(emailStatus);
+      if (neverVerified) {
+        // Deliverability unknown — don't send blind. Pause (don't suppress): once
+        // the address is verified valid/catch_all the operator can resume the
+        // enrollment. The standard enrollment flow verifies first, so this is a
+        // safety net for un-verified bulk imports rather than the common path.
+        await supabase
+          .from("email_queue")
+          .update({ status: "cancelled" as const })
+          .eq("id", item.id);
+        if (item.enrollment_id) {
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "paused" })
+            .eq("id", item.enrollment_id);
+        }
+        continue;
+      }
+
+      // Sequences explicitly flagged as customer follow-ups (allow_customers)
+      // are exempt from the customer guard — the operator deliberately enrolled
+      // the customer (e.g. a post-call "thanks for the conversation" message).
+      const allowCustomers =
+        (enrollment.sequences as unknown as { settings?: SequenceSettings | null })
+          ?.settings?.allow_customers === true;
+
       const companyWorkshopId =
         (contactStatus?.companies as { wl_workshop_id?: string | null } | null)
           ?.wl_workshop_id ?? null;
-      if (contactStatus?.wl_user_id || companyWorkshopId) {
+      if (!allowCustomers && (contactStatus?.wl_user_id || companyWorkshopId)) {
         await supabase
           .from("email_queue")
           .update({ status: "cancelled" as const })

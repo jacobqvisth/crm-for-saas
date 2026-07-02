@@ -8,7 +8,6 @@ import {
   Send,
   Eye,
   MessageSquare,
-  DollarSign,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +18,6 @@ import { DateRangeSelector, type RangeKey } from "./date-range-selector";
 import { DashboardSkeleton } from "./dashboard-skeleton";
 import { EmailPerformance } from "./email-performance";
 import { SequencePerformance } from "./sequence-performance";
-import { PipelineSection } from "./pipeline-section";
 import { ContactGrowth } from "./contact-growth";
 import { DeliverabilityPanel } from "./deliverability-panel";
 import type { Tables } from "@/lib/database.types";
@@ -36,7 +34,6 @@ interface DashboardData {
     openRateTrend: number;
     replyRate: number;
     replyRateTrend: number;
-    pipelineValue: number;
   };
   emailStats: {
     sent: number;
@@ -47,22 +44,6 @@ interface DashboardData {
     unsubscribes: number;
   };
   emailVolumeChart: { date: string; sent: number; opened: number }[];
-  pipelineChartData: { name: string; count: number; value: number; color: string }[];
-  dealsClosingSoon: {
-    id: string;
-    name: string;
-    amount: number | null;
-    stage: string;
-    expected_close_date: string | null;
-    companyName: string | null;
-  }[];
-  wonLost: {
-    wonCount: number;
-    wonValue: number;
-    lostCount: number;
-    lostValue: number;
-    winRate: number;
-  };
   contactGrowthChart: { date: string; total: number }[];
   leadStatusBreakdown: {
     new: number;
@@ -84,12 +65,6 @@ interface DashboardData {
   activities: Tables<"activities">[];
 }
 
-function formatCurrency(value: number) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value}`;
-}
-
 export function DashboardClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -103,7 +78,7 @@ export function DashboardClient() {
     (newRange: RangeKey) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set("range", newRange);
-      router.push(`/dashboard?${params.toString()}`);
+      router.push(`/dashboard/email-campaigns?${params.toString()}`);
     },
     [router, searchParams]
   );
@@ -237,13 +212,6 @@ export function DashboardClient() {
               : undefined
           }
         />
-        <MetricCard
-          title="Pipeline Value"
-          value={formatCurrency(metrics.pipelineValue)}
-          icon={DollarSign}
-          subtitle="open deals"
-          tooltip="Sum of deal amounts for all open deals (every stage except Closed Won and Closed Lost). Live total — not filtered by the date range."
-        />
       </div>
 
       {/* Email Performance */}
@@ -254,15 +222,6 @@ export function DashboardClient() {
       {/* Sequence Performance */}
       <div className="mb-8">
         <SequencePerformance sequences={data.sequencePerformance} />
-      </div>
-
-      {/* Pipeline & Deals */}
-      <div className="mb-8">
-        <PipelineSection
-          chartData={data.pipelineChartData}
-          dealsClosingSoon={data.dealsClosingSoon}
-          wonLost={data.wonLost}
-        />
       </div>
 
       {/* Contact Growth */}

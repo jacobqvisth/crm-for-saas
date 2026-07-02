@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
+import { deriveLifecycleStage } from "@/lib/wl-sync/matching";
 
 const PAGE_SIZE = 1000;
 const CHUNK_IN = 200;
@@ -65,7 +66,7 @@ async function propagateUsersToContacts(
   const contacts = await fetchAll(supabase, async (offset) =>
     supabase
       .from("contacts")
-      .select("id, wl_user_id")
+      .select("id, wl_user_id, lead_status")
       .not("wl_user_id", "is", null)
       .order("id")
       .range(offset, offset + PAGE_SIZE - 1),
@@ -82,7 +83,7 @@ async function propagateUsersToContacts(
     const { data, error } = await supabase
       .from("dashboard_users")
       .select(
-        "internal_user_id, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+        "internal_user_id, last_seen_at, signed_up_at, name, phone, core_stripe_customer_id, metadata",
       )
       .in("internal_user_id", slice);
     if (error) throw error;
@@ -101,10 +102,20 @@ async function propagateUsersToContacts(
         const u = usersById.get(contact.wl_user_id);
         if (!u) return;
         const meta = readMetadata(u.metadata);
+        // Keep the sales-funnel lead_status aligned with the live subscription
+        // for linked app users, without clobbering the prospecting funnel a
+        // rep owns. Returns null (omitted from the update) unless the value
+        // should actually change. See deriveContactLeadStatus.
+        const nextLeadStatus = deriveContactLeadStatus(
+          meta.subscription_status,
+          contact.lead_status,
+        );
         const update = {
           app_username: meta.username,
           app_role: normalizeAppRole(meta.user_role),
           last_active_at: u.last_seen_at,
+          // signup date is stable — never null it out on a sparse payload
+          ...(u.signed_up_at ? { signed_up_at: u.signed_up_at } : {}),
           login_count: meta.login_count,
           credits_remaining: meta.credits_remaining,
           user_plan_type: meta.plan_type,
@@ -112,6 +123,7 @@ async function propagateUsersToContacts(
           user_stripe_customer_id:
             u.core_stripe_customer_id ?? meta.stripe_customer_id,
           user_stripe_subscription_id: meta.stripe_subscription_id,
+          ...(nextLeadStatus ? { lead_status: nextLeadStatus } : {}),
         };
         const { error } = await supabase
           .from("contacts")
@@ -148,7 +160,7 @@ async function propagateWorkshopsToCompanies(
     const { data, error } = await supabase
       .from("dashboard_workshops")
       .select(
-        "workshop_id, name, country, activated_at, plan_key, core_subscription_status, payment_status, trial_end, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+        "workshop_id, name, country, activated_at, churned_at, plan_key, core_subscription_status, payment_status, trial_end, core_stripe_customer_id, core_stripe_subscription_id, metadata",
       )
       .in("workshop_id", slice);
     if (error) throw error;
@@ -171,10 +183,23 @@ async function propagateWorkshopsToCompanies(
           w.core_subscription_status,
           w.activated_at,
         );
+        // Keep lifecycle_stage in sync with the live subscription + plan so it
+        // never drifts from the plan column (active free → 'freemium', active
+        // paid → 'paying', etc.). Only applied when the derivation is
+        // conclusive — past_due / unknown statuses preserve the existing stage.
+        const lifecycleStage = deriveLifecycleStage(
+          w.core_subscription_status,
+          w.plan_key,
+        );
         const memberCount =
           typeof meta.member_count === "number" ? meta.member_count : null;
         const update = {
           activated_at: w.activated_at,
+          // churned_at is the owner's churn timestamp from the core_app
+          // export — a historical fact, kept even if the workshop later
+          // reactivates (lifecycle_stage reflects the current state). This
+          // is what feeds the Field Routes lapsed pool.
+          churned_at: w.churned_at,
           subscription_status: w.core_subscription_status,
           payment_status: w.payment_status,
           trial_ends_at: w.trial_end,
@@ -183,6 +208,7 @@ async function propagateWorkshopsToCompanies(
           stripe_subscription_id: w.core_stripe_subscription_id,
           customer_status: customerStatus,
           member_count: memberCount,
+          ...(lifecycleStage ? { lifecycle_stage: lifecycleStage } : {}),
         };
         const { error } = await supabase
           .from("companies")
@@ -201,6 +227,7 @@ async function propagateWorkshopsToCompanies(
 type DashboardUserShape = {
   internal_user_id: string | null;
   last_seen_at: string | null;
+  signed_up_at: string | null;
   name: string | null;
   phone: string | null;
   core_stripe_customer_id: string | null;
@@ -212,6 +239,7 @@ type DashboardWorkshopShape = {
   name: string | null;
   country: string | null;
   activated_at: string | null;
+  churned_at: string | null;
   plan_key: string | null;
   core_subscription_status: string | null;
   payment_status: string | null;
@@ -273,6 +301,43 @@ function normalizeAppRole(v: string | null): string | null {
   const lower = v.trim().toLowerCase();
   if (lower === "admin" || lower === "mechanic") return lower;
   return null;
+}
+
+// Map a linked app user's live subscription onto the contact's sales-funnel
+// lead_status. Deliberately conservative: we only assert the two states
+// billing makes unambiguous and never overwrite the early/mid funnel that
+// sales owns.
+//   - active / past_due  → "customer"  (an active or dunning subscriber IS a
+//                          customer; mirrors deriveCustomerStatus, which also
+//                          treats past_due as active)
+//   - lapsed (canceled / unpaid / incomplete_expired / paused / inactive)
+//                        → "churned", but ONLY when the contact was previously
+//                          synced to "customer". This demotes a customer who
+//                          lapsed without clobbering a rep's win-back funnel
+//                          state (engaged/qualified) on a churned account.
+//   - trialing / unknown / missing → null (leave it to sales)
+// Returns null whenever the value should not change (already correct, or no
+// opinion), so the caller can omit lead_status from the update entirely.
+export function deriveContactLeadStatus(
+  subscriptionStatus: string | null,
+  currentLeadStatus: string | null,
+): "customer" | "churned" | null {
+  const s = subscriptionStatus?.toLowerCase() ?? null;
+  if (!s) return null;
+  if (s === "active" || s === "past_due") {
+    return currentLeadStatus === "customer" ? null : "customer";
+  }
+  if (
+    s === "canceled" ||
+    s === "cancelled" ||
+    s === "unpaid" ||
+    s === "incomplete_expired" ||
+    s === "paused" ||
+    s === "inactive"
+  ) {
+    return currentLeadStatus === "customer" ? "churned" : null;
+  }
+  return null; // trialing / unknown → owned by sales
 }
 
 function deriveCustomerStatus(

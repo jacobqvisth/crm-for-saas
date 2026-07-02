@@ -24,7 +24,13 @@ import {
 import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 
 export type DashboardSectionKey =
+  | "email-campaigns"
   | "usage"
+  | "active-users"
+  | "feature-usage"
+  | "product-analytics"
+  | "plan-stats"
+  | "toplists"
   | "cta-clicks"
   | "conversions"
   | "dashboard"
@@ -38,6 +44,7 @@ export type DashboardSectionKey =
   | "operations"
   | "lifecycle"
   | "revenue"
+  | "payment-methods"
   | "data-health"
   | "domain-health"
   | "reviews"
@@ -57,16 +64,61 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "usage",
     label: "Usage",
     glyph: "US",
-    href: "/ceo/app-usage",
+    href: "/dashboard/app-usage",
     title: "Usage",
     description:
       "GA4 unique users, sessions, page views, and event volume — bucketed to match the selected range. Filter by platform: web, iOS, Android, or all.",
   },
   {
+    key: "active-users",
+    label: "Active Users",
+    glyph: "AU",
+    href: "/dashboard/active-users",
+    title: "Active Users",
+    description:
+      "Logged-in users on app.wrenchlane.com and what they did in the selected range (default: yesterday). Joins GA4 engagement (sessions, page views, events) with first-party diagnostics, keyed on crm_user_id = contacts.wl_user_id. Internal-test accounts excluded.",
+  },
+  {
+    key: "feature-usage",
+    label: "Feature Usage",
+    glyph: "FU",
+    href: "/dashboard/feature-usage",
+    title: "Feature Usage",
+    description:
+      "Per-feature adoption from first-party app data: diagnostics, chat, AI search, VRM lookups, InfoPro and Motor vehicle lookups, plus real app logins (login-history backfill reaches ~14 months). Feature counters accumulate from the hourly core_app sync starting 2026-06-11.",
+  },
+  {
+    key: "product-analytics",
+    label: "Product Analytics",
+    glyph: "PH",
+    href: "/dashboard/product-analytics",
+    title: "Product Analytics",
+    description:
+      "Live PostHog product behaviour, keyed on the Cognito sub (= contacts.wl_user_id) and grouped by workshop: the in-app activation funnel and where users drop off, monetization/upgrade intent, per-workshop engagement, top events (incl. autocapture), errors, and segments by plan/country. Internal staff excluded. Queried live, cached 5 min. (Retention cohorts arrive once there is enough history — data starts 2026-06-08.)",
+  },
+  {
+    key: "plan-stats",
+    label: "Plan Stats",
+    glyph: "PS",
+    href: "/dashboard/plan-stats",
+    title: "Plan Stats",
+    description:
+      "The public pricing page brought to life: every plan (Free / One / Small / Large) with how many users and workshops are on it, how many are active in the range, and the real feature-event counts behind each listed feature. Expand a card for the full per-feature breakdown. Feature counters exist from 2026-06-11 onward.",
+  },
+  {
+    key: "toplists",
+    label: "Top Lists",
+    glyph: "TL",
+    href: "/dashboard/toplists",
+    title: "Top Lists",
+    description:
+      "Leaderboards for the selected range (default: last 30 days). Top users by activity (diagnoses, GA4 events, sessions, engaged time, with their most-fired event types) and top cars by diagnoses (distinct users/workshops, completion rate, avg AI causes, top fault codes). Click any numeric column to re-sort.",
+  },
+  {
     key: "new-users",
     label: "New Users",
     glyph: "NU",
-    href: "/ceo/new-users",
+    href: "/dashboard/new-users",
     title: "New Users",
     description:
       "Top of the funnel. iOS / Android downloads, sign-ups, first diagnoses, and average days from sign-up to first diagnosis.",
@@ -75,7 +127,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "cta-clicks",
     label: "CTA Clicks",
     glyph: "CT",
-    href: "/ceo/cta-clicks",
+    href: "/dashboard/cta-clicks",
     title: "CTA Clicks",
     description:
       "Live GA4 view of cta_click events. Filter by host (app / marketing / all), break down by section and button label.",
@@ -84,7 +136,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "conversions",
     label: "Conversions",
     glyph: "CV",
-    href: "/ceo/conversions",
+    href: "/dashboard/conversions",
     title: "Conversions",
     description:
       "Outreach → signup attribution. Per-sequence: sends, unique recipients, attributed signups, conversion rate, and median lag from send to signup. Driven by contacts.attributed_to_sequence_id, populated by the hourly discover-new cron.",
@@ -93,7 +145,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "dashboard",
     label: "Overview - test",
     glyph: "OV",
-    href: "/ceo/overview",
+    href: "/dashboard/overview",
     title: "Command Center",
     description:
       "One place to read the company: growth, activation, revenue, operations, and trust in the numbers.",
@@ -102,7 +154,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "pilot-stats",
     label: "Pilot Stats - test",
     glyph: "PS",
-    href: "/ceo/pilot-stats",
+    href: "/dashboard/pilot-stats",
     title: "Pilot Stats",
     description:
       "Mirror of the legacy Streamlit overview. Total users, workshops, diagnostics, AI cost, activity, and per-workshop volume.",
@@ -111,7 +163,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "acquisition",
     label: "Acquisition - test",
     glyph: "AQ",
-    href: "/ceo/acquisition",
+    href: "/dashboard/acquisition",
     title: "Acquisition",
     description:
       "Paid demand, campaign efficiency, funnel handoff, and where traffic is producing real activation.",
@@ -120,7 +172,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "organic-search",
     label: "Organic Search - test",
     glyph: "OS",
-    href: "/ceo/organic-search",
+    href: "/dashboard/organic-search",
     title: "Organic Search",
     description:
       "Search Console clicks, impressions, top queries, top pages, and how organic discovery is trending.",
@@ -129,7 +181,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "product",
     label: "Product - test",
     glyph: "PD",
-    href: "/ceo/product",
+    href: "/dashboard/product",
     title: "Product",
     description:
       "Usage, diagnostics throughput, platform mix, and workshop movement from signup into value.",
@@ -138,7 +190,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "workshops",
     label: "Workshops - test",
     glyph: "WS",
-    href: "/ceo/workshops",
+    href: "/dashboard/workshops",
     title: "Workshop Drilldown",
     description:
       "A deeper account-level view of workshops, members, billing state, activity, and diagnostics usage.",
@@ -147,7 +199,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "diagnostics",
     label: "Diagnostics",
     glyph: "DG",
-    href: "/ceo/diagnostics",
+    href: "/dashboard/diagnostics",
     title: "Diagnostics",
     description:
       "Per-diagnostic drilldown. Username, workshop, car, DTCs, symptoms, description, and the full ranked list of AI causes for every session in the selected window.",
@@ -156,7 +208,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "operations",
     label: "Operations - test",
     glyph: "OP",
-    href: "/ceo/operations",
+    href: "/dashboard/operations",
     title: "Operations",
     description:
       "Diagnostics engine throughput, AI cost, Motor database usage, and efficiency of the product machinery.",
@@ -165,7 +217,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "lifecycle",
     label: "Lifecycle - test",
     glyph: "LC",
-    href: "/ceo/lifecycle",
+    href: "/dashboard/lifecycle",
     title: "Lifecycle",
     description:
       "Customer.io campaign performance, messaging quality, and retention-touch effectiveness.",
@@ -174,16 +226,25 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "revenue",
     label: "Revenue - test",
     glyph: "RV",
-    href: "/ceo/revenue",
+    href: "/dashboard/revenue",
     title: "Revenue",
     description:
       "Stripe-backed subscription health, plan mix, paid growth, and workshop billing posture.",
   },
   {
+    key: "payment-methods",
+    label: "Payment Methods",
+    glyph: "PM",
+    href: "/dashboard/payment-methods",
+    title: "Payment Methods",
+    description:
+      "How many accounts have a card on file in Stripe (live), the now-vs-ever-added gap, method/plan mix, and a CRM-mirror cross-reference. Billing is per workshop/account.",
+  },
+  {
     key: "data-health",
     label: "Data Health - test",
     glyph: "DH",
-    href: "/ceo/data-health",
+    href: "/dashboard/data-health",
     title: "Data Health",
     description:
       "Freshness, recent sync runs, canonical coverage, and how much confidence to place in every view.",
@@ -192,7 +253,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "domain-health",
     label: "Domain Health",
     glyph: "DM",
-    href: "/ceo/domain-health",
+    href: "/dashboard/domain-health",
     title: "Domain Health",
     description:
       "Daily DNS auth, blocklist, and send-rate snapshot for wrenchlane.com. Alerts when bounce rate, unsubscribe rate, or send volume signals deliverability risk.",
@@ -201,7 +262,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "reviews",
     label: "Reviews",
     glyph: "RV",
-    href: "/ceo/reviews",
+    href: "/dashboard/reviews",
     title: "Reviews",
     description:
       "Wrenchlane's rating and review count across every SaaS review platform (Capterra, G2, Trustpilot, Google, and more), with a feed of individual reviews where a platform exposes them. Manual entry today; Google + Trustpilot API sync to follow.",
@@ -210,10 +271,19 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     key: "settings",
     label: "Playbook - test",
     glyph: "PB",
-    href: "/ceo/settings",
+    href: "/dashboard/settings",
     title: "Playbook",
     description:
       "Source priorities, dashboard operating rules, and how the CEO should read this system.",
+  },
+  {
+    key: "email-campaigns",
+    label: "Email Campaigns",
+    glyph: "EC",
+    href: "/dashboard/email-campaigns",
+    title: "Email Campaigns",
+    description:
+      "CRM outreach performance: total contacts, active sequences, emails sent, open and reply rates, pipeline value, sequence performance, and deliverability.",
   },
 ];
 
@@ -306,7 +376,9 @@ function KpiTile({
       <div className="kpi-card-main">
         <p className="label-with-info">
           <span>{card.label}</span>
-          <InfoHint info={sourceInfoFromLabel(card.label)} />
+          <InfoHint
+            info={(card.info as SourceInfo) ?? sourceInfoFromLabel(card.label)}
+          />
         </p>
         <strong>{card.value}</strong>
       </div>
@@ -2094,49 +2166,161 @@ function LifecycleSection({ data }: { data: DashboardData }) {
   );
 }
 
+// Precise per-metric tooltips for the revenue page. These spell out the exact
+// data source + condition behind each number, and (critically) draw the line
+// between "Paused → Free" (a current, reversible paused subscription) and
+// "Trial-only churn" (a fully canceled subscription that never paid).
+const EVER_PAID_NOTE =
+  "ever_paid is true when the subscription has at least one Stripe invoice with amount_paid > 0 (a real charge, not a $0 trial invoice). It's written each hour by the Stripe sync onto dashboard_subscriptions.metadata.ever_paid.";
+
+const REVENUE_INFO: Record<string, SourceInfo> = {
+  mrr: {
+    title: "MRR — monthly recurring revenue",
+    body:
+      "Recurring revenue from workshops that are paying right now. Trials are NOT included here — their potential value is shown separately as Trial MRR.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='active'", "mrr_amount_cents", "currency"],
+    logic:
+      "Sum of mrr_amount_cents / 100 across subscriptions with status='active'. Yearly plans are normalized to a monthly amount by the sync. ARR = MRR × 12. Internal-test workshops are excluded.",
+    refresh: "Refreshes when the hourly Stripe sync upserts dashboard_subscriptions.",
+  },
+  active: {
+    title: "Active subscriptions",
+    body: "Workshops with a live, paying Stripe subscription.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='active'"],
+    logic:
+      "Count of dashboard_subscriptions where status='active', excluding internal-test workshops. These are the subscriptions that make up MRR.",
+  },
+  trials: {
+    title: "Trials",
+    body:
+      "Workshops in a free trial that have not been charged yet. They are not revenue until they convert.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='trialing'", "trial_end", "mrr_amount_cents"],
+    logic:
+      "Count of dashboard_subscriptions where status='trialing'. Trial MRR is the MRR they would add if every current trial converted.",
+  },
+  pausedToFree: {
+    title: "Paused → Free (not churn)",
+    body:
+      "Subscriptions whose billing is PAUSED. The subscription still exists and can resume without a new signup — the workshop has simply dropped back to the Free plan in the meantime. This is a current snapshot of how many are paused right now, and it is reversible.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='paused'"],
+    logic:
+      "Count of dashboard_subscriptions where status='paused', excluding internal-test workshops. NOT counted as churn because the subscription was never canceled — this is the key difference from Trial-only churn, where the subscription is ended.",
+  },
+  paidChurn: {
+    title: "Paid churn",
+    body:
+      "The churn number that matters: customers who paid at least one real invoice and then canceled. True lost revenue.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='canceled'", "ever_paid=true", "canceled_at in range"],
+    logic:
+      "Count of subscriptions where status='canceled', ever_paid=true, and canceled_at falls inside the selected range. " +
+      EVER_PAID_NOTE,
+  },
+  trialChurn: {
+    title: "Trial-only churn",
+    body:
+      "Subscriptions that were CANCELED and never took a real payment — almost always trials that didn't convert. Contrast with Paused → Free: there the subscription is paused (alive, can resume); here it is fully ended.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='canceled'", "ever_paid=false", "canceled_at in range"],
+    logic:
+      "Count of subscriptions where status='canceled', ever_paid=false, and canceled_at falls inside the selected range. " +
+      EVER_PAID_NOTE,
+  },
+  planMix: {
+    title: "Active subscriptions by plan",
+    body:
+      "How many paying subscriptions sit on each plan, and how much MRR each plan contributes.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='active'", "plan_key (Stripe price id)", "mrr_amount_cents"],
+    logic:
+      "Active subscriptions grouped by plan tier. Each subscription's tier is its Stripe price id mapped to One / Small / Large × Monthly / Yearly; MRR is the summed monthly amount for that tier; % of MRR is the tier's share of total MRR.",
+  },
+  billing: {
+    title: "Subscription states",
+    body:
+      "Every Stripe subscription by its current state. Active and Trialing are in the funnel; Paused → Free is paused (reversible); Canceled has ended.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status in (active, trialing, paused, canceled)"],
+    logic:
+      "Counts of dashboard_subscriptions by status, excluding internal-test workshops. Paused → Free = status='paused'. These are current states; the churn breakdown below instead counts cancellations within the selected range.",
+  },
+  churnPanel: {
+    title: "Why subscriptions ended",
+    body:
+      "Cancellations within the selected range, split by whether the customer ever paid. This is distinct from Paused → Free: those subscriptions are paused, not canceled, so they are not here.",
+    sources: ["Stripe", "dashboard_subscriptions"],
+    fields: ["status='canceled'", "canceled_at in range", "ever_paid"],
+    logic:
+      "Subscriptions with status='canceled' whose canceled_at is in range, bucketed by ever_paid (paid vs trial-only). " +
+      EVER_PAID_NOTE,
+  },
+  deleted: {
+    title: "Deleted accounts",
+    body:
+      "Workshops that removed their account entirely (a stronger signal than canceling a subscription).",
+    sources: ["core app export (not yet available)"],
+    logic:
+      "Not currently in the warehouse export, so this shows '—'. It will populate once the core app surfaces an account-deletion timestamp.",
+  },
+};
+
 function RevenueSection({ data }: { data: DashboardData }) {
+  const { revenue } = data;
+  const cur = revenue.currency;
+  const totalChurn = revenue.churn.paid + revenue.churn.trialOnly;
+
   const cards: KpiCard[] = [
     {
       label: "MRR",
-      value: formatCurrency(data.revenue.mrr),
-      rawValue: data.revenue.mrr,
-      hint: `${formatCurrency(data.revenue.arr)} ARR run rate`,
+      value: formatCurrency(revenue.mrr, cur),
+      rawValue: revenue.mrr,
+      hint: `${formatCurrency(revenue.arr, cur)} ARR run rate · active only`,
       tone: "revenue",
+      info: REVENUE_INFO.mrr,
     },
     {
       label: "Active subscriptions",
-      value: formatNumber(data.revenue.activeSubscriptions),
-      rawValue: data.revenue.activeSubscriptions,
-      hint: "Stripe canonical",
+      value: formatNumber(revenue.activeSubscriptions),
+      rawValue: revenue.activeSubscriptions,
+      hint: "Paying workshops (Stripe)",
       tone: "growth",
+      info: REVENUE_INFO.active,
     },
     {
       label: "Trials",
-      value: formatNumber(data.revenue.trials),
-      rawValue: data.revenue.trials,
-      hint: "Potential future paid workshops",
+      value: formatNumber(revenue.trials),
+      rawValue: revenue.trials,
+      hint: `${formatCurrency(revenue.trialMrr, cur)} MRR if they convert`,
       tone: "growth",
+      info: REVENUE_INFO.trials,
     },
     {
-      label: "New paid workshops",
-      value: formatNumber(data.revenue.newPaidWorkshops),
-      rawValue: data.revenue.newPaidWorkshops,
-      hint: "New paid movement in range",
-      tone: "growth",
+      label: "Paused → Free",
+      value: formatNumber(revenue.pausedToFree),
+      rawValue: revenue.pausedToFree,
+      hint: "Billing paused, alive & reversible — not churn",
+      tone: revenue.pausedToFree ? "warning" : "neutral",
+      info: REVENUE_INFO.pausedToFree,
     },
     {
-      label: "Churned",
-      value: formatNumber(data.revenue.churnedSubscriptions),
-      rawValue: data.revenue.churnedSubscriptions,
-      hint: "Stripe churn events in range",
-      tone: data.revenue.churnedSubscriptions ? "warning" : "neutral",
+      label: "Paid churn",
+      value: formatNumber(revenue.churn.paid),
+      rawValue: revenue.churn.paid,
+      hint: `Paid ≥1×, then canceled · ${revenue.churn.rangeLabel}`,
+      tone: revenue.churn.paid ? "warning" : "neutral",
+      info: REVENUE_INFO.paidChurn,
     },
     {
-      label: "Live workshops",
-      value: formatNumber(data.workshopSnapshot.live),
-      rawValue: data.workshopSnapshot.live,
-      hint: "Active + trialing workshops",
-      tone: "growth",
+      label: "Trial-only churn",
+      value: formatNumber(revenue.churn.trialOnly),
+      rawValue: revenue.churn.trialOnly,
+      hint: `Canceled, never paid · ${revenue.churn.rangeLabel}`,
+      tone: "neutral",
+      info: REVENUE_INFO.trialChurn,
     },
   ];
 
@@ -2150,28 +2334,19 @@ function RevenueSection({ data }: { data: DashboardData }) {
             eyebrow="Trend"
             title="Revenue and subscription trend"
             badge="Normalized daily shape"
-            description="MRR, active subscriptions, and trials are shown together to help the CEO read momentum, not just the current snapshot."
+            description="MRR, active subscriptions, and trials are shown together to help read momentum, not just the current snapshot."
           />
           <TrendChart<RevenueTrendPoint, "mrr" | "activeSubscriptions" | "trials" | "newPaidWorkshops">
             points={data.revenueTrend}
             series={[
-              {
-                key: "mrr",
-                label: "MRR",
-                color: "#465fff",
-                fill: "#465fff",
-              },
+              { key: "mrr", label: "MRR", color: "#465fff", fill: "#465fff" },
               {
                 key: "activeSubscriptions",
                 label: "Active subscriptions",
                 color: "#12b76a",
                 fill: "#12b76a",
               },
-              {
-                key: "trials",
-                label: "Trials",
-                color: "#38bdf8",
-              },
+              { key: "trials", label: "Trials", color: "#38bdf8" },
               {
                 key: "newPaidWorkshops",
                 label: "New paid",
@@ -2187,17 +2362,48 @@ function RevenueSection({ data }: { data: DashboardData }) {
         <article className="panel">
           <PanelHeader
             eyebrow="Plan Mix"
-            title="Where recurring revenue is concentrated"
-            badge={`${formatNumber(data.revenue.planMix.length)} plan rows`}
+            title="Active subscriptions by plan"
+            badge={`${formatNumber(revenue.planMix.length)} plans`}
+            description="Each currently-paying subscription, grouped by the plan it bills for. MRR share shows where recurring revenue is concentrated. Trials and paused subscriptions are not counted here."
+            info={REVENUE_INFO.planMix}
           />
-          <BarList
-            items={data.revenue.planMix.map((plan) => ({
-              label: plan.plan,
-              value: plan.subscriptions,
-            }))}
-            emptyTitle="No plan mix rows yet"
-            emptyBody="Stripe plan distribution will appear here once recurring subscription rows are synced."
-          />
+          {revenue.planMix.length === 0 ? (
+            <EmptyState
+              title="No active paid plans yet"
+              body="Once workshops convert from trial to a paid plan, the plan distribution appears here."
+            />
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th><TableHeading label="Plan" /></th>
+                    <th><TableHeading label="Active" info="Count of currently-active (paying) Stripe subscriptions on this plan." /></th>
+                    <th><TableHeading label="MRR" info="Monthly recurring revenue from active subscriptions on this plan (yearly plans normalized to a monthly figure)." /></th>
+                    <th><TableHeading label="% of MRR" info="This plan's MRR as a share of total active MRR — where recurring revenue is concentrated." /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenue.planMix.map((plan) => (
+                    <tr key={plan.plan}>
+                      <td><strong>{plan.plan}</strong></td>
+                      <td>{formatNumber(plan.subscriptions)}</td>
+                      <td>{formatCurrency(plan.mrr, cur)}</td>
+                      <td>{formatPercent(plan.shareOfMrr * 100)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td><strong>Total</strong></td>
+                    <td><strong>{formatNumber(revenue.activeSubscriptions)}</strong></td>
+                    <td><strong>{formatCurrency(revenue.mrr, cur)}</strong></td>
+                    <td><strong>100%</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </article>
       </section>
 
@@ -2205,80 +2411,196 @@ function RevenueSection({ data }: { data: DashboardData }) {
         <article className="panel panel-wide">
           <PanelHeader
             eyebrow="Billing Posture"
-            title="Workshop billing state"
-            badge={`${formatNumber(data.workshopSnapshot.stripeLinked)} Stripe-linked`}
+            title="Subscription states (Stripe)"
+            badge={`${formatNumber(
+              revenue.billing.active +
+                revenue.billing.trialing +
+                revenue.billing.pausedToFree +
+                revenue.billing.canceled,
+            )} subscriptions`}
+            description="Every Stripe subscription by its current state. These are current statuses — not events in the selected range. 'Paused → Free' = billing paused (alive, reversible); 'Canceled' = the subscription has ended."
+            info={REVENUE_INFO.billing}
           />
           <SegmentBar
             segments={[
-              {
-                label: "Active",
-                value: data.workshopSnapshot.active,
-                colorClass: "segment-active",
-              },
-              {
-                label: "Trialing",
-                value: data.workshopSnapshot.trialing,
-                colorClass: "segment-trialing",
-              },
-              {
-                label: "Paused",
-                value: data.workshopSnapshot.paused,
-                colorClass: "segment-paused",
-              },
-              {
-                label: "At risk",
-                value: data.workshopSnapshot.atRisk,
-                colorClass: "segment-risk",
-              },
-              {
-                label: "Inactive",
-                value: data.workshopSnapshot.inactive,
-                colorClass: "segment-inactive",
-              },
-              {
-                label: "Unknown",
-                value: data.workshopSnapshot.unknown,
-                colorClass: "segment-unknown",
-              },
+              { label: "Active", value: revenue.billing.active, colorClass: "segment-active" },
+              { label: "Trialing", value: revenue.billing.trialing, colorClass: "segment-trialing" },
+              { label: "Paused → Free", value: revenue.billing.pausedToFree, colorClass: "segment-paused" },
+              { label: "Canceled", value: revenue.billing.canceled, colorClass: "segment-inactive" },
             ]}
           />
           <SummaryGrid
             columns={4}
             items={[
+              { label: "ARR run rate", value: formatCurrency(revenue.arr, cur) },
+              { label: "MRR", value: formatCurrency(revenue.mrr, cur) },
               {
-                label: "ARR run rate",
-                value: formatCurrency(data.revenue.arr),
+                label: "Trial MRR",
+                value: formatCurrency(revenue.trialMrr, cur),
+                hint: "If active trials convert",
               },
               {
-                label: "MRR",
-                value: formatCurrency(data.revenue.mrr),
-              },
-              {
-                label: "Active subscriptions",
-                value: formatNumber(data.revenue.activeSubscriptions),
-              },
-              {
-                label: "Trialing subscriptions",
-                value: formatNumber(data.revenue.trials),
+                label: "Avg MRR / paying",
+                value: formatCurrency(
+                  revenue.activeSubscriptions
+                    ? revenue.mrr / revenue.activeSubscriptions
+                    : 0,
+                  cur,
+                ),
               },
             ]}
           />
         </article>
 
         <article className="panel">
-          <PanelHeader eyebrow="Retention Lens" title="How to read risk" />
+          <PanelHeader
+            eyebrow="Retention Lens"
+            title="Paused → Free vs. churn"
+          />
           <div className="insight-list">
             <p>
-              Active and trialing workshops show immediate revenue base plus
-              near-term expansion opportunity.
+              These two get confused, so to be precise — both describe a
+              non-paying workshop, but the subscription is in a different state:
             </p>
             <p>
-              Paused and at-risk workshops are the best early-warning group for
-              churn prevention and product success outreach.
+              <strong>Paused → Free</strong> — the Stripe subscription is{" "}
+              <strong>paused</strong>. It still exists, isn’t being charged, and
+              can resume billing without a new signup. A live, reversible state
+              and the best win-back / upsell pool. <em>Not</em> churn.
             </p>
             <p>
-              Unknown status should be treated as missing linkage, not as
-              healthy revenue.
+              <strong>Trial-only churn</strong> — the subscription is{" "}
+              <strong>canceled</strong> and never took a payment. It’s gone, not
+              paused; reactivating means a fresh subscription. Counted as churn
+              (the non-paying kind).
+            </p>
+            <p>
+              <strong>Paid churn</strong> — also <strong>canceled</strong>, but
+              the customer had paid at least once. This is real lost revenue.
+            </p>
+            <p>
+              In short: <strong>paused</strong> ⇒ Paused → Free;{" "}
+              <strong>canceled</strong> ⇒ churn (paid or trial-only). Active and
+              trialing are the live funnel. Internal-test workshops are excluded
+              from every number.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section className="content-grid">
+        <article className="panel panel-wide">
+          <PanelHeader
+            eyebrow="Churn breakdown"
+            title="Why subscriptions ended"
+            badge={
+              revenue.churn.everPaidKnown ? `${revenue.churn.rangeLabel}` : "Approximate"
+            }
+            description={`Subscriptions CANCELED during ${revenue.churn.rangeLabel}, split by whether the customer ever made a real payment. Paused → Free subscriptions are not here — those are paused, not canceled.`}
+            info={REVENUE_INFO.churnPanel}
+          />
+          <SummaryGrid
+            columns={3}
+            items={[
+              {
+                label: "Paid churn",
+                value: formatNumber(revenue.churn.paid),
+                hint: "Paid ≥1 invoice, then canceled — lost revenue",
+                info: REVENUE_INFO.paidChurn,
+              },
+              {
+                label: "Trial-only churn",
+                value: formatNumber(revenue.churn.trialOnly),
+                hint: "Canceled, never paid (subscription ended)",
+                info: REVENUE_INFO.trialChurn,
+              },
+              {
+                label: "Deleted accounts",
+                value: revenue.churn.deletedTracked
+                  ? formatNumber(revenue.churn.deleted)
+                  : "—",
+                hint: revenue.churn.deletedTracked
+                  ? "Account fully deleted"
+                  : "Not exported yet",
+                info: REVENUE_INFO.deleted,
+              },
+            ]}
+          />
+          {!revenue.churn.everPaidKnown ? (
+            <p className="panel-description">
+              Payment history isn’t in the warehouse yet, so the paid/trial split
+              is approximated from the trial boundary (canceled after the trial
+              ended ⇒ counted as paid). It becomes exact after the next Stripe
+              sync populates payment history.
+            </p>
+          ) : null}
+          {revenue.churn.byPlan.length > 0 ? (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th><TableHeading label="Plan churned from" info="The plan the canceled subscription was billing for (from its Stripe price id), even if the workshop has since dropped to Free." /></th>
+                    <th><TableHeading label="Paid churn" info={REVENUE_INFO.paidChurn} /></th>
+                    <th><TableHeading label="Trial-only" info={REVENUE_INFO.trialChurn} /></th>
+                    <th><TableHeading label="Total" info="All cancellations on this plan in the selected range (paid + trial-only)." /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenue.churn.byPlan.map((row) => (
+                    <tr key={row.plan}>
+                      <td><strong>{row.plan}</strong></td>
+                      <td>{formatNumber(row.paid)}</td>
+                      <td>{formatNumber(row.trialOnly)}</td>
+                      <td>{formatNumber(row.paid + row.trialOnly)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td><strong>Total</strong></td>
+                    <td><strong>{formatNumber(revenue.churn.paid)}</strong></td>
+                    <td><strong>{formatNumber(revenue.churn.trialOnly)}</strong></td>
+                    <td><strong>{formatNumber(totalChurn)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              title="No cancellations in this range"
+              body="Nothing churned during the selected window. Widen the range to see historical churn."
+            />
+          )}
+        </article>
+
+        <article className="panel">
+          <PanelHeader eyebrow="Definitions" title="What counts as churn" />
+          <div className="insight-list">
+            <p>
+              Churn here means a <strong>canceled</strong> subscription whose{" "}
+              <code>canceled_at</code> falls in the selected range. Paused → Free
+              is excluded — a paused subscription hasn’t churned.
+            </p>
+            <p>
+              <strong>Paid churn</strong> — <code>ever_paid = true</code>: the
+              customer paid at least one real invoice, then canceled. The number
+              that matters most — actual lost revenue.
+            </p>
+            <p>
+              <strong>Trial-only churn</strong> — <code>ever_paid = false</code>:
+              canceled without ever paying. Usually a trial that didn’t convert.
+              (If they’re still on Free with the subscription paused rather than
+              canceled, they’re in Paused → Free, not here.)
+            </p>
+            <p>
+              <strong>Deleted accounts</strong> — workshops that removed their
+              account outright. Not yet in the data export, so it shows “—”.
+            </p>
+            <p>
+              <strong>ever_paid</strong> is set by the hourly Stripe sync: true
+              when the subscription has ≥1 invoice with{" "}
+              <code>amount_paid &gt; 0</code> (a real charge, not a $0 trial
+              invoice).
             </p>
           </div>
         </article>

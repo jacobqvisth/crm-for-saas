@@ -36,6 +36,8 @@ const workshopDefaults = {
   created_by_agent: null,
   core_stripe_customer_id: null,
   core_stripe_subscription_id: null,
+  is_internal_test: false,
+  churned_at: null,
 };
 
 const workshops: WarehouseWorkshop[] = [
@@ -82,11 +84,14 @@ const subscriptions: WarehouseSubscription[] = [
     stripe_customer_id: "cus_1",
     status: "active",
     plan_key: "pro",
+    mrr_amount_cents: 100000,
+    currency: "USD",
     current_period_start: null,
     current_period_end: null,
     trial_end: null,
     cancel_at: null,
     canceled_at: null,
+    metadata: { ever_paid: true, first_paid_at: "2026-04-04T00:00:00.000Z" },
   },
 ];
 
@@ -96,6 +101,7 @@ const users: WarehouseUser[] = [
     workshop_id: "w-1",
     customer_io_id: "cio-1",
     created_at: "2026-04-01T00:00:00.000Z",
+    signed_up_at: "2026-04-01T00:00:00.000Z",
     last_seen_at: "2026-04-20T00:00:00.000Z",
     name: null,
     phone: null,

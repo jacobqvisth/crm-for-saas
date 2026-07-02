@@ -41,6 +41,7 @@ const contact = {
   email_status: "verified",
   email_verified_at: null,
   seniority: null,
+  signed_up_at: null,
   linkedin_url: null,
   instagram_url: null,
   facebook_url: null,
@@ -75,6 +76,14 @@ const contact = {
   attributed_to_sequence_id: null,
   attributed_via: null,
   attributed_at: null,
+  website: null,
+  primary_owner_id: null,
+  secondary_owner_id: null,
+  owner_auto: true,
+  owner_updated_at: null,
+  primary_owner_source: null,
+  phone_searched_at: null,
+  phone_search_outcome: null,
 } satisfies Contact;
 
 const company: Company = {
@@ -154,6 +163,11 @@ const company: Company = {
   is_sole_proprietor: false,
   employee_size_band: null,
   county: null,
+  primary_owner_id: null,
+  secondary_owner_id: null,
+  owner_auto: true,
+  owner_updated_at: null,
+  primary_owner_source: null,
 };
 
 // ---------------------------------------------------------------------------

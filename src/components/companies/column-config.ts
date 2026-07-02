@@ -2,7 +2,6 @@ import type { Tables } from '@/lib/database.types';
 
 export type Company = Tables<'companies'> & {
   contacts_count: number;
-  deals_count: number;
 };
 
 export type ColumnId =
@@ -15,7 +14,6 @@ export type ColumnId =
   | 'industry'
   | 'category'
   | 'contacts_count'
-  | 'deals_count'
   | 'lifecycle_stage'
   | 'customer_status'
   | 'plan'
@@ -43,7 +41,6 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'industry',        label: 'Industry',        default: true,  sortable: true  },
   { id: 'category',        label: 'Category',        default: false, sortable: false },
   { id: 'contacts_count',  label: 'Contacts',        default: true,  sortable: false },
-  { id: 'deals_count',     label: 'Deals',           default: true,  sortable: false },
   { id: 'lifecycle_stage', label: 'Lifecycle',       default: false, sortable: false },
   { id: 'customer_status', label: 'Customer status', default: false, sortable: false },
   { id: 'plan',            label: 'Plan',            default: false, sortable: false },

@@ -9,6 +9,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/mailbox-sync",
+      "schedule": "15,45 * * * *"
+    },
+    {
       "path": "/api/cron/reset-daily-sends",
       "schedule": "0 0 * * *"
     },
@@ -27,6 +31,14 @@
     {
       "path": "/api/cron/sync-cta-clicks",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-wl-attribution",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/phone-enrichment",
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/sync-reviews",

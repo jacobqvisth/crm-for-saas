@@ -1,4 +1,4 @@
-import { refreshPilotStatsAction } from "@/app/(ceo)/ceo/pilot-stats/actions";
+import { refreshPilotStatsAction } from "@/app/(dashboard)/dashboard/pilot-stats/actions";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/ceo/format";
 import type {
   PilotStatsBarItem,

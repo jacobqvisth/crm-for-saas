@@ -23,6 +23,7 @@ import {
 } from './column-config';
 import { ColumnCustomizer } from './column-customizer';
 import { loadListState, saveListState } from '@/lib/list-state';
+import { applyListFilters, type ListFilter } from '@/lib/lists/filter-query';
 
 const LIST_STATE_KEY = 'crm-contacts-list-state';
 
@@ -81,9 +82,10 @@ const LIFECYCLE_OPTIONS: MultiSelectOption[] = [
   { value: 'lead',    label: 'Lead' },
   { value: 'mql',     label: 'MQL' },
   { value: 'sql',     label: 'SQL' },
-  { value: 'trial',   label: 'Trial' },
-  { value: 'paying',  label: 'Paying' },
-  { value: 'churned', label: 'Churned' },
+  { value: 'trial',    label: 'Trial' },
+  { value: 'freemium', label: 'Freemium' },
+  { value: 'paying',   label: 'Paying' },
+  { value: 'churned',  label: 'Churned' },
 ];
 
 const CUSTOMER_STATUS_OPTIONS: MultiSelectOption[] = [
@@ -128,6 +130,7 @@ type LocalFilters = {
   has_phone: boolean;
   tags: string[];
   engagement: string[];
+  list_id: string[];
 };
 
 const DEFAULT_FILTERS: LocalFilters = {
@@ -144,6 +147,7 @@ const DEFAULT_FILTERS: LocalFilters = {
   has_phone: false,
   tags: [],
   engagement: [],
+  list_id: [],
 };
 
 // ── Sortable columns ─────────────────────────────────────────────────────────
@@ -287,6 +291,7 @@ export function ContactsPageClient() {
       (filters.engagement[0] === 'never_emailed' || filters.engagement[0] === 'emailed')
         ? filters.engagement[0]
         : undefined,
+    list_id: filters.list_id[0] || undefined,
   };
 
   // Fetch contacts
@@ -302,9 +307,23 @@ export function ContactsPageClient() {
       filters.customer_status.length > 0 ||
       filters.has_account.length > 0;
 
-    const selectExpr = needsCompanyJoin
-      ? '*, companies!inner(name, lifecycle_stage, customer_status, wl_workshop_id, plan)'
-      : '*, companies(name, lifecycle_stage, customer_status, wl_workshop_id, plan)';
+    // Selected list constraint. Static lists inner-join contact_list_members;
+    // dynamic lists layer their stored filters onto this query below. Resolved
+    // as a join (not `.in(id, …)`) so 10k+ member lists don't blow the URL.
+    const selectedList = filters.list_id.length === 1
+      ? lists.find((l) => l.id === filters.list_id[0])
+      : undefined;
+    const needsStaticListJoin = selectedList != null && selectedList.is_dynamic !== true;
+
+    // Keep each branch a string literal so Supabase can infer the row shape
+    // (a template literal widens to `string` and breaks .select() typing).
+    const selectExpr = needsStaticListJoin
+      ? (needsCompanyJoin
+          ? '*, companies!inner(name, lifecycle_stage, customer_status, wl_workshop_id, plan), contact_list_members!inner(list_id)'
+          : '*, companies(name, lifecycle_stage, customer_status, wl_workshop_id, plan), contact_list_members!inner(list_id)')
+      : (needsCompanyJoin
+          ? '*, companies!inner(name, lifecycle_stage, customer_status, wl_workshop_id, plan)'
+          : '*, companies(name, lifecycle_stage, customer_status, wl_workshop_id, plan)');
 
     let query = supabase
       .from('contacts')
@@ -364,6 +383,15 @@ export function ContactsPageClient() {
       else if (filters.engagement[0] === 'emailed') query = query.not('last_emailed_at', 'is', null);
     }
 
+    // Apply the selected list constraint (see selectExpr above).
+    if (selectedList) {
+      if (needsStaticListJoin) {
+        query = query.eq('contact_list_members.list_id', selectedList.id);
+      } else {
+        query = applyListFilters(query, (selectedList.filters as unknown as ListFilter[]) ?? []);
+      }
+    }
+
     // Sort. For "name" we sort by last_name primary + first_name secondary
     // (most CRM users sort by surname). For "company" we sort the joined
     // companies table — requires the embedded foreignTable hint.
@@ -402,7 +430,11 @@ export function ContactsPageClient() {
       return;
     }
 
-    const mapped = (data || []).map((c: Record<string, unknown>) => {
+    // Cast via unknown: the dynamic select (with the optional contact_list_members
+    // embed) defeats Supabase's compile-time row-shape parser, which types `data`
+    // as ParserError[]. The runtime shape is correct; we re-map it below.
+    const rows = (data || []) as unknown as Record<string, unknown>[];
+    const mapped = rows.map((c: Record<string, unknown>) => {
       const co = c.companies as {
         name: string | null;
         lifecycle_stage: string | null;
@@ -430,7 +462,7 @@ export function ContactsPageClient() {
     filters.lead_status, filters.status, filters.country_code, filters.email_status,
     filters.has_phone, filters.source,
     filters.lifecycle_stage, filters.customer_status, filters.user_plan_type, filters.has_account,
-    filters.tags, filters.engagement, sort,
+    filters.tags, filters.engagement, filters.list_id, lists, sort,
   ]);
 
   useEffect(() => {
@@ -561,7 +593,8 @@ export function ContactsPageClient() {
     filters.lifecycle_stage.length > 0 || filters.customer_status.length > 0 ||
     filters.user_plan_type.length > 0 ||
     filters.has_account.length > 0 || filters.has_phone !== false ||
-    filters.tags.length > 0 || filters.engagement.length > 0;
+    filters.tags.length > 0 || filters.engagement.length > 0 ||
+    filters.list_id.length > 0;
 
   const toggleSelect = (id: string) => {
     setSelectAllMatching(false);
@@ -711,6 +744,13 @@ export function ContactsPageClient() {
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
           {/* Multi-select filter dropdowns */}
           <div className="flex flex-wrap gap-2 items-center">
+            <MultiSelect
+              values={filters.list_id}
+              onChange={v => setFilters(f => ({ ...f, list_id: v.slice(-1) }))}
+              options={lists.map(l => ({ value: l.id, label: l.name }))}
+              allLabel="lists"
+              placeholder="All lists"
+            />
             <MultiSelect
               values={filters.lead_status}
               onChange={v => setFilters(f => ({ ...f, lead_status: v }))}
@@ -1319,6 +1359,7 @@ function renderCell(id: ColumnId, contact: Contact): React.ReactNode {
       return contact.company_lifecycle_stage ? (
         <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
           contact.company_lifecycle_stage === 'paying'       ? 'bg-emerald-100 text-emerald-700' :
+          contact.company_lifecycle_stage === 'freemium'     ? 'bg-teal-100 text-teal-700' :
           contact.company_lifecycle_stage === 'trial'        ? 'bg-amber-100 text-amber-700' :
           contact.company_lifecycle_stage === 'churned'      ? 'bg-red-100 text-red-700' :
           contact.company_lifecycle_stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :

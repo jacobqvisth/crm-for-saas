@@ -55,6 +55,7 @@ const LIFECYCLE_OPTIONS: MultiSelectOption[] = [
   { value: 'mql',          label: 'MQL' },
   { value: 'sql',          label: 'SQL' },
   { value: 'trial',        label: 'Trial' },
+  { value: 'freemium',     label: 'Freemium' },
   { value: 'paying',       label: 'Paying' },
   { value: 'churned',      label: 'Churned' },
   { value: 'reactivation', label: 'Reactivation' },
@@ -305,33 +306,19 @@ export function CompaniesPageClient() {
       return;
     }
 
-    // Fetch contact and deal counts for this page
+    // Fetch contact counts for this page
     const companyIds = (data || []).map((c) => c.id);
     let contactCounts: Record<string, number> = {};
-    let dealCounts: Record<string, number> = {};
 
     if (companyIds.length > 0) {
-      const [{ data: contacts }, { data: deals }] = await Promise.all([
-        supabase
-          .from('contacts')
-          .select('company_id')
-          .eq('workspace_id', workspaceId)
-          .in('company_id', companyIds),
-        supabase
-          .from('deals')
-          .select('company_id')
-          .eq('workspace_id', workspaceId)
-          .in('company_id', companyIds),
-      ]);
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('company_id')
+        .eq('workspace_id', workspaceId)
+        .in('company_id', companyIds);
       if (contacts) {
         contactCounts = contacts.reduce((acc, c) => {
           if (c.company_id) acc[c.company_id] = (acc[c.company_id] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-      }
-      if (deals) {
-        dealCounts = deals.reduce((acc, d) => {
-          if (d.company_id) acc[d.company_id] = (acc[d.company_id] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
       }
@@ -340,7 +327,6 @@ export function CompaniesPageClient() {
     const mapped: Company[] = (data || []).map((c) => ({
       ...c,
       contacts_count: contactCounts[c.id] || 0,
-      deals_count: dealCounts[c.id] || 0,
     }));
 
     setCompanies(mapped);
@@ -997,12 +983,11 @@ function renderCell(id: ColumnId, company: Company): React.ReactNode {
       ) : <span className="text-slate-400">—</span>;
     case 'contacts_count':
       return <span className="text-slate-600">{company.contacts_count}</span>;
-    case 'deals_count':
-      return <span className="text-slate-600">{company.deals_count}</span>;
     case 'lifecycle_stage':
       return company.lifecycle_stage ? (
         <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
           company.lifecycle_stage === 'paying'       ? 'bg-emerald-100 text-emerald-700' :
+          company.lifecycle_stage === 'freemium'     ? 'bg-teal-100 text-teal-700' :
           company.lifecycle_stage === 'trial'        ? 'bg-amber-100 text-amber-700' :
           company.lifecycle_stage === 'churned'      ? 'bg-red-100 text-red-700' :
           company.lifecycle_stage === 'reactivation' ? 'bg-purple-100 text-purple-700' :

@@ -39,6 +39,26 @@ export type SequenceSettings = {
    * array of gmail_accounts.id values is set, auto-rotate restricts to those accounts.
    */
   rotation_account_ids?: string[];
+  /**
+   * When true, this sequence is allowed to enroll AND send to existing
+   * wl-app users / customer workshops. By default both the enroll guard and
+   * the send-time cron guard skip customers (sequences are for prospecting);
+   * this flag marks a sequence as a deliberate customer follow-up (e.g. a
+   * post-call "thanks for the conversation" message). Set by the contact
+   * "Add to Sequence" modal's "Enroll customers anyway" override.
+   */
+  allow_customers?: boolean;
+  /**
+   * When true, this sequence keeps sending follow-ups to contacts who have
+   * already received at least one email (current_step >= 1), but does NOT
+   * start sending the first email to brand-new contacts (current_step === 0).
+   * Used to "finish what we've started" on a sequence without onboarding new
+   * contacts. Enforced in the process-emails cron (first emails are demoted
+   * from 'scheduled' to 'pending') and toggled via the
+   * POST /api/sequences/[id]/pause-new-contacts endpoint, which also
+   * demotes/promotes the already-queued first emails. Default false.
+   */
+  pause_new_contacts?: boolean;
 };
 
 export type Database = {
@@ -49,6 +69,136 @@ export type Database = {
   }
   public: {
     Tables: {
+      diagnostic_videos: {
+        Row: {
+          category: string | null
+          channel: string
+          created_at: string
+          description: string | null
+          dtc_codes: string[]
+          id: string
+          marked: boolean
+          sort_order: number
+          source: string
+          summary: string | null
+          title: string
+          updated_at: string
+          url: string
+          veo3_prompt: string | null
+          workspace_id: string
+          youtube_id: string
+        }
+        Insert: {
+          category?: string | null
+          channel: string
+          created_at?: string
+          description?: string | null
+          dtc_codes?: string[]
+          id?: string
+          marked?: boolean
+          sort_order?: number
+          source?: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+          url: string
+          veo3_prompt?: string | null
+          workspace_id: string
+          youtube_id: string
+        }
+        Update: {
+          category?: string | null
+          channel?: string
+          created_at?: string
+          description?: string | null
+          dtc_codes?: string[]
+          id?: string
+          marked?: boolean
+          sort_order?: number
+          source?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          url?: string
+          veo3_prompt?: string | null
+          workspace_id?: string
+          youtube_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diagnostic_videos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_posts: {
+        Row: {
+          created_at: string
+          diagnostic_id: string | null
+          forum_target: string
+          generated_body: string | null
+          generated_title: string | null
+          id: string
+          language: string
+          mention_level: string
+          model: string | null
+          post_type: string
+          posted_at: string | null
+          posted_url: string | null
+          scenario_snapshot: Json
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          diagnostic_id?: string | null
+          forum_target: string
+          generated_body?: string | null
+          generated_title?: string | null
+          id?: string
+          language?: string
+          mention_level?: string
+          model?: string | null
+          post_type?: string
+          posted_at?: string | null
+          posted_url?: string | null
+          scenario_snapshot?: Json
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          diagnostic_id?: string | null
+          forum_target?: string
+          generated_body?: string | null
+          generated_title?: string | null
+          id?: string
+          language?: string
+          mention_level?: string
+          model?: string | null
+          post_type?: string
+          posted_at?: string | null
+          posted_url?: string | null
+          scenario_snapshot?: Json
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_posts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       _ops_queue_pause_2026_04_28: {
         Row: {
           captured_at: string | null
@@ -75,6 +225,231 @@ export type Database = {
           scheduled_for?: string | null
         }
         Relationships: []
+      }
+      activation_plan_groups: {
+        Row: {
+          collapsed: boolean
+          color: string
+          created_at: string
+          id: string
+          name: string
+          plan_id: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          plan_id: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          plan_id?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plan_groups_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_groups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activation_plan_items: {
+        Row: {
+          anchor_event: string | null
+          cio_campaign_id: string | null
+          color: string | null
+          created_at: string
+          day_end: number
+          day_start: number
+          description: string | null
+          group_id: string
+          id: string
+          link_url: string | null
+          plan_id: string
+          scenario_ids: string[]
+          sort_order: number
+          source_note: string | null
+          status: string | null
+          title: string
+          trigger_type: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          anchor_event?: string | null
+          cio_campaign_id?: string | null
+          color?: string | null
+          created_at?: string
+          day_end?: number
+          day_start?: number
+          description?: string | null
+          group_id: string
+          id?: string
+          link_url?: string | null
+          plan_id: string
+          scenario_ids?: string[]
+          sort_order?: number
+          source_note?: string | null
+          status?: string | null
+          title?: string
+          trigger_type?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          anchor_event?: string | null
+          cio_campaign_id?: string | null
+          color?: string | null
+          created_at?: string
+          day_end?: number
+          day_start?: number
+          description?: string | null
+          group_id?: string
+          id?: string
+          link_url?: string | null
+          plan_id?: string
+          scenario_ids?: string[]
+          sort_order?: number
+          source_note?: string | null
+          status?: string | null
+          title?: string
+          trigger_type?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plan_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plan_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activation_plan_scenarios: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          plan_id: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          plan_id: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          plan_id?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plan_scenarios_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "activation_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_plan_scenarios_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activation_plans: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_plans_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       activities: {
         Row: {
@@ -150,6 +525,338 @@ export type Database = {
           },
         ]
       }
+      call_feedback: {
+        Row: {
+          activity_id: string | null
+          body: string
+          category: string
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          severity: string | null
+          status: string
+          title: string | null
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          body: string
+          category: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          severity?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          body?: string
+          category?: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          severity?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_feedback_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_sessions: {
+        Row: {
+          activity_id: string | null
+          agent_number: string | null
+          ai_json: Json | null
+          ai_model: string | null
+          ai_processed_at: string | null
+          company_id: string | null
+          connected_at: string | null
+          contact_id: string | null
+          created_at: string
+          direction: string
+          duration_seconds: number | null
+          ended_at: string | null
+          error: string | null
+          from_number: string | null
+          id: string
+          list_id: string | null
+          live_tips: Json | null
+          provider: string
+          provider_call_id: string | null
+          recording_storage_path: string | null
+          recording_url: string | null
+          started_at: string
+          status: string
+          summary: string | null
+          to_number: string | null
+          transcript: Json | null
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          agent_number?: string | null
+          ai_json?: Json | null
+          ai_model?: string | null
+          ai_processed_at?: string | null
+          company_id?: string | null
+          connected_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          error?: string | null
+          from_number?: string | null
+          id?: string
+          list_id?: string | null
+          live_tips?: Json | null
+          provider?: string
+          provider_call_id?: string | null
+          recording_storage_path?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          to_number?: string | null
+          transcript?: Json | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          agent_number?: string | null
+          ai_json?: Json | null
+          ai_model?: string | null
+          ai_processed_at?: string | null
+          company_id?: string | null
+          connected_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          error?: string | null
+          from_number?: string | null
+          id?: string
+          list_id?: string | null
+          live_tips?: Json | null
+          provider?: string
+          provider_call_id?: string | null
+          recording_storage_path?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          to_number?: string | null
+          transcript?: Json | null
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_sessions_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phone_enrichment_jobs: {
+        Row: {
+          attempts: number
+          contact_id: string
+          enqueued_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          outcome: string | null
+          requested_by: string | null
+          saved_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          website_added: string | null
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          contact_id: string
+          enqueued_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          outcome?: string | null
+          requested_by?: string | null
+          saved_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          website_added?: string | null
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          contact_id?: string
+          enqueued_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          outcome?: string | null
+          requested_by?: string | null
+          saved_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          website_added?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_enrichment_jobs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_enrichment_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phone_numbers: {
+        Row: {
+          company_id: string | null
+          contact_id: string | null
+          country_code: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          label: string | null
+          number: string
+          source: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          label?: string | null
+          number: string
+          source?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          label?: string | null
+          number?: string
+          source?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_numbers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           account_owner_id: string | null
@@ -206,6 +913,11 @@ export type Database = {
           nix_blocked: boolean
           notes: string | null
           org_number: string | null
+          owner_auto: boolean
+          owner_updated_at: string | null
+          primary_owner_id: string | null
+          primary_owner_source: string | null
+          secondary_owner_id: string | null
           parent_company_id: string | null
           payment_status: string | null
           phone: string | null
@@ -283,6 +995,11 @@ export type Database = {
           nix_blocked?: boolean
           notes?: string | null
           org_number?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
@@ -360,6 +1077,11 @@ export type Database = {
           nix_blocked?: boolean
           notes?: string | null
           org_number?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
@@ -463,6 +1185,41 @@ export type Database = {
           },
         ]
       }
+      call_exclusions: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          label: string | null
+          value: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          label?: string | null
+          value: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          label?: string | null
+          value?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_exclusions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_list_members: {
         Row: {
           added_at: string | null
@@ -500,30 +1257,36 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          exclusions: Json | null
           filters: Json | null
           id: string
           is_dynamic: boolean | null
           name: string
+          purpose: string
           updated_at: string | null
           workspace_id: string
         }
         Insert: {
           created_at?: string | null
           description?: string | null
+          exclusions?: Json | null
           filters?: Json | null
           id?: string
           is_dynamic?: boolean | null
           name: string
+          purpose?: string
           updated_at?: string | null
           workspace_id: string
         }
         Update: {
           created_at?: string | null
           description?: string | null
+          exclusions?: Json | null
           filters?: Json | null
           id?: string
           is_dynamic?: boolean | null
           name?: string
+          purpose?: string
           updated_at?: string | null
           workspace_id?: string
         }
@@ -578,9 +1341,17 @@ export type Database = {
           linkedin_url: string | null
           login_count: number | null
           notes: string | null
+          owner_auto: boolean
+          owner_updated_at: string | null
           phone: string | null
+          phone_search_outcome: string | null
+          phone_searched_at: string | null
+          primary_owner_id: string | null
+          primary_owner_source: string | null
+          secondary_owner_id: string | null
           postal_code: string | null
           seniority: string | null
+          signed_up_at: string | null
           source: string | null
           status: string | null
           tags: string[] | null
@@ -590,6 +1361,7 @@ export type Database = {
           user_stripe_customer_id: string | null
           user_stripe_subscription_id: string | null
           user_subscription_status: string | null
+          website: string | null
           wl_user_id: string | null
           workspace_id: string
         }
@@ -633,9 +1405,17 @@ export type Database = {
           linkedin_url?: string | null
           login_count?: number | null
           notes?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
           phone?: string | null
+          phone_search_outcome?: string | null
+          phone_searched_at?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           postal_code?: string | null
           seniority?: string | null
+          signed_up_at?: string | null
           source?: string | null
           status?: string | null
           tags?: string[] | null
@@ -645,6 +1425,7 @@ export type Database = {
           user_stripe_customer_id?: string | null
           user_stripe_subscription_id?: string | null
           user_subscription_status?: string | null
+          website?: string | null
           wl_user_id?: string | null
           workspace_id: string
         }
@@ -688,9 +1469,17 @@ export type Database = {
           linkedin_url?: string | null
           login_count?: number | null
           notes?: string | null
+          owner_auto?: boolean
+          owner_updated_at?: string | null
           phone?: string | null
+          phone_search_outcome?: string | null
+          phone_searched_at?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
+          secondary_owner_id?: string | null
           postal_code?: string | null
           seniority?: string | null
+          signed_up_at?: string | null
           source?: string | null
           status?: string | null
           tags?: string[] | null
@@ -700,6 +1489,7 @@ export type Database = {
           user_stripe_customer_id?: string | null
           user_stripe_subscription_id?: string | null
           user_subscription_status?: string | null
+          website?: string | null
           wl_user_id?: string | null
           workspace_id?: string
         }
@@ -1024,6 +1814,33 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_feature_usage: {
+        Row: {
+          collected_at: string
+          feature_key: string
+          granularity: string
+          internal_user_id: string
+          period_start: string
+          usage_count: number
+        }
+        Insert: {
+          collected_at?: string
+          feature_key: string
+          granularity?: string
+          internal_user_id: string
+          period_start: string
+          usage_count?: number
+        }
+        Update: {
+          collected_at?: string
+          feature_key?: string
+          granularity?: string
+          internal_user_id?: string
+          period_start?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
       dashboard_funnel_snapshots: {
         Row: {
           collected_at: string
@@ -1323,8 +2140,27 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_user_logins: {
+        Row: {
+          collected_at: string
+          internal_user_id: string
+          logged_in_at: string
+        }
+        Insert: {
+          collected_at?: string
+          internal_user_id: string
+          logged_in_at: string
+        }
+        Update: {
+          collected_at?: string
+          internal_user_id?: string
+          logged_in_at?: string
+        }
+        Relationships: []
+      }
       dashboard_users: {
         Row: {
+          churned_at: string | null
           core_stripe_customer_id: string | null
           created_at: string | null
           customer_io_id: string | null
@@ -1344,6 +2180,7 @@ export type Database = {
           workshop_id: string | null
         }
         Insert: {
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           created_at?: string | null
           customer_io_id?: string | null
@@ -1363,6 +2200,7 @@ export type Database = {
           workshop_id?: string | null
         }
         Update: {
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           created_at?: string | null
           customer_io_id?: string | null
@@ -1386,6 +2224,7 @@ export type Database = {
       dashboard_workshops: {
         Row: {
           activated_at: string | null
+          churned_at: string | null
           core_stripe_customer_id: string | null
           core_stripe_subscription_id: string | null
           core_subscription_status: string | null
@@ -1407,6 +2246,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           core_stripe_subscription_id?: string | null
           core_subscription_status?: string | null
@@ -1428,6 +2268,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          churned_at?: string | null
           core_stripe_customer_id?: string | null
           core_stripe_subscription_id?: string | null
           core_subscription_status?: string | null
@@ -2020,6 +2861,57 @@ export type Database = {
           },
         ]
       }
+      gmail_sync_state: {
+        Row: {
+          backfill_cursor: string | null
+          backfill_done_at: string | null
+          created_at: string
+          gmail_account_id: string
+          last_run_at: string | null
+          last_synced_at: string | null
+          messages_synced: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          backfill_cursor?: string | null
+          backfill_done_at?: string | null
+          created_at?: string
+          gmail_account_id: string
+          last_run_at?: string | null
+          last_synced_at?: string | null
+          messages_synced?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          backfill_cursor?: string | null
+          backfill_done_at?: string | null
+          created_at?: string
+          gmail_account_id?: string
+          last_run_at?: string | null
+          last_synced_at?: string | null
+          messages_synced?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_sync_state_gmail_account_id_fkey"
+            columns: ["gmail_account_id"]
+            isOneToOne: true
+            referencedRelation: "gmail_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_sync_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_messages: {
         Row: {
           body_html: string | null
@@ -2042,6 +2934,9 @@ export type Database = {
           is_auto_reply: boolean | null
           is_read: boolean
           received_at: string
+          replied_at: string | null
+          reply_draft: string | null
+          reply_draft_updated_at: string | null
           subject: string | null
           subject_translated_en: string | null
           translation_model: string | null
@@ -2069,6 +2964,9 @@ export type Database = {
           is_auto_reply?: boolean | null
           is_read?: boolean
           received_at: string
+          replied_at?: string | null
+          reply_draft?: string | null
+          reply_draft_updated_at?: string | null
           subject?: string | null
           subject_translated_en?: string | null
           translation_model?: string | null
@@ -2096,6 +2994,9 @@ export type Database = {
           is_auto_reply?: boolean | null
           is_read?: boolean
           received_at?: string
+          replied_at?: string | null
+          reply_draft?: string | null
+          reply_draft_updated_at?: string | null
           subject?: string | null
           subject_translated_en?: string | null
           translation_model?: string | null
@@ -2240,6 +3141,180 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "prospector_search_cache_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_groups: {
+        Row: {
+          collapsed: boolean
+          color: string
+          created_at: string
+          id: string
+          name: string
+          roadmap_id: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          roadmap_id: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          collapsed?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          roadmap_id?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_groups_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_groups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_items: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          end_date: string
+          group_id: string
+          id: string
+          owner: string | null
+          phase: string | null
+          priority: string | null
+          progress_note: string | null
+          progress_updated_at: string | null
+          roadmap_id: string
+          sort_order: number
+          start_date: string
+          status: string | null
+          team: string | null
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          end_date: string
+          group_id: string
+          id?: string
+          owner?: string | null
+          phase?: string | null
+          priority?: string | null
+          progress_note?: string | null
+          progress_updated_at?: string | null
+          roadmap_id: string
+          sort_order?: number
+          start_date: string
+          status?: string | null
+          team?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string
+          group_id?: string
+          id?: string
+          owner?: string | null
+          phase?: string | null
+          priority?: string | null
+          progress_note?: string | null
+          progress_updated_at?: string | null
+          roadmap_id?: string
+          sort_order?: number
+          start_date?: string
+          status?: string | null
+          team?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_items_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmaps: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmaps_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2966,6 +4041,12 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          call_agent_phone: string | null
+          call_caller_id: string | null
+          call_enabled: boolean
+          call_failover_user_id: string | null
+          call_ring_seconds: number
+          call_voicemail_enabled: boolean
           created_at: string
           full_name: string | null
           origin_address: string | null
@@ -2980,6 +4061,12 @@ export type Database = {
           working_days: Json
         }
         Insert: {
+          call_agent_phone?: string | null
+          call_caller_id?: string | null
+          call_enabled?: boolean
+          call_failover_user_id?: string | null
+          call_ring_seconds?: number
+          call_voicemail_enabled?: boolean
           created_at?: string
           full_name?: string | null
           origin_address?: string | null
@@ -2994,6 +4081,12 @@ export type Database = {
           working_days?: Json
         }
         Update: {
+          call_agent_phone?: string | null
+          call_caller_id?: string | null
+          call_enabled?: boolean
+          call_failover_user_id?: string | null
+          call_ring_seconds?: number
+          call_voicemail_enabled?: boolean
           created_at?: string
           full_name?: string | null
           origin_address?: string | null
@@ -3198,6 +4291,18 @@ export type Database = {
       }
     }
     Functions: {
+      recompute_contact_owner: {
+        Args: {
+          p_contact_id: string
+        }
+        Returns: undefined
+      }
+      recompute_company_owner: {
+        Args: {
+          p_company_id: string
+        }
+        Returns: undefined
+      }
       find_fuzzy_company_matches: {
         Args: {
           p_country_code: string

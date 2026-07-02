@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { hasSupabaseConfig } from "@/lib/ceo/env";
+import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
   calculateDashboardData,
   getDemoDashboardData,
@@ -62,7 +64,7 @@ function normalizeWorkshop(row: unknown): WarehouseWorkshop {
   };
 }
 
-export async function getDashboardData(
+async function getDashboardDataUncached(
   rangeParam?: string | string[],
 ): Promise<DashboardData> {
   const rangeKey = normalizeDashboardTimeRangeKey(rangeParam);
@@ -118,7 +120,7 @@ export async function getDashboardData(
         supabase
           .from(TABLES.users)
           .select(
-            "internal_user_id, workshop_id, customer_io_id, created_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
+            "internal_user_id, workshop_id, customer_io_id, created_at, signed_up_at, last_seen_at, name, phone, core_stripe_customer_id, metadata",
           )
           .order("internal_user_id", { ascending: true })
           .range(from, to),
@@ -127,7 +129,7 @@ export async function getDashboardData(
         supabase
           .from(TABLES.workshops)
           .select(
-            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, metadata",
+            "workshop_id, name, country, plan_key, created_at, activated_at, language, core_subscription_status, payment_status, trial_end, created_by_agent, core_stripe_customer_id, core_stripe_subscription_id, is_internal_test, churned_at, metadata",
           )
           .order("workshop_id", { ascending: true })
           .range(from, to),
@@ -136,7 +138,7 @@ export async function getDashboardData(
         supabase
           .from(TABLES.subscriptions)
           .select(
-            "workshop_id, stripe_customer_id, status, plan_key, current_period_start, current_period_end, trial_end, cancel_at, canceled_at",
+            "workshop_id, stripe_customer_id, status, plan_key, mrr_amount_cents, currency, current_period_start, current_period_end, trial_end, cancel_at, canceled_at, metadata",
           )
           .order("stripe_customer_id", { ascending: true })
           .range(from, to),
@@ -176,4 +178,21 @@ export async function getDashboardData(
     console.error("Dashboard data normalization failed", error);
     return getDemoDashboardData(range);
   }
+}
+
+// Cache keyed by the normalized range key (a stable string), tagged so the
+// "Update" refresh actions can bust it via revalidateTag(CEO_CACHE_TAG).
+// The key suffix is a shape version: bump it whenever DashboardData's shape
+// changes so entries written by the previous deploy (which the new components
+// would read with the wrong shape) are abandoned instead of crashing render.
+const getDashboardDataCached = unstable_cache(
+  (rangeKey: string) => getDashboardDataUncached(rangeKey),
+  ["ceo-dashboard-data-v2-revenue"],
+  CEO_CACHE_OPTIONS,
+);
+
+export function getDashboardData(
+  rangeParam?: string | string[],
+): Promise<DashboardData> {
+  return getDashboardDataCached(normalizeDashboardTimeRangeKey(rangeParam));
 }

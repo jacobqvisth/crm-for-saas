@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +10,6 @@ import {
   LayoutDashboard,
   Users,
   Building2,
-  DollarSign,
   Mail,
   ListChecks,
   FileText,
@@ -20,23 +20,13 @@ import {
   Inbox,
   CheckSquare,
   MapPin,
-  LineChart,
   Map as MapIcon,
+  GanttChart,
+  Rocket,
+  Phone,
+  Youtube,
+  MessagesSquare,
 } from "lucide-react";
-
-const CEO_ALLOWED_EMAILS = (process.env.NEXT_PUBLIC_CEO_ALLOWED_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-
-function isCeoUser(email?: string | null): boolean {
-  if (!email) return false;
-  if (CEO_ALLOWED_EMAILS.length === 0) return false;
-  const normalized = email.toLowerCase();
-  return CEO_ALLOWED_EMAILS.some((entry) =>
-    entry.startsWith("@") ? normalized.endsWith(entry) : normalized === entry,
-  );
-}
 
 type NavItem = {
   href: string;
@@ -49,13 +39,17 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },
-  { href: "/deals", label: "Deals", icon: DollarSign },
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/discovery", label: "Discovery", icon: MapPin },
   { href: "/routes", label: "Field routes", icon: MapIcon },
+  { href: "/calls", label: "Calls", icon: Phone },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/roadmap", label: "Roadmap", icon: GanttChart },
+  { href: "/videos", label: "Videos", icon: Youtube },
+  { href: "/forums", label: "Forums", icon: MessagesSquare },
+  { href: "/activation", label: "Activation Plan", icon: Rocket },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -124,12 +118,7 @@ export function Sidebar() {
     router.push("/login");
   };
 
-  const allNavItems: Omit<NavItem, "badge">[] = isCeoUser(currentUser?.email)
-    ? [
-        ...staticNavItems,
-        { href: "/ceo/overview", label: "CEO Dashboard", icon: LineChart },
-      ]
-    : staticNavItems;
+  const allNavItems: Omit<NavItem, "badge">[] = staticNavItems;
 
   const navItems: NavItem[] = allNavItems.map((item) => ({
     ...item,
@@ -148,13 +137,28 @@ export function Sidebar() {
       }`}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-200">
-        <div className="flex-shrink-0 w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">C</span>
-        </div>
-        {!collapsed && (
-          <span className="font-semibold text-slate-900 text-lg">CRM</span>
-        )}
+      <div className="flex items-center px-4 h-16 border-b border-slate-200">
+        <Link href="/dashboard" className="flex items-center">
+          {collapsed ? (
+            <Image
+              src="/wrenchlane-mark.png"
+              alt="Wrenchlane"
+              width={32}
+              height={32}
+              priority
+              className="flex-shrink-0 w-8 h-8 rounded-lg"
+            />
+          ) : (
+            <Image
+              src="/wrenchlane-wordmark.png"
+              alt="Wrenchlane — AI-Driven Car Diagnostics"
+              width={1200}
+              height={300}
+              priority
+              className="h-9 w-auto"
+            />
+          )}
+        </Link>
       </div>
 
       {/* Nav */}
