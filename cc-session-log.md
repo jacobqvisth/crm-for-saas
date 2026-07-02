@@ -5118,3 +5118,42 @@ current main and fixed two pre-existing main build breakers found on merge.
 **Checks:** `tsc --noEmit` 0, `next build --webpack` 0 (Homebrew node).
 Reviews page itself (PR #317) has been live since 2026-05-29 at
 /dashboard/reviews (post-restructure).
+
+---
+
+## Domain Portfolio — European TLD decision-tracker page
+**Date:** 2026-07-02 · **PR:** #304 · **Branch:** worktree-domain-portfolio-page → main
+
+Built `/domain-portfolio` (main sidebar, Globe icon, between Templates and
+Settings): a curated catalog of 3–5 recommended TLDs per European country
+(42 countries, 210 rows across north/west/south/east regions), each with
+rank, type (native ccTLD / generic / domain hack / subdomain convention /
+IDN / sponsored), registry, rationale, market share, and restrictions —
+plus per-row decision tracking.
+
+- **Schema:** `dashboard_domain_portfolio` — UNIQUE (country_code, tld),
+  CHECK constraints on status/region/tld_type, `updated_at` touch trigger,
+  RLS on with no policies (reads via CEO service-role client).
+  **Both migrations applied to prod** via Management API; verified
+  210 rows / 42 countries / 4 regions.
+- **UI:** card view grouped by region; filters (region, status, country,
+  search, top-3-only); stat strip (countries covered, planning / bought /
+  installed counts, est. annual €); expandable row editor (domain name,
+  registrar w/ per-TLD heuristic hint, cost, notes); status dropdown with
+  optimistic update + rollback; auto-stamps `purchased_at`/`installed_at`;
+  rows matching `wrenchlane.com`/`.co` link to /ceo/domain-health.
+- Page originally scaffolded under /ceo/*, moved to the main `(dashboard)`
+  group per Jacob — **any authenticated CRM user can view/edit**.
+- **Fix-forward:** main was red — `normaliseExclusion` exported from
+  `api/calls/exclusions/route.ts` (invalid route export). Un-exported it.
+  (The parallel session's #494 fixed the sibling GenericStringError; kept
+  theirs on rebase.)
+
+**Checks:** `tsc --noEmit`, `lint --max-warnings 0`, `next build --webpack`
+all pass. Squash-merged; deploy verification in flight.
+
+### Open
+- Any-user access is a deliberate default — say the word to gate it to
+  CEO_ALLOWED_EMAILS.
+- TLD research (sources + per-country reasoning) lives in the chat session;
+  the durable summary is the seed's `rationale` column.
