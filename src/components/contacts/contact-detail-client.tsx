@@ -22,6 +22,7 @@ import { PhoneNumbersPanel, type PhonePoolState, type PhoneNumber } from '@/comp
 import { RepOwnerControl } from '@/components/reps/rep-owner-control';
 import { countryNameFromIso, languageFromIso, isoFromCountryName } from '@/lib/geo/country';
 import { parseNameFromEmail, type ParsedName } from '@/lib/contacts/parse-name-from-email';
+import { PLAN_TYPE_LABELS } from '@/lib/lists/filter-query';
 import { ArrayChipsField } from '@/components/ui/array-chips-field';
 import { EditableTextarea } from '@/components/ui/editable-textarea';
 import toast from 'react-hot-toast';
@@ -30,6 +31,28 @@ import type { Tables, Json } from '@/lib/database.types';
 type Contact = Tables<'contacts'>;
 type Activity = Tables<'activities'>;
 type Company = Tables<'companies'>;
+
+// Derive an at-a-glance billing badge from the app user's plan + subscription
+// status. Paid = on a non-free plan; Trial = trialing; falls back to Free.
+function getPlanBadge(
+  planType: string | null,
+  subStatus: string | null,
+): { label: string; className: string } {
+  const isPaidPlan = !!planType && planType !== 'free';
+  if (subStatus === 'trialing') {
+    return { label: 'Trial', className: 'bg-amber-100 text-amber-700' };
+  }
+  if (subStatus === 'canceled' || subStatus === 'cancelled') {
+    return { label: 'Canceled', className: 'bg-rose-100 text-rose-700' };
+  }
+  if (subStatus === 'paused') {
+    return { label: 'Paused', className: 'bg-orange-100 text-orange-700' };
+  }
+  if (isPaidPlan) {
+    return { label: 'Paid', className: 'bg-emerald-100 text-emerald-700' };
+  }
+  return { label: 'Free', className: 'bg-slate-100 text-slate-600' };
+}
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 const CONTACT_STATUSES = ['active', 'bounced', 'unsubscribed'] as const;
@@ -1094,6 +1117,14 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                 {contact.app_username && (
                   <span className="text-xs text-slate-600 font-mono">@{contact.app_username}</span>
                 )}
+                {(contact.user_plan_type || contact.user_subscription_status) && (() => {
+                  const badge = getPlanBadge(contact.user_plan_type, contact.user_subscription_status);
+                  return (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${badge.className}`}>
+                      {badge.label}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="text-[11px] text-slate-400 font-mono break-all">
                 {contact.wl_user_id}
@@ -1160,7 +1191,9 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   {contact.user_plan_type && (
                     <div className="flex justify-between">
                       <span className="text-slate-500">User plan</span>
-                      <span className="text-slate-900 font-mono">{contact.user_plan_type}</span>
+                      <span className="text-slate-900">
+                        {PLAN_TYPE_LABELS[contact.user_plan_type] ?? contact.user_plan_type}
+                      </span>
                     </div>
                   )}
                   {contact.user_subscription_status && (
