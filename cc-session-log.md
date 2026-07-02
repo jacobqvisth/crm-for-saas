@@ -13,6 +13,20 @@ updated: 2026-05-26
 
 ---
 
+## Computer calling: stop background re-registration from clobbering the live-call UI — 2026-07-02 — fix/webrtc-call-state
+
+Jacob: during a call the right panel **sometimes flips back to "Connected — placing the call…"** while he's actually talking, and **after a call the pill/box doesn't auto-update — he has to refresh** (screenshots showed a stuck pill with Mute/Hang-up + a runaway 21:46 timer).
+
+Root cause (a regression from my multi-tab work in #475, surfaced by the presence focus/line-freed re-registration): `WebrtcPhone.ensureRegistered()` emits `"connecting"`/`"registered"` to the **shared** listener set. The `CallProvider` subscribes to that same set for the *call's* state. So whenever the background presence tab re-registered — on window focus/visibility, or when another tab freed the line — it re-emitted `"registered"`, which the provider applied as `webrtcState="registered"`:
+- **mid-call** → drawer reverted to "Connected — placing the call…" ("registered" copy) even though the call was live;
+- **post-call** → after `"ended"`, a refocus re-emitted `"registered"` → `webrtcLive` went true again → the pill got stuck showing Mute/Hang-up + a running timer instead of transitioning to "Call summary ready". Refreshing cleared the in-memory state.
+
+**Fix:** `ensureRegistered(creds, { silent })` — the background presence tab now registers **silently** (`webrtc-presence.tsx`), so routine (re)registration never emits call-state. Belt-and-suspenders: the `"registered"` emits are also guarded by `!inCall()` so a re-register can never revert an active call. The tab actively placing a call still emits setup progress (non-silent). Only two callers: presence (silent) + provider outbound (non-silent).
+
+**Checks:** `tsc` clean · `eslint src/` clean · `npm run build` ✅ · smoke+api E2E **8/8**. Not browser-tested (single-owner WebRTC needs Jacob's session + mic + phone) — Jacob to confirm: place a computer call, click around / switch apps mid-call (status stays "On call"), hang up (pill → "Call summary ready" without a refresh).
+
+---
+
 ## Calls page — Call lists / Recent calls tabs — 2026-07-02 — PR #493 — worktree-calls-list-tabs
 
 Jacob asked (from a screenshot of `/calls`) to add tabs so he can switch between the **Call lists** and **Calls** panels, so the call list can be wider and fit more info per row.
