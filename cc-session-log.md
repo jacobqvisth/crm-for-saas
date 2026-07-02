@@ -5063,3 +5063,30 @@ Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
 - Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
   compose English, Preview in Swedish, send, verify recipient gets Swedish and
   the timeline activity retains the English (`body_en` / `sent_language`).
+
+---
+
+## Reviews dashboard — Trustpilot sync (PR2) + branch refresh + main build fixes
+**Date:** 2026-07-02 · **PR:** #320 · **Branch:** claude/reviews-sync-pr2
+
+Refreshed the month-old PR #320 (reviews API sync, opened 2026-06-02) onto
+current main and fixed two pre-existing main build breakers found on merge.
+
+- `/api/cron/sync-reviews` (daily 07:00 UTC): pulls rating + count + recent
+  reviews into `dashboard_review_snapshots` / `dashboard_reviews` (from PR
+  #317). Trustpilot connector fully implemented (public Business Units API,
+  apikey only — activate by setting `TRUSTPILOT_API_KEY`); Google Business
+  Profile connector dormant behind `GBP_REVIEWS_ENABLED` until the GBP API
+  access request is approved (project quota currently 0).
+- Merge conflict resolved in `vercel.json` (kept mailbox-sync /
+  reconcile-wl-attribution / phone-enrichment crons, appended sync-reviews).
+- **Fix-forward on main breakage:** `next build` failed on
+  `api/calls/exclusions/route.ts` (illegal `export` of helper
+  `normaliseExclusion` from a route file — de-exported, only used locally) and
+  `tsc` failed on `api/calls/route.ts` (concatenated `.select()` string
+  defeats the Supabase type parser → `GenericStringError`; collapsed to a
+  single literal). Both predate this branch.
+
+**Checks:** `tsc --noEmit` 0, `next build --webpack` 0 (Homebrew node).
+Not merged — awaiting Jacob (agent self-merge blocked). Reviews page itself
+(PR #317) has been live since 2026-05-29 at /dashboard/reviews (post-restructure).
