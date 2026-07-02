@@ -13,6 +13,25 @@ updated: 2026-05-26
 
 ---
 
+## Calls page — Call lists / Recent calls tabs — 2026-07-02 — PR #493 — worktree-calls-list-tabs
+
+Jacob asked (from a screenshot of `/calls`) to add tabs so he can switch between the **Call lists** and **Calls** panels, so the call list can be wider and fit more info per row.
+
+**What shipped:**
+- `src/app/(dashboard)/calls/page.tsx` — replaced the side-by-side `lg:grid-cols-2` layout with a tab bar (**Call lists** / **Recent calls**) below the metric cards. Each view now renders full width.
+  - Call lists tab shows a count badge; each list is one broad row — name + `Dynamic` badge + description on the left (truncating), contact count pinned right (was a stacked card).
+  - Recent-calls date filter (Today / Yesterday / Last 7 days) moved inline with the call count; dropped the now-redundant "Recent calls" heading (the tab labels it).
+  - Page container widened `max-w-6xl` → `max-w-7xl`.
+- Added `activeTab` state (`"lists" | "calls"`, defaults to `lists`); inactive section rendered with `hidden` so both keep their loaded state.
+
+**Checks:** `npx tsc --noEmit` clean, `npm run lint` clean on the changed file. Client-only component change (no API/schema touched) — skipped full `next build`.
+
+**Deploy:** squash-merged (b2da393, 2026-07-02T15:02:09Z); Vercel deploy dpl_82yzzVCW589e5i6kfYDY3KUzFCsM reached READY on crm-for-saas.vercel.app.
+
+**Out of scope:** no change to the call-list detail pages, the planner, or the recent-calls row rendering itself — only the overview layout.
+
+---
+
 ## User profile pictures — sidebar, team, call worklist — 2026-07-02 — PR #496 — worktree-feature+user-avatars
 
 Jacob asked to (1) let all users add a profile picture so it shows instead of the initial-letter avatar, and (2) show the caller's photo in the call-worklist circle instead of the checkmark once a contact has been called. Plus set the two team photos (Jacob + Hans) directly.
