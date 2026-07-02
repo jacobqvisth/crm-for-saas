@@ -341,6 +341,9 @@ async function processThread(
         subject: subject || "(no subject)",
         body: `Email sent to ${usedRecip}`,
         contact_id: contactId,
+        // Stamp the activity with the real send date, not now(). Backfilled mail
+        // is often months old; without this the whole thread bunches at sync time.
+        created_at: tsIso,
         metadata: {
           synced_from: "mailbox_sync",
           direction: "outbound",
@@ -400,6 +403,8 @@ async function processThread(
           subject: "Email received",
           body: `Email from ${from}`,
           contact_id: contactId,
+          // Real received date, not now() — see the outbound insert above.
+          created_at: tsIso,
           metadata: {
             synced_from: "mailbox_sync",
             direction: "inbound",
