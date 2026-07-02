@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Phone, Plus, ListChecks, MessageSquare, Target, PhoneIncoming, PhoneOutgoing } from "lucide-react";
+import { Phone, Plus, ListChecks, MessageSquare, Target, PhoneIncoming, PhoneOutgoing, User } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -26,6 +26,7 @@ type CallRow = {
   subject: string | null;
   contact_id: string | null;
   metadata: Record<string, unknown> | null;
+  agent_name: string | null;
   contacts: { first_name: string | null; last_name: string | null; email: string; wl_user_id: string | null } | null;
   companies: { name: string | null } | null;
 };
@@ -274,6 +275,15 @@ export default function CallsOverviewPage() {
                       {c.contacts?.wl_user_id && (
                         <span className="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
                           Customer
+                        </span>
+                      )}
+                      {c.agent_name && (
+                        <span
+                          className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                          title={`${isInbound ? "Answered" : "Called"} by ${c.agent_name}`}
+                        >
+                          <User className="h-2.5 w-2.5" />
+                          {c.agent_name}
                         </span>
                       )}
                     </div>

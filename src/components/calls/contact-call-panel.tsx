@@ -318,6 +318,7 @@ export function ContactCallPanel({
                     {CALL_OUTCOME_LABEL[row.lastCall.outcome as CallOutcome] ?? row.lastCall.outcome}
                   </span>
                   {row.lastCall.created_at && <span className="text-slate-400"> · {fmtRel(row.lastCall.created_at)}</span>}
+                  {row.lastCall.agentName && <span className="text-slate-400"> · by {row.lastCall.agentName}</span>}
                 </p>
               )}
               {!row.lastContactedAt && !row.lastCall && (
