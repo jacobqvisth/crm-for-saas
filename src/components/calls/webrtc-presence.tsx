@@ -95,8 +95,12 @@ export function WebrtcPresence() {
     // (leaving the caller stuck on "Connecting…"). A cross-tab Web Lock ensures
     // exactly one tab holds the live registration; the rest wait for the lock.
     const ac = new AbortController();
+    // Silent: background presence (re)registration must never emit call-state
+    // ("connecting"/"registered") — otherwise a re-register on focus or on
+    // another tab freeing the line would revert an in-progress or just-ended
+    // call's UI back to "placing the call…".
     const register = () =>
-      phone.ensureRegistered(creds).catch(() => {
+      phone.ensureRegistered(creds, { silent: true }).catch(() => {
         /* registration failure is non-fatal; the cell still rings */
       });
     // When THIS tab is looking at the CRM, make sure it holds the line, so an

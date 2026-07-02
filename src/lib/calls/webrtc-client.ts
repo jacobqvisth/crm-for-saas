@@ -173,15 +173,22 @@ class WebrtcPhone {
     this.emit("error");
   }
 
-  /** Lazily create + register the shared UA. Resolves once registered. */
-  async ensureRegistered(creds: WebrtcCreds): Promise<void> {
+  /** Lazily create + register the shared UA. Resolves once registered.
+   *
+   *  `silent` suppresses the "connecting"/"registered" state emits — used by the
+   *  background presence tab so a routine (re)registration (on focus, or when
+   *  another tab frees the line) never clobbers an in-progress or just-ended
+   *  call's UI. Only the tab actively placing a call emits setup progress. */
+  async ensureRegistered(creds: WebrtcCreds, opts: { silent?: boolean } = {}): Promise<void> {
+    const silent = opts.silent ?? false;
     this.iceServers = creds.iceServers ?? [];
     this.ensureChannel();
     const key = `${creds.wsUri}|${creds.uri}`;
     // Already registered with these creds — re-emit "registered" so callers that
-    // optimistically set "connecting" don't get stuck on a stale label.
+    // optimistically set "connecting" don't get stuck on a stale label. Never
+    // when silent, and never mid-call (a re-register must not revert call state).
     if (this.ua && this.ua.isRegistered() && this.credsKey === key) {
-      this.emit("registered");
+      if (!silent && !this.inCall()) this.emit("registered");
       return;
     }
     if (this.ua && this.credsKey !== key) {
@@ -218,7 +225,7 @@ class WebrtcPhone {
       }, REGISTER_TIMEOUT_MS);
       const ok = () => {
         cleanup();
-        this.emit("registered");
+        if (!silent && !this.inCall()) this.emit("registered");
         resolve();
       };
       const bad = () => {
@@ -234,7 +241,7 @@ class WebrtcPhone {
       ua.on("registered", ok);
       ua.on("registrationFailed", bad);
       ua.on("disconnected", bad);
-      this.emit("connecting");
+      if (!silent) this.emit("connecting");
       ua.start();
     });
   }
