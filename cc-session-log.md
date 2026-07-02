@@ -5063,3 +5063,23 @@ Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
 - Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
   compose English, Preview in Swedish, send, verify recipient gets Swedish and
   the timeline activity retains the English (`body_en` / `sent_language`).
+
+## Add-to-call-list button on contact profile + linked Lists card — 2026-07-02
+
+**PR #489** · branch `worktree-add-to-call-list-button` · squash-merged
+
+- Added an **"Add to call list"** button to the Lists card on the contact
+  profile (`contact-detail-client.tsx`), mirroring the Sequences "+ Add"
+  pattern. Opens a new `AddToCallListModal`.
+- Modal (`src/components/contacts/add-to-call-list-modal.tsx`) lists existing
+  **static** call lists (`GET /api/calls/lists`, `purpose='calling'`; dynamic
+  lists hidden since they resolve members by filter), or creates a new call
+  list inline (`POST /api/calls/lists`) and adds the contact in one step.
+  Adds via `POST /api/contact-lists/add-contacts` `{ workspaceId, listId,
+  contactIds:[id] }`, then refetches the Lists section.
+- **Lists card entries are now links** — `/calls/lists/[id]` for calling
+  lists, `/lists/[id]` otherwise. Contact-lists load query now selects
+  `purpose` to route correctly.
+
+**Checks:** `tsc --noEmit` exit 0, eslint clean on both files. Docs-only follow-up
+skips the Vercel build (ignoreCommand). Feature deploy live (307 → /login).
