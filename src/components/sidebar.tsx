@@ -26,6 +26,7 @@ import {
   Phone,
   Youtube,
   MessagesSquare,
+  Globe,
 } from "lucide-react";
 
 type NavItem = {
@@ -51,6 +52,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/forums", label: "Forums", icon: MessagesSquare },
   { href: "/activation", label: "Activation Plan", icon: Rocket },
   { href: "/templates", label: "Templates", icon: FileText },
+  { href: "/domain-portfolio", label: "Domain Portfolio", icon: Globe },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
