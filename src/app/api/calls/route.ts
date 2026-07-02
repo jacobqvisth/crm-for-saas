@@ -49,7 +49,10 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = data ?? [];
+  // The embedded contacts()/companies() selects widen `data`'s inferred type to
+  // a union that includes PostgREST's error shape, so give it a concrete row
+  // type before reading fields off it.
+  const rows = (data ?? []) as unknown as Array<Record<string, unknown> & { user_id: string | null }>;
 
   // Attach the agent (the CRM user who made/received the call) so the feed can
   // show who called who. user_profiles RLS only exposes the caller's own row,
