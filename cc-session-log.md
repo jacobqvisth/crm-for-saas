@@ -13,6 +13,23 @@ updated: 2026-05-26
 
 ---
 
+## Mailbox-sync activity created_at fix — 2026-07-02 — PR #486 — worktree-fix+mailbox-sync-created-at
+
+Jacob spotted a contact (Jocke / info@svanhagensbil.se) whose timeline showed 5 "Inloggning WrenchLane" emails all as "about 14 hours ago", asking where they came from (Customer.io?) and whether they were old mail synced now.
+
+**Diagnosis:** the emails were a single real Gmail thread from **hans@wrenchlane.com** (Dec 2025 + Feb 2026) — NOT Customer.io — pulled in by the mailbox-sync backfill. Root cause: `insertSyncedActivity` in `src/app/api/cron/mailbox-sync/route.ts` inserted `email_sent`/`email_received` rows **without** `created_at`, so Postgres defaulted it to `now()`. The real email date only lived in `metadata.sent_at`/`received_at`. Since the contact timeline sorts by `created_at`, every backfilled email (often months old) bunched at sync time and read "just sent". Affected **all** synced activities, not just Jocke.
+
+**What shipped:**
+- `src/app/api/cron/mailbox-sync/route.ts` — pass `created_at: tsIso` (the parsed message date) on both the outbound (`email_sent`) and inbound (`email_received`) synced inserts, so future syncs land at the true email date.
+
+**Ops (data backfill):** `UPDATE activities SET created_at = coalesce((metadata->>'sent_at')::timestamptz,(metadata->>'received_at')::timestamptz) WHERE metadata->>'synced_from'='mailbox_sync'` — ran in two steps (single-contact first to unblock, then global after Jacob's OK). **6,859 rows** re-dated; post-run verify = **0 remaining mismatches**. All `mailbox_sync` activities now carry their true email date. (Auto-mode classifier blocks the mass UPDATE until a plain-chat "yes".)
+
+**Checks:** `npx tsc --noEmit` clean (`created_at?: string` is a valid optional Insert field on `activities`). Deploy live (307 → /login).
+
+**Out of scope:** no `direction` column / Inbox-UI change; `last_contacted_at` already used the real date (guarded against moving backwards), so untouched.
+
+---
+
 ## User profile pictures — sidebar, team, call worklist — 2026-07-02 — PR #496 — worktree-feature+user-avatars
 
 Jacob asked to (1) let all users add a profile picture so it shows instead of the initial-letter avatar, and (2) show the caller's photo in the call-worklist circle instead of the checkmark once a contact has been called. Plus set the two team photos (Jacob + Hans) directly.
