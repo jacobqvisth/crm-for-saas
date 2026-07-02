@@ -233,6 +233,24 @@ function daysAgo(days: number): string {
 }
 
 /**
+ * True when a filter row is fully specified enough to run.
+ *
+ * `is_null` / `is_not_null` need no value; everything else needs a non-empty
+ * value (and `in` needs a non-empty array). Used to guard the static-list
+ * snapshot at creation so a half-filled filter row can't accidentally match
+ * (and snapshot) every contact in the workspace.
+ */
+export function isCompleteFilter(filter: ListFilter): boolean {
+  if (filter.operator === 'is_null' || filter.operator === 'is_not_null') return true;
+  if (filter.field === 'custom_fields' && !filter.customFieldKey) return false;
+  const v = filter.value;
+  if (v === null || v === undefined) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'string') return v.trim() !== '';
+  return true; // numbers (incl. 0) are valid
+}
+
+/**
  * Apply a list's stored filter rules onto an existing PostgREST query builder.
  *
  * Extracted from `buildFilterQuery` so the same dynamic-list semantics can be
