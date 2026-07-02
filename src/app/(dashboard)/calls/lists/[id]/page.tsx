@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight, Search, Pencil, X } from "lucide-react";
+import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight, Search, User, Pencil, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -46,7 +46,7 @@ export type QueueRow = {
   lastActiveAt: string | null;
   lastLoginAt: string | null;
   lastContactedAt: string | null;
-  lastCall: { outcome: string | null; created_at: string | null } | null;
+  lastCall: { outcome: string | null; created_at: string | null; agentName: string | null } | null;
 };
 
 type ListInfo = { id: string; name: string; description: string | null; is_dynamic: boolean | null };
@@ -359,6 +359,15 @@ export default function CallListPage() {
                       <span className="text-slate-600">
                         {CALL_OUTCOME_LABEL[r.lastCall.outcome as CallOutcome] ?? r.lastCall.outcome}
                         {r.lastCall.created_at && ` · ${formatDistanceToNow(new Date(r.lastCall.created_at), { addSuffix: true })}`}
+                      </span>
+                    )}
+                    {r.lastCall?.agentName && (
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                        title={`Last call by ${r.lastCall.agentName}`}
+                      >
+                        <User className="h-2.5 w-2.5" />
+                        {r.lastCall.agentName}
                       </span>
                     )}
                     {!r.title && !r.companyName && !r.city && !r.lastCall && (

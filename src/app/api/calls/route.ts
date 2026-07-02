@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 // GET /api/calls — recent calls feed (activities of type 'call').
 // Filters: outcome (comma list), contact_id, company_id, since, until.
@@ -50,5 +51,27 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ calls: data ?? [], total: count ?? 0 });
+  const rows = data ?? [];
+
+  // Attach the agent (the CRM user who made/received the call) so the feed can
+  // show who called who. user_profiles RLS only exposes the caller's own row,
+  // so resolve other agents' names via the service client (same pattern as
+  // /api/settings/calls). Scoped to the ids present in this page of results.
+  const agentIds = [...new Set(rows.map((r) => r.user_id).filter((id): id is string => !!id))];
+  const agentNameById = new Map<string, string | null>();
+  if (agentIds.length) {
+    const admin = createServiceClient();
+    const { data: profiles } = await admin
+      .from("user_profiles")
+      .select("user_id, full_name")
+      .in("user_id", agentIds);
+    for (const p of profiles ?? []) agentNameById.set(p.user_id, p.full_name);
+  }
+
+  const calls = rows.map((r) => ({
+    ...r,
+    agent_name: r.user_id ? agentNameById.get(r.user_id)?.trim() || null : null,
+  }));
+
+  return NextResponse.json({ calls, total: count ?? 0 });
 }
