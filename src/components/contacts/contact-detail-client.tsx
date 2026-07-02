@@ -14,6 +14,7 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
+import { AddToCallListModal } from '@/components/contacts/add-to-call-list-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { ActivityDetailModal } from '@/components/contacts/activity-detail-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
@@ -121,7 +122,8 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [hasMoreActivities, setHasMoreActivities] = useState(false);
   const [activitiesPage, setActivitiesPage] = useState(0);
-  const [contactLists, setContactLists] = useState<{ id: string; name: string }[]>([]);
+  const [contactLists, setContactLists] = useState<{ id: string; name: string; purpose: string | null }[]>([]);
+  const [showAddToCallList, setShowAddToCallList] = useState(false);
   const [sequences, setSequences] = useState<{ id: string; name: string; status: string; current_step: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editField, setEditField] = useState<string | null>(null);
@@ -224,9 +226,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         const listIds = listMembers.map(lm => lm.list_id);
         const { data: listsData } = await supabase
           .from('contact_lists')
-          .select('id, name')
+          .select('id, name, purpose')
           .in('id', listIds);
         if (listsData) setContactLists(listsData);
+      } else {
+        setContactLists([]);
       }
 
       // Fetch sequences
@@ -1227,13 +1231,28 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
           {/* Lists */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Lists</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-700">Lists</h3>
+              <button
+                onClick={() => setShowAddToCallList(true)}
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                <Plus className="w-3 h-3" />
+                Add to call list
+              </button>
+            </div>
             {contactLists.length === 0 ? (
               <p className="text-sm text-slate-400">Not in any lists</p>
             ) : (
               <div className="space-y-1">
                 {contactLists.map(list => (
-                  <div key={list.id} className="text-sm text-slate-700 py-1">{list.name}</div>
+                  <Link
+                    key={list.id}
+                    href={list.purpose === 'calling' ? `/calls/lists/${list.id}` : `/lists/${list.id}`}
+                    className="block text-sm text-indigo-600 hover:text-indigo-700 hover:underline py-1"
+                  >
+                    {list.name}
+                  </Link>
                 ))}
               </div>
             )}
@@ -1296,6 +1315,33 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
                   return { id: e.sequence_id, name: seq?.name || 'Unknown', status: e.status ?? 'active', current_step: e.current_step ?? 0 };
                 }));
               }
+            }
+          })();
+        }}
+      />
+
+      {/* Add to Call List Modal */}
+      <AddToCallListModal
+        open={showAddToCallList}
+        onClose={() => setShowAddToCallList(false)}
+        contactId={contactId}
+        contactName={fullName}
+        onAdded={() => {
+          // Reload the Lists section
+          (async () => {
+            const { data: listMembers } = await supabase
+              .from('contact_list_members')
+              .select('list_id')
+              .eq('contact_id', contactId);
+            if (listMembers && listMembers.length > 0) {
+              const listIds = listMembers.map(lm => lm.list_id);
+              const { data: listsData } = await supabase
+                .from('contact_lists')
+                .select('id, name, purpose')
+                .in('id', listIds);
+              if (listsData) setContactLists(listsData);
+            } else {
+              setContactLists([]);
             }
           })();
         }}
