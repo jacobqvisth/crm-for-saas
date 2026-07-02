@@ -10,6 +10,7 @@ const protectedRoutes = [
   "/roadmap",
   "/activation",
   "/templates",
+  "/domain-portfolio",
   "/settings",
 ];
 
