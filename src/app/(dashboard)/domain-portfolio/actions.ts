@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 import type { DomainPortfolioStatus } from "@/lib/ceo/data/domain-portfolio";
 
@@ -58,6 +59,17 @@ export async function updateDomainPortfolioRowAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!id || typeof id !== "string") {
     return { ok: false, error: "Missing row id" };
+  }
+
+  // The write goes through the service-role client (the table's RLS has no
+  // policies), so require an authenticated CRM user here — middleware alone
+  // doesn't cover direct server-action invocations from stale sessions.
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "Not authenticated" };
   }
 
   const supabase = createSupabaseServiceClient();
