@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight, Search } from "lucide-react";
+import { Phone, ArrowLeft, Loader2, Check, Building2, MapPin, Wrench, ChevronRight, Search, User, Pencil, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
@@ -11,6 +11,7 @@ import { CallLogger, type CallLoggerTarget } from "@/components/calls/call-logge
 import { CallNowButton } from "@/components/calls/call-now";
 import { ContactCallPanel } from "@/components/calls/contact-call-panel";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { createClient } from "@/lib/supabase/client";
 
 // The bulk find-numbers endpoint caps each request at 6 contacts; chunk to match.
 const FIND_BATCH = 6;
@@ -45,7 +46,12 @@ export type QueueRow = {
   lastActiveAt: string | null;
   lastLoginAt: string | null;
   lastContactedAt: string | null;
-  lastCall: { outcome: string | null; created_at: string | null } | null;
+  lastCall: {
+    outcome: string | null;
+    created_at: string | null;
+    agentName: string | null;
+    agentAvatarUrl: string | null;
+  } | null;
 };
 
 type ListInfo = { id: string; name: string; description: string | null; is_dynamic: boolean | null };
@@ -64,6 +70,34 @@ export default function CallListPage() {
   const [active, setActive] = useState<CallLoggerTarget | null>(null);
   const [openRow, setOpenRow] = useState<QueueRow | null>(null);
   const [findingNumbers, setFindingNumbers] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
+  // Inline-rename the list, mirroring the pattern on the general list-detail page
+  // (src/components/lists/list-detail-client.tsx). Writes straight to contact_lists
+  // via the browser Supabase client under RLS — there is no rename API route.
+  const handleSaveName = async () => {
+    const next = nameInput.trim();
+    if (!list || !next || next === list.name) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("contact_lists")
+      .update({ name: next })
+      .eq("id", list.id);
+    setSavingName(false);
+    if (error) {
+      toast.error("Failed to rename list");
+      return;
+    }
+    setList({ ...list, name: next });
+    toast.success("List renamed");
+    setEditingName(false);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,7 +206,51 @@ export default function CallListPage() {
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{list?.name ?? "Call list"}</h1>
+          {editingName && list ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                disabled={savingName}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveName();
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+                className="rounded-lg border border-slate-300 px-2 py-1 text-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={savingName}
+                className="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50"
+                title="Save name"
+              >
+                {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={() => setEditingName(false)}
+                disabled={savingName}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                title="Cancel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <h1
+              className="group inline-flex cursor-pointer items-center gap-2 text-xl font-semibold text-slate-900 hover:text-indigo-600"
+              onClick={() => {
+                if (!list) return;
+                setNameInput(list.name);
+                setEditingName(true);
+              }}
+              title="Click to rename this call list"
+            >
+              {list?.name ?? "Call list"}
+              {list && <Pencil className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100" />}
+            </h1>
+          )}
           {list?.description && <p className="mt-0.5 text-sm text-slate-500">{list.description}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -240,9 +318,22 @@ export default function CallListPage() {
               className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 ${openRow?.contactId === r.contactId ? "bg-indigo-50/60" : ""}`}
             >
               {r.lastCall ? (
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                  <Check className="h-3.5 w-3.5" />
-                </span>
+                r.lastCall.agentAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={r.lastCall.agentAvatarUrl}
+                    alt={r.lastCall.agentName ?? "Caller"}
+                    title={r.lastCall.agentName ? `Last call by ${r.lastCall.agentName}` : "Called"}
+                    className="h-6 w-6 shrink-0 rounded-full object-cover ring-2 ring-emerald-300"
+                  />
+                ) : (
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+                    title={r.lastCall.agentName ? `Last call by ${r.lastCall.agentName}` : "Called"}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                )
               ) : (
                 <span className="h-6 w-6 shrink-0 rounded-full border border-dashed border-slate-300" />
               )}
@@ -286,6 +377,15 @@ export default function CallListPage() {
                       <span className="text-slate-600">
                         {CALL_OUTCOME_LABEL[r.lastCall.outcome as CallOutcome] ?? r.lastCall.outcome}
                         {r.lastCall.created_at && ` · ${formatDistanceToNow(new Date(r.lastCall.created_at), { addSuffix: true })}`}
+                      </span>
+                    )}
+                    {r.lastCall?.agentName && (
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                        title={`Last call by ${r.lastCall.agentName}`}
+                      >
+                        <User className="h-2.5 w-2.5" />
+                        {r.lastCall.agentName}
                       </span>
                     )}
                     {!r.title && !r.companyName && !r.city && !r.lastCall && (

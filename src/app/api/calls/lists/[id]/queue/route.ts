@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { resolveListContactIds } from "@/lib/lists/filter-query";
 import {
   ALWAYS_ON_CALLING,
@@ -104,13 +105,17 @@ export async function GET(
     contacts.push(...((data ?? []) as unknown as ContactRow[]));
   }
 
-  // Most-recent call per contact on this page (chunked .in()).
-  const lastCallByContact = new Map<string, { outcome: string | null; created_at: string | null }>();
+  // Most-recent call per contact on this page (chunked .in()). Keep the agent's
+  // user_id so we can show who made the last call.
+  const lastCallByContact = new Map<
+    string,
+    { outcome: string | null; created_at: string | null; userId: string | null }
+  >();
   for (let i = 0; i < pageIds.length; i += IN_CHUNK) {
     const chunk = pageIds.slice(i, i + IN_CHUNK);
     const { data, error } = await supabase
       .from("activities")
-      .select("contact_id, outcome, created_at")
+      .select("contact_id, outcome, created_at, user_id")
       .eq("workspace_id", list.workspace_id)
       .eq("type", "call")
       .in("contact_id", chunk)
@@ -118,8 +123,34 @@ export async function GET(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     for (const row of data ?? []) {
       if (row.contact_id && !lastCallByContact.has(row.contact_id)) {
-        lastCallByContact.set(row.contact_id, { outcome: row.outcome, created_at: row.created_at });
+        lastCallByContact.set(row.contact_id, {
+          outcome: row.outcome,
+          created_at: row.created_at,
+          userId: row.user_id,
+        });
       }
+    }
+  }
+
+  // Resolve the agent (who made the last call) to a display name. user_profiles
+  // RLS only exposes the caller's own row, so use the service client — scoped to
+  // the agent ids present in this page (same pattern as /api/calls).
+  const agentIds = [
+    ...new Set(
+      [...lastCallByContact.values()].map((v) => v.userId).filter((id): id is string => !!id),
+    ),
+  ];
+  const agentNameById = new Map<string, string | null>();
+  const agentAvatarById = new Map<string, string | null>();
+  if (agentIds.length) {
+    const admin = createServiceClient();
+    const { data: profiles } = await admin
+      .from("user_profiles")
+      .select("user_id, full_name, avatar_url")
+      .in("user_id", agentIds);
+    for (const p of profiles ?? []) {
+      agentNameById.set(p.user_id, p.full_name);
+      agentAvatarById.set(p.user_id, p.avatar_url);
     }
   }
 
@@ -156,7 +187,16 @@ export async function GET(
       lastActiveAt: c.last_active_at,
       lastLoginAt: c.last_login_at,
       lastContactedAt: c.last_contacted_at,
-      lastCall: lastCallByContact.get(c.id) ?? null,
+      lastCall: (() => {
+        const lc = lastCallByContact.get(c.id);
+        if (!lc) return null;
+        return {
+          outcome: lc.outcome,
+          created_at: lc.created_at,
+          agentName: lc.userId ? agentNameById.get(lc.userId)?.trim() || null : null,
+          agentAvatarUrl: lc.userId ? agentAvatarById.get(lc.userId) || null : null,
+        };
+      })(),
     }));
 
   return NextResponse.json({

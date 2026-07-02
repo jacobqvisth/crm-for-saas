@@ -5064,6 +5064,102 @@ Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
   compose English, Preview in Swedish, send, verify recipient gets Swedish and
   the timeline activity retains the English (`body_en` / `sent_language`).
 
+---
+
+## CEO dashboard: Stockholm-time date ranges + rolling windows end yesterday
+**Date:** 2026-06-02 · **PR:** #326 · **Branch:** fix/ceo-stockholm-ranges
+
+Fixed three compounding bugs in the shared `/ceo` date-range util (affects every
+`/ceo` page; reported on `/ceo/new-users`):
+- **Rolling windows shifted +1 day** — `last_7/30/90_days` were `[tomorrow-N, tomorrow)`
+  (included today). Now N complete days **ending yesterday** (`end = start of today`,
+  exclusive). `today` / `this_month` (MTD) / `all_time` still include today.
+- **Off-by-one bucketing** — `enumerateBuckets` looped `<=` on an exclusive end,
+  drawing the boundary day (phantom "tomorrow" bar; the `Jun 1 = 0` row on Last week,
+  Jun 1 being this week's Monday). Now half-open `[start, end)` (`< end`).
+- **UTC → Europe/Stockholm** — added zero-dep, DST-safe Intl helpers in `dates.ts`
+  (`startOfStockholmDay`/`addStockholmDays`/`startOfStockholmMonth`/`addStockholmMonths`/
+  `startOfStockholmIsoWeek`/`toStockholmIsoDate`/`getStockholmParts`/`stockholmYearWeek`);
+  switched `time-ranges.ts` + `app-usage.ts` bucketing to them. UTC helpers kept
+  untouched for the sync jobs (GA4/App Store/Stripe). Weekly buckets now ISO Mon–Sun.
+- `inRange` in `new-users.ts` → strict `< range.end`.
+
+Verified for now = Jun 2 14:05 Stockholm: `last_7_days` = May 26–Jun 1 (7 bars, ends
+yesterday); `last_week` = May 25–May 31 (Mon–Sun, no Jun-1=0 row).
+
+**Checks:** 33 unit tests (rewrote time-ranges + app-usage specs, added DST/Stockholm
+coverage in dates.test.ts), `tsc`, `eslint`, `next build`, 8/8 smoke e2e — all green.
+Deployed to production (deploy READY for 22f3d40). Build ran under Homebrew Node
+(Codex.app's bundled Node can't dlopen native bindings).
+
+---
+
+## Reviews dashboard — Trustpilot sync (PR2) + branch refresh + main build fixes
+**Date:** 2026-07-02 · **PR:** #320 · **Branch:** claude/reviews-sync-pr2
+
+Refreshed the month-old PR #320 (reviews API sync, opened 2026-06-02) onto
+current main and fixed two pre-existing main build breakers found on merge.
+
+- `/api/cron/sync-reviews` (daily 07:00 UTC): pulls rating + count + recent
+  reviews into `dashboard_review_snapshots` / `dashboard_reviews` (from PR
+  #317). Trustpilot connector fully implemented (public Business Units API,
+  apikey only — activate by setting `TRUSTPILOT_API_KEY`); Google Business
+  Profile connector dormant behind `GBP_REVIEWS_ENABLED` until the GBP API
+  access request is approved (project quota currently 0).
+- Merge conflict resolved in `vercel.json` (kept mailbox-sync /
+  reconcile-wl-attribution / phone-enrichment crons, appended sync-reviews).
+- **Fix-forward on main breakage:** `next build` failed on
+  `api/calls/exclusions/route.ts` (illegal `export` of helper
+  `normaliseExclusion` from a route file — de-exported, only used locally) and
+  `tsc` failed on `api/calls/route.ts` (concatenated `.select()` string
+  defeats the Supabase type parser → `GenericStringError`; collapsed to a
+  single literal). Both predate this branch.
+
+**Checks:** `tsc --noEmit` 0, `next build --webpack` 0 (Homebrew node).
+Reviews page itself (PR #317) has been live since 2026-05-29 at
+/dashboard/reviews (post-restructure).
+
+---
+
+## Domain Portfolio — European TLD decision-tracker page
+**Date:** 2026-07-02 · **PR:** #304 · **Branch:** worktree-domain-portfolio-page → main
+
+Built `/domain-portfolio` (main sidebar, Globe icon, between Templates and
+Settings): a curated catalog of 3–5 recommended TLDs per European country
+(42 countries, 210 rows across north/west/south/east regions), each with
+rank, type (native ccTLD / generic / domain hack / subdomain convention /
+IDN / sponsored), registry, rationale, market share, and restrictions —
+plus per-row decision tracking.
+
+- **Schema:** `dashboard_domain_portfolio` — UNIQUE (country_code, tld),
+  CHECK constraints on status/region/tld_type, `updated_at` touch trigger,
+  RLS on with no policies (reads via CEO service-role client).
+  **Both migrations applied to prod** via Management API; verified
+  210 rows / 42 countries / 4 regions.
+- **UI:** card view grouped by region; filters (region, status, country,
+  search, top-3-only); stat strip (countries covered, planning / bought /
+  installed counts, est. annual €); expandable row editor (domain name,
+  registrar w/ per-TLD heuristic hint, cost, notes); status dropdown with
+  optimistic update + rollback; auto-stamps `purchased_at`/`installed_at`;
+  rows matching `wrenchlane.com`/`.co` link to /ceo/domain-health.
+- Page originally scaffolded under /ceo/*, moved to the main `(dashboard)`
+  group per Jacob — **any authenticated CRM user can view/edit**.
+- **Fix-forward:** main was red — `normaliseExclusion` exported from
+  `api/calls/exclusions/route.ts` (invalid route export). Un-exported it.
+  (The parallel session's #494 fixed the sibling GenericStringError; kept
+  theirs on rebase.)
+
+**Checks:** `tsc --noEmit`, `lint --max-warnings 0`, `next build --webpack`
+all pass. Squash-merged; deploy verification in flight.
+
+### Open
+- Any-user access is a deliberate default — say the word to gate it to
+  CEO_ALLOWED_EMAILS.
+- TLD research (sources + per-country reasoning) lives in the chat session;
+  the durable summary is the seed's `rationale` column.
+
+---
+
 ## Add-to-call-list button on contact profile + linked Lists card — 2026-07-02
 
 **PR #489** · branch `worktree-add-to-call-list-button` · squash-merged
