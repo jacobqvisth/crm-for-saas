@@ -13,6 +13,32 @@ updated: 2026-05-26
 
 ---
 
+## User profile pictures — sidebar, team, call worklist — 2026-07-02 — PR #496 — worktree-feature+user-avatars
+
+Jacob asked to (1) let all users add a profile picture so it shows instead of the initial-letter avatar, and (2) show the caller's photo in the call-worklist circle instead of the checkmark once a contact has been called. Plus set the two team photos (Jacob + Hans) directly.
+
+**What shipped:**
+- **DB:** `user_profiles.avatar_url TEXT` — migration `supabase/migrations/20260702120000_user_profiles_avatar.sql`, applied to prod (via Supabase Management-equivalent — psql wasn't installed, added `libpq`).
+- `src/app/api/settings/avatar/route.ts` — new `POST`/`DELETE`; uploads to a public `avatars` Storage bucket (created lazily, mirrors the email-images pattern), persists URL to `user_profiles.avatar_url` **and** auth `user_metadata.avatar_url` so the sidebar/team page reflect it with no extra query.
+- `src/components/user-avatar.tsx` — new shared `UserAvatar` (image + initials fallback).
+- `src/components/sidebar.tsx` — uses `UserAvatar` (was an inline indigo-initials block).
+- `src/app/(dashboard)/settings/profile/page.tsx` — upload / change / remove profile picture with live preview.
+- `src/app/api/settings/profile/route.ts` — GET now returns `avatar_url`.
+- `src/app/api/calls/lists/[id]/queue/route.ts` — resolves + returns `lastCall.agentAvatarUrl` (added `avatar_url` to the existing service-client `user_profiles` lookup).
+- `src/app/(dashboard)/calls/lists/[id]/page.tsx` — the row circle shows the caller's photo (emerald-ringed) when the last call has an avatar; falls back to the checkmark.
+- `src/lib/database.types.ts` — hand-added `avatar_url` to `user_profiles` Row/Insert/Update.
+- Team settings page (`src/components/settings/team-settings.tsx`) picks up avatars automatically (already read `user_metadata.avatar_url`).
+
+**Ops:** created the public `avatars` bucket; seeded jacob@wrenchlane.com (LinkedIn photo) + hans@wrenchlane.com (glasses photo) into `user_profiles.avatar_url` + auth `user_metadata`. Both public URLs verified `200`.
+
+**Checks:** `npx tsc --noEmit` clean, `npm run lint` clean (1 pre-existing warning in call-provider.tsx), `next build` EXIT=0 (117/117 pages). Deploy live (307 → /login).
+
+**Notes / gotchas:** the bg sandbox's `node` resolves to `/Applications/Codex.app/Contents/Resources/node`, which SIGKILLs (exit 137) even `node -v` — prepend `/opt/homebrew/bin` to PATH. The worktree was branched from a **stale** origin/main (c290d31 / PR #488) that still had the pre-cast `api/calls/route.ts` type error; rebased onto current origin/main (33ea995, PR #494 cast fix) to clear it. Worktrees have no `node_modules` — symlink the parent's.
+
+**Out of scope:** no avatar cropping/resizing (stored as-uploaded, ≤5 MB); the sidebar/team `full_name` vs `user_profiles.full_name` inconsistency was left as-is (only avatar was reconciled across both sources).
+
+---
+
 ## Calls: inbound/outbound direction label on Recent calls rows — 2026-07-01 — PR #482 — feature/call-direction-label
 
 Follow-up to the Recent-calls date tabs (#474): Jacob spotted an inbound call in the list and asked to label inbound vs outbound.
