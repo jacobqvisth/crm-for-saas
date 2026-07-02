@@ -5063,3 +5063,31 @@ Note: build OOMs under Codex.app's bundled Node — use Homebrew node.
 - Live: open a Swedish contact → Email, confirm selector defaults to Swedish,
   compose English, Preview in Swedish, send, verify recipient gets Swedish and
   the timeline activity retains the English (`body_en` / `sent_language`).
+
+---
+
+## CEO dashboard: Stockholm-time date ranges + rolling windows end yesterday
+**Date:** 2026-06-02 · **PR:** #326 · **Branch:** fix/ceo-stockholm-ranges
+
+Fixed three compounding bugs in the shared `/ceo` date-range util (affects every
+`/ceo` page; reported on `/ceo/new-users`):
+- **Rolling windows shifted +1 day** — `last_7/30/90_days` were `[tomorrow-N, tomorrow)`
+  (included today). Now N complete days **ending yesterday** (`end = start of today`,
+  exclusive). `today` / `this_month` (MTD) / `all_time` still include today.
+- **Off-by-one bucketing** — `enumerateBuckets` looped `<=` on an exclusive end,
+  drawing the boundary day (phantom "tomorrow" bar; the `Jun 1 = 0` row on Last week,
+  Jun 1 being this week's Monday). Now half-open `[start, end)` (`< end`).
+- **UTC → Europe/Stockholm** — added zero-dep, DST-safe Intl helpers in `dates.ts`
+  (`startOfStockholmDay`/`addStockholmDays`/`startOfStockholmMonth`/`addStockholmMonths`/
+  `startOfStockholmIsoWeek`/`toStockholmIsoDate`/`getStockholmParts`/`stockholmYearWeek`);
+  switched `time-ranges.ts` + `app-usage.ts` bucketing to them. UTC helpers kept
+  untouched for the sync jobs (GA4/App Store/Stripe). Weekly buckets now ISO Mon–Sun.
+- `inRange` in `new-users.ts` → strict `< range.end`.
+
+Verified for now = Jun 2 14:05 Stockholm: `last_7_days` = May 26–Jun 1 (7 bars, ends
+yesterday); `last_week` = May 25–May 31 (Mon–Sun, no Jun-1=0 row).
+
+**Checks:** 33 unit tests (rewrote time-ranges + app-usage specs, added DST/Stockholm
+coverage in dates.test.ts), `tsc`, `eslint`, `next build`, 8/8 smoke e2e — all green.
+Deployed to production (deploy READY for 22f3d40). Build ran under Homebrew Node
+(Codex.app's bundled Node can't dlopen native bindings).
