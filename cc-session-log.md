@@ -13,6 +13,24 @@ updated: 2026-05-26
 
 ---
 
+## Activity details — show real email body — 2026-07-02 — PR #461 — feat/activity-email-body
+
+Jacob (from a contact-profile screenshot) asked that opening a logged activity show the actual email message text — the **Activity details** modal only showed a generic summary line ("Email sent to info@…" / "Email from …"), never the message body.
+
+**What shipped:**
+- **New route** `src/app/api/activities/[id]/email-body/route.ts` — read-only `GET` that reads the activity's `metadata` and resolves the full message from `inbox_messages` (inbound replies + mailbox-synced mail, keyed on `gmail_message_id`) or `email_queue` (outbound sequence/one-off, via `email_queue_id` or `gmail_message_id`). RLS-scoped, auth-gated (401 without a session).
+- `src/components/contacts/activity-detail-modal.tsx` — lazy-loads the body on open for email activities and renders `body_html` in a **sandboxed iframe** (same pattern the activation modal uses for external email HTML), falling back to `body_text`. Hides the redundant generic `activity.body` summary once the real message loads; shows a Translate toggle when a stored `body_translated_en` exists.
+
+**Behaviour / Why:** the ids needed to find the body were already stored in `activities.metadata`, so this works **retroactively for every previously-logged email** — no backfill. Body summary in the modal now only appears when no stored message exists.
+
+**Verification:** `npx tsc --noEmit` clean, `eslint` clean on both files, **Build & Lint CI (`next build`) passed** (2m33s). Local `next build` couldn't run — the dev sandbox was OOM-killing node (exit 137); the Vercel *preview* build hit the known preview-only prerender failure, but the **production** deploy for the merge SHA (4b3da4e) reached Vercel `success`, and `GET /api/activities/[id]/email-body` returns 401 in prod (route live).
+
+**Deploy:** squash-merged (4b3da4e, 2026-07-01T12:02:42Z); production deploy Vercel `success` on crm-for-saas.vercel.app.
+
+**Out of scope:** iframe is fixed ~320px tall (scrolls internally) — auto-size / full-screen is a possible follow-up. No change to how emails are stored or synced; no schema change.
+
+---
+
 ## Calls page — Call lists / Recent calls tabs — 2026-07-02 — PR #493 — worktree-calls-list-tabs
 
 Jacob asked (from a screenshot of `/calls`) to add tabs so he can switch between the **Call lists** and **Calls** panels, so the call list can be wider and fit more info per row.
