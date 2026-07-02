@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { UserAvatar } from "@/components/user-avatar";
 import type { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard,
@@ -202,25 +203,14 @@ export function Sidebar() {
             className="flex items-center gap-3 px-3 py-2 rounded-lg"
             title={currentUser.email ?? undefined}
           >
-            {currentUser.user_metadata?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={currentUser.user_metadata.avatar_url}
-                alt={currentUser.user_metadata?.full_name ?? "You"}
-                className="w-7 h-7 rounded-full object-cover flex-shrink-0"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-semibold text-indigo-700">
-                  {(currentUser.user_metadata?.full_name as string | undefined)
-                    ?.split(" ")
-                    .map((n: string) => n[0])
-                    .slice(0, 2)
-                    .join("")
-                    .toUpperCase() ?? "?"}
-                </span>
-              </div>
-            )}
+            <UserAvatar
+              name={
+                (currentUser.user_metadata?.full_name as string | undefined) ??
+                currentUser.email
+              }
+              src={currentUser.user_metadata?.avatar_url as string | undefined}
+              className="w-7 h-7"
+            />
             {!collapsed && (
               <div className="min-w-0">
                 <p className="text-xs font-medium text-slate-700 truncate">

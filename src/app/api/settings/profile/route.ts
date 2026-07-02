@@ -16,7 +16,7 @@ export async function GET() {
   const { data } = await supabase
     .from("user_profiles")
     .select(
-      "full_name, title, signature_html, signature_updated_at, origin_address, origin_latitude, origin_longitude, origin_geocoded_at, working_days",
+      "full_name, title, avatar_url, signature_html, signature_updated_at, origin_address, origin_latitude, origin_longitude, origin_geocoded_at, working_days",
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -25,6 +25,7 @@ export async function GET() {
     email: user.email,
     full_name: data?.full_name ?? null,
     title: data?.title ?? null,
+    avatar_url: data?.avatar_url ?? null,
     signature_html: data?.signature_html ?? null,
     signature_updated_at: data?.signature_updated_at ?? null,
     origin_address: data?.origin_address ?? null,
