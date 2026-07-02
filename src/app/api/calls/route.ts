@@ -32,9 +32,10 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("activities")
     .select(
-      "id, created_at, outcome, subject, body, metadata, contact_id, company_id, user_id, " +
-        "contacts(first_name, last_name, email, phone, lead_status, wl_user_id), " +
-        "companies(name)",
+      // NOTE: keep this a single string literal — postgrest-js only infers row
+      // types (so r.user_id etc. resolve) from a literal select; concatenating
+      // with `+` degrades every row to GenericStringError and fails the build.
+      "id, created_at, outcome, subject, body, metadata, contact_id, company_id, user_id, contacts(first_name, last_name, email, phone, lead_status, wl_user_id), companies(name)",
       { count: "exact" },
     )
     .eq("workspace_id", membership.workspace_id)
@@ -51,7 +52,12 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = data ?? [];
+  // Type the rows explicitly. postgrest-js's row inference over this nested
+  // select is deep enough that the production `next build` type-checker can fall
+  // back to `GenericStringError` (where `.user_id` doesn't exist and the build
+  // fails), even though local `tsc` infers it fine. Pinning the shape we read
+  // makes the handler compile regardless of that fallback.
+  const rows = (data ?? []) as Array<Record<string, unknown> & { user_id: string | null }>;
 
   // Attach the agent (the CRM user who made/received the call) so the feed can
   // show who called who. user_profiles RLS only exposes the caller's own row,
