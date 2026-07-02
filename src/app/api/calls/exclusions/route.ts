@@ -20,7 +20,7 @@ async function getWorkspaceId(
 }
 
 /** Normalise a raw value for a given kind, or return null if it's not valid. */
-export function normaliseExclusion(
+function normaliseExclusion(
   kind: "domain" | "email" | "company",
   raw: string,
 ): { value: string; label: string } | null {
