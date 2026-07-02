@@ -5224,3 +5224,49 @@ skips the Vercel build (ignoreCommand). Feature deploy live (307 → /login).
 Merged (d37da9a). Prod deploy Ready, live (307 → /login).
 **Note:** local build needed `PATH=/opt/homebrew/bin:$PATH` — bare `node`
 resolves to Codex.app's binary and SIGKILLs the Next build instantly.
+
+---
+
+## Named call lists + inline rename on the call worklist — 2026-07-02
+
+**PR #492** · branch `worktree-calls-list-rename` · squash-merged 2026-07-02T08:30:38Z → main.
+**Deploy:** live on crm-for-saas.vercel.app (green after #494's build fix landed on main; 307 → /login).
+
+**Code:**
+- `src/app/(dashboard)/calls/lists/[id]/page.tsx` — added inline click-to-edit
+  rename of a call list right on the worklist heading (pencil affordance,
+  Enter saves / Escape cancels, saving spinner + toast). Writes to
+  `contact_lists.name` via the browser Supabase client under RLS, mirroring the
+  existing rename in `src/components/lists/list-detail-client.tsx` (no rename
+  API route exists). Previously the name was read-only here and renaming meant
+  hopping to "Manage contacts" → `/lists/[id]`.
+
+**Data ops (prod, via Management API — no deploy needed):**
+- Renamed call list `Top calls — 02 juli` → **"Hans call list"**
+  (`f26c0a3e-ce4f-4811-b3cf-462a3d58765a`, 19 members).
+- Created **"Jacob call list"** (`eca51676-07a1-4581-b79e-b782c1fc6d26`, static,
+  `purpose='calling'`, `exclusions:{groups:[never_call]}`) — Swedish app-user
+  workshops for Jacob to call, built to NOT overlap Hans's list: excluded
+  Hans's 16 company_ids, `@minbil.se`/`@bilia.se` (Hans deal domains),
+  `@wrenchlane.com`/`@codeoc.ai`, phone-deduped vs Hans's numbers, ranked by
+  `diagnostics_total`. Started at 20 members.
+- Follow-up: removed **Bilfix** + **Svanhagensbil** from Jacob call list (→ 18)
+  because Hans had already *called* them directly (activities.user_id =
+  `5258517c…`) even though they were never on his list. Lesson logged in memory:
+  a true "don't call the same" list must exclude anyone already called by
+  another rep, not just members of the other rep's list.
+
+**Checks:** `tsc --noEmit` clean (incremental cache masks some errors — use clean
+`--incremental false`); eslint clean on the changed file. Vercel preview build
+fails only on the known unrelated `/calls/feedback` prerender (missing preview
+Supabase env); prod on main is green.
+
+**Notable:** merging #492 surfaced that main was already red from #488 (a
+postgrest-js concatenated-`.select()` type error that only prod `next build`
+catches, not local `tsc`). Opened #495 to fix; teammate's #494 landed the
+equivalent fix first, so #495 closed as redundant. Gotcha recorded in
+`project_crm-for-saas.md` memory. This bg-job sandbox SIGKILLs full-project
+`tsc`/`next build` (~137) — Vercel build log is the authoritative type gate.
+
+**Out of scope:** Hans has no `user_profiles.full_name`, so the #488 caller-name
+pill renders empty on his calls — cosmetic, not touched this session.
