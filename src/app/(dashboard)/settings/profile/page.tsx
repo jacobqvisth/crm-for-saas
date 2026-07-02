@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
@@ -13,8 +13,11 @@ import {
   CalendarOff,
   Plus,
   X,
+  Camera,
+  Trash2,
 } from "lucide-react";
 import { RichEmailEditor } from "@/components/sequences/rich-email-editor";
+import { UserAvatar } from "@/components/user-avatar";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 
 type WorkingDays = {
@@ -51,6 +54,7 @@ type Profile = {
   email: string | null;
   full_name: string | null;
   title: string | null;
+  avatar_url: string | null;
   signature_html: string | null;
   signature_updated_at: string | null;
   origin_address: string | null;
@@ -73,6 +77,9 @@ export default function ProfileSettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState("");
   const [title, setTitle] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [signatureHtml, setSignatureHtml] = useState("");
   const [originAddress, setOriginAddress] = useState("");
   const [workingDays, setWorkingDays] = useState<WorkingDays>(DEFAULT_WORKING_DAYS);
@@ -96,6 +103,7 @@ export default function ProfileSettingsPage() {
         setProfile(p);
         setFullName(p.full_name ?? "");
         setTitle(p.title ?? "");
+        setAvatarUrl(p.avatar_url ?? null);
         setSignatureHtml(p.signature_html ?? "");
         setOriginAddress(p.origin_address ?? "");
         setWorkingDays(p.working_days ?? DEFAULT_WORKING_DAYS);
@@ -147,6 +155,46 @@ export default function ProfileSettingsPage() {
       setSaving(false);
     }
   };
+
+  async function handleAvatarSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset the input so picking the same file again re-triggers change.
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Images can be up to 5 MB.");
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/settings/avatar", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setAvatarUrl(data.url);
+      toast.success("Profile picture updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  async function removeAvatar() {
+    setAvatarUploading(true);
+    try {
+      const res = await fetch("/api/settings/avatar", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to remove");
+      setAvatarUrl(null);
+      toast.success("Profile picture removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   async function addPto() {
     if (!ptoDate) {
@@ -220,6 +268,51 @@ export default function ProfileSettingsPage() {
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-2">Profile picture</label>
+          <div className="flex items-center gap-4">
+            <UserAvatar
+              name={fullName || profile?.email}
+              src={avatarUrl}
+              className="h-16 w-16"
+              textClassName="text-lg"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleAvatarSelected}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {avatarUploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Camera className="h-3.5 w-3.5" />
+                )}
+                {avatarUrl ? "Change" : "Upload"}
+              </button>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={removeAvatar}
+                  disabled={avatarUploading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remove
+                </button>
+              )}
+              <p className="w-full text-xs text-slate-400">JPG, PNG, GIF or WebP · up to 5 MB. Saved instantly.</p>
+            </div>
+          </div>
+        </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Full name</label>
           <input

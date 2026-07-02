@@ -141,13 +141,17 @@ export async function GET(
     ),
   ];
   const agentNameById = new Map<string, string | null>();
+  const agentAvatarById = new Map<string, string | null>();
   if (agentIds.length) {
     const admin = createServiceClient();
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, full_name")
+      .select("user_id, full_name, avatar_url")
       .in("user_id", agentIds);
-    for (const p of profiles ?? []) agentNameById.set(p.user_id, p.full_name);
+    for (const p of profiles ?? []) {
+      agentNameById.set(p.user_id, p.full_name);
+      agentAvatarById.set(p.user_id, p.avatar_url);
+    }
   }
 
   // Preserve list order; attach call state + customer flag.
@@ -190,6 +194,7 @@ export async function GET(
           outcome: lc.outcome,
           created_at: lc.created_at,
           agentName: lc.userId ? agentNameById.get(lc.userId)?.trim() || null : null,
+          agentAvatarUrl: lc.userId ? agentAvatarById.get(lc.userId) || null : null,
         };
       })(),
     }));

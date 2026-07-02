@@ -46,7 +46,12 @@ export type QueueRow = {
   lastActiveAt: string | null;
   lastLoginAt: string | null;
   lastContactedAt: string | null;
-  lastCall: { outcome: string | null; created_at: string | null; agentName: string | null } | null;
+  lastCall: {
+    outcome: string | null;
+    created_at: string | null;
+    agentName: string | null;
+    agentAvatarUrl: string | null;
+  } | null;
 };
 
 type ListInfo = { id: string; name: string; description: string | null; is_dynamic: boolean | null };
@@ -313,9 +318,22 @@ export default function CallListPage() {
               className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 ${openRow?.contactId === r.contactId ? "bg-indigo-50/60" : ""}`}
             >
               {r.lastCall ? (
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                  <Check className="h-3.5 w-3.5" />
-                </span>
+                r.lastCall.agentAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={r.lastCall.agentAvatarUrl}
+                    alt={r.lastCall.agentName ?? "Caller"}
+                    title={r.lastCall.agentName ? `Last call by ${r.lastCall.agentName}` : "Called"}
+                    className="h-6 w-6 shrink-0 rounded-full object-cover ring-2 ring-emerald-300"
+                  />
+                ) : (
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+                    title={r.lastCall.agentName ? `Last call by ${r.lastCall.agentName}` : "Called"}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                )
               ) : (
                 <span className="h-6 w-6 shrink-0 rounded-full border border-dashed border-slate-300" />
               )}
