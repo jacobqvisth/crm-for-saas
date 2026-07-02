@@ -32,9 +32,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("activities")
     .select(
-      "id, created_at, outcome, subject, body, metadata, contact_id, company_id, user_id, " +
-        "contacts(first_name, last_name, email, phone, lead_status, wl_user_id), " +
-        "companies(name)",
+      "id, created_at, outcome, subject, body, metadata, contact_id, company_id, user_id, contacts(first_name, last_name, email, phone, lead_status, wl_user_id), companies(name)",
       { count: "exact" },
     )
     .eq("workspace_id", membership.workspace_id)
