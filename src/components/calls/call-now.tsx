@@ -7,6 +7,7 @@ import { PhoneDisplay } from "@/components/contacts/phone-field";
 import { useCall } from "@/components/calls/call-provider";
 import {
   CallDrawer,
+  isStaleProcessing,
   type CallMode,
   type CallNowTarget,
   type CallNumber,
@@ -194,7 +195,13 @@ export function CallDetailDrawer({
       if (res.ok) {
         const json = await res.json();
         setSession(json.session);
-        if (["processed", "failed", "no_recording"].includes(json.session?.status) && pollRef.current) {
+        // Stop polling on a terminal state, or when a "processing" row has been
+        // stuck past the function timeout (it won't recover without a retry) —
+        // otherwise the drawer would poll forever behind the spinner.
+        const done =
+          ["processed", "failed", "no_recording"].includes(json.session?.status) ||
+          isStaleProcessing(json.session);
+        if (done && pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
@@ -235,7 +242,11 @@ export function CallDetailDrawer({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId }),
         }).then(() => {
-          setSession((s) => (s ? { ...s, status: "processing", error: null } : s));
+          // Bump updated_at optimistically so the just-retried call isn't
+          // immediately re-flagged as stale before the first poll returns.
+          setSession((s) =>
+            s ? { ...s, status: "processing", error: null, updated_at: new Date().toISOString() } : s,
+          );
           if (!pollRef.current) pollRef.current = setInterval(load, 3000);
         })
       }

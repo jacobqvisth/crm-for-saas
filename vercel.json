@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/sync-reviews",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/sweep-stuck-calls",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
