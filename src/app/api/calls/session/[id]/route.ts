@@ -20,7 +20,7 @@ export async function GET(
   const { data: session, error } = await supabase
     .from("call_sessions")
     .select(
-      "id, status, direction, to_number, from_number, duration_seconds, recording_url, transcript, summary, ai_json, ai_processed_at, activity_id, contact_id, company_id, error, created_at",
+      "id, status, direction, to_number, from_number, duration_seconds, recording_url, transcript, summary, ai_json, ai_processed_at, activity_id, contact_id, company_id, error, created_at, ended_at, updated_at",
     )
     .eq("id", id)
     .maybeSingle();

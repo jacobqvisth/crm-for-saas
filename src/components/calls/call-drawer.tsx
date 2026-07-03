@@ -82,7 +82,24 @@ export type Session = {
   ai_json: AiJson | null;
   transcript: Utterance[] | null;
   error: string | null;
+  /** Present for past-call views (from the API); absent while a call is live. */
+  updated_at?: string | null;
 };
+
+// The AI pipeline (transcribe + summarize) runs inside a serverless function
+// capped at maxDuration=300s. If a row is still "processing" well past that, the
+// job was killed mid-run (timeout / background-task eviction) before it could
+// reach "processed" or "failed" — it's stuck and will never recover on its own.
+// We use updated_at (bumped whenever status changes / a retry re-kicks it) so a
+// freshly re-started job isn't immediately re-flagged.
+const STALE_PROCESSING_MS = 6 * 60 * 1000;
+
+export function isStaleProcessing(session: Session | null): boolean {
+  if (!session || session.status !== "processing" || !session.updated_at) return false;
+  const updatedMs = Date.parse(session.updated_at);
+  if (Number.isNaN(updatedMs)) return false;
+  return Date.now() - updatedMs > STALE_PROCESSING_MS;
+}
 
 export const STATUS_COPY: Record<string, string> = {
   dialing: "Ringing your phone — answer to connect the call…",
@@ -92,6 +109,7 @@ export const STATUS_COPY: Record<string, string> = {
   processed: "Done",
   failed: "Processing failed",
   no_recording: "No recording was captured for this call",
+  stalled: "Processing stalled — this call is taking longer than expected. Retry below.",
 };
 
 const WEBRTC_COPY: Record<WebrtcState, string> = {
@@ -152,7 +170,12 @@ export function CallDrawer({
   const status = session?.status ?? "dialing";
   const ai = session?.ai_json ?? null;
   const transcript = session?.transcript ?? null;
-  const inFlight = ["dialing", "in_progress", "completed", "processing"].includes(status);
+  // A "processing" row that's been stuck past the function timeout is treated as
+  // a recoverable failure: no spinner, and the Retry button is offered.
+  const stale = isStaleProcessing(session);
+  const inFlight =
+    !stale && ["dialing", "in_progress", "completed", "processing"].includes(status);
+  const recoverable = status === "failed" || status === "no_recording" || stale;
   // Show the browser call controls while the WebRTC leg is live.
   const webrtcLive =
     webrtc && ["connecting", "registered", "ringing", "in_call"].includes(webrtc.state);
@@ -201,7 +224,7 @@ export function CallDrawer({
             className={`flex items-center gap-3 rounded-lg border p-3 text-sm ${
               status === "processed"
                 ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : status === "failed" || status === "no_recording"
+                : recoverable
                   ? "border-amber-200 bg-amber-50 text-amber-800"
                   : "border-slate-200 bg-slate-50 text-slate-700"
             }`}
@@ -213,11 +236,11 @@ export function CallDrawer({
             ) : (
               <AlertTriangle className="h-4 w-4 shrink-0" />
             )}
-            <span>{STATUS_COPY[status] ?? status}</span>
+            <span>{stale ? STATUS_COPY.stalled : (STATUS_COPY[status] ?? status)}</span>
           </div>
           )}
 
-          {(status === "failed" || status === "no_recording") && (
+          {recoverable && (
             <div className="space-y-2">
               {session?.error && <p className="text-xs text-rose-600">{session.error}</p>}
               <button
