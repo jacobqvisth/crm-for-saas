@@ -13,6 +13,36 @@ updated: 2026-05-26
 
 ---
 
+## Recover calls stuck at status='processing' (perpetual "AI is transcribing…" spinner) — 2026-07-03 — PR #508 — fix/stuck-call-processing
+
+Jacob (from a screenshot): clicking **View call** on a completed call (Adrian Silverbark, Torsås Bilservice) opened the call drawer stuck forever on *"AI is transcribing & summarizing the call…"* — the call had ended ~19h earlier.
+
+Root cause: the `call_sessions` row was frozen at `status='processing'`. The post-call AI pipeline (`processCallSession`) runs as a Vercel `after()` background task and sets `status='processing'` at the start; on this call — the **longest in the table, 877s / 14.6 min** — the job was killed mid-run (`after()` eviction / `maxDuration=300` timeout) before reaching the final `'processed'` write, and never hit a `catch → 'failed'` branch either (so `error` stayed null). Nothing recovered it:
+- the 46elks hangup webhook's idempotency guard refuses to re-kick a `'processing'` row;
+- `CallDetailDrawer` polls every 3s and only stops on a terminal status → **infinite spinner**;
+- the **Retry** button was gated to `'failed'`/`'no_recording'` only, so a stuck-`processing` row offered no recovery.
+
+Also found in the same table: **5 rows stuck in `completed`** (Jul 1, no recording — a dead-end kick that never fired) and 3 `failed` (2× "Anthropic credit balance too low" on Jul 2, 1× old Deepgram 401).
+
+**Files:**
+- `src/app/api/cron/sweep-stuck-calls/route.ts` (new) — cron (Bearer `CRON_SECRET`, exports GET+POST) that re-runs the idempotent `processCallSession` on rows stuck at `processing` (`updated_at` older than the 300s timeout + margin) or `completed` (`ended_at` stale). Batch 5, concurrency 2.
+- `vercel.json` — registered `/api/cron/sweep-stuck-calls` at `*/5 * * * *`.
+- `src/components/calls/call-drawer.tsx` — added `isStaleProcessing()` + `STALE_PROCESSING_MS=6min`; a stale `processing` row is now treated as recoverable (no spinner, amber "Processing stalled — retry" banner, Retry button shown). Added `stalled` copy + `updated_at` to the `Session` type.
+- `src/components/calls/call-now.tsx` — `CallDetailDrawer` stops polling once a call is stale (was infinite); Retry bumps `updated_at` optimistically so a just-retried call isn't instantly re-flagged.
+- `src/app/api/calls/session/[id]/route.ts` — select now returns `ended_at` + `updated_at` (needed to detect staleness).
+
+**Behaviour / Why:** staleness keys on `updated_at` (bumped whenever the pipeline touches the row / a retry re-kicks it) rather than `ended_at`, so a re-started job isn't immediately re-flagged; the 6-min threshold sits above the 300s function cap so a legitimately-running job is never grabbed. The cron makes the whole class of failure self-heal within ~5 min instead of hanging forever.
+
+**Verification:** `npx tsc --noEmit` clean · `npm run lint` 0 errors (1 pre-existing warning in `call-provider.tsx`, untouched) · `npm run build` ✅. Post-deploy (prod READY, commit 0e0fc56) the cron ran and re-processed Adrian's call → `status='processed'`, transcript + summary present, `ai_processed_at 13:46`, model `claude-sonnet-4-6`; the 5 orphan `completed` rows correctly moved to `no_recording`. Final table: 47 `processed`, 5 `no_recording`, 3 `failed`, **0 stuck**.
+
+**Ops:** none needed beyond the cron — no manual DB writes; the stuck call recovered through the real production pipeline. The 3 remaining `failed` rows now surface a Retry button in the UI if Jacob wants them recovered.
+
+**Out of scope:** did not change the `after()` kick itself or move processing to a proper queue (the cron is the safety net); did not touch the live-call path, planner, or Deepgram/Claude steps.
+
+**Deploy:** squash-merged (0e0fc56, 2026-07-03T13:41:27Z); Vercel deploy dpl_J4GetVRsca3ibPK38t4ki1srh6VD reached READY on crm-for-saas.vercel.app.
+
+---
+
 ## Computer calling: stop background re-registration from clobbering the live-call UI — 2026-07-02 — fix/webrtc-call-state
 
 Jacob: during a call the right panel **sometimes flips back to "Connected — placing the call…"** while he's actually talking, and **after a call the pill/box doesn't auto-update — he has to refresh** (screenshots showed a stuck pill with Mute/Hang-up + a runaway 21:46 timer).
