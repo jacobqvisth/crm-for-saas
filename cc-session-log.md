@@ -13,6 +13,17 @@ updated: 2026-05-26
 
 ---
 
+## Call follow-up email: edit in Swedish/English, editable subject, sender selector — 2026-07-06 — PR #510 — feature/followup-email-subject-sender
+
+Jacob (from a screenshot of the call drawer's **Suggested follow-up email** card): needs to edit the subject line, see/change the sender, and edit the email *in Swedish* — the translated "Recipient sees" preview was read-only and the sender was invisible. Follow-ups clarified the full model: edit in English OR Swedish, and independently choose the send language.
+
+- **`FollowupEmail` rewritten** (`src/components/calls/call-drawer.tsx`): "Edit in" toggle (English / contact language, default Swedish) + independent "Send in" select. Two drafts kept so toggling never loses edits. For non-English contacts the card opens directly in the native language, seeded once from an AI translation of the English draft ("Re-translate from English" button re-seeds). Subject editable in both modes. When edit-language == send-language the email ships **verbatim** (no re-translation); otherwise translated at send as before. Footer states which will happen.
+- **"Send from" sender selector** — reuses `SenderAccountSelector`, preselected to the acting rep's own Gmail account (the server's existing implicit default via `getNextSender(…, user.id)`, now explicit). New opt-in `preferOwnDefault` prop (one-shot effect, never fights a manual choice); `GET /api/gmail/accounts` now returns `is_own` per account. Existing selector usages unchanged.
+- **`sourceLanguage` support**: `translateOutboundEmail` + `POST /api/contacts/[id]/send-email` accept optional `sourceLanguage` (default `en`, backward-compatible); translation runs only when target ≠ source. Activity metadata records `composed_language`; authored copy still audited under the legacy `subject_en`/`body_en` keys.
+- Old debounced read-only preview machinery removed; new `htmlToText` helper round-trips the translation API's `<p>/<br>` HTML back into the textarea.
+
+**Checks:** `tsc --noEmit` exit 0, eslint clean (one pre-existing warning in `call-provider.tsx`), `npm run build` exit 0. Merged (f921bc5); prod deploy verified READY for that SHA.
+
 ## Recover calls stuck at status='processing' (perpetual "AI is transcribing…" spinner) — 2026-07-03 — PR #508 — fix/stuck-call-processing
 
 Jacob (from a screenshot): clicking **View call** on a completed call (Adrian Silverbark, Torsås Bilservice) opened the call drawer stuck forever on *"AI is transcribing & summarizing the call…"* — the call had ended ~19h earlier.
