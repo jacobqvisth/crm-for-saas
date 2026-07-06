@@ -7,7 +7,7 @@
 // same drawer without an import cycle. This file holds NO call lifecycle state —
 // it just renders a `Session` plus optional live WebRTC controls.
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Phone,
@@ -32,6 +32,7 @@ import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { WebrtcState } from "@/lib/calls/webrtc-client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/i18n/languages";
+import { SenderAccountSelector } from "@/components/gmail/sender-account-selector";
 
 /** Which leg rings as the agent: their mobile (bridge) or the browser (webrtc). */
 export type CallMode = "bridge" | "webrtc";
@@ -148,6 +149,22 @@ function textToHtml(text: string): string {
     .split(/\n{2,}/)
     .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
     .join("");
+}
+
+/** Inverse of textToHtml for the simple <p>/<br> markup the translation API
+ *  returns — lets a translated draft load back into a plain textarea. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;/g, "'")
+    .trim();
 }
 
 export function CallDrawer({
@@ -453,34 +470,43 @@ function FollowupEmail({
   defaultLanguage?: string;
 }) {
   const { workspaceId } = useWorkspace();
-  const [subject, setSubject] = useState(suggested.subject);
-  const [body, setBody] = useState(suggested.body);
+
+  // The AI drafts in English. The rep can edit that draft OR a native-language
+  // draft (the contact's language, defaulting to Swedish — most of the team
+  // and customer base is Swedish). Which language you EDIT in and which
+  // language the email is SENT in are independent choices: the server
+  // translates at send time only when they differ, and sends verbatim when
+  // they match — so a Swedish draft sent in Swedish ships exactly as written.
+  const nativeLang =
+    defaultLanguage && defaultLanguage.toLowerCase() !== "en"
+      ? defaultLanguage.toLowerCase()
+      : "sv";
+  const startNative = (defaultLanguage || "en").toLowerCase() !== "en";
+  const [editLang, setEditLang] = useState<string>(startNative ? nativeLang : "en");
   const [language, setLanguage] = useState<string>(
     (defaultLanguage || "en").toLowerCase()
   );
+  const [subject, setSubject] = useState(suggested.subject);
+  const [body, setBody] = useState(suggested.body);
+  // Native draft — seeded once from an AI translation of the English draft,
+  // then owned by the rep.
+  const [nativeSubject, setNativeSubject] = useState("");
+  const [nativeBody, setNativeBody] = useState("");
+  const [nativeSeeded, setNativeSeeded] = useState(false);
+  const [nativeLoading, setNativeLoading] = useState(false);
+  const [nativeError, setNativeError] = useState<string | null>(null);
+  const [senderAccountId, setSenderAccountId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Translated preview (what the recipient receives). The agent composes in
-  // English; the send path re-translates server-side, so a stale preview never
-  // determines what ships. Mirrors the contact compose modal.
-  const [showPreview, setShowPreview] = useState(false);
-  const [translated, setTranslated] = useState<{ subject: string; body: string } | null>(null);
-  const [translating, setTranslating] = useState(false);
-  const [translateError, setTranslateError] = useState<string | null>(null);
-  const translatedKeyRef = useRef<string | null>(null);
+  const editingNative = editLang !== "en";
 
-  const fetchTranslation = useCallback(async () => {
-    if (language === "en" || !workspaceId) return;
-    if (!subject.trim() && !body.trim()) {
-      setTranslated(null);
-      translatedKeyRef.current = null;
-      return;
-    }
-    const key = `${language} ${subject} ${body}`;
-    if (translatedKeyRef.current === key) return;
-    setTranslating(true);
-    setTranslateError(null);
+  // Seed (or re-seed, via the "Re-translate" button) the native draft by
+  // translating the current English draft.
+  const seedNativeDraft = useCallback(async () => {
+    if (!workspaceId) return;
+    setNativeLoading(true);
+    setNativeError(null);
     try {
       const res = await fetch("/api/ai/translate-email", {
         method: "POST",
@@ -489,39 +515,36 @@ function FollowupEmail({
           workspaceId,
           subject,
           bodyHtml: textToHtml(body),
-          targetLanguage: language,
+          targetLanguage: nativeLang,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setTranslateError(data.error || "Translation failed");
+        setNativeError(data.error || "Translation failed");
         return;
       }
-      setTranslated({ subject: data.subject || "", body: data.bodyHtml || "" });
-      translatedKeyRef.current = key;
+      setNativeSubject(data.subject || "");
+      setNativeBody(htmlToText(data.bodyHtml || ""));
+      setNativeSeeded(true);
     } catch {
-      setTranslateError("Network error while translating");
+      setNativeError("Network error while translating");
     } finally {
-      setTranslating(false);
+      setNativeLoading(false);
     }
-  }, [language, subject, body, workspaceId]);
+  }, [workspaceId, subject, body, nativeLang]);
 
-  // Invalidate + hide the preview when the target language changes.
+  // First time the native editor opens (on mount for non-English contacts),
+  // fill it with a translation of the AI's English draft.
   useEffect(() => {
-    setTranslated(null);
-    setTranslateError(null);
-    translatedKeyRef.current = null;
-  }, [language]);
-
-  // Keep the preview fresh while it's open (debounced).
-  useEffect(() => {
-    if (!showPreview || language === "en") return;
-    const t = setTimeout(() => void fetchTranslation(), 600);
-    return () => clearTimeout(t);
-  }, [showPreview, language, subject, body, fetchTranslation]);
+    if (editingNative && !nativeSeeded && !nativeLoading && !nativeError) {
+      void seedNativeDraft();
+    }
+  }, [editingNative, nativeSeeded, nativeLoading, nativeError, seedNativeDraft]);
 
   const send = async () => {
-    if (!subject.trim() || !body.trim()) {
+    const draftSubject = (editingNative ? nativeSubject : subject).trim();
+    const draftBody = (editingNative ? nativeBody : body).trim();
+    if (!draftSubject || !draftBody) {
       toast.error("Subject and body are required");
       return;
     }
@@ -531,9 +554,11 @@ function FollowupEmail({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject: subject.trim(),
-          bodyHtml: textToHtml(body.trim()),
+          subject: draftSubject,
+          bodyHtml: textToHtml(draftBody),
           targetLanguage: language,
+          sourceLanguage: editLang,
+          senderAccountId: senderAccountId ?? undefined,
         }),
       });
       const json = await res.json();
@@ -560,69 +585,91 @@ function FollowupEmail({
         )}
       </div>
 
-      {/* Send-language row: compose in English, translate at send. */}
-      <div className="mb-2 flex items-center gap-2">
-        <label className="text-xs font-medium text-slate-500">Send in</label>
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="rounded border border-slate-200 px-2 py-1 text-sm bg-white"
-          title="You edit in English; it's translated to this language when you send."
-        >
-          {LANGUAGE_OPTIONS.map((l) => (
-            <option key={l.code} value={l.code}>{l.label}</option>
-          ))}
-        </select>
-        {language !== "en" && (
-          <button
-            onClick={() => setShowPreview((v) => !v)}
-            className="ml-auto inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+      {suggested.reason && (
+        <p className="mb-2 text-xs text-slate-400">{suggested.reason}</p>
+      )}
+
+      {/* Edit-language and send-language are independent: edit in English or
+          Swedish, send in anything — translated at send only when they differ. */}
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-slate-500">Edit in</label>
+          <div className="flex overflow-hidden rounded border border-slate-200 text-xs">
+            {["en", nativeLang].map((code) => (
+              <button
+                key={code}
+                onClick={() => setEditLang(code)}
+                className={`px-2 py-1 font-medium ${
+                  editLang === code
+                    ? "bg-indigo-600 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {languageLabel(code)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-slate-500">Send in</label>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="rounded border border-slate-200 px-2 py-1 text-sm bg-white"
+            title="Translated to this language at send when it differs from the editing language."
           >
-            <Languages className="h-3.5 w-3.5" />
-            {showPreview ? "Edit English" : `Preview in ${languageLabel(language)}`}
-          </button>
-        )}
+            {LANGUAGE_OPTIONS.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {showPreview && language !== "en" ? (
-        <div className="rounded border border-slate-200 overflow-hidden">
-          <div className="flex items-center justify-between px-2 py-1.5 bg-indigo-50 border-b border-indigo-100 text-xs text-indigo-700">
-            <span className="inline-flex items-center gap-1 font-medium">
-              <Languages className="h-3.5 w-3.5" />
-              Recipient sees ({languageLabel(language)})
-            </span>
-            {translating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {editingNative ? (
+        nativeError ? (
+          <div className="rounded border border-red-200 bg-red-50 px-2 py-3 text-sm text-red-600">
+            {nativeError}{" "}
+            <button
+              onClick={() => void seedNativeDraft()}
+              className="underline hover:text-red-700"
+            >
+              Retry
+            </button>
           </div>
-          {translateError ? (
-            <div className="px-2 py-3 text-sm text-red-600">
-              {translateError}{" "}
-              <button
-                onClick={() => {
-                  translatedKeyRef.current = null;
-                  void fetchTranslation();
-                }}
-                className="underline hover:text-red-700"
-              >
-                Retry
-              </button>
-            </div>
-          ) : translated ? (
-            <>
-              <div className="px-2 py-1.5 bg-slate-50 border-b border-slate-100 text-xs text-slate-600">
-                <span className="font-medium">Subject:</span>{" "}
-                {translated.subject || <span className="text-slate-400">(empty)</span>}
-              </div>
-              <div
-                className="prose prose-sm max-w-none px-2 py-2 text-sm text-slate-800"
-                dangerouslySetInnerHTML={{ __html: translated.body || "<p class='text-slate-400'>(empty)</p>" }}
-              />
-            </>
-          ) : (
-            <div className="px-2 py-6 text-center text-sm text-slate-400">
-              {translating ? `Translating to ${languageLabel(language)}…` : "Nothing to translate yet."}
-            </div>
-          )}
-        </div>
+        ) : !nativeSeeded ? (
+          <div className="flex items-center justify-center gap-2 rounded border border-slate-200 px-2 py-6 text-sm text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Translating draft to {languageLabel(nativeLang)}…
+          </div>
+        ) : (
+          <>
+            <input
+              value={nativeSubject}
+              onChange={(e) => setNativeSubject(e.target.value)}
+              placeholder="Subject"
+              className="mb-2 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+            />
+            <textarea
+              value={nativeBody}
+              onChange={(e) => setNativeBody(e.target.value)}
+              rows={5}
+              className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+            />
+            <button
+              onClick={() => void seedNativeDraft()}
+              disabled={nativeLoading}
+              title="Overwrite this draft with a fresh translation of the English version"
+              className="mt-1 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50"
+            >
+              {nativeLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Languages className="h-3 w-3" />
+              )}
+              Re-translate from English
+            </button>
+          </>
+        )
       ) : (
         <>
           <input
@@ -640,11 +687,27 @@ function FollowupEmail({
         </>
       )}
 
+      {/* Sender — visible and changeable; defaults to the rep's own account,
+          which is also what the server falls back to when unset. */}
+      {workspaceId && (
+        <div className="mt-2">
+          <label className="mb-1 block text-xs font-medium text-slate-500">Send from</label>
+          <SenderAccountSelector
+            workspaceId={workspaceId}
+            value={senderAccountId}
+            onChange={setSenderAccountId}
+            showCapacity={false}
+            preferOwnDefault
+            autoRotateLabel="Automatic (your account first)"
+          />
+        </div>
+      )}
+
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="text-xs text-slate-400">
-          {language !== "en"
-            ? `You edit in English — sent in ${languageLabel(language)}.`
-            : suggested.reason}
+          {editLang === language
+            ? "Sent exactly as written."
+            : `Written in ${languageLabel(editLang)} — translated to ${languageLabel(language)} at send.`}
         </span>
         <button
           onClick={send}

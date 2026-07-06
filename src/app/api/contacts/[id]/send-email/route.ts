@@ -18,12 +18,18 @@ type SendOneOffRequest = {
   /** Optional explicit sender; falls back to round-robin getNextSender */
   senderAccountId?: string;
   /**
-   * Language to send in (ISO code, e.g. "sv"). The composer edits English; if
-   * this is set and not "en" we translate the English subject/body (preserving
-   * HTML + {{merge}} tokens) before resolving variables and sending. Defaults
-   * to "en" (no translation) when omitted.
+   * Language to send in (ISO code, e.g. "sv"). If it differs from
+   * sourceLanguage we translate the subject/body (preserving HTML + {{merge}}
+   * tokens) before resolving variables and sending. Defaults to "en" (no
+   * translation) when omitted.
    */
   targetLanguage?: string;
+  /**
+   * Language the draft is written in (ISO code). Composers may edit in English
+   * or directly in the recipient's language; defaults to "en". When it equals
+   * targetLanguage the draft is sent verbatim.
+   */
+  sourceLanguage?: string;
 };
 
 /**
@@ -56,6 +62,7 @@ export async function POST(
   let subject = body.subject?.trim();
   let bodyHtml = body.bodyHtml?.trim();
   const targetLanguage = body.targetLanguage?.trim().toLowerCase() || "en";
+  const sourceLanguage = body.sourceLanguage?.trim().toLowerCase() || "en";
   if (!subject) {
     return NextResponse.json({ error: "Subject is required" }, { status: 400 });
   }
@@ -156,18 +163,20 @@ export async function POST(
     );
   }
 
-  // The composer edits English; translate to the recipient's language before
-  // anything else touches the copy. We translate the raw authored HTML (with
+  // Translate to the recipient's language before anything else touches the
+  // copy — unless the draft is already written in it (a rep editing directly
+  // in Swedish sends verbatim). We translate the raw authored HTML (with
   // {{merge}} tokens intact) so the variable-resolution + tracking pipeline
-  // below runs identically on the translated output. Keep the English around
-  // for the activity audit trail.
-  const subjectEn = subject;
-  const bodyEn = bodyHtml;
-  if (targetLanguage !== "en") {
+  // below runs identically on the translated output. Keep the authored copy
+  // around for the activity audit trail.
+  const subjectAuthored = subject;
+  const bodyAuthored = bodyHtml;
+  if (targetLanguage !== sourceLanguage) {
     const translation = await translateOutboundEmail({
       subject,
       bodyHtml,
       targetLanguage,
+      sourceLanguage,
     });
     if (!translation.ok) {
       return NextResponse.json(
@@ -268,10 +277,12 @@ export async function POST(
       sender_account_id: senderId,
       sender_email: senderAccount?.email_address ?? null,
       sender_name: senderAccount?.display_name ?? null,
-      // Language audit: what shipped vs. the English the rep composed.
+      // Language audit: what shipped vs. what the rep composed. The authored
+      // copy is kept under the legacy *_en keys (drafts are usually English).
       sent_language: targetLanguage,
-      ...(targetLanguage !== "en"
-        ? { subject_en: subjectEn, body_en: bodyEn }
+      composed_language: sourceLanguage,
+      ...(targetLanguage !== sourceLanguage
+        ? { subject_en: subjectAuthored, body_en: bodyAuthored }
         : {}),
     },
   });

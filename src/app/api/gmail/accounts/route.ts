@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   // sort by created_at desc.
   const { data: accounts, error } = await supabase
     .from("gmail_accounts")
-    .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status, created_at")
+    .select("id, user_id, email_address, display_name, daily_sends_count, max_daily_sends, status, created_at")
     .eq("workspace_id", workspaceId)
     .order("status", { ascending: true })
     .order("created_at", { ascending: false });
@@ -51,6 +51,9 @@ export async function GET(request: NextRequest) {
     max_daily_sends: a.max_daily_sends,
     remaining_capacity: Math.max(0, (a.max_daily_sends ?? 0) - (a.daily_sends_count ?? 0)),
     status: a.status,
+    // Lets pickers default to "send as yourself" (interactive sends prefer the
+    // acting rep's own account) without leaking teammate user ids.
+    is_own: a.user_id === user.id,
   }));
 
   return NextResponse.json({ accounts: formatted });

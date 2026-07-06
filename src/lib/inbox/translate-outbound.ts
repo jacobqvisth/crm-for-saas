@@ -73,7 +73,7 @@ export async function translateOutboundReply(input: {
   return { ok: true, translated, targetLanguage, model: MODEL };
 }
 
-const HTML_EMAIL_SYSTEM_PROMPT = `You translate a full B2B outreach email (subject line + HTML body) from English to the recipient's native language for a SaaS called Wrenchlane.
+const HTML_EMAIL_SYSTEM_PROMPT = `You translate a full B2B outreach email (subject line + HTML body) into the recipient's native language for a SaaS called Wrenchlane.
 
 Rules:
 - Translate naturally — native-speaker quality, business-professional tone, not literal.
@@ -93,14 +93,18 @@ export type OutboundEmailTranslationResult =
  * language, preserving HTML tags and {{merge}} placeholders so the existing
  * variable-resolution + tracking pipeline still works on the translated output.
  *
- * No-ops to identity when targetLanguage is 'en'.
+ * The draft may be authored in any language (sourceLanguage, default 'en' —
+ * e.g. a rep composing in Swedish). No-ops to identity when the target matches
+ * the source.
  */
 export async function translateOutboundEmail(input: {
   subject: string;
   bodyHtml: string;
   targetLanguage: string;
+  sourceLanguage?: string;
 }): Promise<OutboundEmailTranslationResult> {
   const targetLanguage = input.targetLanguage.toLowerCase();
+  const sourceLanguage = (input.sourceLanguage ?? "en").toLowerCase();
   const subject = input.subject ?? "";
   const bodyHtml = input.bodyHtml ?? "";
 
@@ -108,15 +112,17 @@ export async function translateOutboundEmail(input: {
     return { ok: false, reason: "empty email" };
   }
 
-  // Already English — no translation needed.
-  if (targetLanguage === "en") {
-    return { ok: true, subject, bodyHtml, targetLanguage: "en", model: "identity" };
+  // Already in the target language — no translation needed.
+  if (targetLanguage === sourceLanguage) {
+    return { ok: true, subject, bodyHtml, targetLanguage, model: "identity" };
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
 
   const label = TARGET_LANGUAGE_LABELS[targetLanguage] ?? targetLanguage.toUpperCase();
+  const sourceLabel =
+    TARGET_LANGUAGE_LABELS[sourceLanguage] ?? sourceLanguage.toUpperCase();
   const client = new Anthropic({ apiKey });
 
   let raw = "";
@@ -128,7 +134,7 @@ export async function translateOutboundEmail(input: {
       messages: [
         {
           role: "user",
-          content: `Translate this English email to ${label} (ISO code: ${targetLanguage}).\n\nSubject: ${subject}\n\nBody (HTML):\n${bodyHtml}`,
+          content: `Translate this ${sourceLabel} email to ${label} (ISO code: ${targetLanguage}).\n\nSubject: ${subject}\n\nBody (HTML):\n${bodyHtml}`,
         },
       ],
     });
