@@ -59,6 +59,8 @@ type InboxMessage = {
   replied_at: string | null;
   reply_draft: string | null;
   reply_draft_updated_at: string | null;
+  to_emails: string[] | null;
+  delivered_to: string | null;
   contacts: Contact | null;
   email_queue: EmailQueue | null;
 };
@@ -105,8 +107,17 @@ type Sender = {
   status: string | null;
 };
 
+type Alias = {
+  id: string;
+  email_address: string;
+  display_name: string | null;
+  gmail_account_id: string;
+  can_send_as: boolean;
+};
+
 const HIDE_OOO_KEY = "inbox.hideOOO";
 const SENDER_FILTER_KEY = "inbox.senderFilter";
+const ALIAS_LANE_KEY = "inbox.aliasLane";
 const LIST_WIDTH_KEY = "inbox.listWidth";
 const LIST_WIDTH_DEFAULT = 320;
 const LIST_WIDTH_MIN = 240;
@@ -404,6 +415,15 @@ export function InboxClient() {
   const [hideOOO, setHideOOO] = useState(true);
   const [senders, setSenders] = useState<Sender[]>([]);
   const [selectedSenderIds, setSelectedSenderIds] = useState<string[] | null>(null);
+  const [aliases, setAliases] = useState<Alias[]>([]);
+  // Selected alias "lane" (an alias email_address), or null for all mail.
+  const [selectedAlias, setSelectedAlias] = useState<string | null>(null);
+  // Chosen From address for the current reply (an alias email, or null = the
+  // receiving mailbox's own address). Reset per selected message.
+  const [replyFrom, setReplyFrom] = useState<string | null>(null);
+  // Whether the user manually picked a From for the current message — so the
+  // per-message default doesn't clobber their choice once aliases load.
+  const replyFromTouchedRef = useRef(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [listWidth, setListWidth] = useState(LIST_WIDTH_DEFAULT);
   const [isResizing, setIsResizing] = useState(false);
@@ -422,6 +442,45 @@ export function InboxClient() {
     ? sendersById.get(selectedMessage.gmail_account_id) ?? null
     : null;
 
+  // Distinct alias addresses for the lane picker (dedup across mailboxes).
+  const aliasLanes = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Alias[] = [];
+    for (const a of aliases) {
+      if (seen.has(a.email_address)) continue;
+      seen.add(a.email_address);
+      out.push(a);
+    }
+    return out;
+  }, [aliases]);
+
+  // Aliases that live on the mailbox that received the selected message — the
+  // send-as From options for a reply.
+  const replyFromOptions = useMemo(() => {
+    if (!selectedMessage) return [] as Alias[];
+    return aliases.filter(
+      (a) => a.gmail_account_id === selectedMessage.gmail_account_id && a.can_send_as,
+    );
+  }, [aliases, selectedMessage]);
+
+  // Default the reply From to whichever registered alias the message was
+  // addressed to (reply from the address they emailed), else the mailbox itself.
+  const defaultReplyFrom = useMemo(() => {
+    if (!selectedMessage) return null;
+    const addressed = new Set<string>([
+      ...(selectedMessage.to_emails ?? []),
+      ...(selectedMessage.delivered_to ? [selectedMessage.delivered_to] : []),
+    ]);
+    const match = replyFromOptions.find((a) => addressed.has(a.email_address));
+    return match?.email_address ?? null;
+  }, [selectedMessage, replyFromOptions]);
+
+  // Apply the per-message default From unless the user has overridden it.
+  useEffect(() => {
+    if (replyFromTouchedRef.current) return;
+    setReplyFrom(defaultReplyFrom);
+  }, [defaultReplyFrom, selectedId]);
+
   // Hydrate persisted preferences once on mount.
   useEffect(() => {
     try {
@@ -439,6 +498,8 @@ export function InboxClient() {
           setListWidth(Math.min(LIST_WIDTH_MAX, Math.max(LIST_WIDTH_MIN, parsed)));
         }
       }
+      const storedAlias = localStorage.getItem(ALIAS_LANE_KEY);
+      if (storedAlias) setSelectedAlias(storedAlias);
     } catch {
       // Ignore corrupt localStorage values; defaults stand.
     }
@@ -475,6 +536,17 @@ export function InboxClient() {
       /* non-fatal */
     }
   }, [listWidth, preferencesLoaded]);
+
+  // Persist selected alias lane whenever it changes (after hydration).
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    try {
+      if (selectedAlias) localStorage.setItem(ALIAS_LANE_KEY, selectedAlias);
+      else localStorage.removeItem(ALIAS_LANE_KEY);
+    } catch {
+      /* non-fatal */
+    }
+  }, [selectedAlias, preferencesLoaded]);
 
   // Drag-to-resize the conversation list. Mouse events bind to window so the
   // drag continues smoothly even when the cursor leaves the handle.
@@ -524,6 +596,23 @@ export function InboxClient() {
     };
   }, []);
 
+  // Fetch the workspace's alias registry once (for lanes + send-as).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/inbox/aliases")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: Alias[]) => {
+        if (cancelled) return;
+        setAliases(data);
+      })
+      .catch(() => {
+        // No aliases just means no lane filter / send-as options; inbox still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const fetchMessages = useCallback(async () => {
     if (!preferencesLoaded) return;
     setLoading(true);
@@ -533,6 +622,7 @@ export function InboxClient() {
       if (selectedSenderIds !== null) {
         params.set("senders", selectedSenderIds.join(","));
       }
+      if (selectedAlias) params.set("alias", selectedAlias);
       const res = await fetch(`/api/inbox?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load inbox");
       const data = await res.json();
@@ -542,7 +632,7 @@ export function InboxClient() {
     } finally {
       setLoading(false);
     }
-  }, [filter, hideOOO, selectedSenderIds, preferencesLoaded]);
+  }, [filter, hideOOO, selectedSenderIds, selectedAlias, preferencesLoaded]);
 
   useEffect(() => {
     fetchMessages();
@@ -698,6 +788,8 @@ export function InboxClient() {
       setPreviewText(null);
       setPreviewError(null);
       previewBaseRef.current = null;
+      // New message → re-derive the default From (effect handles the value).
+      replyFromTouchedRef.current = false;
 
       if (!msg.is_read) {
         // Mark as read optimistically
@@ -757,7 +849,7 @@ export function InboxClient() {
       const res = await fetch(`/api/inbox/${selectedId}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: replyBody }),
+        body: JSON.stringify({ body: replyBody, fromAlias: replyFrom }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -790,7 +882,7 @@ export function InboxClient() {
     } finally {
       setReplySending(false);
     }
-  }, [selectedId, replyBody, fetchMessages]);
+  }, [selectedId, replyBody, replyFrom, fetchMessages]);
 
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
@@ -869,6 +961,24 @@ export function InboxClient() {
               onSelectAll={selectAllSenders}
               onClearAll={clearAllSenders}
             />
+            {aliasLanes.length > 0 && (
+              <label className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-slate-200 bg-white text-xs text-slate-700">
+                <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                <span className="text-slate-400">Lane</span>
+                <select
+                  value={selectedAlias ?? ""}
+                  onChange={(e) => setSelectedAlias(e.target.value || null)}
+                  className="flex-1 min-w-0 bg-transparent text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="">All mail</option>
+                  {aliasLanes.map((a) => (
+                    <option key={a.email_address} value={a.email_address}>
+                      {a.display_name ? `${a.display_name} (${a.email_address})` : a.email_address}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label
               className={`flex items-center gap-2 text-xs ${
                 filter === "out_of_office"
@@ -1071,13 +1181,27 @@ export function InboxClient() {
                 {recipientSender && (
                   <div className="flex items-center gap-2 mt-0.5 text-sm text-slate-500">
                     <span className="text-slate-400 text-xs uppercase tracking-wide">To</span>
-                    <span className="font-medium text-slate-700">
-                      {recipientSender.display_name || recipientSender.email_address}
-                    </span>
-                    {recipientSender.display_name && (
+                    {defaultReplyFrom ? (
+                      // Addressed to an alias (e.g. support@) — show the alias the
+                      // customer actually emailed, not the underlying mailbox.
                       <>
+                        <span className="font-medium text-slate-700">{defaultReplyFrom}</span>
                         <span className="text-slate-300">·</span>
-                        <span>{recipientSender.email_address}</span>
+                        <span className="text-slate-400">
+                          via {recipientSender.email_address}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-slate-700">
+                          {recipientSender.display_name || recipientSender.email_address}
+                        </span>
+                        {recipientSender.display_name && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span>{recipientSender.email_address}</span>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -1173,6 +1297,32 @@ export function InboxClient() {
               </button>
               {replyOpen && (
                 <div>
+                  {replyFromOptions.length > 0 && recipientSender && (
+                    <label className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+                      <span className="text-slate-400 uppercase tracking-wide">From</span>
+                      <select
+                        value={replyFrom ?? ""}
+                        onChange={(e) => {
+                          replyFromTouchedRef.current = true;
+                          setReplyFrom(e.target.value || null);
+                        }}
+                        className="flex-1 min-w-0 border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        <option value="">
+                          {recipientSender.display_name
+                            ? `${recipientSender.display_name} <${recipientSender.email_address}>`
+                            : recipientSender.email_address}
+                        </option>
+                        {replyFromOptions.map((a) => (
+                          <option key={a.id} value={a.email_address}>
+                            {a.display_name
+                              ? `${a.display_name} <${a.email_address}>`
+                              : a.email_address}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   {(draftLoading || draftPresent || draftError) && (
                     <div className="mb-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-indigo-50/70 border border-indigo-100 text-xs">
                       <span className="flex items-center gap-1.5 text-indigo-700">

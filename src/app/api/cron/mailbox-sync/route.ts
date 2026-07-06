@@ -368,6 +368,16 @@ async function processThread(
       const bodyHtml = extractHtmlBody(m.payload);
       const autoReply = isAutoReply(headers, subject, bodyText);
 
+      // Capture which of our addresses the mail was sent to, so it can be
+      // attributed to an alias "lane" (e.g. support@wrenchlane.com is an alias
+      // on this mailbox). Delivered-To is the most reliable alias signal; To/Cc
+      // cover cases where routing leaves Delivered-To as the primary address.
+      const toEmails = [
+        ...parseAddressList(getHeader(headers, "to")),
+        ...parseAddressList(getHeader(headers, "cc")),
+      ];
+      const deliveredTo = parseEmailAddress(getHeader(headers, "delivered-to")).email || null;
+
       // inbox_messages.gmail_message_id is UNIQUE; ignoreDuplicates means a
       // returned row == a genuinely new message (also dedups vs check-replies).
       const { data: insRows } = await supabase
@@ -387,6 +397,8 @@ async function processThread(
             received_at: tsIso,
             is_auto_reply: autoReply,
             category: autoReply ? "out_of_office" : "inbox",
+            to_emails: Array.from(new Set(toEmails)),
+            delivered_to: deliveredTo,
           },
           { onConflict: "gmail_message_id", ignoreDuplicates: true },
         )

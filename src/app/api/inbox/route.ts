@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
   const senders = sendersParam
     ? sendersParam.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
+  // Alias "lane": restrict to mail addressed to a specific alias (e.g.
+  // support@wrenchlane.com), lower-cased to match how the sync stores it.
+  const alias = searchParams.get("alias")?.trim().toLowerCase() || null;
   const page = parseInt(searchParams.get("page") || "0");
   const limit = parseInt(searchParams.get("limit") || "50");
   const offset = page * limit;
@@ -83,6 +86,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
     query = query.in("gmail_account_id", senders);
+  }
+
+  // Alias lane: message is in the lane if the alias is among its recipients
+  // (to/cc, captured in to_emails) OR it was delivered directly to the alias.
+  if (alias) {
+    query = query.or(`to_emails.cs.{${alias}},delivered_to.eq.${alias}`);
   }
 
   const { data, error } = await query;

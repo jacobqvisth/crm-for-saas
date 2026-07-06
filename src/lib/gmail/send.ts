@@ -26,6 +26,14 @@ interface SendEmailParams {
    * sequence sends. The daily send cap (max_daily_sends) still applies.
    */
   bypassSendInterval?: boolean;
+  /**
+   * Override the From header — a complete address, e.g.
+   * "WrenchLane Support <support@wrenchlane.com>". Used to send AS a verified
+   * alias on the account's mailbox. Callers MUST validate that the address is a
+   * registered send-as alias for this account (Gmail rejects/ rewrites an
+   * unknown From). When omitted, From is the account's own identity.
+   */
+  from?: string;
 }
 
 interface SendEmailResult {
@@ -190,9 +198,13 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
   const accessToken = tokenResult.accessToken;
 
-  const fromAddress = account.display_name
-    ? `${account.display_name} <${account.email_address}>`
-    : account.email_address;
+  // Send-as alias override (validated by the caller) wins over the account's
+  // own identity, so replies to support@ mail go out From: support@.
+  const fromAddress =
+    params.from ??
+    (account.display_name
+      ? `${account.display_name} <${account.email_address}>`
+      : account.email_address);
 
   // Look up the sender's signature and append it to the body.
   // Honors the explicit includeSignature flag (default true) regardless of
