@@ -11,6 +11,8 @@ export interface SenderAccount {
   max_daily_sends: number;
   remaining_capacity: number;
   status: string;
+  /** True when this account belongs to the logged-in user. */
+  is_own?: boolean;
 }
 
 interface SenderAccountSelectorProps {
@@ -23,6 +25,13 @@ interface SenderAccountSelectorProps {
    * Use this to surface per-sequence rotation pool info, e.g. "Auto-rotate (3 of 7 accounts)".
    */
   autoRotateLabel?: string;
+  /**
+   * When set and no account is selected yet, preselect the logged-in user's own
+   * active account once loaded. Use for interactive sends (one-off email, call
+   * follow-up) where the server would default to the acting rep's account anyway —
+   * this makes that default visible instead of implicit.
+   */
+  preferOwnDefault?: boolean;
 }
 
 export function SenderAccountSelector({
@@ -31,9 +40,11 @@ export function SenderAccountSelector({
   onChange,
   showCapacity = true,
   autoRotateLabel,
+  preferOwnDefault = false,
 }: SenderAccountSelectorProps) {
   const [accounts, setAccounts] = useState<SenderAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ownDefaultApplied, setOwnDefaultApplied] = useState(false);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -46,6 +57,18 @@ export function SenderAccountSelector({
       })
       .catch(() => setLoading(false));
   }, [workspaceId]);
+
+  // One-shot: once accounts load, preselect the user's own account if nothing
+  // is selected yet. Never fires again, so it can't fight a manual choice.
+  useEffect(() => {
+    if (!preferOwnDefault || ownDefaultApplied || loading) return;
+    setOwnDefaultApplied(true);
+    if (value !== null) return;
+    const own = accounts.find(
+      (a) => a.is_own && a.status === "active" && a.remaining_capacity > 0
+    );
+    if (own) onChange(own.id);
+  }, [preferOwnDefault, ownDefaultApplied, loading, accounts, value, onChange]);
 
   if (loading) {
     return (
