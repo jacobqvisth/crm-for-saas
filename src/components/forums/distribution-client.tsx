@@ -297,6 +297,30 @@ function RecCard({
         </div>
       )}
 
+      {/* Suggested body */}
+      {rec.suggested_body && (
+        <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Body
+            </span>
+            <CopyButton text={rec.suggested_body} label="Copy" />
+          </div>
+          <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-slate-700">
+            {rec.suggested_body}
+          </p>
+          {rec.suggested_title && (
+            <div className="mt-2 flex justify-end">
+              <CopyButton
+                text={`${rec.suggested_title}\n\n${rec.suggested_body}`}
+                label="Copy title + body"
+                prominent
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Angle + rules */}
       <div className="mt-2 space-y-1">
         {rec.recommended_angle && (
@@ -471,7 +495,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({
+  text,
+  label,
+  prominent,
+}: {
+  text: string;
+  label: string;
+  prominent?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -481,6 +513,17 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     } catch {
       // ignore
     }
+  }
+  if (prominent) {
+    return (
+      <button
+        onClick={copy}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? "Copied" : label}
+      </button>
+    );
   }
   return (
     <button

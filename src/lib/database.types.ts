@@ -150,6 +150,7 @@ export type Database = {
           status: string
           subreddit: string
           subreddit_url: string
+          suggested_body: string | null
           suggested_title: string | null
           tier: string
           topic: string
@@ -173,6 +174,7 @@ export type Database = {
           status?: string
           subreddit: string
           subreddit_url: string
+          suggested_body?: string | null
           suggested_title?: string | null
           tier?: string
           topic?: string
@@ -196,6 +198,7 @@ export type Database = {
           status?: string
           subreddit?: string
           subreddit_url?: string
+          suggested_body?: string | null
           suggested_title?: string | null
           tier?: string
           topic?: string
