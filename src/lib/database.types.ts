@@ -225,6 +225,7 @@ export type Database = {
       }
       forum_posts: {
         Row: {
+          assigned_account_id: string | null
           created_at: string
           diagnostic_id: string | null
           forum_target: string
@@ -250,6 +251,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          assigned_account_id?: string | null
           created_at?: string
           diagnostic_id?: string | null
           forum_target: string
@@ -275,6 +277,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          assigned_account_id?: string | null
           created_at?: string
           diagnostic_id?: string | null
           forum_target?: string
@@ -301,7 +304,58 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "forum_posts_assigned_account_id_fkey"
+            columns: ["assigned_account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "forum_posts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reddit_accounts: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          notes: string | null
+          owner_label: string
+          subreddits: string[]
+          updated_at: string
+          username: string | null
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_label: string
+          subreddits?: string[]
+          updated_at?: string
+          username?: string | null
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_label?: string
+          subreddits?: string[]
+          updated_at?: string
+          username?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reddit_accounts_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
