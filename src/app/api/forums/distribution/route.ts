@@ -26,7 +26,24 @@ export async function GET(request: NextRequest) {
   if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 });
 
   if (existing && existing.length > 0) {
-    return NextResponse.json({ recs: existing as unknown as DistributionRec[] });
+    // Self-heal rows seeded before suggested_body existed: backfill the body
+    // from the code seed (matched by subreddit) so old boards aren't title-only.
+    const recs = existing as unknown as DistributionRec[];
+    const missing = recs.filter((r) => r.suggested_body == null);
+    for (const row of missing) {
+      const seed = DISTRIBUTION_SEED.find(
+        (s) => s.topic === row.topic && s.subreddit === row.subreddit,
+      );
+      if (seed?.suggested_body) {
+        await supabase
+          .from("forum_distribution")
+          .update({ suggested_body: seed.suggested_body })
+          .eq("id", row.id)
+          .eq("workspace_id", workspaceId);
+        row.suggested_body = seed.suggested_body;
+      }
+    }
+    return NextResponse.json({ recs });
   }
 
   // First visit for this topic — seed the curated recommendations.
