@@ -27,6 +27,7 @@ export interface AccountSeed {
 export const ACCOUNT_SEED: AccountSeed[] = [
   // Accounts Jacob already controls (one per Google identity).
   { username: "Minimum-Ad7044", owner_label: "Jacob", notes: "jacob.qvisth@gmail.com — new account, warm up before strict subs." },
+  { username: "Emergency-Parsley964", owner_label: "Jacob (work)", notes: "jacob@wrenchlane.com" },
   { username: "Minimum-Fig-2004", owner_label: "Mech Macai", notes: "mechmacai@gmail.com (Jacob)" },
   { username: "Franqer", owner_label: "Francis", notes: "francis.qvisth@gmail.com" },
   // Teammates — fill in each Reddit handle via the roster once they share it.
