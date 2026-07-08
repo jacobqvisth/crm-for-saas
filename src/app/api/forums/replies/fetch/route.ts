@@ -3,6 +3,9 @@ import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { fetchRedditPost, isRedditConfigured } from "@/lib/forums/reddit";
 
+// Loading a post may run via an Apify scrape (~30-90s); raise the timeout.
+export const maxDuration = 120;
+
 const bodySchema = z.object({ url: z.string().min(1).max(2000) });
 
 // POST /api/forums/replies/fetch → { post } | { error, redditConfigured }

@@ -4,6 +4,9 @@ import { resolveWorkspace } from "@/lib/forums/server";
 import { fetchRedditTraction, type DistributionRec } from "@/lib/forums/distribution";
 import { notifyForumPosted } from "@/lib/forums/notify-posted";
 
+// A traction refresh may run via an Apify scrape (~30-90s); raise the timeout.
+export const maxDuration = 120;
+
 const patchSchema = z.object({
   status: z.enum(["recommended", "posted", "skipped"]).optional(),
   posted_url: z.string().max(2000).nullable().optional(),

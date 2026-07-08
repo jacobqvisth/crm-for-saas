@@ -3,6 +3,11 @@ import { resolveWorkspace } from "@/lib/forums/server";
 import { fetchRedditTraction } from "@/lib/forums/reddit";
 import type { ForumPost } from "@/lib/forums/types";
 
+// Bulk traction sweep — each row may run via an Apify scrape (~30-90s), so
+// allow the full window. At low volume this finishes; a large backlog will
+// refresh what it can within the limit.
+export const maxDuration = 300;
+
 // POST /api/forums/refresh → { posts: ForumPost[], checked: number }
 // Pull fresh Reddit traction (upvotes + comments) for every posted generated
 // post in the workspace, one click. Returns the full updated list.
