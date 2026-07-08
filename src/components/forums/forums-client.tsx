@@ -16,6 +16,8 @@ import {
   Trash2,
   Pencil,
   Send,
+  ArrowUpToLine,
+  MessageSquare,
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import type {
@@ -47,6 +49,7 @@ export function ForumsClient() {
   const [error, setError] = useState<string | null>(null);
   const [generateFor, setGenerateFor] = useState<ForumScenario | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +94,22 @@ export function ForumsClient() {
 
   function removePost(id: string) {
     setPosts((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  const postedCount = useMemo(
+    () => posts.filter((p) => p.status === "posted").length,
+    [posts],
+  );
+
+  async function refreshAllTraction() {
+    setRefreshingAll(true);
+    try {
+      const res = await fetch("/api/forums/refresh", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) setPosts(data.posts ?? []);
+    } finally {
+      setRefreshingAll(false);
+    }
   }
 
   return (
@@ -191,6 +210,23 @@ export function ForumsClient() {
                     {s}
                   </button>
                 ))}
+                <button
+                  onClick={refreshAllTraction}
+                  disabled={refreshingAll || postedCount === 0}
+                  title={
+                    postedCount === 0
+                      ? "Mark a post as posted first"
+                      : "Pull live upvotes + comments from Reddit"
+                  }
+                  className="ml-2 inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+                >
+                  {refreshingAll ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Refresh traction
+                </button>
               </div>
             </div>
 
@@ -466,6 +502,9 @@ function PostCard({
   const [draftBody, setDraftBody] = useState(post.generated_body ?? "");
   const [showPostedInput, setShowPostedInput] = useState(false);
   const [postedUrl, setPostedUrl] = useState(post.posted_url ?? "");
+  const [editingTraction, setEditingTraction] = useState(false);
+  const [manualScore, setManualScore] = useState(post.score?.toString() ?? "");
+  const [manualComments, setManualComments] = useState(post.num_comments?.toString() ?? "");
 
   const target = getForumTarget(post.forum_target);
 
@@ -498,8 +537,20 @@ function PostCard({
   }
 
   async function markPosted() {
-    const ok = await patch({ status: "posted", posted_url: postedUrl || null });
+    const ok = await patch({
+      status: "posted",
+      posted_url: postedUrl || null,
+      refresh: Boolean(postedUrl),
+    });
     if (ok) setShowPostedInput(false);
+  }
+
+  async function saveManualTraction() {
+    const ok = await patch({
+      score: manualScore === "" ? null : Number(manualScore),
+      num_comments: manualComments === "" ? null : Number(manualComments),
+    });
+    if (ok) setEditingTraction(false);
   }
 
   async function remove() {
@@ -537,6 +588,84 @@ function PostCard({
           </a>
         )}
       </div>
+
+      {/* Traction (posted only) */}
+      {post.status === "posted" && (
+        <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-green-100 bg-green-50/50 px-3 py-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 font-medium text-green-800">
+            <ArrowUpToLine className="h-3.5 w-3.5" />
+            {post.score ?? "—"}
+            <span className="font-normal text-green-700">upvotes</span>
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium text-green-800">
+            <MessageSquare className="h-3.5 w-3.5" />
+            {post.num_comments ?? "—"}
+            <span className="font-normal text-green-700">comments</span>
+          </span>
+          {typeof post.upvote_ratio === "number" && (
+            <span className="text-green-700">{Math.round(post.upvote_ratio * 100)}% upvoted</span>
+          )}
+          <button
+            onClick={() => patch({ refresh: true })}
+            disabled={busy}
+            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900 disabled:opacity-50"
+            title="Auto-refresh from Reddit"
+          >
+            {busy ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+          </button>
+          <button
+            onClick={() => setEditingTraction((v) => !v)}
+            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900"
+            title="Enter upvotes / comments manually"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          {post.last_checked_at && (
+            <span className="text-green-600/70">
+              checked {new Date(post.last_checked_at).toLocaleDateString()}
+            </span>
+          )}
+          {post.traction_note && (
+            <span className="text-amber-700">{post.traction_note}</span>
+          )}
+        </div>
+      )}
+
+      {post.status === "posted" && editingTraction && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label className="inline-flex items-center gap-1 text-slate-500">
+            <ArrowUpToLine className="h-3.5 w-3.5" />
+            <input
+              type="number"
+              value={manualScore}
+              onChange={(e) => setManualScore(e.target.value)}
+              placeholder="upvotes"
+              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <label className="inline-flex items-center gap-1 text-slate-500">
+            <MessageSquare className="h-3.5 w-3.5" />
+            <input
+              type="number"
+              value={manualComments}
+              onChange={(e) => setManualComments(e.target.value)}
+              placeholder="comments"
+              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <button
+            onClick={saveManualTraction}
+            disabled={busy}
+            className="rounded-lg bg-green-600 px-3 py-1 font-medium text-white hover:bg-green-700 disabled:opacity-60"
+          >
+            Save
+          </button>
+        </div>
+      )}
 
       {/* Body */}
       {editing ? (

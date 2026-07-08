@@ -227,87 +227,10 @@ export const DISTRIBUTION_SEED: DistributionSeedRow[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Reddit traction fetch.
-//
-// Reddit exposes a post's public data as JSON by appending `.json` to its
-// permalink — no auth needed. We read score (upvotes), num_comments and
-// upvote_ratio. Reddit rate-limits anonymous requests and needs a descriptive
-// User-Agent, so callers should fetch server-side (from the API route), not
-// from the browser.
-// ---------------------------------------------------------------------------
-
-export interface RedditTraction {
-  score: number | null;
-  num_comments: number | null;
-  upvote_ratio: number | null;
-}
-
-// Turn a Reddit post URL into its `.json` endpoint. Handles www/old/new hosts,
-// trailing slashes and query strings. Returns null for anything that doesn't
-// look like a Reddit comments permalink.
-export function redditJsonUrl(postUrl: string): string | null {
-  let u: URL;
-  try {
-    u = new URL(postUrl.trim());
-  } catch {
-    return null;
-  }
-  if (!/(^|\.)reddit\.com$/i.test(u.hostname) && u.hostname !== "redd.it") {
-    return null;
-  }
-  // Only comment permalinks carry post-level score/comments.
-  if (u.hostname !== "redd.it" && !/\/comments\//i.test(u.pathname)) {
-    return null;
-  }
-  const path = u.pathname.replace(/\/+$/, "");
-  return `https://www.reddit.com${path}.json?raw_json=1`;
-}
-
-// Fetch traction for one posted URL. Never throws — returns an { ok, ... } shape
-// so the caller can record a per-row note without failing the whole refresh.
-export async function fetchRedditTraction(
-  postUrl: string,
-): Promise<
-  | { ok: true; traction: RedditTraction }
-  | { ok: false; reason: string }
-> {
-  const jsonUrl = redditJsonUrl(postUrl);
-  if (!jsonUrl) return { ok: false, reason: "Not a recognizable Reddit post URL" };
-
-  let res: Response;
-  try {
-    res = await fetch(jsonUrl, {
-      headers: { "User-Agent": "wrenchlane-crm/1.0 (forum distribution tracker)" },
-      cache: "no-store",
-    });
-  } catch {
-    return { ok: false, reason: "Could not reach Reddit" };
-  }
-  if (res.status === 429) return { ok: false, reason: "Rate-limited by Reddit — try again shortly" };
-  if (!res.ok) return { ok: false, reason: `Reddit returned ${res.status}` };
-
-  let json: unknown;
-  try {
-    json = await res.json();
-  } catch {
-    return { ok: false, reason: "Unexpected response from Reddit" };
-  }
-
-  // Listing shape: [ { data: { children: [ { data: {...post} } ] } }, ... ]
-  const listing = Array.isArray(json) ? json[0] : json;
-  const postData =
-    (listing as { data?: { children?: Array<{ data?: Record<string, unknown> }> } })?.data
-      ?.children?.[0]?.data;
-  if (!postData) return { ok: false, reason: "No post data found (deleted or private?)" };
-
-  const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
-  return {
-    ok: true,
-    traction: {
-      score: num(postData.score) ?? num(postData.ups),
-      num_comments: num(postData.num_comments),
-      upvote_ratio: num(postData.upvote_ratio),
-    },
-  };
-}
+// Reddit traction helpers moved to src/lib/forums/reddit.ts (shared with the
+// post generator). Re-exported here so existing imports keep working.
+export {
+  fetchRedditTraction,
+  redditJsonUrl,
+  type RedditTraction,
+} from "./reddit";

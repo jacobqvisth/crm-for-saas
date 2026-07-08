@@ -15,6 +15,7 @@ import {
   MessagesSquare,
   CircleSlash,
   RotateCcw,
+  Pencil,
 } from "lucide-react";
 import {
   DEFAULT_TOPIC,
@@ -112,8 +113,9 @@ export function DistributionClient() {
       <div className="mt-5 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">
         <span className="font-medium">The post:</span> {topic.summary} Below are the communities to
         post it in, ranked by how welcome a discussion post is. Mark each one as you post it (paste
-        the URL) and hit <span className="font-medium">Refresh traction</span> to pull live upvotes
-        and comments from Reddit.
+        the URL), then hit <span className="font-medium">Refresh traction</span> to auto-pull upvotes
+        and comments — or type them in with the pencil (Reddit blocks automated reads unless API keys
+        are configured).
         <div className="mt-2 text-xs text-orange-800/90">
           <span className="font-medium">Careful:</span> don&apos;t post the same text to every sub
           the same day — Reddit&apos;s spam filter flags rapid cross-posting. Space them out, tweak
@@ -213,6 +215,9 @@ function RecCard({
   const [busy, setBusy] = useState(false);
   const [showPostedInput, setShowPostedInput] = useState(false);
   const [postedUrl, setPostedUrl] = useState(rec.posted_url ?? "");
+  const [editingTraction, setEditingTraction] = useState(false);
+  const [manualScore, setManualScore] = useState(rec.score?.toString() ?? "");
+  const [manualComments, setManualComments] = useState(rec.num_comments?.toString() ?? "");
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
@@ -240,6 +245,14 @@ function RecCard({
       refresh: Boolean(postedUrl),
     });
     if (ok) setShowPostedInput(false);
+  }
+
+  async function saveManualTraction() {
+    const ok = await patch({
+      score: manualScore === "" ? null : Number(manualScore),
+      num_comments: manualComments === "" ? null : Number(manualComments),
+    });
+    if (ok) setEditingTraction(false);
   }
 
   const posted = rec.status === "posted";
@@ -328,9 +341,16 @@ function RecCard({
             onClick={() => patch({ refresh: true })}
             disabled={busy}
             className="inline-flex items-center gap-1 text-green-700 hover:text-green-900 disabled:opacity-50"
-            title="Refresh this post's traction"
+            title="Auto-refresh from Reddit"
           >
             {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+          </button>
+          <button
+            onClick={() => setEditingTraction((v) => !v)}
+            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900"
+            title="Enter upvotes / comments manually"
+          >
+            <Pencil className="h-3 w-3" />
           </button>
           {rec.last_checked_at && (
             <span className="text-green-600/70">
@@ -341,6 +361,37 @@ function RecCard({
       )}
       {posted && rec.traction_note && (
         <p className="mt-1 text-[11px] text-amber-700">{rec.traction_note}</p>
+      )}
+      {posted && editingTraction && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label className="inline-flex items-center gap-1 text-slate-500">
+            <ArrowUpToLine className="h-3.5 w-3.5" />
+            <input
+              type="number"
+              value={manualScore}
+              onChange={(e) => setManualScore(e.target.value)}
+              placeholder="upvotes"
+              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <label className="inline-flex items-center gap-1 text-slate-500">
+            <MessageSquare className="h-3.5 w-3.5" />
+            <input
+              type="number"
+              value={manualComments}
+              onChange={(e) => setManualComments(e.target.value)}
+              placeholder="comments"
+              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <button
+            onClick={saveManualTraction}
+            disabled={busy}
+            className="rounded-lg bg-green-600 px-3 py-1 font-medium text-white hover:bg-green-700 disabled:opacity-60"
+          >
+            Save
+          </button>
+        </div>
       )}
 
       {/* Actions */}

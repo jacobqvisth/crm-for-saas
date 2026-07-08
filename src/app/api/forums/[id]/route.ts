@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
+import { fetchRedditTraction } from "@/lib/forums/reddit";
 import type {
   ForumMentionLevel,
   ForumPost,
@@ -17,6 +18,12 @@ const patchSchema = z.object({
   generated_body: z.string().max(20000).nullable().optional(),
   // When true, re-run the model from the post's stored scenario + settings.
   regenerate: z.boolean().optional(),
+  // When true, re-fetch this post's traction (upvotes/comments) from Reddit.
+  refresh: z.boolean().optional(),
+  // Manual traction entry (used when auto-fetch is blocked).
+  score: z.number().int().nullable().optional(),
+  num_comments: z.number().int().nullable().optional(),
+  traction_note: z.string().max(2000).nullable().optional(),
 });
 
 // PATCH /api/forums/[id] → { post }
@@ -35,12 +42,47 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, status, ...rest } = parsed.data;
+  const { regenerate, refresh, status, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
     update.status = status;
     if (status === "posted") update.posted_at = new Date().toISOString();
+  }
+
+  // Manual traction entry — stamp the check time and clear any error note.
+  if (!refresh && (rest.score !== undefined || rest.num_comments !== undefined)) {
+    update.last_checked_at = new Date().toISOString();
+    if (rest.traction_note === undefined) update.traction_note = null;
+  }
+
+  if (refresh) {
+    // Pull live traction. Prefer an incoming posted_url (e.g. just marked
+    // posted), else read the stored one.
+    let url = typeof rest.posted_url === "string" ? rest.posted_url : null;
+    if (!url) {
+      const { data: row } = await supabase
+        .from("forum_posts")
+        .select("posted_url")
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .single();
+      url = (row?.posted_url as string | null) ?? null;
+    }
+    update.last_checked_at = new Date().toISOString();
+    if (!url) {
+      update.traction_note = "No posted URL to check yet";
+    } else {
+      const result = await fetchRedditTraction(url);
+      if (result.ok) {
+        update.score = result.traction.score;
+        update.num_comments = result.traction.num_comments;
+        update.upvote_ratio = result.traction.upvote_ratio;
+        update.traction_note = null;
+      } else {
+        update.traction_note = result.reason;
+      }
+    }
   }
 
   if (regenerate) {

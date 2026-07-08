@@ -223,14 +223,19 @@ export type Database = {
           generated_title: string | null
           id: string
           language: string
+          last_checked_at: string | null
           mention_level: string
           model: string | null
+          num_comments: number | null
           post_type: string
           posted_at: string | null
           posted_url: string | null
           scenario_snapshot: Json
+          score: number | null
           status: string
+          traction_note: string | null
           updated_at: string
+          upvote_ratio: number | null
           workspace_id: string
         }
         Insert: {
@@ -241,14 +246,19 @@ export type Database = {
           generated_title?: string | null
           id?: string
           language?: string
+          last_checked_at?: string | null
           mention_level?: string
           model?: string | null
+          num_comments?: number | null
           post_type?: string
           posted_at?: string | null
           posted_url?: string | null
           scenario_snapshot?: Json
+          score?: number | null
           status?: string
+          traction_note?: string | null
           updated_at?: string
+          upvote_ratio?: number | null
           workspace_id: string
         }
         Update: {
@@ -259,14 +269,19 @@ export type Database = {
           generated_title?: string | null
           id?: string
           language?: string
+          last_checked_at?: string | null
           mention_level?: string
           model?: string | null
+          num_comments?: number | null
           post_type?: string
           posted_at?: string | null
           posted_url?: string | null
           scenario_snapshot?: Json
+          score?: number | null
           status?: string
+          traction_note?: string | null
           updated_at?: string
+          upvote_ratio?: number | null
           workspace_id?: string
         }
         Relationships: [

@@ -7,6 +7,9 @@ const patchSchema = z.object({
   status: z.enum(["recommended", "posted", "skipped"]).optional(),
   posted_url: z.string().max(2000).nullable().optional(),
   traction_note: z.string().max(2000).nullable().optional(),
+  // Manual traction entry (used when auto-fetch is blocked).
+  score: z.number().int().nullable().optional(),
+  num_comments: z.number().int().nullable().optional(),
   // When true, re-fetch this post's traction from Reddit now.
   refresh: z.boolean().optional(),
 });
@@ -34,6 +37,12 @@ export async function PATCH(
   if (status) {
     update.status = status;
     if (status === "posted") update.posted_at = new Date().toISOString();
+  }
+
+  // Manual traction entry — stamp the check time and clear any error note.
+  if (!refresh && (rest.score !== undefined || rest.num_comments !== undefined)) {
+    update.last_checked_at = new Date().toISOString();
+    if (rest.traction_note === undefined) update.traction_note = null;
   }
 
   if (refresh) {

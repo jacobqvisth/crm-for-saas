@@ -64,6 +64,12 @@ export interface ForumPost {
   posted_url: string | null;
   posted_at: string | null;
   model: string | null;
+  // Traction pulled from Reddit's public JSON (see src/lib/forums/reddit.ts).
+  score: number | null;
+  num_comments: number | null;
+  upvote_ratio: number | null;
+  traction_note: string | null;
+  last_checked_at: string | null;
   created_at: string;
   updated_at: string;
 }
