@@ -138,6 +138,12 @@ export function ForumsClient() {
         >
           Distribution
         </Link>
+        <Link
+          href="/forums/answers"
+          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+        >
+          Answer posts
+        </Link>
       </div>
 
       {/* Workflow note */}
