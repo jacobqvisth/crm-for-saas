@@ -505,11 +505,13 @@ function PostCard({
   const [editingTraction, setEditingTraction] = useState(false);
   const [manualScore, setManualScore] = useState(post.score?.toString() ?? "");
   const [manualComments, setManualComments] = useState(post.num_comments?.toString() ?? "");
+  const [error, setError] = useState<string | null>(null);
 
   const target = getForumTarget(post.forum_target);
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/forums/${post.id}`, {
         method: "PATCH",
@@ -520,11 +522,23 @@ function PostCard({
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       onPatched(data.post as ForumPost);
       return true;
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
       return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  // Post to Reddit via the API. Irreversible, so confirm first.
+  async function submitToReddit() {
+    if (
+      !window.confirm(
+        `Post this to ${target?.name ?? "Reddit"} now? This publishes immediately to the connected account.`,
+      )
+    )
+      return;
+    await patch({ submit: true });
   }
 
   async function saveEdit() {
@@ -784,10 +798,26 @@ function PostCard({
             )}{" "}
             Regenerate
           </button>
+          {post.status !== "posted" && target?.platform === "reddit" && (
+            <button
+              onClick={submitToReddit}
+              disabled={busy || !post.generated_title}
+              title="Publish to Reddit now via the API"
+              className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}{" "}
+              Post to Reddit
+            </button>
+          )}
           {post.status !== "posted" ? (
             <button
               onClick={() => setShowPostedInput((v) => !v)}
               disabled={busy}
+              title="Record that you posted it elsewhere / manually"
               className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-60"
             >
               <Send className="h-3.5 w-3.5" /> Mark posted
@@ -809,6 +839,10 @@ function PostCard({
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </button>
         </div>
+      )}
+
+      {error && !editing && (
+        <p className="mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">{error}</p>
       )}
 
       {showPostedInput && !editing && (

@@ -92,6 +92,133 @@ async function getAppToken(): Promise<string | null> {
   }
 }
 
+// --- Posting -------------------------------------------------------------
+// Submitting a post needs a *user* token, not the app-only token above. A
+// "script" app (https://www.reddit.com/prefs/apps) authenticates with the
+// resource-owner password grant: the owning account's username + password
+// plus the app's client id/secret. Posts appear as that account. This is the
+// sanctioned path — unlike browser automation it never trips Reddit's bot
+// challenge. Requires REDDIT_CLIENT_ID/SECRET + REDDIT_USERNAME/PASSWORD.
+
+let userTokenCache: { token: string; expiresAt: number } | null = null;
+
+async function getUserToken(): Promise<string | null> {
+  const id = process.env.REDDIT_CLIENT_ID;
+  const secret = process.env.REDDIT_CLIENT_SECRET;
+  const username = process.env.REDDIT_USERNAME;
+  const password = process.env.REDDIT_PASSWORD;
+  if (!id || !secret || !username || !password) return null;
+
+  if (userTokenCache && userTokenCache.expiresAt > Date.now() + 60_000) {
+    return userTokenCache.token;
+  }
+
+  try {
+    const basic = Buffer.from(`${id}:${secret}`).toString("base64");
+    const body = new URLSearchParams({ grant_type: "password", username, password });
+    const res = await fetch("https://www.reddit.com/api/v1/access_token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": UA,
+      },
+      body: body.toString(),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { access_token?: string; expires_in?: number };
+    if (!data.access_token) return null;
+    userTokenCache = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
+    };
+    return userTokenCache.token;
+  } catch {
+    return null;
+  }
+}
+
+// Whether posting is configured at all — lets the API/UI show a helpful message
+// instead of a generic failure when the keys are missing.
+export function redditPostingConfigured(): boolean {
+  return Boolean(
+    process.env.REDDIT_CLIENT_ID &&
+      process.env.REDDIT_CLIENT_SECRET &&
+      process.env.REDDIT_USERNAME &&
+      process.env.REDDIT_PASSWORD,
+  );
+}
+
+// Submit a self (text) post to a subreddit. `subreddit` is the bare name
+// (e.g. "MechanicAdvice", no "r/"). Never throws — returns an { ok, ... } shape.
+export async function submitRedditPost(args: {
+  subreddit: string;
+  title: string;
+  body: string;
+}): Promise<{ ok: true; url: string; name: string } | { ok: false; reason: string }> {
+  if (!redditPostingConfigured()) {
+    return {
+      ok: false,
+      reason:
+        "Reddit posting isn't configured — set REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET / REDDIT_USERNAME / REDDIT_PASSWORD",
+    };
+  }
+  const token = await getUserToken();
+  if (!token) {
+    return { ok: false, reason: "Reddit login failed — check the account credentials / app keys" };
+  }
+
+  try {
+    const form = new URLSearchParams({
+      api_type: "json",
+      sr: args.subreddit,
+      kind: "self",
+      title: args.title,
+      text: args.body ?? "",
+      resubmit: "true",
+      sendreplies: "true",
+    });
+    const res = await fetch("https://oauth.reddit.com/api/submit", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": UA,
+      },
+      body: form.toString(),
+      cache: "no-store",
+    });
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, reason: "Reddit rejected the credentials (401/403)" };
+    }
+    if (res.status === 429) {
+      return { ok: false, reason: "Rate-limited by Reddit — try again shortly" };
+    }
+    if (!res.ok) return { ok: false, reason: `Reddit returned ${res.status}` };
+
+    const data = (await res.json()) as {
+      json?: {
+        errors?: unknown[][];
+        data?: { url?: string; name?: string; id?: string };
+      };
+    };
+    const errors = data?.json?.errors ?? [];
+    if (errors.length) {
+      // Reddit errors look like [["SUBREDDIT_NOEXIST","that subreddit...","sr"], ...]
+      const reason = errors
+        .map((e) => (Array.isArray(e) ? e.slice(0, 2).filter(Boolean).join(": ") : String(e)))
+        .join("; ");
+      return { ok: false, reason: reason || "Reddit rejected the post" };
+    }
+    const url = data?.json?.data?.url;
+    if (!url) return { ok: false, reason: "Reddit accepted the post but returned no URL" };
+    return { ok: true, url, name: data.json?.data?.name ?? data.json?.data?.id ?? "" };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Could not reach Reddit" };
+  }
+}
+
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
 
 function parsePostData(postData: Record<string, unknown> | undefined): RedditTraction | null {
