@@ -1,34 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
-import { getForumTarget } from "@/lib/forums/targets";
-import { generateForumPost } from "@/lib/forums/generate";
-import { fetchRedditTraction } from "@/lib/forums/reddit";
-import type {
-  ForumMentionLevel,
-  ForumPost,
-  ForumPostType,
-  ForumScenario,
-} from "@/lib/forums/types";
+import { fetchRedditTraction, type DistributionRec } from "@/lib/forums/distribution";
 
 const patchSchema = z.object({
-  status: z.enum(["idea", "drafted", "posted", "archived"]).optional(),
+  status: z.enum(["recommended", "posted", "skipped"]).optional(),
   posted_url: z.string().max(2000).nullable().optional(),
-  generated_title: z.string().max(500).nullable().optional(),
-  generated_body: z.string().max(20000).nullable().optional(),
-  // When true, re-run the model from the post's stored scenario + settings.
-  regenerate: z.boolean().optional(),
-  // When true, re-fetch this post's traction (upvotes/comments) from Reddit.
-  refresh: z.boolean().optional(),
+  traction_note: z.string().max(2000).nullable().optional(),
   // Manual traction entry (used when auto-fetch is blocked).
   score: z.number().int().nullable().optional(),
   num_comments: z.number().int().nullable().optional(),
-  traction_note: z.string().max(2000).nullable().optional(),
+  // When true, re-fetch this post's traction from Reddit now.
+  refresh: z.boolean().optional(),
 });
 
-// PATCH /api/forums/[id] → { post }
-// Edit a post (status / posted URL / hand-edited title+body), or regenerate it
-// from its frozen scenario_snapshot. Marking status=posted stamps posted_at.
+// PATCH /api/forums/distribution/[id] → { rec }
+// Update a recommendation's tracking state: mark it posted (with URL), skip it,
+// jot a traction note, or pull fresh upvote/comment counts from Reddit.
+// Marking status=posted stamps posted_at.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -42,7 +31,7 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, refresh, status, ...rest } = parsed.data;
+  const { refresh, status, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
@@ -57,12 +46,12 @@ export async function PATCH(
   }
 
   if (refresh) {
-    // Pull live traction. Prefer an incoming posted_url (e.g. just marked
-    // posted), else read the stored one.
+    // Read the row to get the URL to check (may have just been set above, so
+    // prefer the incoming posted_url when present).
     let url = typeof rest.posted_url === "string" ? rest.posted_url : null;
     if (!url) {
       const { data: row } = await supabase
-        .from("forum_posts")
+        .from("forum_distribution")
         .select("posted_url")
         .eq("id", id)
         .eq("workspace_id", workspaceId)
@@ -85,37 +74,8 @@ export async function PATCH(
     }
   }
 
-  if (regenerate) {
-    const { data: existing, error: readErr } = await supabase
-      .from("forum_posts")
-      .select("*")
-      .eq("id", id)
-      .eq("workspace_id", workspaceId)
-      .single();
-    if (readErr || !existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const target = getForumTarget(existing.forum_target);
-    if (!target) {
-      return NextResponse.json({ error: "Unknown forum target" }, { status: 400 });
-    }
-    const result = await generateForumPost({
-      scenario: existing.scenario_snapshot as unknown as ForumScenario,
-      target,
-      postType: existing.post_type as ForumPostType,
-      mentionLevel: existing.mention_level as ForumMentionLevel,
-      language: target.language,
-    });
-    if (!result.ok) {
-      return NextResponse.json({ error: result.reason }, { status: 502 });
-    }
-    update.generated_title = result.title;
-    update.generated_body = result.body;
-    update.model = result.model;
-  }
-
-  const { data: post, error } = await supabase
-    .from("forum_posts")
+  const { data: rec, error } = await supabase
+    .from("forum_distribution")
     .update(update)
     .eq("id", id)
     .eq("workspace_id", workspaceId)
@@ -123,11 +83,11 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ post: post as unknown as ForumPost });
+  if (!rec) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ rec: rec as unknown as DistributionRec });
 }
 
-// DELETE /api/forums/[id] → { ok: true }
+// DELETE /api/forums/distribution/[id] → { ok: true }
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -138,7 +98,7 @@ export async function DELETE(
   const { id } = await params;
 
   const { error } = await supabase
-    .from("forum_posts")
+    .from("forum_distribution")
     .delete()
     .eq("id", id)
     .eq("workspace_id", workspaceId);

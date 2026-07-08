@@ -134,6 +134,86 @@ export type Database = {
           },
         ]
       }
+      forum_distribution: {
+        Row: {
+          created_at: string
+          fit_reason: string | null
+          id: string
+          last_checked_at: string | null
+          num_comments: number | null
+          posted_at: string | null
+          posted_url: string | null
+          recommended_angle: string | null
+          rules_note: string | null
+          score: number | null
+          sort_order: number
+          status: string
+          subreddit: string
+          subreddit_url: string
+          suggested_title: string | null
+          tier: string
+          topic: string
+          traction_note: string | null
+          updated_at: string
+          upvote_ratio: number | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          fit_reason?: string | null
+          id?: string
+          last_checked_at?: string | null
+          num_comments?: number | null
+          posted_at?: string | null
+          posted_url?: string | null
+          recommended_angle?: string | null
+          rules_note?: string | null
+          score?: number | null
+          sort_order?: number
+          status?: string
+          subreddit: string
+          subreddit_url: string
+          suggested_title?: string | null
+          tier?: string
+          topic?: string
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          fit_reason?: string | null
+          id?: string
+          last_checked_at?: string | null
+          num_comments?: number | null
+          posted_at?: string | null
+          posted_url?: string | null
+          recommended_angle?: string | null
+          rules_note?: string | null
+          score?: number | null
+          sort_order?: number
+          status?: string
+          subreddit?: string
+          subreddit_url?: string
+          suggested_title?: string | null
+          tier?: string
+          topic?: string
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_distribution_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forum_posts: {
         Row: {
           created_at: string
@@ -143,14 +223,19 @@ export type Database = {
           generated_title: string | null
           id: string
           language: string
+          last_checked_at: string | null
           mention_level: string
           model: string | null
+          num_comments: number | null
           post_type: string
           posted_at: string | null
           posted_url: string | null
           scenario_snapshot: Json
+          score: number | null
           status: string
+          traction_note: string | null
           updated_at: string
+          upvote_ratio: number | null
           workspace_id: string
         }
         Insert: {
@@ -161,14 +246,19 @@ export type Database = {
           generated_title?: string | null
           id?: string
           language?: string
+          last_checked_at?: string | null
           mention_level?: string
           model?: string | null
+          num_comments?: number | null
           post_type?: string
           posted_at?: string | null
           posted_url?: string | null
           scenario_snapshot?: Json
+          score?: number | null
           status?: string
+          traction_note?: string | null
           updated_at?: string
+          upvote_ratio?: number | null
           workspace_id: string
         }
         Update: {
@@ -179,14 +269,19 @@ export type Database = {
           generated_title?: string | null
           id?: string
           language?: string
+          last_checked_at?: string | null
           mention_level?: string
           model?: string | null
+          num_comments?: number | null
           post_type?: string
           posted_at?: string | null
           posted_url?: string | null
           scenario_snapshot?: Json
+          score?: number | null
           status?: string
+          traction_note?: string | null
           updated_at?: string
+          upvote_ratio?: number | null
           workspace_id?: string
         }
         Relationships: [
