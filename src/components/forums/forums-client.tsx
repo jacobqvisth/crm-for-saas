@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   MessagesSquare,
   ExternalLink,
@@ -105,6 +106,19 @@ export function ForumsClient() {
             Turn real diagnostic scenarios into ready-to-paste forum posts.
           </p>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="mt-4 flex items-center gap-1 border-b border-slate-200">
+        <span className="border-b-2 border-orange-500 px-3 py-2 text-sm font-medium text-orange-700">
+          Post generator
+        </span>
+        <Link
+          href="/forums/distribution"
+          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+        >
+          Distribution
+        </Link>
       </div>
 
       {/* Workflow note */}
