@@ -5298,3 +5298,41 @@ skips the Vercel build (ignoreCommand). Feature deploy live (307 → /login).
 Merged (d37da9a). Prod deploy Ready, live (307 → /login).
 **Note:** local build needed `PATH=/opt/homebrew/bin:$PATH` — bare `node`
 resolves to Codex.app's binary and SIGKILLs the Next build instantly.
+
+---
+
+## Forums — Distribution board + traction tracking
+**Date:** 2026-07-08 · **PR:** #514 · **Branch:** worktree-forums-distribution
+
+Two features under **Forums**, both prompted by "make a post about whether AI
+will take over car diagnostics + track where it's posted and how it does".
+
+- **Distribution board** (`/forums/distribution`, new tab on `/forums`): a
+  per-topic placement tracker. Ships seeded with the "Will AI take over car
+  diagnostics?" post → 10 curated subreddit recommendations grouped by fit tier
+  (best fit / trade pros / AI-angle), each with a tailored title (copy),
+  angle, fit reason, and rules note. Mark-posted with URL, skip/restore,
+  running posted-count + total upvotes/comments. New workspace-scoped table
+  `forum_distribution` (RLS mirrors `forum_posts`), auto-seeded per workspace
+  from `src/lib/forums/distribution.ts` on first load.
+- **Traction on generated posts** (`/forums`): `forum_posts` gained
+  `score / num_comments / upvote_ratio / traction_note / last_checked_at`.
+  Each posted card shows upvotes + comments + ratio, per-card refresh + a
+  top "Refresh traction" sweep.
+- **Reddit fetch** (`src/lib/forums/reddit.ts`, shared): Reddit **403s the
+  anonymous `.json` endpoint from datacenter IPs (incl. Vercel)** — verified.
+  So the fetcher prefers the **OAuth API** when `REDDIT_CLIENT_ID` +
+  `REDDIT_CLIENT_SECRET` are set (app-only token → `/api/info`), falls back to
+  anonymous JSON, and both boards have **manual upvotes/comments entry** as the
+  always-works path. To enable auto-tracking: create a "script" app at
+  reddit.com/prefs/apps and add the two env vars to Vercel.
+
+**Migrations (applied to prod):** `20260708000000_forum_distribution.sql`,
+`20260708001000_forum_posts_traction.sql`.
+
+**Data:** set the June-16 posted post (Transit Connect P2463) to 1 comment —
+the single reply Jacob mentioned.
+
+**Checks:** `tsc --noEmit` exit 0, eslint clean. Build & Lint green. Prod deploy
+READY (24b10c0); `/forums/distribution` 200, `/api/forums/distribution` +
+`/api/forums/refresh` 401 unauth. Build needs `PATH=/opt/homebrew/bin:$PATH`.
