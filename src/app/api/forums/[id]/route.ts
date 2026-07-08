@@ -3,7 +3,7 @@ import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
-import { fetchRedditTraction } from "@/lib/forums/reddit";
+import { fetchRedditTraction, submitRedditPost } from "@/lib/forums/reddit";
 import { notifyForumPosted } from "@/lib/forums/notify-posted";
 import type {
   ForumMentionLevel,
@@ -21,6 +21,9 @@ const patchSchema = z.object({
   regenerate: z.boolean().optional(),
   // When true, re-fetch this post's traction (upvotes/comments) from Reddit.
   refresh: z.boolean().optional(),
+  // When true, submit this post to Reddit via the API (script-app user token),
+  // then mark it posted with the returned URL.
+  submit: z.boolean().optional(),
   // Manual traction entry (used when auto-fetch is blocked).
   score: z.number().int().nullable().optional(),
   num_comments: z.number().int().nullable().optional(),
@@ -45,12 +48,51 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, refresh, resend_slack, status, ...rest } = parsed.data;
+  const { regenerate, refresh, resend_slack, submit, status, ...rest } = parsed.data;
+
+  // `status === "posted"` drives the Slack fan-out below. When we post via the
+  // API (submit), we set that state internally, so track the effective status.
+  let effectiveStatus = status;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
     update.status = status;
     if (status === "posted") update.posted_at = new Date().toISOString();
+  }
+
+  if (submit) {
+    const { data: existing, error: readErr } = await supabase
+      .from("forum_posts")
+      .select("*")
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .single();
+    if (readErr || !existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    // Guard against double-posting.
+    if (existing.status === "posted" || existing.posted_url) {
+      return NextResponse.json({ error: "Already posted" }, { status: 409 });
+    }
+    const target = getForumTarget(existing.forum_target);
+    if (!target || target.platform !== "reddit") {
+      return NextResponse.json({ error: "Only Reddit posting is supported" }, { status: 400 });
+    }
+    const title = (rest.generated_title as string | undefined) ?? existing.generated_title;
+    const body = (rest.generated_body as string | undefined) ?? existing.generated_body;
+    if (!title) {
+      return NextResponse.json({ error: "Nothing to post — the title is empty" }, { status: 400 });
+    }
+    // forum_target is "reddit:<Subreddit>"; the API wants the bare name.
+    const subreddit = existing.forum_target.split(":")[1] ?? "";
+    const result = await submitRedditPost({ subreddit, title, body: body ?? "" });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.reason }, { status: 502 });
+    }
+    update.status = "posted";
+    update.posted_url = result.url;
+    update.posted_at = new Date().toISOString();
+    effectiveStatus = "posted";
   }
 
   // Manual traction entry — stamp the check time and clear any error note.
@@ -132,7 +174,7 @@ export async function PATCH(
 
   // Fan out to #forum-posts when it's freshly marked posted, or on an explicit
   // resend. Best-effort — never fail the save on Slack/AI errors.
-  const firstPost = status === "posted" && post.posted_url && !post.slack_notified_at;
+  const firstPost = effectiveStatus === "posted" && post.posted_url && !post.slack_notified_at;
   if ((firstPost || resend_slack) && post.posted_url && post.generated_title) {
     const target = getForumTarget(post.forum_target);
     const result = await notifyForumPosted({
