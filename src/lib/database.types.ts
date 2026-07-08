@@ -146,11 +146,13 @@ export type Database = {
           recommended_angle: string | null
           rules_note: string | null
           score: number | null
+          slack_notified_at: string | null
           sort_order: number
           status: string
           subreddit: string
           subreddit_url: string
           suggested_body: string | null
+          suggested_comment: string | null
           suggested_title: string | null
           tier: string
           topic: string
@@ -170,11 +172,13 @@ export type Database = {
           recommended_angle?: string | null
           rules_note?: string | null
           score?: number | null
+          slack_notified_at?: string | null
           sort_order?: number
           status?: string
           subreddit: string
           subreddit_url: string
           suggested_body?: string | null
+          suggested_comment?: string | null
           suggested_title?: string | null
           tier?: string
           topic?: string
@@ -194,11 +198,13 @@ export type Database = {
           recommended_angle?: string | null
           rules_note?: string | null
           score?: number | null
+          slack_notified_at?: string | null
           sort_order?: number
           status?: string
           subreddit?: string
           subreddit_url?: string
           suggested_body?: string | null
+          suggested_comment?: string | null
           suggested_title?: string | null
           tier?: string
           topic?: string
@@ -235,7 +241,9 @@ export type Database = {
           posted_url: string | null
           scenario_snapshot: Json
           score: number | null
+          slack_notified_at: string | null
           status: string
+          suggested_comment: string | null
           traction_note: string | null
           updated_at: string
           upvote_ratio: number | null
@@ -258,7 +266,9 @@ export type Database = {
           posted_url?: string | null
           scenario_snapshot?: Json
           score?: number | null
+          slack_notified_at?: string | null
           status?: string
+          suggested_comment?: string | null
           traction_note?: string | null
           updated_at?: string
           upvote_ratio?: number | null
@@ -281,7 +291,9 @@ export type Database = {
           posted_url?: string | null
           scenario_snapshot?: Json
           score?: number | null
+          slack_notified_at?: string | null
           status?: string
+          suggested_comment?: string | null
           traction_note?: string | null
           updated_at?: string
           upvote_ratio?: number | null

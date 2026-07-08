@@ -4,6 +4,7 @@ import { resolveWorkspace } from "@/lib/forums/server";
 import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
 import { fetchRedditTraction } from "@/lib/forums/reddit";
+import { notifyForumPosted } from "@/lib/forums/notify-posted";
 import type {
   ForumMentionLevel,
   ForumPost,
@@ -24,6 +25,8 @@ const patchSchema = z.object({
   score: z.number().int().nullable().optional(),
   num_comments: z.number().int().nullable().optional(),
   traction_note: z.string().max(2000).nullable().optional(),
+  // When true, (re)post this to #forum-posts and redraft the suggested comment.
+  resend_slack: z.boolean().optional(),
 });
 
 // PATCH /api/forums/[id] → { post }
@@ -42,7 +45,7 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, refresh, status, ...rest } = parsed.data;
+  const { regenerate, refresh, resend_slack, status, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
@@ -114,7 +117,7 @@ export async function PATCH(
     update.model = result.model;
   }
 
-  const { data: post, error } = await supabase
+  const { data: updated, error } = await supabase
     .from("forum_posts")
     .update(update)
     .eq("id", id)
@@ -123,8 +126,42 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ post: post as unknown as ForumPost });
+  if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let post = updated as unknown as ForumPost;
+
+  // Fan out to #forum-posts when it's freshly marked posted, or on an explicit
+  // resend. Best-effort — never fail the save on Slack/AI errors.
+  const firstPost = status === "posted" && post.posted_url && !post.slack_notified_at;
+  if ((firstPost || resend_slack) && post.posted_url && post.generated_title) {
+    const target = getForumTarget(post.forum_target);
+    const result = await notifyForumPosted({
+      subreddit: target?.name ?? post.forum_target,
+      tone: target?.tone,
+      rulesNote: target?.rulesNote,
+      title: post.generated_title,
+      body: post.generated_body,
+      url: post.posted_url,
+      existingComment: post.suggested_comment,
+      forceRegenerate: Boolean(resend_slack),
+    });
+    const postUpdate: Record<string, unknown> = {};
+    if (result.comment && result.comment !== post.suggested_comment)
+      postUpdate.suggested_comment = result.comment;
+    if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
+    if (Object.keys(postUpdate).length) {
+      const { data: reUpdated } = await supabase
+        .from("forum_posts")
+        .update(postUpdate)
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .select()
+        .single();
+      if (reUpdated) post = reUpdated as unknown as ForumPost;
+    }
+  }
+
+  return NextResponse.json({ post });
 }
 
 // DELETE /api/forums/[id] → { ok: true }
