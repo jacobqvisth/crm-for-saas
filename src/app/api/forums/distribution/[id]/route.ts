@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { fetchRedditTraction, type DistributionRec } from "@/lib/forums/distribution";
+import { notifyForumPosted } from "@/lib/forums/notify-posted";
 
 const patchSchema = z.object({
   status: z.enum(["recommended", "posted", "skipped"]).optional(),
@@ -12,6 +13,8 @@ const patchSchema = z.object({
   num_comments: z.number().int().nullable().optional(),
   // When true, re-fetch this post's traction from Reddit now.
   refresh: z.boolean().optional(),
+  // When true, (re)post this to #forum-posts and redraft the suggested comment.
+  resend_slack: z.boolean().optional(),
 });
 
 // PATCH /api/forums/distribution/[id] → { rec }
@@ -31,7 +34,7 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { refresh, status, ...rest } = parsed.data;
+  const { refresh, resend_slack, status, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
@@ -74,7 +77,7 @@ export async function PATCH(
     }
   }
 
-  const { data: rec, error } = await supabase
+  const { data: updated, error } = await supabase
     .from("forum_distribution")
     .update(update)
     .eq("id", id)
@@ -83,8 +86,41 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!rec) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ rec: rec as unknown as DistributionRec });
+  if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let rec = updated as unknown as DistributionRec;
+
+  // Fan out to #forum-posts when it's freshly marked posted (first time), or on
+  // an explicit resend. Best-effort — never fail the save on Slack/AI errors.
+  const firstPost = status === "posted" && rec.posted_url && !rec.slack_notified_at;
+  if ((firstPost || resend_slack) && rec.posted_url && rec.suggested_title) {
+    const result = await notifyForumPosted({
+      subreddit: rec.subreddit,
+      tone: rec.recommended_angle,
+      rulesNote: rec.rules_note,
+      title: rec.suggested_title,
+      body: rec.suggested_body,
+      url: rec.posted_url,
+      existingComment: rec.suggested_comment,
+      forceRegenerate: Boolean(resend_slack),
+    });
+    const postUpdate: Record<string, unknown> = {};
+    if (result.comment && result.comment !== rec.suggested_comment)
+      postUpdate.suggested_comment = result.comment;
+    if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
+    if (Object.keys(postUpdate).length) {
+      const { data: reUpdated } = await supabase
+        .from("forum_distribution")
+        .update(postUpdate)
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .select()
+        .single();
+      if (reUpdated) rec = reUpdated as unknown as DistributionRec;
+    }
+  }
+
+  return NextResponse.json({ rec });
 }
 
 // DELETE /api/forums/distribution/[id] → { ok: true }

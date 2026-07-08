@@ -72,6 +72,8 @@ export interface DistributionRec {
   upvote_ratio: number | null;
   traction_note: string | null;
   last_checked_at: string | null;
+  suggested_comment: string | null;
+  slack_notified_at: string | null;
   created_at: string;
   updated_at: string;
 }

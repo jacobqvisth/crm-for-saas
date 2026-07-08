@@ -113,9 +113,10 @@ export function DistributionClient() {
       <div className="mt-5 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">
         <span className="font-medium">The post:</span> {topic.summary} Below are the communities to
         post it in, ranked by how welcome a discussion post is. Mark each one as you post it (paste
-        the URL), then hit <span className="font-medium">Refresh traction</span> to auto-pull upvotes
-        and comments — or type them in with the pencil (Reddit blocks automated reads unless API keys
-        are configured).
+        the URL) — that also pings <span className="font-medium">#forum-posts</span> in Slack with a
+        ready-to-paste reply so the team can jump in from their own Reddit accounts. Then hit{" "}
+        <span className="font-medium">Refresh traction</span> to auto-pull upvotes and comments — or
+        type them in with the pencil (Reddit blocks automated reads unless API keys are configured).
         <div className="mt-2 text-xs text-orange-800/90">
           <span className="font-medium">Careful:</span> don&apos;t post the same text to every sub
           the same day — Reddit&apos;s spam filter flags rapid cross-posting. Space them out, tweak
@@ -415,6 +416,45 @@ function RecCard({
           >
             Save
           </button>
+        </div>
+      )}
+
+      {/* Team comment (posted only) */}
+      {posted && (
+        <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
+              <MessageSquare className="h-3 w-3" /> Team comment for Reddit
+            </span>
+            {rec.suggested_comment && (
+              <CopyButton text={rec.suggested_comment} label="Copy" />
+            )}
+          </div>
+          {rec.suggested_comment ? (
+            <p className="whitespace-pre-wrap text-xs text-slate-700">{rec.suggested_comment}</p>
+          ) : (
+            <p className="text-xs text-slate-500">No comment drafted yet.</p>
+          )}
+          <div className="mt-2 flex items-center gap-3 text-[11px]">
+            <button
+              onClick={() => patch({ resend_slack: true })}
+              disabled={busy}
+              className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+              title="Redraft the comment and re-post to #forum-posts"
+            >
+              {busy ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="h-3 w-3" />
+              )}
+              {rec.slack_notified_at ? "Resend to Slack" : "Send to #forum-posts"}
+            </button>
+            {rec.slack_notified_at && (
+              <span className="text-indigo-500/70">
+                sent {new Date(rec.slack_notified_at).toLocaleDateString()}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
