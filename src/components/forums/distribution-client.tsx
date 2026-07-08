@@ -16,6 +16,7 @@ import {
   CircleSlash,
   RotateCcw,
   Pencil,
+  User,
 } from "lucide-react";
 import {
   DEFAULT_TOPIC,
@@ -24,12 +25,14 @@ import {
   type DistributionRec,
   type DistributionTier,
 } from "@/lib/forums/distribution";
+import type { RedditAccount } from "@/lib/forums/accounts";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
 export function DistributionClient() {
   const topic = TOPICS[DEFAULT_TOPIC];
   const [recs, setRecs] = useState<DistributionRec[]>([]);
+  const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
@@ -46,6 +49,16 @@ export function DistributionClient() {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
         if (!cancelled) setLoading(false);
+      }
+    })();
+    // Roster for the "posted by" picker — best-effort, never blocks the board.
+    (async () => {
+      try {
+        const res = await fetch("/api/forums/accounts");
+        const data = await res.json();
+        if (res.ok && !cancelled) setAccounts(data.accounts ?? []);
+      } catch {
+        // ignore — the picker just won't have options
       }
     })();
     return () => {
@@ -182,7 +195,7 @@ export function DistributionClient() {
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {group.map((rec) => (
-                    <RecCard key={rec.id} rec={rec} onPatched={patchRec} />
+                    <RecCard key={rec.id} rec={rec} accounts={accounts} onPatched={patchRec} />
                   ))}
                 </div>
               </section>
@@ -192,6 +205,11 @@ export function DistributionClient() {
       )}
     </div>
   );
+}
+
+// "Owner · u/handle" (or just the owner when the handle isn't filled in yet).
+function accountLabel(a: RedditAccount): string {
+  return a.username ? `${a.owner_label} · u/${a.username}` : `${a.owner_label} (handle pending)`;
 }
 
 function StatChip({
@@ -214,14 +232,17 @@ function StatChip({
 
 function RecCard({
   rec,
+  accounts,
   onPatched,
 }: {
   rec: DistributionRec;
+  accounts: RedditAccount[];
   onPatched: (r: DistributionRec) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [showPostedInput, setShowPostedInput] = useState(false);
   const [postedUrl, setPostedUrl] = useState(rec.posted_url ?? "");
+  const [postedByAccountId, setPostedByAccountId] = useState(rec.posted_by_account_id ?? "");
   const [editingTraction, setEditingTraction] = useState(false);
   const [manualScore, setManualScore] = useState(rec.score?.toString() ?? "");
   const [manualComments, setManualComments] = useState(rec.num_comments?.toString() ?? "");
@@ -249,6 +270,7 @@ function RecCard({
     const ok = await patch({
       status: "posted",
       posted_url: postedUrl || null,
+      posted_by_account_id: postedByAccountId || null,
       refresh: Boolean(postedUrl),
     });
     if (ok) setShowPostedInput(false);
@@ -264,6 +286,13 @@ function RecCard({
 
   const posted = rec.status === "posted";
   const skipped = rec.status === "skipped";
+  const postedByAccount = accounts.find((a) => a.id === rec.posted_by_account_id) ?? null;
+  // The Reddit handle Reddit reports as the author (source of truth). Flag it
+  // when it doesn't match the picked account's handle.
+  const authorMismatch =
+    !!rec.posted_by_username &&
+    !!postedByAccount?.username &&
+    rec.posted_by_username.toLowerCase() !== postedByAccount.username.toLowerCase();
 
   return (
     <div
@@ -393,6 +422,22 @@ function RecCard({
       {posted && rec.traction_note && (
         <p className="mt-1 text-[11px] text-amber-700">{rec.traction_note}</p>
       )}
+      {posted && (postedByAccount || rec.posted_by_username) && (
+        <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+          <User className="h-3 w-3 text-slate-400" />
+          <span className="font-medium text-slate-600">Posted by</span>{" "}
+          {postedByAccount ? (
+            <span>{accountLabel(postedByAccount)}</span>
+          ) : (
+            <span>u/{rec.posted_by_username}</span>
+          )}
+          {authorMismatch && (
+            <span className="text-amber-700">
+              — Reddit says u/{rec.posted_by_username}
+            </span>
+          )}
+        </p>
+      )}
       {posted && editingTraction && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <label className="inline-flex items-center gap-1 text-slate-500">
@@ -504,20 +549,39 @@ function RecCard({
       </div>
 
       {showPostedInput && !posted && (
-        <div className="mt-2 flex gap-2">
-          <input
-            value={postedUrl}
-            onChange={(e) => setPostedUrl(e.target.value)}
-            placeholder="Paste the Reddit post URL"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
-          />
-          <button
-            onClick={markPosted}
-            disabled={busy}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-          </button>
+        <div className="mt-2 flex flex-col gap-2">
+          <label className="flex items-center gap-2">
+            <User className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+            <select
+              value={postedByAccountId}
+              onChange={(e) => setPostedByAccountId(e.target.value)}
+              className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+            >
+              <option value="">Posted by… (which Reddit account?)</option>
+              {accounts
+                .filter((a) => a.active)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {accountLabel(a)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={postedUrl}
+              onChange={(e) => setPostedUrl(e.target.value)}
+              placeholder="Paste the Reddit post URL"
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
+            />
+            <button
+              onClick={markPosted}
+              disabled={busy}
+              className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -7,6 +7,8 @@ import { notifyForumPosted } from "@/lib/forums/notify-posted";
 const patchSchema = z.object({
   status: z.enum(["recommended", "posted", "skipped"]).optional(),
   posted_url: z.string().max(2000).nullable().optional(),
+  // Which roster account posted this (picked when marking posted).
+  posted_by_account_id: z.string().uuid().nullable().optional(),
   traction_note: z.string().max(2000).nullable().optional(),
   // Manual traction entry (used when auto-fetch is blocked).
   score: z.number().int().nullable().optional(),
@@ -70,6 +72,8 @@ export async function PATCH(
         update.score = result.traction.score;
         update.num_comments = result.traction.num_comments;
         update.upvote_ratio = result.traction.upvote_ratio;
+        // Capture the real author handle as the source-of-truth poster.
+        if (result.traction.author) update.posted_by_username = result.traction.author;
         update.traction_note = null;
       } else {
         update.traction_note = result.reason;

@@ -19,6 +19,9 @@ export interface RedditTraction {
   score: number | null;
   num_comments: number | null;
   upvote_ratio: number | null;
+  // The post's author handle (no "u/"). Lets the Distribution board record which
+  // Reddit user actually posted a placement, cross-checked against the roster.
+  author: string | null;
 }
 
 // Extract the base-36 post id from a Reddit permalink → "t3_<id>" fullname.
@@ -142,6 +145,7 @@ function parsePostData(postData: Record<string, unknown> | undefined): RedditTra
     score: num(postData.score) ?? num(postData.ups),
     num_comments: num(postData.num_comments),
     upvote_ratio: num(postData.upvote_ratio),
+    author: typeof postData.author === "string" ? postData.author : null,
   };
 }
 

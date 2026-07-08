@@ -67,6 +67,10 @@ export interface DistributionRec {
   status: DistributionStatus;
   posted_url: string | null;
   posted_at: string | null;
+  // Which Reddit account posted it (roster FK, picked when marking posted) and
+  // the actual author handle auto-captured from Reddit on traction refresh.
+  posted_by_account_id: string | null;
+  posted_by_username: string | null;
   score: number | null;
   num_comments: number | null;
   upvote_ratio: number | null;
