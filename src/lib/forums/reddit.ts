@@ -92,7 +92,49 @@ async function getAppToken(): Promise<string | null> {
   }
 }
 
+// True when app-only OAuth creds are present. Search + auto-fetch of post
+// bodies both need OAuth (anon JSON 403s from datacenter IPs), so the UI uses
+// this to decide between the live "find posts" flow and the paste-a-URL /
+// paste-the-text fallback.
+export function isRedditConfigured(): boolean {
+  return !!(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET);
+}
+
+// A candidate post to reply to, as returned by discovery/fetch.
+export interface RedditPost {
+  fullname: string; // t3_<id>
+  id: string;
+  subreddit: string; // e.g. "MechanicAdvice"
+  title: string;
+  body: string; // selftext, may be ""
+  author: string | null;
+  url: string; // full permalink on reddit.com
+  score: number | null;
+  num_comments: number | null;
+  created_utc: number | null;
+}
+
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
+
+function toRedditPost(data: Record<string, unknown> | undefined): RedditPost | null {
+  if (!data) return null;
+  const id = str(data.id);
+  const permalink = str(data.permalink);
+  if (!id) return null;
+  return {
+    fullname: `t3_${id}`,
+    id,
+    subreddit: str(data.subreddit),
+    title: str(data.title),
+    body: str(data.selftext),
+    author: typeof data.author === "string" ? data.author : null,
+    url: permalink ? `https://www.reddit.com${permalink}` : str(data.url),
+    score: num(data.score) ?? num(data.ups),
+    num_comments: num(data.num_comments),
+    created_utc: num(data.created_utc),
+  };
+}
 
 function parsePostData(postData: Record<string, unknown> | undefined): RedditTraction | null {
   if (!postData) return null;
@@ -169,4 +211,133 @@ export async function fetchRedditTraction(
   const traction = parsePostData(postData);
   if (!traction) return { ok: false, reason: "No post data found (deleted or private?)" };
   return { ok: true, traction };
+}
+
+// Fetch one post's full content (title + body) so we can draft a reply to it.
+// OAuth first, anon JSON fallback. Never throws.
+export async function fetchRedditPost(
+  postUrl: string,
+): Promise<{ ok: true; post: RedditPost } | { ok: false; reason: string }> {
+  const fullname = redditFullname(postUrl);
+  if (!fullname) return { ok: false, reason: "Not a recognizable Reddit post URL" };
+
+  const token = await getAppToken();
+  if (token) {
+    try {
+      const res = await fetch(
+        `https://oauth.reddit.com/api/info?id=${fullname}&raw_json=1`,
+        {
+          headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
+          cache: "no-store",
+        },
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          data?: { children?: Array<{ data?: Record<string, unknown> }> };
+        };
+        const post = toRedditPost(data?.data?.children?.[0]?.data);
+        if (post) return { ok: true, post };
+        return { ok: false, reason: "Post not found (deleted or private?)" };
+      }
+    } catch {
+      // fall through to anon
+    }
+  }
+
+  const jsonUrl = redditJsonUrl(postUrl);
+  if (!jsonUrl) return { ok: false, reason: "Not a recognizable Reddit post URL" };
+  let res: Response;
+  try {
+    res = await fetch(jsonUrl, { headers: { "User-Agent": UA }, cache: "no-store" });
+  } catch {
+    return { ok: false, reason: "Could not reach Reddit" };
+  }
+  if (res.status === 403) {
+    return {
+      ok: false,
+      reason:
+        "Reddit blocked the request (403) — add Reddit API keys to auto-load posts, or paste the post text below manually",
+    };
+  }
+  if (res.status === 429) return { ok: false, reason: "Rate-limited by Reddit — try again shortly" };
+  if (!res.ok) return { ok: false, reason: `Reddit returned ${res.status}` };
+
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    return { ok: false, reason: "Unexpected response from Reddit" };
+  }
+  const listing = Array.isArray(json) ? json[0] : json;
+  const post = toRedditPost(
+    (listing as { data?: { children?: Array<{ data?: Record<string, unknown> }> } })?.data
+      ?.children?.[0]?.data,
+  );
+  if (!post) return { ok: false, reason: "No post data found (deleted or private?)" };
+  return { ok: true, post };
+}
+
+// Search/list candidate posts across one or more subreddits. Needs OAuth
+// (Reddit blocks anon listing from datacenter IPs), so returns a clear reason
+// when creds aren't set — the UI then falls back to the paste-a-URL flow.
+export async function searchRedditPosts(opts: {
+  subreddits: string[]; // bare names, e.g. ["MechanicAdvice"]
+  query?: string;
+  sort?: "new" | "hot" | "relevance" | "top";
+  limit?: number;
+}): Promise<{ ok: true; posts: RedditPost[] } | { ok: false; reason: string }> {
+  const subs = opts.subreddits
+    .map((s) => s.replace(/^\/?r\//i, "").trim())
+    .filter(Boolean);
+  if (subs.length === 0) return { ok: false, reason: "No subreddits selected" };
+
+  const token = await getAppToken();
+  if (!token) {
+    return {
+      ok: false,
+      reason:
+        "Reddit API not configured — add REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET to enable finding posts. You can still paste a post URL below.",
+    };
+  }
+
+  const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const path = subs.join("+");
+  const query = opts.query?.trim();
+  let endpoint: string;
+  if (query) {
+    const sort = opts.sort && opts.sort !== "hot" ? opts.sort : "new";
+    const params = new URLSearchParams({
+      q: query,
+      restrict_sr: "true",
+      sort,
+      t: "month",
+      limit: String(limit),
+      raw_json: "1",
+    });
+    endpoint = `https://oauth.reddit.com/r/${path}/search?${params}`;
+  } else {
+    const sort = opts.sort === "hot" ? "hot" : "new";
+    endpoint = `https://oauth.reddit.com/r/${path}/${sort}?limit=${limit}&raw_json=1`;
+  }
+
+  try {
+    const res = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
+      cache: "no-store",
+    });
+    if (res.status === 429) return { ok: false, reason: "Rate-limited by Reddit — try again shortly" };
+    if (!res.ok) return { ok: false, reason: `Reddit returned ${res.status}` };
+    const data = (await res.json()) as {
+      data?: { children?: Array<{ data?: Record<string, unknown> }> };
+    };
+    const posts = (data?.data?.children ?? [])
+      .map((c) => toRedditPost(c?.data))
+      .filter((p): p is RedditPost => p !== null);
+    return { ok: true, posts };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `Could not reach Reddit: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }

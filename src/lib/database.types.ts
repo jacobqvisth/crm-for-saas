@@ -297,6 +297,74 @@ export type Database = {
           },
         ]
       }
+      forum_replies: {
+        Row: {
+          created_at: string
+          generated_body: string | null
+          id: string
+          mention_level: string
+          model: string | null
+          posted_at: string | null
+          posted_url: string | null
+          source_author: string | null
+          source_body: string | null
+          source_num_comments: number | null
+          source_score: number | null
+          source_subreddit: string | null
+          source_title: string | null
+          source_url: string | null
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          generated_body?: string | null
+          id?: string
+          mention_level?: string
+          model?: string | null
+          posted_at?: string | null
+          posted_url?: string | null
+          source_author?: string | null
+          source_body?: string | null
+          source_num_comments?: number | null
+          source_score?: number | null
+          source_subreddit?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          generated_body?: string | null
+          id?: string
+          mention_level?: string
+          model?: string | null
+          posted_at?: string | null
+          posted_url?: string | null
+          source_author?: string | null
+          source_body?: string | null
+          source_num_comments?: number | null
+          source_score?: number | null
+          source_subreddit?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_replies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       _ops_queue_pause_2026_04_28: {
         Row: {
           captured_at: string | null
