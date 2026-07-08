@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       update.score = result.traction.score;
       update.num_comments = result.traction.num_comments;
       update.upvote_ratio = result.traction.upvote_ratio;
+      if (result.traction.author) update.posted_by_username = result.traction.author;
       update.traction_note = null;
     } else {
       update.traction_note = result.reason;

@@ -142,6 +142,8 @@ export type Database = {
           last_checked_at: string | null
           num_comments: number | null
           posted_at: string | null
+          posted_by_account_id: string | null
+          posted_by_username: string | null
           posted_url: string | null
           recommended_angle: string | null
           rules_note: string | null
@@ -168,6 +170,8 @@ export type Database = {
           last_checked_at?: string | null
           num_comments?: number | null
           posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
           posted_url?: string | null
           recommended_angle?: string | null
           rules_note?: string | null
@@ -194,6 +198,8 @@ export type Database = {
           last_checked_at?: string | null
           num_comments?: number | null
           posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
           posted_url?: string | null
           recommended_angle?: string | null
           rules_note?: string | null
@@ -214,6 +220,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "forum_distribution_posted_by_account_id_fkey"
+            columns: ["posted_by_account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "forum_distribution_workspace_id_fkey"
             columns: ["workspace_id"]
