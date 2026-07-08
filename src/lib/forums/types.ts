@@ -64,6 +64,8 @@ export interface ForumPost {
   posted_url: string | null;
   posted_at: string | null;
   model: string | null;
+  // Roster account assigned to post this draft (semi-automated flow).
+  assigned_account_id: string | null;
   // Traction pulled from Reddit's public JSON (see src/lib/forums/reddit.ts).
   score: number | null;
   num_comments: number | null;

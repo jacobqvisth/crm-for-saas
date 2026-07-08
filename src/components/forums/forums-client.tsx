@@ -20,6 +20,8 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
+import { AccountsPanel } from "./accounts-panel";
+import type { RedditAccount } from "@/lib/forums/accounts";
 import type {
   ForumMentionLevel,
   ForumPost,
@@ -45,6 +47,7 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
 export function ForumsClient() {
   const [scenarios, setScenarios] = useState<ForumScenario[]>([]);
   const [posts, setPosts] = useState<ForumPost[]>([]);
+  const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generateFor, setGenerateFor] = useState<ForumScenario | null>(null);
@@ -55,17 +58,20 @@ export function ForumsClient() {
     let cancelled = false;
     (async () => {
       try {
-        const [sRes, pRes] = await Promise.all([
+        const [sRes, pRes, aRes] = await Promise.all([
           fetch("/api/forums/scenarios"),
           fetch("/api/forums"),
+          fetch("/api/forums/accounts"),
         ]);
         if (!sRes.ok) throw new Error((await sRes.json()).error ?? "Failed to load scenarios");
         if (!pRes.ok) throw new Error((await pRes.json()).error ?? "Failed to load posts");
         const sData = await sRes.json();
         const pData = await pRes.json();
+        const aData = aRes.ok ? await aRes.json() : { accounts: [] };
         if (!cancelled) {
           setScenarios(sData.scenarios ?? []);
           setPosts(pData.posts ?? []);
+          setAccounts(aData.accounts ?? []);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
@@ -195,6 +201,9 @@ export function ForumsClient() {
 
       {!loading && !error && (
         <>
+          {/* Reddit account roster */}
+          <AccountsPanel accounts={accounts} onChange={setAccounts} />
+
           {/* Generated posts */}
           <section className="mt-10">
             <div className="flex items-center justify-between mb-4">
@@ -248,6 +257,7 @@ export function ForumsClient() {
                   <PostCard
                     key={p.id}
                     post={p}
+                    accounts={accounts}
                     onPatched={patchPost}
                     onRemoved={() => removePost(p.id)}
                   />
@@ -495,10 +505,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function PostCard({
   post,
+  accounts,
   onPatched,
   onRemoved,
 }: {
   post: ForumPost;
+  accounts: RedditAccount[];
   onPatched: (p: ForumPost) => void;
   onRemoved: () => void;
 }) {
@@ -513,6 +525,11 @@ function PostCard({
   const [manualComments, setManualComments] = useState(post.num_comments?.toString() ?? "");
 
   const target = getForumTarget(post.forum_target);
+  const subreddit = post.forum_target.split(":")[1] ?? "";
+  const submitUrl = subreddit
+    ? `https://www.reddit.com/r/${subreddit}/submit`
+    : (target?.url ?? "https://www.reddit.com");
+  const assigned = accounts.find((a) => a.id === post.assigned_account_id) ?? null;
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
@@ -583,6 +600,12 @@ function PostCard({
           {MENTION_LABEL[post.mention_level]}
         </span>
         <StatusBadge status={post.status} />
+        {assigned && (
+          <span className="rounded-full bg-violet-50 px-2 py-0.5 font-medium text-violet-700">
+            {assigned.owner_label}
+            {assigned.username ? ` · u/${assigned.username}` : ""}
+          </span>
+        )}
         {post.posted_url && (
           <a
             href={post.posted_url}
@@ -790,6 +813,37 @@ function PostCard({
             )}{" "}
             Regenerate
           </button>
+          {post.status !== "posted" && (
+            <>
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                <span className="sr-only">Assign to</span>
+                <select
+                  value={post.assigned_account_id ?? ""}
+                  onChange={(e) => patch({ assigned_account_id: e.target.value || null })}
+                  disabled={busy}
+                  title="Assign to a team member's Reddit account"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-60"
+                >
+                  <option value="">Unassigned</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.owner_label}
+                      {a.username ? ` (u/${a.username})` : " — no username"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <a
+                href={submitUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open the subreddit's submit page in a new tab, then paste"
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open submit page
+              </a>
+            </>
+          )}
           {post.status !== "posted" ? (
             <button
               onClick={() => setShowPostedInput((v) => !v)}

@@ -17,6 +17,8 @@ const patchSchema = z.object({
   posted_url: z.string().max(2000).nullable().optional(),
   generated_title: z.string().max(500).nullable().optional(),
   generated_body: z.string().max(20000).nullable().optional(),
+  // Which roster account should post this draft (null = unassigned).
+  assigned_account_id: z.string().uuid().nullable().optional(),
   // When true, re-run the model from the post's stored scenario + settings.
   regenerate: z.boolean().optional(),
   // When true, re-fetch this post's traction (upvotes/comments) from Reddit.
