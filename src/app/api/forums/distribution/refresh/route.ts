@@ -6,6 +6,10 @@ import {
   type DistributionRec,
 } from "@/lib/forums/distribution";
 
+// Bulk traction sweep — each row may run via an Apify scrape (~30-90s), so
+// allow the full window (refreshes what it can within the limit at scale).
+export const maxDuration = 300;
+
 // POST /api/forums/distribution/refresh?topic=... → { recs: DistributionRec[] }
 // Pull fresh Reddit traction (upvotes + comments) for every posted row in the
 // topic, one click. Returns the full updated list so the client can re-render.

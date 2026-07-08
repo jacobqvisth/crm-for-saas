@@ -13,6 +13,13 @@
 // When both fail the caller records the reason and the user can still enter the
 // numbers by hand. Nothing here throws.
 
+import {
+  isApifyConfigured,
+  apifySearchRedditPosts,
+  apifyFetchRedditPost,
+  apifyFetchRedditTraction,
+} from "./reddit-apify";
+
 const UA = "web:wrenchlane-crm:1.0 (forum traction tracker)";
 
 export interface RedditTraction {
@@ -92,12 +99,14 @@ async function getAppToken(): Promise<string | null> {
   }
 }
 
-// True when app-only OAuth creds are present. Search + auto-fetch of post
-// bodies both need OAuth (anon JSON 403s from datacenter IPs), so the UI uses
-// this to decide between the live "find posts" flow and the paste-a-URL /
-// paste-the-text fallback.
+// True when live Reddit reads are available — either app-only OAuth creds, OR
+// an Apify token (we scrape via Apify's residential IPs when the API is off,
+// since anon JSON 403s from datacenter IPs). The UI uses this to decide between
+// the live "find posts" flow and the paste-a-URL / paste-the-text fallback.
 export function isRedditConfigured(): boolean {
-  return !!(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET);
+  return (
+    !!(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET) || isApifyConfigured()
+  );
 }
 
 // A candidate post to reply to, as returned by discovery/fetch.
@@ -178,7 +187,15 @@ export async function fetchRedditTraction(
     }
   }
 
-  // 2. Anonymous public JSON fallback (often 403s from datacenter IPs).
+  // 2. Apify scrape (residential IPs) — reliable when OAuth is off.
+  if (isApifyConfigured()) {
+    const traction = await apifyFetchRedditTraction(postUrl);
+    if (traction && (traction.score !== null || traction.num_comments !== null)) {
+      return { ok: true, traction };
+    }
+  }
+
+  // 3. Anonymous public JSON fallback (often 403s from datacenter IPs).
   const jsonUrl = redditJsonUrl(postUrl);
   if (!jsonUrl) return { ok: false, reason: "Not a recognizable Reddit post URL" };
   let res: Response;
@@ -240,8 +257,14 @@ export async function fetchRedditPost(
         return { ok: false, reason: "Post not found (deleted or private?)" };
       }
     } catch {
-      // fall through to anon
+      // fall through to Apify / anon
     }
+  }
+
+  // Apify scrape (residential IPs) — preferred over anon JSON, which 403s.
+  if (isApifyConfigured()) {
+    const post = await apifyFetchRedditPost(postUrl);
+    if (post) return { ok: true, post };
   }
 
   const jsonUrl = redditJsonUrl(postUrl);
@@ -256,7 +279,7 @@ export async function fetchRedditPost(
     return {
       ok: false,
       reason:
-        "Reddit blocked the request (403) — add Reddit API keys to auto-load posts, or paste the post text below manually",
+        "Reddit blocked the request (403) — add Reddit API keys or an APIFY_TOKEN to auto-load posts, or paste the post text below manually",
     };
   }
   if (res.status === 429) return { ok: false, reason: "Rate-limited by Reddit — try again shortly" };
@@ -293,10 +316,20 @@ export async function searchRedditPosts(opts: {
 
   const token = await getAppToken();
   if (!token) {
+    // No OAuth — scrape via Apify (residential IPs) when configured.
+    if (isApifyConfigured()) {
+      const posts = await apifySearchRedditPosts({
+        subreddits: subs,
+        query: opts.query,
+        sort: opts.sort,
+        limit: opts.limit,
+      });
+      return { ok: true, posts };
+    }
     return {
       ok: false,
       reason:
-        "Reddit API not configured — add REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET to enable finding posts. You can still paste a post URL below.",
+        "Reddit reads not configured — add REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET or an APIFY_TOKEN to enable finding posts. You can still paste a post URL below.",
     };
   }
 

@@ -4,6 +4,10 @@ import { resolveWorkspace } from "@/lib/forums/server";
 import { isRedditConfigured, searchRedditPosts } from "@/lib/forums/reddit";
 import { REPLY_SUBREDDITS } from "@/lib/forums/replies";
 
+// Reddit reads may run via an Apify scrape (residential IPs) which can take
+// ~30-90s, so allow well past the default function timeout.
+export const maxDuration = 120;
+
 const ALLOWED = new Set(REPLY_SUBREDDITS.map((s) => s.name));
 
 const bodySchema = z.object({
