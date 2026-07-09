@@ -145,5 +145,10 @@ export async function apifyFetchRedditPost(postUrl: string): Promise<RedditPost 
 export async function apifyFetchRedditTraction(postUrl: string): Promise<RedditTraction | null> {
   const post = await apifyFetchRedditPost(postUrl);
   if (!post) return null;
-  return { score: post.score, num_comments: post.num_comments, upvote_ratio: null };
+  return {
+    score: post.score,
+    num_comments: post.num_comments,
+    upvote_ratio: null,
+    author: post.author,
+  };
 }
