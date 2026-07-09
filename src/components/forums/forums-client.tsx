@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { AccountsPanel } from "./accounts-panel";
+import { TeamComments } from "./team-comments";
 import type { RedditAccount } from "@/lib/forums/accounts";
 import type {
   ForumMentionLevel,
@@ -751,39 +752,14 @@ function PostCard({
         </div>
       )}
 
-      {/* Team comment (posted only) */}
+      {/* Per-member team comments (posted only) */}
       {post.status === "posted" && !editing && (
-        <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
-              <MessageSquare className="h-3 w-3" /> Team comment for Reddit
-            </span>
-            {post.suggested_comment && (
-              <CopyButton text={post.suggested_comment} label="Copy" />
-            )}
-          </div>
-          {post.suggested_comment ? (
-            <p className="whitespace-pre-wrap text-xs text-slate-700">{post.suggested_comment}</p>
-          ) : (
-            <p className="text-xs text-slate-500">No comment drafted yet.</p>
-          )}
-          <div className="mt-2 flex items-center gap-3 text-[11px]">
-            <button
-              onClick={() => patch({ resend_slack: true })}
-              disabled={busy}
-              className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
-              title="Redraft the comment and re-post to #forum-posts"
-            >
-              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-              {post.slack_notified_at ? "Resend to Slack" : "Send to #forum-posts"}
-            </button>
-            {post.slack_notified_at && (
-              <span className="text-indigo-500/70">
-                sent {new Date(post.slack_notified_at).toLocaleDateString()}
-              </span>
-            )}
-          </div>
-        </div>
+        <TeamComments
+          assignments={post.assignments ?? []}
+          slackNotifiedAt={post.slack_notified_at}
+          onResend={() => patch({ resend_slack: true })}
+          resendBusy={busy}
+        />
       )}
 
       {/* Actions */}

@@ -134,6 +134,75 @@ export type Database = {
           },
         ]
       }
+      forum_comment_assignments: {
+        Row: {
+          account_id: string | null
+          comment: string | null
+          confirmed_via: string | null
+          created_at: string
+          id: string
+          owner_label: string
+          posted_at: string | null
+          posted_url: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
+          source: string
+          source_id: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          comment?: string | null
+          confirmed_via?: string | null
+          created_at?: string
+          id?: string
+          owner_label: string
+          posted_at?: string | null
+          posted_url?: string | null
+          slack_channel_id?: string | null
+          slack_message_ts?: string | null
+          source: string
+          source_id: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string | null
+          comment?: string | null
+          confirmed_via?: string | null
+          created_at?: string
+          id?: string
+          owner_label?: string
+          posted_at?: string | null
+          posted_url?: string | null
+          slack_channel_id?: string | null
+          slack_message_ts?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_comment_assignments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_comment_assignments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forum_distribution: {
         Row: {
           created_at: string
@@ -148,7 +217,9 @@ export type Database = {
           recommended_angle: string | null
           rules_note: string | null
           score: number | null
+          slack_channel_id: string | null
           slack_notified_at: string | null
+          slack_thread_ts: string | null
           sort_order: number
           status: string
           subreddit: string
@@ -176,7 +247,9 @@ export type Database = {
           recommended_angle?: string | null
           rules_note?: string | null
           score?: number | null
+          slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_thread_ts?: string | null
           sort_order?: number
           status?: string
           subreddit: string
@@ -204,7 +277,9 @@ export type Database = {
           recommended_angle?: string | null
           rules_note?: string | null
           score?: number | null
+          slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_thread_ts?: string | null
           sort_order?: number
           status?: string
           subreddit?: string
@@ -255,7 +330,9 @@ export type Database = {
           posted_url: string | null
           scenario_snapshot: Json
           score: number | null
+          slack_channel_id: string | null
           slack_notified_at: string | null
+          slack_thread_ts: string | null
           status: string
           suggested_comment: string | null
           traction_note: string | null
@@ -281,7 +358,9 @@ export type Database = {
           posted_url?: string | null
           scenario_snapshot?: Json
           score?: number | null
+          slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_thread_ts?: string | null
           status?: string
           suggested_comment?: string | null
           traction_note?: string | null
@@ -307,7 +386,9 @@ export type Database = {
           posted_url?: string | null
           scenario_snapshot?: Json
           score?: number | null
+          slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_thread_ts?: string | null
           status?: string
           suggested_comment?: string | null
           traction_note?: string | null
@@ -339,6 +420,7 @@ export type Database = {
           id: string
           notes: string | null
           owner_label: string
+          slack_user_id: string | null
           subreddits: string[]
           updated_at: string
           username: string | null
@@ -350,6 +432,7 @@ export type Database = {
           id?: string
           notes?: string | null
           owner_label: string
+          slack_user_id?: string | null
           subreddits?: string[]
           updated_at?: string
           username?: string | null
@@ -361,6 +444,7 @@ export type Database = {
           id?: string
           notes?: string | null
           owner_label?: string
+          slack_user_id?: string | null
           subreddits?: string[]
           updated_at?: string
           username?: string | null

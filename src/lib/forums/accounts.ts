@@ -10,6 +10,7 @@ export interface RedditAccount {
   username: string | null; // reddit handle, no "u/". null = pending.
   owner_label: string; // team member who operates it
   subreddits: string[]; // subs this account is established in
+  slack_user_id: string | null; // Slack member id, for @-mentions in the thread
   notes: string | null;
   active: boolean;
   created_at: string;

@@ -7,6 +7,8 @@
 // forum_distribution table on first load; the DB row then owns the tracking
 // state (status / posted URL / traction).
 
+import type { ForumCommentAssignment } from "./types";
+
 export type DistributionTier = "best_fit" | "trade" | "ai_angle";
 export type DistributionStatus = "recommended" | "posted" | "skipped";
 
@@ -78,8 +80,12 @@ export interface DistributionRec {
   last_checked_at: string | null;
   suggested_comment: string | null;
   slack_notified_at: string | null;
+  slack_thread_ts: string | null;
+  slack_channel_id: string | null;
   created_at: string;
   updated_at: string;
+  // Per-member comments attached on GET (not a column).
+  assignments?: ForumCommentAssignment[];
 }
 
 // The shape we insert when seeding a workspace (DB fills the rest).

@@ -26,6 +26,7 @@ import {
   type DistributionTier,
 } from "@/lib/forums/distribution";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import { TeamComments } from "./team-comments";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
@@ -470,43 +471,14 @@ function RecCard({
         </div>
       )}
 
-      {/* Team comment (posted only) */}
+      {/* Per-member team comments (posted only) */}
       {posted && (
-        <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
-              <MessageSquare className="h-3 w-3" /> Team comment for Reddit
-            </span>
-            {rec.suggested_comment && (
-              <CopyButton text={rec.suggested_comment} label="Copy" />
-            )}
-          </div>
-          {rec.suggested_comment ? (
-            <p className="whitespace-pre-wrap text-xs text-slate-700">{rec.suggested_comment}</p>
-          ) : (
-            <p className="text-xs text-slate-500">No comment drafted yet.</p>
-          )}
-          <div className="mt-2 flex items-center gap-3 text-[11px]">
-            <button
-              onClick={() => patch({ resend_slack: true })}
-              disabled={busy}
-              className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
-              title="Redraft the comment and re-post to #forum-posts"
-            >
-              {busy ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Send className="h-3 w-3" />
-              )}
-              {rec.slack_notified_at ? "Resend to Slack" : "Send to #forum-posts"}
-            </button>
-            {rec.slack_notified_at && (
-              <span className="text-indigo-500/70">
-                sent {new Date(rec.slack_notified_at).toLocaleDateString()}
-              </span>
-            )}
-          </div>
-        </div>
+        <TeamComments
+          assignments={rec.assignments ?? []}
+          slackNotifiedAt={rec.slack_notified_at}
+          onResend={() => patch({ resend_slack: true })}
+          resendBusy={busy}
+        />
       )}
 
       {/* Actions */}
