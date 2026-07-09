@@ -25,19 +25,29 @@ const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
 type BoardView = "todo" | "posted";
 
+// Topics in dropdown order (object insertion order in TOPICS).
+const TOPIC_LIST = Object.values(TOPICS);
+
 export function DistributionClient() {
-  const topic = TOPICS[DEFAULT_TOPIC];
+  const [selectedTopic, setSelectedTopic] = useState<string>(DEFAULT_TOPIC);
+  const topic = TOPICS[selectedTopic] ?? TOPICS[DEFAULT_TOPIC];
   const [recs, setRecs] = useState<DistributionRec[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [view, setView] = useState<BoardView>("todo");
 
+  // Load (and seed on first visit) the board for the selected topic. Re-runs
+  // whenever the topic changes so switching the dropdown swaps the board.
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       try {
-        const res = await fetch(`/api/forums/distribution?topic=${DEFAULT_TOPIC}`);
+        const res = await fetch(
+          `/api/forums/distribution?topic=${encodeURIComponent(selectedTopic)}`,
+        );
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to load");
         if (!cancelled) setRecs(data.recs ?? []);
@@ -50,14 +60,15 @@ export function DistributionClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedTopic]);
 
   async function refreshAll() {
     setRefreshingAll(true);
     try {
-      const res = await fetch(`/api/forums/distribution/refresh?topic=${DEFAULT_TOPIC}`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/forums/distribution/refresh?topic=${encodeURIComponent(selectedTopic)}`,
+        { method: "POST" },
+      );
       const data = await res.json();
       if (res.ok) setRecs(data.recs ?? []);
     } finally {
@@ -97,8 +108,8 @@ export function DistributionClient() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Distribution</h1>
           <p className="text-sm text-slate-500">
-            Where to post <span className="font-medium text-slate-700">“{topic.title}”</span> —
-            track what you&apos;ve posted and how it&apos;s doing.
+            Where to post <span className="font-medium text-slate-700">“{topic.title}”</span>.
+            Track what you&apos;ve posted and how it&apos;s doing.
           </p>
         </div>
       </div>
@@ -120,6 +131,39 @@ export function DistributionClient() {
         >
           Answer posts
         </Link>
+        <Link
+          href="/forums/gaps"
+          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+        >
+          Gap log
+        </Link>
+      </div>
+
+      {/* Topic picker — rotate the angle so we're not posting the same thing every week */}
+      <div className="mt-5 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+        <label
+          htmlFor="topic-select"
+          className="flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500"
+        >
+          Topic to post
+        </label>
+        <select
+          id="topic-select"
+          value={selectedTopic}
+          onChange={(e) => setSelectedTopic(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300 sm:min-w-[18rem]"
+        >
+          {TOPIC_LIST.map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.menuLabel ?? t.title}
+            </option>
+          ))}
+        </select>
+        {topic.goal && (
+          <p className="text-xs text-slate-500 sm:border-l sm:border-slate-200 sm:pl-4">
+            <span className="font-medium text-slate-600">Goal:</span> {topic.goal}
+          </p>
+        )}
       </div>
 
       {/* What this is */}
