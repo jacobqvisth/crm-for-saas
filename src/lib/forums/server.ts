@@ -16,9 +16,24 @@ interface WorkspaceErr {
 }
 
 /**
- * Resolve the authenticated user + their workspace. Mirrors
- * src/lib/videos/server.ts — the same auth/membership guard used across the
- * workspace-scoped APIs.
+ * The Forums feature (distribution board, team comment drafts, Reddit roster,
+ * answer posts) is a SHARED team resource, not per-tenant data — it holds no
+ * per-user secrets. Wrenchlane runs this CRM as one team, so every forum API
+ * resolves to this single shared workspace regardless of which account is
+ * logged in. That way everyone with a CRM account (Jacob's two logins today,
+ * Francis and others later) sees the exact same board.
+ *
+ * This is the canonical company workspace ("My Workspace") — the oldest one,
+ * where all existing forum data already lives. RLS on the forum_* +
+ * reddit_accounts tables is opened to any authenticated user to match; see
+ * migration 20260709000000_forums_shared_across_users.sql.
+ */
+export const SHARED_FORUMS_WORKSPACE_ID = "d946ea1f-74b4-492e-ae6a-d50f59ff04f0";
+
+/**
+ * Resolve the authenticated user for a forum API. Unlike other workspace-scoped
+ * features, forums are shared across the whole team, so every provisioned CRM
+ * user resolves to SHARED_FORUMS_WORKSPACE_ID rather than their own workspace.
  */
 export async function resolveWorkspace(): Promise<WorkspaceOk | WorkspaceErr> {
   const supabase = await createClient();
@@ -29,6 +44,8 @@ export async function resolveWorkspace(): Promise<WorkspaceOk | WorkspaceErr> {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
+  // Must be a provisioned CRM user (member of some workspace), but the forum
+  // board they see is always the shared one — not their own workspace.
   const { data: membership } = await supabase
     .from("workspace_members")
     .select("workspace_id")
@@ -39,7 +56,7 @@ export async function resolveWorkspace(): Promise<WorkspaceOk | WorkspaceErr> {
     return { error: NextResponse.json({ error: "No workspace" }, { status: 403 }) };
   }
 
-  return { supabase, userId: user.id, workspaceId: membership.workspace_id };
+  return { supabase, userId: user.id, workspaceId: SHARED_FORUMS_WORKSPACE_ID };
 }
 
 /**
