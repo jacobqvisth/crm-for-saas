@@ -759,8 +759,9 @@ function PostCard({
           source="post"
           sourceId={post.id}
           slackNotifiedAt={post.slack_notified_at}
-          onResend={() => patch({ resend_slack: true })}
-          resendBusy={busy}
+          onRedraft={() => patch({ draft: true })}
+          onSend={() => patch({ send_slack: true })}
+          busy={busy}
         />
       )}
 

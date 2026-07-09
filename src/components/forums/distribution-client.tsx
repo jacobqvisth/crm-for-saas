@@ -481,8 +481,9 @@ function RecCard({
           source="distribution"
           sourceId={rec.id}
           slackNotifiedAt={rec.slack_notified_at}
-          onResend={() => patch({ resend_slack: true })}
-          resendBusy={busy}
+          onRedraft={() => patch({ draft: true })}
+          onSend={() => patch({ send_slack: true })}
+          busy={busy}
         />
       )}
 
