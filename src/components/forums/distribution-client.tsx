@@ -4,19 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Share2,
-  ExternalLink,
-  Copy,
-  Check,
   Loader2,
   ArrowUpToLine,
   MessageSquare,
-  Send,
   RefreshCw,
   MessagesSquare,
-  CircleSlash,
-  RotateCcw,
-  Pencil,
-  User,
+  ArrowRight,
+  ChevronRight,
 } from "lucide-react";
 import {
   DEFAULT_TOPIC,
@@ -25,19 +19,19 @@ import {
   type DistributionRec,
   type DistributionTier,
 } from "@/lib/forums/distribution";
-import type { RedditAccount } from "@/lib/forums/accounts";
-import { TeamComments } from "./team-comments";
 import { ContributorsPanel } from "./contributors-panel";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
+type BoardView = "todo" | "posted";
+
 export function DistributionClient() {
   const topic = TOPICS[DEFAULT_TOPIC];
   const [recs, setRecs] = useState<DistributionRec[]>([]);
-  const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [view, setView] = useState<BoardView>("todo");
 
   useEffect(() => {
     let cancelled = false;
@@ -53,24 +47,10 @@ export function DistributionClient() {
         if (!cancelled) setLoading(false);
       }
     })();
-    // Roster for the "posted by" picker — best-effort, never blocks the board.
-    (async () => {
-      try {
-        const res = await fetch("/api/forums/accounts");
-        const data = await res.json();
-        if (res.ok && !cancelled) setAccounts(data.accounts ?? []);
-      } catch {
-        // ignore — the picker just won't have options
-      }
-    })();
     return () => {
       cancelled = true;
     };
   }, []);
-
-  function patchRec(updated: DistributionRec) {
-    setRecs((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-  }
 
   async function refreshAll() {
     setRefreshingAll(true);
@@ -95,6 +75,18 @@ export function DistributionClient() {
     };
   }, [recs]);
 
+  // "To be posted" = anything not yet posted (recommended first, skipped last).
+  // "Posted" = the ones live on Reddit. Tier grouping is preserved inside each.
+  const todoRecs = useMemo(
+    () =>
+      recs
+        .filter((r) => r.status !== "posted")
+        .sort((a, b) => Number(a.status === "skipped") - Number(b.status === "skipped")),
+    [recs],
+  );
+  const postedRecs = useMemo(() => recs.filter((r) => r.status === "posted"), [recs]);
+  const shown = view === "posted" ? postedRecs : todoRecs;
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       {/* Header */}
@@ -111,7 +103,7 @@ export function DistributionClient() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Section tabs */}
       <div className="mt-4 flex items-center gap-1 border-b border-slate-200">
         <Link
           href="/forums"
@@ -133,11 +125,11 @@ export function DistributionClient() {
       {/* What this is */}
       <div className="mt-5 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">
         <span className="font-medium">The post:</span> {topic.summary} Below are the communities to
-        post it in, ranked by how welcome a discussion post is. Mark each one as you post it (paste
-        the URL) — that also pings <span className="font-medium">#forum-posts</span> in Slack with a
-        ready-to-paste reply so the team can jump in from their own Reddit accounts. Then hit{" "}
-        <span className="font-medium">Refresh traction</span> to auto-pull upvotes and comments — or
-        type them in with the pencil (Reddit blocks automated reads unless API keys are configured).
+        post it in, ranked by how welcome a discussion post is. Open one to see the full post, mark
+        it posted (paste the URL) — that also pings <span className="font-medium">#forum-posts</span>{" "}
+        in Slack with a ready-to-paste reply so the team can jump in from their own Reddit accounts.
+        Then hit <span className="font-medium">Refresh traction</span> to auto-pull upvotes and
+        comments.
         <div className="mt-2 text-xs text-orange-800/90">
           <span className="font-medium">Careful:</span> don&apos;t post the same text to every sub
           the same day — Reddit&apos;s spam filter flags rapid cross-posting. Space them out, tweak
@@ -180,40 +172,91 @@ export function DistributionClient() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading recommendations…
         </div>
       ) : (
-        <div className="mt-8 space-y-10">
-          {TIER_ORDER.map((tier) => {
-            const group = recs.filter((r) => r.tier === tier);
-            if (group.length === 0) return null;
-            const meta = TIER_META[tier];
-            return (
-              <section key={tier}>
-                <div className="mb-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badgeClass}`}
-                    >
-                      {meta.label}
-                    </span>
-                    <span className="text-xs text-slate-500">{meta.blurb}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {group.map((rec) => (
-                    <RecCard key={rec.id} rec={rec} accounts={accounts} onPatched={patchRec} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <>
+          {/* Posted / To be posted toggle */}
+          <div className="mt-8 flex items-center gap-1 rounded-lg bg-slate-100 p-1 w-fit">
+            <ViewTab
+              label="To be posted"
+              count={todoRecs.length}
+              active={view === "todo"}
+              onClick={() => setView("todo")}
+            />
+            <ViewTab
+              label="Posted"
+              count={postedRecs.length}
+              active={view === "posted"}
+              onClick={() => setView("posted")}
+            />
+          </div>
+
+          {shown.length === 0 ? (
+            <p className="mt-8 text-sm text-slate-500">
+              {view === "posted"
+                ? "Nothing posted yet. Open a recommendation under “To be posted” and mark it once it's live."
+                : "All recommendations have been posted. 🎉"}
+            </p>
+          ) : (
+            <div className="mt-6 space-y-10">
+              {TIER_ORDER.map((tier) => {
+                const group = shown.filter((r) => r.tier === tier);
+                if (group.length === 0) return null;
+                const meta = TIER_META[tier];
+                return (
+                  <section key={tier}>
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badgeClass}`}
+                        >
+                          {meta.label}
+                        </span>
+                        <span className="text-xs text-slate-500">{meta.blurb}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {group.map((rec) => (
+                        <SummaryCard key={rec.id} rec={rec} />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// "Owner · u/handle" (or just the owner when the handle isn't filled in yet).
-function accountLabel(a: RedditAccount): string {
-  return a.username ? `${a.owner_label} · u/${a.username}` : `${a.owner_label} (handle pending)`;
+function ViewTab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+      }`}
+    >
+      {label}
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+          active ? "bg-slate-100 text-slate-600" : "bg-slate-200/70 text-slate-500"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
 }
 
 function StatChip({
@@ -234,344 +277,68 @@ function StatChip({
   );
 }
 
-function RecCard({
-  rec,
-  accounts,
-  onPatched,
-}: {
-  rec: DistributionRec;
-  accounts: RedditAccount[];
-  onPatched: (r: DistributionRec) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [showPostedInput, setShowPostedInput] = useState(false);
-  const [postedUrl, setPostedUrl] = useState(rec.posted_url ?? "");
-  const [postedByAccountId, setPostedByAccountId] = useState(rec.posted_by_account_id ?? "");
-  const [editingTraction, setEditingTraction] = useState(false);
-  const [manualScore, setManualScore] = useState(rec.score?.toString() ?? "");
-  const [manualComments, setManualComments] = useState(rec.num_comments?.toString() ?? "");
-
-  async function patch(body: Record<string, unknown>) {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/forums/distribution/${rec.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-      onPatched(data.rec as DistributionRec);
-      return true;
-    } catch {
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function markPosted() {
-    const ok = await patch({
-      status: "posted",
-      posted_url: postedUrl || null,
-      posted_by_account_id: postedByAccountId || null,
-      refresh: Boolean(postedUrl),
-    });
-    if (ok) setShowPostedInput(false);
-  }
-
-  async function saveManualTraction() {
-    const ok = await patch({
-      score: manualScore === "" ? null : Number(manualScore),
-      num_comments: manualComments === "" ? null : Number(manualComments),
-    });
-    if (ok) setEditingTraction(false);
-  }
-
+// A compact, read-only summary of one recommendation. The whole card links to
+// the post's own page (/forums/distribution/[id]) where you copy the text, mark
+// it posted, edit traction and manage the thread — everything about that post.
+function SummaryCard({ rec }: { rec: DistributionRec }) {
   const posted = rec.status === "posted";
   const skipped = rec.status === "skipped";
-  const postedByAccount = accounts.find((a) => a.id === rec.posted_by_account_id) ?? null;
-  // The Reddit handle Reddit reports as the author (source of truth). Flag it
-  // when it doesn't match the picked account's handle.
-  const authorMismatch =
-    !!rec.posted_by_username &&
-    !!postedByAccount?.username &&
-    rec.posted_by_username.toLowerCase() !== postedByAccount.username.toLowerCase();
-
   return (
-    <div
-      className={`flex flex-col rounded-xl border bg-white p-4 ${
+    <Link
+      href={`/forums/distribution/${rec.id}`}
+      className={`group flex flex-col rounded-xl border bg-white p-4 transition-colors hover:border-orange-300 hover:shadow-sm ${
         posted ? "border-green-200" : skipped ? "border-slate-200 opacity-70" : "border-slate-200"
       }`}
     >
-      {/* Header row */}
+      {/* Header row — subreddit + status + the "open" affordance up top */}
       <div className="flex items-start justify-between gap-2">
-        <a
-          href={rec.subreddit_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group inline-flex items-center gap-1.5"
-        >
+        <span className="inline-flex items-center gap-1.5 min-w-0">
           <MessagesSquare className="h-4 w-4 text-orange-600 flex-shrink-0" />
-          <span className="text-sm font-semibold text-slate-900 group-hover:text-orange-700">
+          <span className="truncate text-sm font-semibold text-slate-900 group-hover:text-orange-700">
             {rec.subreddit}
           </span>
-          <ExternalLink className="h-3 w-3 text-slate-400" />
-        </a>
-        <StatusBadge status={rec.status} />
+        </span>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <StatusBadge status={rec.status} />
+          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-orange-500" />
+        </div>
       </div>
 
-      {/* Fit reason */}
-      {rec.fit_reason && <p className="mt-2 text-xs text-slate-600">{rec.fit_reason}</p>}
-
-      {/* Suggested title */}
+      {/* Tailored title + why it fits */}
       {rec.suggested_title && (
-        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Suggested title
+        <p className="mt-2 line-clamp-2 text-sm font-medium text-slate-800">{rec.suggested_title}</p>
+      )}
+      {rec.fit_reason && (
+        <p className="mt-1 line-clamp-2 text-xs text-slate-500">{rec.fit_reason}</p>
+      )}
+
+      {/* Footer — traction for posted, "open" for the rest */}
+      <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-3 text-xs">
+        {posted ? (
+          <>
+            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+              <ArrowUpToLine className="h-3.5 w-3.5 text-slate-400" />
+              {rec.score ?? "—"}
             </span>
-            <CopyButton text={rec.suggested_title} label="Copy" />
-          </div>
-          <p className="text-xs font-medium text-slate-800">{rec.suggested_title}</p>
-        </div>
-      )}
-
-      {/* Suggested body */}
-      {rec.suggested_body && (
-        <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Body
+            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+              <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+              {rec.num_comments ?? "—"}
             </span>
-            <CopyButton text={rec.suggested_body} label="Copy" />
-          </div>
-          <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-slate-700">
-            {rec.suggested_body}
-          </p>
-          {rec.suggested_title && (
-            <div className="mt-2 flex justify-end">
-              <CopyButton
-                text={`${rec.suggested_title}\n\n${rec.suggested_body}`}
-                label="Copy title + body"
-                prominent
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Angle + rules */}
-      <div className="mt-2 space-y-1">
-        {rec.recommended_angle && (
-          <p className="text-[11px] text-slate-500">
-            <span className="font-medium text-slate-600">Angle:</span> {rec.recommended_angle}
-          </p>
-        )}
-        {rec.rules_note && (
-          <p className="text-[11px] text-amber-700">
-            <span className="font-medium">Rules:</span> {rec.rules_note}
-          </p>
-        )}
-      </div>
-
-      {/* Traction (posted only) */}
-      {posted && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-green-100 bg-green-50/50 px-3 py-2 text-xs">
-          <span className="inline-flex items-center gap-1 font-medium text-green-800">
-            <ArrowUpToLine className="h-3.5 w-3.5" />
-            {rec.score ?? "—"}
-            <span className="font-normal text-green-700">upvotes</span>
-          </span>
-          <span className="inline-flex items-center gap-1 font-medium text-green-800">
-            <MessageSquare className="h-3.5 w-3.5" />
-            {rec.num_comments ?? "—"}
-            <span className="font-normal text-green-700">comments</span>
-          </span>
-          {typeof rec.upvote_ratio === "number" && (
-            <span className="text-green-700">{Math.round(rec.upvote_ratio * 100)}% upvoted</span>
-          )}
-          {rec.posted_url && (
-            <a
-              href={rec.posted_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-green-700 hover:text-green-900"
-            >
-              <ExternalLink className="h-3 w-3" /> view post
-            </a>
-          )}
-          <button
-            onClick={() => patch({ refresh: true })}
-            disabled={busy}
-            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900 disabled:opacity-50"
-            title="Auto-refresh from Reddit"
-          >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-          </button>
-          <button
-            onClick={() => setEditingTraction((v) => !v)}
-            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900"
-            title="Enter upvotes / comments manually"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-          {rec.last_checked_at && (
-            <span className="text-green-600/70">
-              checked {new Date(rec.last_checked_at).toLocaleDateString()}
+            {typeof rec.upvote_ratio === "number" && (
+              <span className="text-slate-500">{Math.round(rec.upvote_ratio * 100)}% upvoted</span>
+            )}
+            <span className="ml-auto inline-flex items-center gap-1 font-medium text-indigo-600 group-hover:text-indigo-700">
+              Open thread <ArrowRight className="h-3.5 w-3.5" />
             </span>
-          )}
-        </div>
-      )}
-      {posted && rec.traction_note && (
-        <p className="mt-1 text-[11px] text-amber-700">{rec.traction_note}</p>
-      )}
-      {posted && (postedByAccount || rec.posted_by_username) && (
-        <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
-          <User className="h-3 w-3 text-slate-400" />
-          <span className="font-medium text-slate-600">Posted by</span>{" "}
-          {postedByAccount ? (
-            <span>{accountLabel(postedByAccount)}</span>
-          ) : (
-            <span>u/{rec.posted_by_username}</span>
-          )}
-          {authorMismatch && (
-            <span className="text-amber-700">
-              — Reddit says u/{rec.posted_by_username}
-            </span>
-          )}
-        </p>
-      )}
-      {posted && editingTraction && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <label className="inline-flex items-center gap-1 text-slate-500">
-            <ArrowUpToLine className="h-3.5 w-3.5" />
-            <input
-              type="number"
-              value={manualScore}
-              onChange={(e) => setManualScore(e.target.value)}
-              placeholder="upvotes"
-              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
-            />
-          </label>
-          <label className="inline-flex items-center gap-1 text-slate-500">
-            <MessageSquare className="h-3.5 w-3.5" />
-            <input
-              type="number"
-              value={manualComments}
-              onChange={(e) => setManualComments(e.target.value)}
-              placeholder="comments"
-              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
-            />
-          </label>
-          <button
-            onClick={saveManualTraction}
-            disabled={busy}
-            className="rounded-lg bg-green-600 px-3 py-1 font-medium text-white hover:bg-green-700 disabled:opacity-60"
-          >
-            Save
-          </button>
-        </div>
-      )}
-
-      {/* Per-member team comments (posted only) */}
-      {posted && (
-        <TeamComments
-          assignments={rec.assignments ?? []}
-          source="distribution"
-          sourceId={rec.id}
-          slackNotifiedAt={rec.slack_notified_at}
-          onRedraft={() => patch({ draft: true })}
-          onSend={() => patch({ send_slack: true })}
-          busy={busy}
-        />
-      )}
-
-      {/* Actions */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-        {posted && (
-          <Link
-            href={`/forums/distribution/${rec.id}`}
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-            title="Open the thread: reply to other people's comments"
-          >
-            <MessagesSquare className="h-3.5 w-3.5" /> Open thread
-          </Link>
-        )}
-        {!posted ? (
-          <button
-            onClick={() => setShowPostedInput((v) => !v)}
-            disabled={busy}
-            className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
-          >
-            <Send className="h-3.5 w-3.5" /> Mark posted
-          </button>
+          </>
         ) : (
-          <button
-            onClick={() => patch({ status: "recommended", posted_url: null })}
-            disabled={busy}
-            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
-          >
-            <RotateCcw className="h-3.5 w-3.5" /> Unmark
-          </button>
+          <span className="ml-auto inline-flex items-center gap-1 font-medium text-slate-500 group-hover:text-orange-600">
+            {skipped ? "Skipped — open to restore" : "Open to post"}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
         )}
-        {!posted &&
-          (skipped ? (
-            <button
-              onClick={() => patch({ status: "recommended" })}
-              disabled={busy}
-              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Restore
-            </button>
-          ) : (
-            <button
-              onClick={() => patch({ status: "skipped" })}
-              disabled={busy}
-              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-60"
-            >
-              <CircleSlash className="h-3.5 w-3.5" /> Skip
-            </button>
-          ))}
       </div>
-
-      {showPostedInput && !posted && (
-        <div className="mt-2 flex flex-col gap-2">
-          <label className="flex items-center gap-2">
-            <User className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
-            <select
-              value={postedByAccountId}
-              onChange={(e) => setPostedByAccountId(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
-            >
-              <option value="">Posted by… (which Reddit account?)</option>
-              {accounts
-                .filter((a) => a.active)
-                .map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {accountLabel(a)}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <div className="flex gap-2">
-            <input
-              value={postedUrl}
-              onChange={(e) => setPostedUrl(e.target.value)}
-              placeholder="Paste the Reddit post URL"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
-            />
-            <button
-              onClick={markPosted}
-              disabled={busy}
-              className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
-            >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </Link>
   );
 }
 
@@ -589,46 +356,5 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
-  );
-}
-
-function CopyButton({
-  text,
-  label,
-  prominent,
-}: {
-  text: string;
-  label: string;
-  prominent?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
-  }
-  if (prominent) {
-    return (
-      <button
-        onClick={copy}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900"
-      >
-        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-        {copied ? "Copied" : label}
-      </button>
-    );
-  }
-  return (
-    <button
-      onClick={copy}
-      className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800"
-    >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? "Copied" : label}
-    </button>
   );
 }
