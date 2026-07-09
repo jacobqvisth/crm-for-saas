@@ -4,7 +4,7 @@ import { resolveWorkspace, fetchAssignmentsBySource } from "@/lib/forums/server"
 import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
 import { fetchRedditTraction } from "@/lib/forums/reddit";
-import { notifyForumPosted } from "@/lib/forums/notify-posted";
+import { draftForumComments, sendForumPostToSlack } from "@/lib/forums/notify-posted";
 import type {
   ForumMentionLevel,
   ForumPost,
@@ -30,8 +30,10 @@ const patchSchema = z.object({
   score: z.number().int().nullable().optional(),
   num_comments: z.number().int().nullable().optional(),
   traction_note: z.string().max(2000).nullable().optional(),
-  // When true, (re)post this to #forum-posts and redraft the suggested comment.
-  resend_slack: z.boolean().optional(),
+  // Step 1: (re)generate the per-member comment drafts. No Slack.
+  draft: z.boolean().optional(),
+  // Step 2: post the current drafts to #forum-posts.
+  send_slack: z.boolean().optional(),
 });
 
 // PATCH /api/forums/[id] → { post }
@@ -50,7 +52,7 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, refresh, resend_slack, status, ...rest } = parsed.data;
+  const { regenerate, refresh, draft, send_slack, status, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
@@ -135,24 +137,28 @@ export async function PATCH(
 
   let post = updated as unknown as ForumPost;
 
-  // Fan out to #forum-posts when it's freshly marked posted, or on an explicit
-  // resend. Best-effort — never fail the save on Slack/AI errors.
-  const firstPost = status === "posted" && post.posted_url && !post.slack_notified_at;
-  if ((firstPost || resend_slack) && post.posted_url && post.generated_title) {
-    const target = getForumTarget(post.forum_target);
-    const result = await notifyForumPosted({
-      supabase,
-      workspaceId,
-      source: "post",
-      sourceId: id,
-      subreddit: target?.name ?? post.forum_target,
-      tone: target?.tone,
-      rulesNote: target?.rulesNote,
-      title: post.generated_title,
-      body: post.generated_body,
-      url: post.posted_url,
-      forceRegenerate: Boolean(resend_slack),
-    });
+  // Two decoupled steps, both best-effort: auto-draft once on first posting,
+  // `draft` redrafts everyone, `send_slack` posts the current drafts.
+  const target = getForumTarget(post.forum_target);
+  const common = {
+    supabase,
+    workspaceId,
+    source: "post" as const,
+    sourceId: id,
+    subreddit: target?.name ?? post.forum_target,
+    tone: target?.tone,
+    rulesNote: target?.rulesNote,
+    title: post.generated_title ?? (target?.name ?? post.forum_target),
+    body: post.generated_body,
+  };
+  const firstPost = status === "posted" && post.posted_url;
+
+  if (draft || firstPost) {
+    await draftForumComments({ ...common, regenerate: Boolean(draft) });
+  }
+
+  if (send_slack && post.posted_url && post.generated_title) {
+    const result = await sendForumPostToSlack({ ...common, url: post.posted_url });
     const postUpdate: Record<string, unknown> = {};
     if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
     if (result.threadTs) postUpdate.slack_thread_ts = result.threadTs;

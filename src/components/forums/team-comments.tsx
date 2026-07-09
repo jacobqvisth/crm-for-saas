@@ -11,6 +11,8 @@ import {
   CircleSlash,
   Search,
   ExternalLink,
+  Pencil,
+  RefreshCw,
 } from "lucide-react";
 import type { ForumCommentAssignment, ForumSource } from "@/lib/forums/types";
 
@@ -23,15 +25,17 @@ export function TeamComments({
   source,
   sourceId,
   slackNotifiedAt,
-  onResend,
-  resendBusy,
+  onRedraft,
+  onSend,
+  busy,
 }: {
   assignments: ForumCommentAssignment[];
   source: ForumSource;
   sourceId: string;
   slackNotifiedAt: string | null;
-  onResend: () => void;
-  resendBusy: boolean;
+  onRedraft: () => void; // step 1 — (re)generate drafts, no Slack
+  onSend: () => void; // step 2 — post current drafts to Slack
+  busy: boolean;
 }) {
   // Local copy so mark-posted updates render instantly without a board refetch.
   // Re-syncs when the parent hands down a new array (e.g. after a resend redraft).
@@ -102,33 +106,79 @@ export function TeamComments({
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-indigo-100/70 pt-2 text-[11px]">
-        <button
-          onClick={scanReddit}
-          disabled={scanning}
-          className="inline-flex items-center gap-1 font-medium text-indigo-700 hover:text-indigo-900 disabled:opacity-50"
-          title="Read the Reddit thread and mark teammates whose account commented"
-        >
-          {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
-          Scan Reddit for our comments
-        </button>
-        <button
-          onClick={onResend}
-          disabled={resendBusy}
-          className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
-          title="Redraft everyone's comment and re-post the #forum-posts thread"
-        >
-          {resendBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-          {slackNotifiedAt ? "Redraft + resend to Slack" : "Send to #forum-posts"}
-        </button>
-        {slackNotifiedAt && (
-          <span className="text-indigo-500/70">
-            sent {new Date(slackNotifiedAt).toLocaleDateString()}
-          </span>
-        )}
+      <div className="mt-2 border-t border-indigo-100/70 pt-2">
+        {/* Two-step status: draft → send. */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+          <StepChip done={items.length > 0} label={items.length > 0 ? "Drafted" : "Not drafted"} />
+          <span className="text-slate-300">→</span>
+          <StepChip
+            done={!!slackNotifiedAt}
+            label={
+              slackNotifiedAt
+                ? `Sent to Slack ${new Date(slackNotifiedAt).toLocaleDateString()}`
+                : "Not sent to Slack"
+            }
+          />
+        </div>
+
+        {/* Step buttons — draft/redraft is separate from send. */}
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          {items.length === 0 ? (
+            <button
+              onClick={onRedraft}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              title="Generate a comment for each team member (no Slack)"
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pencil className="h-3 w-3" />}
+              Draft team comments
+            </button>
+          ) : (
+            <button
+              onClick={onRedraft}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-md border border-indigo-200 px-2.5 py-1 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              title="Regenerate every member's comment (no Slack)"
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Redraft
+            </button>
+          )}
+          <button
+            onClick={onSend}
+            disabled={busy || items.length === 0}
+            className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+            title="Post the current drafts to #forum-posts"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+            {slackNotifiedAt ? "Resend to Slack" : "Send to Slack"}
+          </button>
+          <button
+            onClick={scanReddit}
+            disabled={scanning}
+            className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900 disabled:opacity-50"
+            title="Read the Reddit thread and mark teammates whose account commented"
+          >
+            {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+            Scan Reddit for our comments
+          </button>
+        </div>
       </div>
       {scanNote && <p className="mt-1 text-[11px] text-slate-500">{scanNote}</p>}
     </div>
+  );
+}
+
+function StepChip({ done, label }: { done: boolean; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+        done ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"
+      }`}
+    >
+      {done ? <Check className="h-2.5 w-2.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />}
+      {label}
+    </span>
   );
 }
 
