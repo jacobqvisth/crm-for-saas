@@ -5336,3 +5336,44 @@ the single reply Jacob mentioned.
 **Checks:** `tsc --noEmit` exit 0, eslint clean. Build & Lint green. Prod deploy
 READY (24b10c0); `/forums/distribution` 200, `/api/forums/distribution` +
 `/api/forums/refresh` 401 unauth. Build needs `PATH=/opt/homebrew/bin:$PATH`.
+
+## Forums — per-member Reddit comments + Slack ✅ roundtrip
+**Date:** 2026-07-09 · **PR:** #525 · **Branch:** feature/forums-per-member-comments
+
+Jacob's ask: the Slack fan-out was **one shared comment** for the whole team;
+make it **one distinct comment per team member** (so each just posts theirs),
+mirror that per-member on the CRM ("Matteo posted this"), and — if a teammate
+✅'s their post in Slack — send that back to the CRM as "they commented".
+
+- **Per-member comments.** `generateForumComments()` (Sonnet, one call → N
+  diversified replies so N teammates don't paste near-identical text that
+  Reddit spam-flags). New table **`forum_comment_assignments`** — one row per
+  forum-item × member (comment, status, posted_url, confirmed_via,
+  slack_message_ts). Shown per-member in a shared **`TeamComments`** panel on
+  both the Distribution and post-generator boards; each row has Copy + "X
+  posted this" / skip.
+- **Threaded Slack fan-out.** When bot-configured, `notify-posted` posts a
+  parent "post is live" message + **one threaded reply per member** via
+  `chat.postMessage` (captures each reply's ts). Without a bot token it falls
+  back to a single inline webhook message (still creates the per-member rows).
+  `src/lib/slack/api.ts` = bot post + v0 signature verify.
+- **✅ roundtrip.** New **`/api/slack/events`** (signature-verified, service-role
+  client, no session): `reaction_added` on a member's threaded reply →
+  match `slack_message_ts` → mark that member posted (`confirmed_via =
+  slack_reaction`); `reaction_removed` reverts a reaction-driven mark only.
+- Roster (`reddit_accounts`) gained optional **`slack_user_id`** for real
+  @-mentions (editable in the accounts panel).
+
+**Migration (applied to prod):** `20260709000000_forum_comment_assignments.sql`
+(+ `slack_thread_ts`/`slack_channel_id` on both boards, `slack_user_id` on
+`reddit_accounts`).
+
+**Activation (Jacob, one-time — see `docs/forums-slack-setup.md`):** reactions
+need `SLACK_BOT_TOKEN` + `SLACK_FORUM_POSTS_CHANNEL_ID` + `SLACK_SIGNING_SECRET`
+on Vercel + Event Subscriptions (`reaction_added`/`reaction_removed`) pointed at
+`/api/slack/events`. Until then, per-member comments + CRM manual marking work
+via the existing webhook.
+
+**Checks:** `tsc --noEmit` exit 0, eslint clean (1 pre-existing warning), local
+`npm run build` OK. Rebased onto #522/#523/#524 (only an import conflict in
+distribution-client). Merged; prod deploy verified for af577cf.
