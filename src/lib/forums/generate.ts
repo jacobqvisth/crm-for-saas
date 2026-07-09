@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 import type {
   ForumMentionLevel,
   ForumPostType,
@@ -53,6 +54,7 @@ How to sound human, not like AI:
 - No corporate phrasing, no bullet-point listicles unless the angle is helpful_answer. No emojis unless they'd be natural. Don't end with "Any help appreciated!" every time — vary it.
 - Never sound like marketing. If the brand-mention rule is "none", there is zero product talk.
 - Keep it realistic in length: a help question is a short paragraph or two; a solved story or helpful answer can be a bit longer.
+- ${NO_LONG_DASH_INSTRUCTION}
 
 ${
   mentionLevel === "none"
@@ -128,7 +130,12 @@ export async function generateForumPost(opts: {
   if (!parsed.title.trim() || !parsed.body.trim()) {
     return { ok: false, reason: "empty title or body from model" };
   }
-  return { ok: true, title: parsed.title.trim(), body: parsed.body.trim(), model: MODEL };
+  return {
+    ok: true,
+    title: stripLongDashes(parsed.title.trim()),
+    body: stripLongDashes(parsed.body.trim()),
+    model: MODEL,
+  };
 }
 
 // The model is told to return bare JSON, but be defensive: strip code fences and

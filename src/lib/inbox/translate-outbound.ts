@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { TARGET_LANGUAGE_LABELS } from "@/lib/i18n/languages";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 export { TARGET_LANGUAGE_LABELS, LANGUAGE_OPTIONS } from "@/lib/i18n/languages";
 
@@ -14,6 +15,7 @@ Rules:
 - Preserve URLs and email addresses exactly.
 - Do not translate the product name "Wrenchlane".
 - Do not add a signature, greeting closer, or boilerplate. Whatever the user wrote in English is what gets translated — nothing more.
+- ${NO_LONG_DASH_INSTRUCTION}
 - Return ONLY the translated text. No markdown fences, no quotes around it, no commentary.`;
 
 export type OutboundTranslationResult =
@@ -67,7 +69,7 @@ export async function translateOutboundReply(input: {
     };
   }
 
-  const translated = raw.trim();
+  const translated = stripLongDashes(raw.trim());
   if (!translated) return { ok: false, reason: "empty translation from model" };
 
   return { ok: true, translated, targetLanguage, model: MODEL };
@@ -82,6 +84,7 @@ Rules:
 - Preserve URLs and email addresses exactly.
 - Do not translate the product name "Wrenchlane".
 - Do not add, remove, or reorder content. Same structure in, same structure out — only the language changes.
+- ${NO_LONG_DASH_INSTRUCTION}
 - Return ONLY minified JSON: {"subject":"...","bodyHtml":"..."}. No markdown fences, no commentary.`;
 
 export type OutboundEmailTranslationResult =
@@ -166,8 +169,8 @@ export async function translateOutboundEmail(input: {
 
   return {
     ok: true,
-    subject: outSubject,
-    bodyHtml: outBody,
+    subject: stripLongDashes(outSubject),
+    bodyHtml: stripLongDashes(outBody),
     targetLanguage,
     model: MODEL,
   };

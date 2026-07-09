@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 type DuplicateRequest = {
   sourceSequenceId: string;
@@ -21,6 +22,7 @@ Rules:
 - PRESERVE URLs exactly.
 - Keep paragraph count and structure identical to the source.
 - Translate the subject too.
+- ${NO_LONG_DASH_INSTRUCTION}
 - Return ONLY valid JSON: {"subject": "...", "body": "..."} — no markdown fences, no commentary.`;
 
 async function translateStep(
@@ -53,7 +55,10 @@ ${body}`;
     .trim();
 
   const parsed = JSON.parse(cleaned) as { subject: string; body: string };
-  return parsed;
+  return {
+    subject: stripLongDashes(parsed.subject),
+    body: stripLongDashes(parsed.body),
+  };
 }
 
 export async function POST(request: NextRequest) {
