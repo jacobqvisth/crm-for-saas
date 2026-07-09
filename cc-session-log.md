@@ -13,6 +13,28 @@ updated: 2026-05-26
 
 ---
 
+## Forums: rotatable distribution topics + AI-failure Gap log — 2026-07-09 — PR #538 — feat/forum-topic-rotation
+
+**Branch:** feat/forum-topic-rotation → main (squash merge 2026-07-09T15:22:37Z, commit 2f56f4f8).
+**Deploy:** live on crm-for-saas.vercel.app; Vercel prod deploy for 2f56f4f8 verified state=READY.
+
+Jacob's ask (from a colleague's Slack idea): harvest people's AI-diagnosis "journeys" — especially the epic failures (expensive part replaced on a wrong AI call) — and stop posting the same Distribution topic every week. Two parts:
+
+**1. Rotatable topics on `/forums/distribution`.** The board was locked to one concept ("Will AI take over car diagnostics?"). The API + `forum_distribution.topic` were already `?topic=`-aware and self-seed per topic, so this was mostly content + a `<select>`.
+- `src/lib/forums/distribution.ts` — `TOPICS` grew to 5 (added `menuLabel` + `goal` fields); `DISTRIBUTION_SEED` grew 23 tailored rows (per-community title/body/angle/rules, **no em/en dashes**) across 4 new topics: `ai-repair-horror-stories` (flagship story-bait — open with a painful AI-misdiagnosis story, invite people to share when theirs went south), `ai-diagnostics-wins`, `code-is-not-a-diagnosis`, `diy-confidence-with-ai`.
+- `src/components/forums/distribution-client.tsx` — "Topic to post" dropdown drives `selectedTopic` → refetch `?topic=`, header/summary/goal, and refreshAll. Merged on top of PR #535's board-view refactor (rebase conflict; took main's version + re-applied the dropdown).
+
+**2. Gap log — the "would we have done better?" R&D loop.** New tab `/forums/gaps`.
+- Migration `20260709210000_ai_failure_stories.sql` — table `ai_failure_stories` (workspace-scoped, RLS mirrors forum_distribution). Applied to prod via Supabase MCP `apply_migration`.
+- `src/lib/forums/gaps.ts` (types + option meta), `src/app/api/forums/gaps/route.ts` (GET/POST), `src/app/api/forums/gaps/[id]/route.ts` (PATCH/DELETE), `src/components/forums/gaps-client.tsx` (form + list + editable verdict).
+- Logs each harvested story: symptom / AI tool / AI's claimed cause / part replaced / true root cause / cost / outcome, plus an editable **verdict** (would_have_caught / would_have_missed / unsure) to score against Wrenchlane. Summary chips track review progress.
+- "Gap log" tab added to all 4 forum tab bars (forums / distribution / answers / gaps clients).
+- `src/lib/database.types.ts` — hand-added `ai_failure_stories` block (mirrors forum_distribution shape) since gen output is one 169k-char line.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean (one pre-existing unrelated warning in call-provider.tsx), `npm run build` compiled with `/forums/gaps` + both gap APIs in the manifest. Migration confirmed on prod; deploy READY.
+
+**Out of scope:** did not touch the pre-existing em/en dashes in the original topic's seed rows / TIER_META blurbs (UI chrome, not this PR); no Reddit auto-posting; the Gap log is manual-entry (no auto-harvest from thread replies yet — natural phase 2).
+
 ## Call follow-up email: edit in Swedish/English, editable subject, sender selector — 2026-07-06 — PR #510 — feature/followup-email-subject-sender
 
 Jacob (from a screenshot of the call drawer's **Suggested follow-up email** card): needs to edit the subject line, see/change the sender, and edit the email *in Swedish* — the translated "Recipient sees" preview was read-only and the sender was invisible. Follow-ups clarified the full model: edit in English OR Swedish, and independently choose the send language.
