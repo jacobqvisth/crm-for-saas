@@ -7,6 +7,7 @@ const patchSchema = z.object({
   owner_label: z.string().min(1).max(100).optional(),
   username: z.string().max(100).nullable().optional(),
   subreddits: z.array(z.string().max(100)).max(50).optional(),
+  slack_user_id: z.string().max(50).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   active: z.boolean().optional(),
 });

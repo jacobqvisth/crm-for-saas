@@ -149,6 +149,7 @@ function AccountRow({
   const [busy, setBusy] = useState(false);
   const [username, setUsername] = useState(account.username ?? "");
   const [subs, setSubs] = useState(account.subreddits.join(", "));
+  const [slackId, setSlackId] = useState(account.slack_user_id ?? "");
   const [notes, setNotes] = useState(account.notes ?? "");
 
   async function patch(body: Record<string, unknown>) {
@@ -177,6 +178,7 @@ function AccountRow({
         .split(",")
         .map((s) => s.trim().replace(/^r\//i, ""))
         .filter(Boolean),
+      slack_user_id: slackId.trim() || null,
       notes: notes.trim() || null,
     });
     if (ok) setEditing(false);
@@ -217,6 +219,15 @@ function AccountRow({
             />
           </label>
         </div>
+        <label className="mt-2 block text-[11px] text-slate-500">
+          Slack member ID (for @-mentions in #forum-posts — optional)
+          <input
+            value={slackId}
+            onChange={(e) => setSlackId(e.target.value)}
+            placeholder="e.g. U0123ABCD"
+            className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+        </label>
         <label className="mt-2 block text-[11px] text-slate-500">
           Notes
           <input

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveWorkspace } from "@/lib/forums/server";
+import { resolveWorkspace, fetchAssignmentsBySource } from "@/lib/forums/server";
 import {
   DEFAULT_TOPIC,
   DISTRIBUTION_SEED,
@@ -43,7 +43,15 @@ export async function GET(request: NextRequest) {
         row.suggested_body = seed.suggested_body;
       }
     }
-    return NextResponse.json({ recs });
+    const grouped = await fetchAssignmentsBySource(
+      supabase,
+      workspaceId,
+      "distribution",
+      recs.map((r) => r.id),
+    );
+    return NextResponse.json({
+      recs: recs.map((r) => ({ ...r, assignments: grouped.get(r.id) ?? [] })),
+    });
   }
 
   // First visit for this topic — seed the curated recommendations.
@@ -64,5 +72,6 @@ export async function GET(request: NextRequest) {
   const recs = ((inserted ?? []) as unknown as DistributionRec[]).sort(
     (a, b) => a.sort_order - b.sort_order,
   );
-  return NextResponse.json({ recs });
+  // Freshly seeded — no assignments until a rec is marked posted.
+  return NextResponse.json({ recs: recs.map((r) => ({ ...r, assignments: [] })) });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { resolveWorkspace } from "@/lib/forums/server";
+import { resolveWorkspace, fetchAssignmentsBySource } from "@/lib/forums/server";
 import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
 import { fetchRedditTraction } from "@/lib/forums/reddit";
@@ -141,19 +141,22 @@ export async function PATCH(
   if ((firstPost || resend_slack) && post.posted_url && post.generated_title) {
     const target = getForumTarget(post.forum_target);
     const result = await notifyForumPosted({
+      supabase,
+      workspaceId,
+      source: "post",
+      sourceId: id,
       subreddit: target?.name ?? post.forum_target,
       tone: target?.tone,
       rulesNote: target?.rulesNote,
       title: post.generated_title,
       body: post.generated_body,
       url: post.posted_url,
-      existingComment: post.suggested_comment,
       forceRegenerate: Boolean(resend_slack),
     });
     const postUpdate: Record<string, unknown> = {};
-    if (result.comment && result.comment !== post.suggested_comment)
-      postUpdate.suggested_comment = result.comment;
     if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
+    if (result.threadTs) postUpdate.slack_thread_ts = result.threadTs;
+    if (result.channelId) postUpdate.slack_channel_id = result.channelId;
     if (Object.keys(postUpdate).length) {
       const { data: reUpdated } = await supabase
         .from("forum_posts")
@@ -165,6 +168,9 @@ export async function PATCH(
       if (reUpdated) post = reUpdated as unknown as ForumPost;
     }
   }
+
+  const grouped = await fetchAssignmentsBySource(supabase, workspaceId, "post", [id]);
+  post.assignments = grouped.get(id) ?? [];
 
   return NextResponse.json({ post });
 }

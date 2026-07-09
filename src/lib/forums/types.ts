@@ -72,9 +72,38 @@ export interface ForumPost {
   upvote_ratio: number | null;
   traction_note: string | null;
   last_checked_at: string | null;
-  // Slack fan-out: drafted reply + when we pinged #forum-posts.
+  // Slack fan-out: legacy single drafted reply + when we pinged #forum-posts.
   suggested_comment: string | null;
   slack_notified_at: string | null;
+  slack_thread_ts: string | null;
+  slack_channel_id: string | null;
+  created_at: string;
+  updated_at: string;
+  // Per-member comments attached on GET (not a column) — see below.
+  assignments?: ForumCommentAssignment[];
+}
+
+// Per-member comment for one forum item (Distribution rec or generated post).
+// Each active roster member gets a distinct drafted reply they can post from
+// their own Reddit account; status tracks who has done it, and how we know
+// (marked in the CRM, or a ✅ reaction in the #forum-posts Slack thread).
+export type CommentAssignmentStatus = "suggested" | "posted" | "skipped";
+export type CommentConfirmedVia = "crm" | "slack_reaction";
+
+export interface ForumCommentAssignment {
+  id: string;
+  workspace_id: string;
+  source: "distribution" | "post";
+  source_id: string;
+  account_id: string | null;
+  owner_label: string;
+  comment: string | null;
+  status: CommentAssignmentStatus;
+  posted_url: string | null;
+  posted_at: string | null;
+  confirmed_via: CommentConfirmedVia | null;
+  slack_message_ts: string | null;
+  slack_channel_id: string | null;
   created_at: string;
   updated_at: string;
 }

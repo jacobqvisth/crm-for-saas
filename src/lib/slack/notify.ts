@@ -74,6 +74,54 @@ export async function postForumPost(p: SlackForumPost): Promise<SlackResult> {
   }
 }
 
+// Fallback fan-out used when the bot token isn't configured yet: one incoming-
+// webhook message that lists each member's own suggested comment inline (no
+// threading, no ✅ roundtrip — that needs the bot token). Once SLACK_BOT_TOKEN +
+// SLACK_FORUM_POSTS_CHANNEL_ID are set, notify-posted switches to threaded
+// per-member replies via chat.postMessage instead.
+export async function postForumPostMembers(p: {
+  subreddit: string;
+  title: string;
+  url: string;
+  members: Array<{ owner_label: string; comment: string | null }>;
+}): Promise<SlackResult> {
+  const webhook = process.env.SLACK_FORUM_POSTS_WEBHOOK_URL;
+  if (!webhook)
+    return { ok: false, configured: false, reason: "SLACK_FORUM_POSTS_WEBHOOK_URL not set" };
+
+  const lines: string[] = [
+    ":mega: *New forum post is live — jump in and comment from your own Reddit account*",
+    `<${p.url}|${p.title}>  ·  ${p.subreddit}`,
+    "",
+    "*Each of you has your own draft below* — pick yours, reword it a touch, and post it from your account:",
+  ];
+  for (const m of p.members) {
+    lines.push("");
+    lines.push(`*${m.owner_label}*`);
+    if (m.comment) {
+      for (const line of m.comment.split("\n")) lines.push(`> ${line}`);
+    } else {
+      lines.push("> _(no draft yet)_");
+    }
+  }
+
+  try {
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: lines.join("\n") }),
+    });
+    if (res.ok) return { ok: true, configured: true };
+    return { ok: false, configured: true, reason: `Slack webhook status ${res.status}` };
+  } catch (err) {
+    return {
+      ok: false,
+      configured: true,
+      reason: err instanceof Error ? err.message : "Slack post failed",
+    };
+  }
+}
+
 export async function postBugReport(r: SlackBugReport): Promise<SlackResult> {
   const webhook = process.env.SLACK_BUG_REPORTS_WEBHOOK_URL;
   if (!webhook) return { ok: false, configured: false, reason: "SLACK_BUG_REPORTS_WEBHOOK_URL not set" };

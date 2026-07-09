@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { resolveWorkspace } from "@/lib/forums/server";
+import { resolveWorkspace, fetchAssignmentsBySource } from "@/lib/forums/server";
 import { fetchRedditTraction, type DistributionRec } from "@/lib/forums/distribution";
 import { notifyForumPosted } from "@/lib/forums/notify-posted";
 
@@ -102,19 +102,22 @@ export async function PATCH(
   const firstPost = status === "posted" && rec.posted_url && !rec.slack_notified_at;
   if ((firstPost || resend_slack) && rec.posted_url && rec.suggested_title) {
     const result = await notifyForumPosted({
+      supabase,
+      workspaceId,
+      source: "distribution",
+      sourceId: id,
       subreddit: rec.subreddit,
       tone: rec.recommended_angle,
       rulesNote: rec.rules_note,
       title: rec.suggested_title,
       body: rec.suggested_body,
       url: rec.posted_url,
-      existingComment: rec.suggested_comment,
       forceRegenerate: Boolean(resend_slack),
     });
     const postUpdate: Record<string, unknown> = {};
-    if (result.comment && result.comment !== rec.suggested_comment)
-      postUpdate.suggested_comment = result.comment;
     if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
+    if (result.threadTs) postUpdate.slack_thread_ts = result.threadTs;
+    if (result.channelId) postUpdate.slack_channel_id = result.channelId;
     if (Object.keys(postUpdate).length) {
       const { data: reUpdated } = await supabase
         .from("forum_distribution")
@@ -126,6 +129,9 @@ export async function PATCH(
       if (reUpdated) rec = reUpdated as unknown as DistributionRec;
     }
   }
+
+  const grouped = await fetchAssignmentsBySource(supabase, workspaceId, "distribution", [id]);
+  rec.assignments = grouped.get(id) ?? [];
 
   return NextResponse.json({ rec });
 }
