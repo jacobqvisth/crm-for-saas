@@ -126,6 +126,14 @@ function startUrls(subs: string[], query: string | undefined, sort: string): { u
 // Search/browse posts across subreddits. `subreddits` are bare names. Returns
 // the failure signal so the caller can tell "scrape timed out" apart from
 // "genuinely no matching posts".
+//
+// One Apify run per subreddit, fired in parallel — NOT a single run with all
+// the start URLs. The actor processes multiple start URLs serially, so a
+// 5-subreddit run routinely blew past even a 230s timeout; splitting makes each
+// run small (and likely to finish) and the wall-clock the slowest single
+// subreddit (~60-90s) instead of the sum. Results merge with partial success:
+// a slow/failed subreddit no longer sinks the whole search, and we only report
+// failure when EVERY subreddit failed.
 export async function apifySearchRedditPosts(opts: {
   subreddits: string[];
   query?: string;
@@ -134,21 +142,43 @@ export async function apifySearchRedditPosts(opts: {
 }): Promise<{ posts: RedditPost[]; failed: boolean; timedOut: boolean }> {
   const subs = opts.subreddits.map((s) => s.replace(/^\/?r\//i, "").trim()).filter(Boolean);
   if (subs.length === 0) return { posts: [], failed: false, timedOut: false };
-  const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
-  const { items, failed, timedOut } = await runActor({
-    startUrls: startUrls(subs, opts.query?.trim() || undefined, opts.sort ?? "new"),
-    skipComments: true,
-    skipUserPosts: true,
-    skipCommunity: true,
-    includeMediaLinks: true, // brings upVotes + numberOfComments
-    maxItems: limit,
-    maxPostCount: limit,
-  });
-  const posts = items
-    .filter((i) => (i.dataType ?? "post") === "post")
-    .map(toRedditPost)
-    .filter((p): p is RedditPost => p !== null);
-  return { posts, failed, timedOut };
+  const totalLimit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const perSub = Math.max(Math.ceil(totalLimit / subs.length), 3);
+  const query = opts.query?.trim() || undefined;
+  const sort = opts.sort ?? "new";
+
+  const results = await Promise.all(
+    subs.map((sub) =>
+      runActor({
+        startUrls: startUrls([sub], query, sort),
+        skipComments: true,
+        skipUserPosts: true,
+        skipCommunity: true,
+        includeMediaLinks: true, // brings upVotes + numberOfComments
+        maxItems: perSub,
+        maxPostCount: perSub,
+      }),
+    ),
+  );
+
+  // Merge + de-dupe by post id across subreddits.
+  const seen = new Set<string>();
+  const posts: RedditPost[] = [];
+  for (const r of results) {
+    for (const item of r.items) {
+      if ((item.dataType ?? "post") !== "post") continue;
+      const post = toRedditPost(item);
+      if (!post || seen.has(post.id)) continue;
+      seen.add(post.id);
+      posts.push(post);
+    }
+  }
+  posts.sort((a, b) => (b.created_utc ?? 0) - (a.created_utc ?? 0));
+
+  // Only a failure if nothing came back AND every subreddit's run failed.
+  const failed = posts.length === 0 && results.every((r) => r.failed);
+  const timedOut = failed && results.some((r) => r.timedOut);
+  return { posts: posts.slice(0, totalLimit), failed, timedOut };
 }
 
 // Load a single post by URL.
