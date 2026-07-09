@@ -141,6 +141,33 @@ export async function apifyFetchRedditPost(postUrl: string): Promise<RedditPost 
   return post ?? null;
 }
 
+// Commenters on a posted URL — for contribution tracking. Runs the actor with
+// comments ON and returns each comment's author + permalink (bare handles, no
+// "u/"). Used to detect which of our roster accounts actually replied on the
+// thread. Never throws — returns [] on failure.
+export async function apifyFetchRedditCommenters(
+  postUrl: string,
+  maxComments = 300,
+): Promise<{ author: string; permalink: string | null }[]> {
+  const items = await runActor({
+    startUrls: [{ url: postUrl }],
+    skipComments: false,
+    skipUserPosts: true,
+    skipCommunity: true,
+    includeMediaLinks: false,
+    maxComments,
+    maxItems: maxComments + 5,
+  });
+  const out: { author: string; permalink: string | null }[] = [];
+  for (const it of items) {
+    if ((it.dataType ?? "") !== "comment") continue;
+    const author = (it.username ?? "").replace(/^\/?u\//i, "").trim();
+    if (!author || author === "[deleted]") continue;
+    out.push({ author, permalink: it.url ?? null });
+  }
+  return out;
+}
+
 // Traction (score + comments) for a posted URL.
 export async function apifyFetchRedditTraction(postUrl: string): Promise<RedditTraction | null> {
   const post = await apifyFetchRedditPost(postUrl);

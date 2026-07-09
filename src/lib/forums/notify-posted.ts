@@ -3,6 +3,7 @@ import type { Database } from "@/lib/database.types";
 import { generateForumComments, type PerMemberComment } from "./comment";
 import { postForumPostMembers, FORUM_TEAM } from "@/lib/slack/notify";
 import { isSlackBotConfigured, forumChannelId, postSlackMessage } from "@/lib/slack/api";
+import type { ForumSource } from "./types";
 
 // Fan-out when a forum item is marked posted (Distribution rec or generated
 // post). Two things happen, both best-effort — the caller must NEVER fail the
@@ -20,8 +21,6 @@ import { isSlackBotConfigured, forumChannelId, postSlackMessage } from "@/lib/sl
 // Slack was reached; assignment rows are written here directly.
 
 type DB = SupabaseClient<Database>;
-
-export type ForumSource = "distribution" | "post";
 
 export type NotifyForumPostedInput = {
   supabase: DB;

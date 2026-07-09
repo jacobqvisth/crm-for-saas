@@ -756,6 +756,8 @@ function PostCard({
       {post.status === "posted" && !editing && (
         <TeamComments
           assignments={post.assignments ?? []}
+          source="post"
+          sourceId={post.id}
           slackNotifiedAt={post.slack_notified_at}
           onResend={() => patch({ resend_slack: true })}
           resendBusy={busy}

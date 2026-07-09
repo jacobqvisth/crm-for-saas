@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySlackSignature } from "@/lib/slack/api";
 import { createServiceClient } from "@/lib/supabase/service";
+import { refreshSlackContributorSummary } from "@/lib/forums/contributors";
+import type { ForumSource } from "@/lib/forums/types";
 
 // Slack Events API endpoint — the inbound half of the forums ✅ roundtrip.
 //
@@ -91,7 +93,7 @@ async function handleReaction(added: boolean, messageTs: string, channel: string
     const supabase = createServiceClient();
     const { data: rows } = await supabase
       .from("forum_comment_assignments")
-      .select("id, confirmed_via, slack_channel_id")
+      .select("id, confirmed_via, slack_channel_id, source, source_id")
       .eq("slack_message_ts", messageTs);
 
     if (!rows || rows.length === 0) return;
@@ -111,7 +113,8 @@ async function handleReaction(added: boolean, messageTs: string, channel: string
         })
         .eq("id", row.id);
     } else {
-      // Only undo confirmations that came from a reaction — never a CRM mark.
+      // Only undo confirmations that came from a reaction — never a CRM mark or
+      // an authoritative Reddit detection.
       if (row.confirmed_via === "slack_reaction") {
         await supabase
           .from("forum_comment_assignments")
@@ -119,6 +122,13 @@ async function handleReaction(added: boolean, messageTs: string, channel: string
           .eq("id", row.id);
       }
     }
+
+    // Keep the thread's "contributors so far" summary current.
+    await refreshSlackContributorSummary({
+      supabase,
+      source: row.source as ForumSource,
+      sourceId: row.source_id,
+    });
   } catch {
     // Best-effort — never surface to Slack (would trigger retries).
   }

@@ -9,20 +9,26 @@ import {
   Send,
   RotateCcw,
   CircleSlash,
+  Search,
+  ExternalLink,
 } from "lucide-react";
-import type { ForumCommentAssignment } from "@/lib/forums/types";
+import type { ForumCommentAssignment, ForumSource } from "@/lib/forums/types";
 
 // Per-member Reddit comments for one forum item. Each active teammate gets their
 // own distinct draft; this panel shows them, lets you copy each, and tracks who
-// has posted — either marked here in the CRM or via a ✅ reaction in the
-// #forum-posts Slack thread (see /api/slack/events).
+// actually contributed — detected from the real Reddit thread ("Scan Reddit"),
+// a ✅ reaction in the #forum-posts Slack thread, or a manual CRM mark.
 export function TeamComments({
   assignments,
+  source,
+  sourceId,
   slackNotifiedAt,
   onResend,
   resendBusy,
 }: {
   assignments: ForumCommentAssignment[];
+  source: ForumSource;
+  sourceId: string;
   slackNotifiedAt: string | null;
   onResend: () => void;
   resendBusy: boolean;
@@ -31,11 +37,44 @@ export function TeamComments({
   // Re-syncs when the parent hands down a new array (e.g. after a resend redraft).
   const [items, setItems] = useState<ForumCommentAssignment[]>(assignments);
   useEffect(() => setItems(assignments), [assignments]);
+  const [scanning, setScanning] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
 
-  const postedCount = items.filter((a) => a.status === "posted").length;
+  // "Contributed" = the trustworthy signals only (Reddit-detected or Slack ✅).
+  const contributed = items.filter(
+    (a) => a.confirmed_via === "reddit_detected" || a.confirmed_via === "slack_reaction",
+  ).length;
 
   function onItem(updated: ForumCommentAssignment) {
     setItems((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+  }
+
+  async function scanReddit() {
+    setScanning(true);
+    setScanNote(null);
+    try {
+      const res = await fetch(`/api/forums/contributors/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, source_id: sourceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScanNote(data.error ?? "Scan failed");
+        return;
+      }
+      if (Array.isArray(data.assignments)) setItems(data.assignments as ForumCommentAssignment[]);
+      const n = data.result?.matched?.length ?? 0;
+      setScanNote(
+        n > 0
+          ? `Found ${n} of our account${n === 1 ? "" : "s"} in the thread.`
+          : `Scanned ${data.result?.commentersFound ?? 0} comments — none matched a roster handle yet.`,
+      );
+    } catch {
+      setScanNote("Scan failed");
+    } finally {
+      setScanning(false);
+    }
   }
 
   return (
@@ -46,7 +85,7 @@ export function TeamComments({
         </span>
         {items.length > 0 && (
           <span className="text-[10px] font-medium text-indigo-500">
-            {postedCount}/{items.length} posted
+            {contributed}/{items.length} contributed
           </span>
         )}
       </div>
@@ -63,7 +102,16 @@ export function TeamComments({
         </div>
       )}
 
-      <div className="mt-2 flex items-center gap-3 border-t border-indigo-100/70 pt-2 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-indigo-100/70 pt-2 text-[11px]">
+        <button
+          onClick={scanReddit}
+          disabled={scanning}
+          className="inline-flex items-center gap-1 font-medium text-indigo-700 hover:text-indigo-900 disabled:opacity-50"
+          title="Read the Reddit thread and mark teammates whose account commented"
+        >
+          {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+          Scan Reddit for our comments
+        </button>
         <button
           onClick={onResend}
           disabled={resendBusy}
@@ -79,6 +127,7 @@ export function TeamComments({
           </span>
         )}
       </div>
+      {scanNote && <p className="mt-1 text-[11px] text-slate-500">{scanNote}</p>}
     </div>
   );
 }
@@ -133,9 +182,23 @@ function MemberRow({
           {posted && (
             <span className="inline-flex items-center gap-0.5 rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
               <Check className="h-2.5 w-2.5" />
-              posted
-              {a.confirmed_via === "slack_reaction" && " · via Slack ✅"}
+              {a.confirmed_via === "reddit_detected"
+                ? "commented on Reddit"
+                : a.confirmed_via === "slack_reaction"
+                  ? "posted · via Slack ✅"
+                  : "posted"}
             </span>
+          )}
+          {a.confirmed_via === "reddit_detected" && a.reddit_comment_url && (
+            <a
+              href={a.reddit_comment_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 hover:text-slate-700"
+              title={a.detected_author ? `u/${a.detected_author}` : "view comment"}
+            >
+              <ExternalLink className="h-2.5 w-2.5" /> comment
+            </a>
           )}
           {skipped && (
             <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">

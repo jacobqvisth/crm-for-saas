@@ -18,6 +18,7 @@ import {
   apifySearchRedditPosts,
   apifyFetchRedditPost,
   apifyFetchRedditTraction,
+  apifyFetchRedditCommenters,
 } from "./reddit-apify";
 
 const UA = "web:wrenchlane-crm:1.0 (forum traction tracker)";
@@ -302,6 +303,98 @@ export async function fetchRedditPost(
   );
   if (!post) return { ok: false, reason: "No post data found (deleted or private?)" };
   return { ok: true, post };
+}
+
+// A commenter on a thread — used to detect which roster accounts replied.
+export interface RedditCommenter {
+  author: string; // bare handle, no "u/"
+  permalink: string | null; // full URL to the comment, when known
+}
+
+// Recursively collect comment authors + permalinks from a Reddit comments
+// listing (the t1 tree returned by the comments endpoint / anon .json).
+function collectCommenters(
+  listing: unknown,
+  out: RedditCommenter[],
+  depth = 0,
+): void {
+  if (depth > 12 || out.length > 500) return;
+  const children = (listing as { data?: { children?: unknown[] } })?.data?.children;
+  if (!Array.isArray(children)) return;
+  for (const child of children) {
+    const c = child as { kind?: string; data?: Record<string, unknown> };
+    if (c.kind !== "t1" || !c.data) continue;
+    const author = typeof c.data.author === "string" ? c.data.author.replace(/^\/?u\//i, "") : "";
+    if (author && author !== "[deleted]") {
+      const permalink = typeof c.data.permalink === "string" ? c.data.permalink : null;
+      out.push({
+        author,
+        permalink: permalink ? `https://www.reddit.com${permalink}` : null,
+      });
+    }
+    if (c.data.replies && typeof c.data.replies === "object") {
+      collectCommenters(c.data.replies, out, depth + 1);
+    }
+  }
+}
+
+// Fetch the commenters on a posted thread so we can match them against the
+// roster's Reddit handles (contribution tracking). Apify first (works from
+// datacenter IPs and is our configured path), OAuth comments endpoint next,
+// anonymous .json last. Never throws.
+export async function fetchRedditCommenters(
+  postUrl: string,
+): Promise<{ ok: true; commenters: RedditCommenter[] } | { ok: false; reason: string }> {
+  const fullname = redditFullname(postUrl);
+  if (!fullname) return { ok: false, reason: "Not a recognizable Reddit post URL" };
+
+  // 1. Apify (residential IPs). Treat its result as authoritative when
+  //    configured — an empty list just means none of our handles commented.
+  if (isApifyConfigured()) {
+    const commenters = await apifyFetchRedditCommenters(postUrl);
+    return { ok: true, commenters };
+  }
+
+  // 2. OAuth comments endpoint.
+  const id = fullname.replace(/^t3_/, "");
+  const token = await getAppToken();
+  if (token) {
+    try {
+      const res = await fetch(
+        `https://oauth.reddit.com/comments/${id}?raw_json=1&limit=500&depth=10`,
+        { headers: { Authorization: `Bearer ${token}`, "User-Agent": UA }, cache: "no-store" },
+      );
+      if (res.ok) {
+        const json = (await res.json()) as unknown[];
+        const out: RedditCommenter[] = [];
+        collectCommenters(Array.isArray(json) ? json[1] : undefined, out);
+        return { ok: true, commenters: out };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // 3. Anonymous .json (often 403s from datacenter IPs).
+  const jsonUrl = redditJsonUrl(postUrl);
+  if (jsonUrl) {
+    try {
+      const res = await fetch(jsonUrl, { headers: { "User-Agent": UA }, cache: "no-store" });
+      if (res.ok) {
+        const json = (await res.json()) as unknown[];
+        const out: RedditCommenter[] = [];
+        collectCommenters(Array.isArray(json) ? json[1] : undefined, out);
+        return { ok: true, commenters: out };
+      }
+      if (res.status === 403) {
+        return { ok: false, reason: "Reddit blocked the request (403) — add an APIFY_TOKEN or Reddit API keys to auto-detect commenters" };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  return { ok: false, reason: "Could not read Reddit comments" };
 }
 
 // Search/list candidate posts across one or more subreddits. Needs OAuth

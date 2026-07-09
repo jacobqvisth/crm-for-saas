@@ -140,8 +140,10 @@ export type Database = {
           comment: string | null
           confirmed_via: string | null
           created_at: string
+          detected_author: string | null
           id: string
           owner_label: string
+          reddit_comment_url: string | null
           posted_at: string | null
           posted_url: string | null
           slack_channel_id: string | null
@@ -157,9 +159,11 @@ export type Database = {
           comment?: string | null
           confirmed_via?: string | null
           created_at?: string
+          detected_author?: string | null
           id?: string
           owner_label: string
           posted_at?: string | null
+          reddit_comment_url?: string | null
           posted_url?: string | null
           slack_channel_id?: string | null
           slack_message_ts?: string | null
@@ -174,8 +178,10 @@ export type Database = {
           comment?: string | null
           confirmed_via?: string | null
           created_at?: string
+          detected_author?: string | null
           id?: string
           owner_label?: string
+          reddit_comment_url?: string | null
           posted_at?: string | null
           posted_url?: string | null
           slack_channel_id?: string | null
@@ -219,6 +225,8 @@ export type Database = {
           score: number | null
           slack_channel_id: string | null
           slack_notified_at: string | null
+          slack_summary_channel: string | null
+          slack_summary_ts: string | null
           slack_thread_ts: string | null
           sort_order: number
           status: string
@@ -249,6 +257,8 @@ export type Database = {
           score?: number | null
           slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
           slack_thread_ts?: string | null
           sort_order?: number
           status?: string
@@ -279,6 +289,8 @@ export type Database = {
           score?: number | null
           slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
           slack_thread_ts?: string | null
           sort_order?: number
           status?: string
@@ -332,6 +344,8 @@ export type Database = {
           score: number | null
           slack_channel_id: string | null
           slack_notified_at: string | null
+          slack_summary_channel: string | null
+          slack_summary_ts: string | null
           slack_thread_ts: string | null
           status: string
           suggested_comment: string | null
@@ -360,6 +374,8 @@ export type Database = {
           score?: number | null
           slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
           slack_thread_ts?: string | null
           status?: string
           suggested_comment?: string | null
@@ -388,6 +404,8 @@ export type Database = {
           score?: number | null
           slack_channel_id?: string | null
           slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
           slack_thread_ts?: string | null
           status?: string
           suggested_comment?: string | null
