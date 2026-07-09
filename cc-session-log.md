@@ -13,6 +13,27 @@ updated: 2026-05-26
 
 ---
 
+## Forums "Find posts" stops timing out — 2026-07-09 — PR #529 + #537 — fix/forums-parallel-subreddit-scrape
+
+Jacob (from screenshots of `/forums/answers`): "Find posts to answer" spun ~90s then always showed "No posts found. Try different keywords." even with an empty keyword field — is the feature working? Diagnosed live, then fixed in two PRs.
+
+**Branch:** #529 `worktree-forums-find-posts-timeout` → main (squash 2026-07-09T13:?, commit 6768cca); #537 `fix/forums-parallel-subreddit-scrape` → main (squash 2026-07-09T15:25:13Z, commit 82a20f0).
+**Deploy:** both live on crm-for-saas.vercel.app — #537 build verified `get_deployment` state=READY for 82a20f0 (aliased to crm-for-saas.vercel.app / link.wrenchlane.se).
+
+**Root cause (confirmed live against Apify):** "Find posts" has no Reddit OAuth, so it falls back to the Apify actor `trudax/reddit-scraper-lite` run synchronously. Two compounding bugs:
+1. `runActor` capped the wait at 90s server / 100s client and the routes at `maxDuration:120`, and it **swallowed every failure (incl. Apify's 400/TIMED-OUT) into `[]`** — so a timeout was reported as a successful empty result → misleading "No posts found". (Single-sub run: times out ~91s, succeeds ~207s.)
+2. Even after raising the cap, the default search hits **all 5 subreddits in ONE actor run**, and the actor processes start URLs **serially** — a 5-URL run HTTP-400s at 281s regardless.
+
+**Files:**
+- `src/lib/forums/reddit-apify.ts` — `runActor` now returns `{ items, failed, timedOut }` (classifies AbortError / 408 / "TIMED-OUT" bodies as timeouts) instead of bare `[]`; `serverTimeout` 90→230, `clientTimeout` 100s→290s. **`apifySearchRedditPosts` fans out one `runActor()` per subreddit via `Promise.all`** (each scrapes just its own `/new/` listing, `perSub=ceil(limit/subs)`, capped `serverTimeout:180`/client 190s), merges + de-dupes by post id, and reports `failed` only when EVERY subreddit's run failed (partial success).
+- `src/lib/forums/reddit.ts` — `searchRedditPosts` Apify branch surfaces `ok:false` with an honest "Reddit search timed out — try again" reason on failure; a genuine empty scrape still returns "No posts found".
+- `src/app/api/forums/{replies/discover,replies/fetch,contributors/scan,distribution/[id],[id]}/route.ts` — `maxDuration` 120→300 on the five routes that can trigger a sync scrape.
+
+**Behaviour / Why:** wall-clock is now the slowest single subreddit (~75–130s measured; ~30–60s once the actor is warm) instead of the serial sum (>280s, guaranteed timeout). A slow/cold subreddit no longer sinks the whole search — the fast subs' posts still return. Live test: all 5 subs succeeded (74/101/131/187/205s, 19 posts); with the 180s cap the 3 fast subs (~11 posts) return in ~180s. The client (`answers-client.tsx`) needed no change — it already renders `data.error` as a banner and suppresses "No posts found" when an error is set.
+
+**Verification:** `npx tsc --noEmit` clean, `eslint` clean, `next build` clean (both PRs); Build & Lint ✅ on #537; Apify actor exercised live (single 5-URL run → 400 at 281s; 5 parallel single-sub runs → all 201 with posts). #537 deploy verified state=READY for commit 82a20f0.
+
+**Out of scope / follow-up:** durable upgrades if cold-start spin is still too long — Reddit OAuth creds (`REDDIT_CLIENT_ID/SECRET` → fast `oauth.reddit.com`, if the dev-program gate allows) or an async Apify run + client polling. Neither needed for this fix.
 ## Forums: rotatable distribution topics + AI-failure Gap log — 2026-07-09 — PR #538 — feat/forum-topic-rotation
 
 **Branch:** feat/forum-topic-rotation → main (squash merge 2026-07-09T15:22:37Z, commit 2f56f4f8).
