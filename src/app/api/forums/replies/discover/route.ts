@@ -4,9 +4,10 @@ import { resolveWorkspace } from "@/lib/forums/server";
 import { isRedditConfigured, searchRedditPosts } from "@/lib/forums/reddit";
 import { REPLY_SUBREDDITS } from "@/lib/forums/replies";
 
-// Reddit reads may run via an Apify scrape (residential IPs) which can take
-// ~30-90s, so allow well past the default function timeout.
-export const maxDuration = 120;
+// Reddit reads may run via an Apify scrape (residential IPs). The actor
+// cold-starts and a multi-subreddit run can take ~200s, so give the function
+// the full window the sync scrape needs (client waits up to 290s).
+export const maxDuration = 300;
 
 const ALLOWED = new Set(REPLY_SUBREDDITS.map((s) => s.name));
 

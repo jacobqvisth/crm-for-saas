@@ -13,7 +13,7 @@ import type {
 } from "@/lib/forums/types";
 
 // A traction refresh may run via an Apify scrape (~30-90s); raise the timeout.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const patchSchema = z.object({
   status: z.enum(["idea", "drafted", "posted", "archived"]).optional(),

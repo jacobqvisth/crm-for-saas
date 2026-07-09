@@ -52,15 +52,29 @@ function toRedditPost(item: ApifyPostItem): RedditPost | null {
   };
 }
 
+// Outcome of an actor run. `failed` distinguishes a real error (timeout, HTTP
+// error, network) from a successful-but-empty scrape — callers that surface a
+// message to the user must NOT report a timeout as "no posts found".
+export interface ActorResult {
+  items: ApifyPostItem[];
+  failed: boolean;
+  timedOut: boolean;
+}
+
 // Run the actor synchronously and return its dataset items. Bounded by a
 // server-side actor timeout + a client abort so a slow scrape can't hang the
-// request. Never throws — returns [] on any failure.
+// request. Never throws.
+//
+// The actor cold-starts often and a multi-subreddit scrape can take ~200s, well
+// past the old 90s cap — which surfaced to users as a permanent "no posts
+// found". The window is now sized to cover a cold run (Apify's run-sync endpoint
+// itself hard-caps at 300s; the callers' routes use maxDuration: 300).
 async function runActor(
   input: Record<string, unknown>,
-  { serverTimeout = 90, clientTimeout = 100_000 } = {},
-): Promise<ApifyPostItem[]> {
+  { serverTimeout = 230, clientTimeout = 290_000 } = {},
+): Promise<ActorResult> {
   const token = process.env.APIFY_TOKEN;
-  if (!token) return [];
+  if (!token) return { items: [], failed: true, timedOut: false };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), clientTimeout);
   try {
@@ -74,11 +88,19 @@ async function runActor(
         cache: "no-store",
       },
     );
-    if (!res.ok) return [];
+    if (!res.ok) {
+      // Apify returns 400/408 with a "TIMED-OUT" run status when the actor
+      // exceeds the server timeout — treat that specifically as a timeout.
+      const text = await res.text().catch(() => "");
+      const timedOut = res.status === 408 || /TIMED-?OUT/i.test(text);
+      return { items: [], failed: true, timedOut };
+    }
     const data = (await res.json()) as ApifyPostItem[];
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
+    return { items: Array.isArray(data) ? data : [], failed: false, timedOut: false };
+  } catch (err) {
+    // AbortError = our client-side timeout fired; anything else is a network error.
+    const timedOut = err instanceof Error && err.name === "AbortError";
+    return { items: [], failed: true, timedOut };
   } finally {
     clearTimeout(timer);
   }
@@ -101,17 +123,19 @@ function startUrls(subs: string[], query: string | undefined, sort: string): { u
   });
 }
 
-// Search/browse posts across subreddits. `subreddits` are bare names.
+// Search/browse posts across subreddits. `subreddits` are bare names. Returns
+// the failure signal so the caller can tell "scrape timed out" apart from
+// "genuinely no matching posts".
 export async function apifySearchRedditPosts(opts: {
   subreddits: string[];
   query?: string;
   sort?: string;
   limit?: number;
-}): Promise<RedditPost[]> {
+}): Promise<{ posts: RedditPost[]; failed: boolean; timedOut: boolean }> {
   const subs = opts.subreddits.map((s) => s.replace(/^\/?r\//i, "").trim()).filter(Boolean);
-  if (subs.length === 0) return [];
+  if (subs.length === 0) return { posts: [], failed: false, timedOut: false };
   const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
-  const items = await runActor({
+  const { items, failed, timedOut } = await runActor({
     startUrls: startUrls(subs, opts.query?.trim() || undefined, opts.sort ?? "new"),
     skipComments: true,
     skipUserPosts: true,
@@ -120,15 +144,16 @@ export async function apifySearchRedditPosts(opts: {
     maxItems: limit,
     maxPostCount: limit,
   });
-  return items
+  const posts = items
     .filter((i) => (i.dataType ?? "post") === "post")
     .map(toRedditPost)
     .filter((p): p is RedditPost => p !== null);
+  return { posts, failed, timedOut };
 }
 
 // Load a single post by URL.
 export async function apifyFetchRedditPost(postUrl: string): Promise<RedditPost | null> {
-  const items = await runActor({
+  const { items } = await runActor({
     startUrls: [{ url: postUrl }],
     skipComments: true,
     skipUserPosts: true,
@@ -149,7 +174,7 @@ export async function apifyFetchRedditCommenters(
   postUrl: string,
   maxComments = 300,
 ): Promise<{ author: string; permalink: string | null }[]> {
-  const items = await runActor({
+  const { items } = await runActor({
     startUrls: [{ url: postUrl }],
     skipComments: false,
     skipUserPosts: true,

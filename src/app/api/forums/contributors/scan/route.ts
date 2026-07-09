@@ -4,7 +4,7 @@ import { resolveWorkspace, fetchAssignmentsBySource } from "@/lib/forums/server"
 import { scanRedditContributors, refreshSlackContributorSummary } from "@/lib/forums/contributors";
 
 // A comment scrape can run through Apify (~30-90s); give it room.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   source: z.enum(["distribution", "post"]),
