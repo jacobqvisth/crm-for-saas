@@ -299,6 +299,74 @@ export type Database = {
           },
         ]
       }
+      ai_failure_stories: {
+        Row: {
+          action_taken: string | null
+          actual_cause: string | null
+          ai_claimed_cause: string | null
+          ai_tool: string | null
+          cost_amount: number | null
+          cost_currency: string | null
+          created_at: string
+          id: string
+          our_notes: string | null
+          our_verdict: string
+          outcome: string
+          source_author: string | null
+          source_subreddit: string | null
+          source_url: string | null
+          symptom: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          action_taken?: string | null
+          actual_cause?: string | null
+          ai_claimed_cause?: string | null
+          ai_tool?: string | null
+          cost_amount?: number | null
+          cost_currency?: string | null
+          created_at?: string
+          id?: string
+          our_notes?: string | null
+          our_verdict?: string
+          outcome?: string
+          source_author?: string | null
+          source_subreddit?: string | null
+          source_url?: string | null
+          symptom: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          action_taken?: string | null
+          actual_cause?: string | null
+          ai_claimed_cause?: string | null
+          ai_tool?: string | null
+          cost_amount?: number | null
+          cost_currency?: string | null
+          created_at?: string
+          id?: string
+          our_notes?: string | null
+          our_verdict?: string
+          outcome?: string
+          source_author?: string | null
+          source_subreddit?: string | null
+          source_url?: string | null
+          symptom?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_failure_stories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forum_distribution: {
         Row: {
           created_at: string
