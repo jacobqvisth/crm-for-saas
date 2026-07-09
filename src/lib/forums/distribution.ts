@@ -82,6 +82,8 @@ export interface DistributionRec {
   slack_notified_at: string | null;
   slack_thread_ts: string | null;
   slack_channel_id: string | null;
+  slack_summary_ts: string | null;
+  slack_summary_channel: string | null;
   created_at: string;
   updated_at: string;
   // Per-member comments attached on GET (not a column).

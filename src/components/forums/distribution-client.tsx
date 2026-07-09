@@ -27,6 +27,7 @@ import {
 } from "@/lib/forums/distribution";
 import type { RedditAccount } from "@/lib/forums/accounts";
 import { TeamComments } from "./team-comments";
+import { ContributorsPanel } from "./contributors-panel";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
@@ -165,6 +166,8 @@ export function DistributionClient() {
           Refresh traction
         </button>
       </div>
+
+      <ContributorsPanel />
 
       {error && (
         <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -475,6 +478,8 @@ function RecCard({
       {posted && (
         <TeamComments
           assignments={rec.assignments ?? []}
+          source="distribution"
+          sourceId={rec.id}
           slackNotifiedAt={rec.slack_notified_at}
           onResend={() => patch({ resend_slack: true })}
           resendBusy={busy}

@@ -77,6 +77,8 @@ export interface ForumPost {
   slack_notified_at: string | null;
   slack_thread_ts: string | null;
   slack_channel_id: string | null;
+  slack_summary_ts: string | null;
+  slack_summary_channel: string | null;
   created_at: string;
   updated_at: string;
   // Per-member comments attached on GET (not a column) — see below.
@@ -87,8 +89,13 @@ export interface ForumPost {
 // Each active roster member gets a distinct drafted reply they can post from
 // their own Reddit account; status tracks who has done it, and how we know
 // (marked in the CRM, or a ✅ reaction in the #forum-posts Slack thread).
+// Which board a forum item lives on.
+export type ForumSource = "distribution" | "post";
+
 export type CommentAssignmentStatus = "suggested" | "posted" | "skipped";
-export type CommentConfirmedVia = "crm" | "slack_reaction";
+// 'reddit_detected' = their roster handle showed up as a commenter on the
+// actual Reddit thread (read via Apify) — the authoritative contribution signal.
+export type CommentConfirmedVia = "crm" | "slack_reaction" | "reddit_detected";
 
 export interface ForumCommentAssignment {
   id: string;
@@ -104,6 +111,9 @@ export interface ForumCommentAssignment {
   confirmed_via: CommentConfirmedVia | null;
   slack_message_ts: string | null;
   slack_channel_id: string | null;
+  // Reddit-detected contribution: the matched comment's permalink + author.
+  reddit_comment_url: string | null;
+  detected_author: string | null;
   created_at: string;
   updated_at: string;
 }

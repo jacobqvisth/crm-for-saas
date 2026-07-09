@@ -70,6 +70,32 @@ export async function postSlackMessage(opts: {
   }
 }
 
+// Edits an existing message (used to keep the "contributors so far" summary
+// fresh in the thread). Returns ok:false if the bot token isn't set.
+export async function updateSlackMessage(opts: {
+  channel: string;
+  ts: string;
+  text: string;
+}): Promise<PostMessageResult> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return { ok: false, reason: "SLACK_BOT_TOKEN not set" };
+  try {
+    const res = await fetch("https://slack.com/api/chat.update", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ channel: opts.channel, ts: opts.ts, text: opts.text }),
+    });
+    const data = (await res.json()) as { ok: boolean; ts?: string; channel?: string; error?: string };
+    if (data.ok && data.ts) return { ok: true, ts: data.ts, channel: data.channel ?? opts.channel };
+    return { ok: false, reason: `Slack chat.update error: ${data.error ?? "unknown"}` };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "Slack update failed" };
+  }
+}
+
 // Verifies an inbound Slack request using the v0 signing scheme:
 //   base = "v0:{timestamp}:{rawBody}"; sig = "v0=" + HMAC_SHA256(base, secret)
 // Rejects requests older than 5 minutes (replay protection). `rawBody` MUST be
