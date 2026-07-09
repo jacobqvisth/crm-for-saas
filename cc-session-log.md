@@ -5440,3 +5440,33 @@ comments" button to backfill.
 
 No schema change. **Checks:** `tsc` exit 0, eslint clean (1 pre-existing),
 `npm run build` OK. Merged; prod deploy verified for f28ce08.
+
+---
+
+## Forums Distribution UX — summary board + Posted/To-be-posted tabs
+
+**Date:** 2026-07-09 · **PR #535** · branch `worktree-forums-distribution-ux` (merged, commit e641026)
+
+Jacob flagged `/forums/distribution` as messy: the "Open thread" button was
+buried at the bottom of long fully-expanded cards, and posted vs unposted recs
+weren't separated.
+
+**Board (`distribution-client.tsx`) — now a scannable summary list:**
+- Each recommendation is a compact, clickable `SummaryCard` linking to the
+  post's own page (`/forums/distribution/[id]`). Shows subreddit, tailored
+  title, why-it-fits, and (posted only) a mini upvotes/comments/ratio line. The
+  "open" affordance sits at the top-right and the whole card is the link.
+- New "To be posted" / "Posted" sub-tabs (with counts), default "To be
+  posted"; skipped recs sort to the bottom of "To be posted".
+- Dropped the heavy inline RecCard (copy, mark-posted, team comments, etc.).
+
+**Detail page (`thread-client.tsx`) — now "everything about the post":**
+- Ported from the old board card: copy title / body / title+body, angle +
+  rules, Mark posted (posted-by account picker + URL), Unmark, Skip/Restore,
+  manual traction editing (pencil), posted-by + author-mismatch display.
+- Existing thread features (per-member TeamComments, Analyze thread => reply
+  drafts) unchanged. Updated the stale "go back to the board to mark posted"
+  amber note to point at the on-page Mark posted button.
+
+No schema change. Checks: tsc --noEmit clean, eslint clean, npm run build OK.
+Merged; prod deploy verified READY for e641026 (Vercel check success).
