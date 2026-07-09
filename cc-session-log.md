@@ -5413,3 +5413,30 @@ Slack ✅ still needs the one-time bot setup from `docs/forums-slack-setup.md`.
 
 **Checks:** `tsc` exit 0, eslint clean (1 pre-existing), `npm run build` OK.
 Merged; prod deploy verified for ddb66af.
+
+## Forums — decouple drafting from Slack send (2 steps, 2 buttons)
+**Date:** 2026-07-09 · **PR:** #530 · **Branch:** feature/forums-draft-send-split
+
+Jacob found the states drifting: drafting per-member comments and sending to
+Slack were ONE action (mark-posted / a single "Redraft + resend" button), so a
+post could show "sent to Slack" with no drafts (old single-comment posts), and
+there was no way to draft → review → redraft → *then* send.
+
+Split `notifyForumPosted` into two decoupled functions in `notify-posted.ts`:
+- **`draftForumComments()`** — generate/regenerate the per-member comments only,
+  no Slack (idempotent; `regenerate` flag redrafts everyone vs filling gaps).
+- **`sendForumPostToSlack()`** — post the CURRENT drafts (parent + threaded
+  replies via bot, or webhook fallback); never regenerates; drafts first if none
+  exist so a bare Send still works.
+
+Routes (both `[id]` PATCH handlers): mark-posted now **auto-drafts only** (no
+Slack); new `draft` flag redrafts; new `send_slack` flag sends. Removed the old
+coupled `resend_slack`.
+
+UI (`TeamComments`): **two separate buttons** — "Draft team comments"/"Redraft"
+vs "Send to Slack"/"Resend to Slack" — plus a **"Drafted → Sent to Slack"
+step-status row**. Posts with no drafts yet (old ones) get a "Draft team
+comments" button to backfill.
+
+No schema change. **Checks:** `tsc` exit 0, eslint clean (1 pre-existing),
+`npm run build` OK. Merged; prod deploy verified for f28ce08.
