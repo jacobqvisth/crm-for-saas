@@ -10,7 +10,7 @@
 // communityName: "r/X", createdAt, dataType: "post", + upVotes/numberOfComments
 // when includeMediaLinks is on }.
 
-import type { RedditPost, RedditTraction } from "./reddit";
+import type { RedditPost, RedditTraction, RedditComment } from "./reddit";
 
 const ACTOR = "trudax~reddit-scraper-lite";
 
@@ -189,6 +189,43 @@ export async function apifyFetchRedditCommenters(
     const author = (it.username ?? "").replace(/^\/?u\//i, "").trim();
     if (!author || author === "[deleted]") continue;
     out.push({ author, permalink: it.url ?? null });
+  }
+  return out;
+}
+
+// Full comments on a posted URL, WITH their text — for the thread analyzer that
+// picks which comments are worth replying to. Same actor run as the commenter
+// scan but we keep body/score/permalink instead of flattening to author only.
+// Returns them in the order the actor emits them (roughly top-of-thread first).
+// Never throws — returns [] on failure.
+export async function apifyFetchRedditComments(
+  postUrl: string,
+  maxComments = 200,
+): Promise<RedditComment[]> {
+  const { items } = await runActor({
+    startUrls: [{ url: postUrl }],
+    skipComments: false,
+    skipUserPosts: true,
+    skipCommunity: true,
+    includeMediaLinks: false,
+    maxComments,
+    maxItems: maxComments + 5,
+  });
+  const out: RedditComment[] = [];
+  for (const it of items) {
+    if ((it.dataType ?? "") !== "comment") continue;
+    const author = (it.username ?? "").replace(/^\/?u\//i, "").trim();
+    const body = (it.body ?? "").trim();
+    if (!body || body === "[deleted]" || body === "[removed]") continue;
+    const id = it.parsedId || (it.id?.replace(/^t1_/, "") ?? "");
+    out.push({
+      id,
+      author: author || null,
+      body,
+      permalink: it.url ?? null,
+      score: num(it.upVotes),
+      depth: 0,
+    });
   }
   return out;
 }

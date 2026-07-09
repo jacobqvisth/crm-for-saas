@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { stripLongDashes } from "@/lib/ai/no-long-dash";
 
 // Drafts a Reddit *reply* the team can paste under one of our forum posts, so
 // members can add to the conversation from their own accounts. Sonnet for the
@@ -45,7 +46,7 @@ Return ONLY the reply text, no quotes, no preamble, no markdown.`;
     });
     const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
     if (!text) return { ok: false, reason: "empty comment from model" };
-    return { ok: true, comment: text, model: MODEL };
+    return { ok: true, comment: stripLongDashes(text), model: MODEL };
   } catch (err) {
     return {
       ok: false,
@@ -119,7 +120,7 @@ One object per person, in the order given.`;
     const comments: PerMemberComment[] = members.map((label, i) => {
       const comment =
         byName.get(label.toLowerCase()) ?? parsed[i]?.comment ?? "";
-      return { owner_label: label, comment: comment.trim() };
+      return { owner_label: label, comment: stripLongDashes(comment.trim()) };
     });
     if (comments.every((c) => !c.comment)) {
       return { ok: false, reason: "empty comments from model" };

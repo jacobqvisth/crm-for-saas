@@ -489,6 +489,15 @@ function RecCard({
 
       {/* Actions */}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+        {posted && (
+          <Link
+            href={`/forums/distribution/${rec.id}`}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+            title="Open the thread: reply to other people's comments"
+          >
+            <MessagesSquare className="h-3.5 w-3.5" /> Open thread
+          </Link>
+        )}
         {!posted ? (
           <button
             onClick={() => setShowPostedInput((v) => !v)}

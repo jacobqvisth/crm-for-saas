@@ -209,6 +209,96 @@ export type Database = {
           },
         ]
       }
+      forum_thread_replies: {
+        Row: {
+          account_id: string | null
+          assigned_owner_label: string | null
+          comment_author: string | null
+          comment_excerpt: string | null
+          comment_score: number | null
+          confirmed_via: string | null
+          created_at: string
+          id: string
+          mention_level: string
+          model: string | null
+          posted_at: string | null
+          posted_url: string | null
+          priority: number
+          reddit_comment_id: string
+          reddit_comment_url: string | null
+          reply_text: string | null
+          source: string
+          source_id: string
+          status: string
+          updated_at: string
+          why: string | null
+          workspace_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          assigned_owner_label?: string | null
+          comment_author?: string | null
+          comment_excerpt?: string | null
+          comment_score?: number | null
+          confirmed_via?: string | null
+          created_at?: string
+          id?: string
+          mention_level?: string
+          model?: string | null
+          posted_at?: string | null
+          posted_url?: string | null
+          priority?: number
+          reddit_comment_id: string
+          reddit_comment_url?: string | null
+          reply_text?: string | null
+          source: string
+          source_id: string
+          status?: string
+          updated_at?: string
+          why?: string | null
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string | null
+          assigned_owner_label?: string | null
+          comment_author?: string | null
+          comment_excerpt?: string | null
+          comment_score?: number | null
+          confirmed_via?: string | null
+          created_at?: string
+          id?: string
+          mention_level?: string
+          model?: string | null
+          posted_at?: string | null
+          posted_url?: string | null
+          priority?: number
+          reddit_comment_id?: string
+          reddit_comment_url?: string | null
+          reply_text?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          updated_at?: string
+          why?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_thread_replies_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_thread_replies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forum_distribution: {
         Row: {
           created_at: string
@@ -434,38 +524,50 @@ export type Database = {
       reddit_accounts: {
         Row: {
           active: boolean
+          can_mention_wrenchlane: boolean
           created_at: string
           id: string
           notes: string | null
           owner_label: string
+          persona_note: string | null
           slack_user_id: string | null
           subreddits: string[]
+          turns_wrenches: boolean
           updated_at: string
           username: string | null
+          uses_ai_tools: boolean
           workspace_id: string
         }
         Insert: {
           active?: boolean
+          can_mention_wrenchlane?: boolean
           created_at?: string
           id?: string
           notes?: string | null
           owner_label: string
+          persona_note?: string | null
           slack_user_id?: string | null
           subreddits?: string[]
+          turns_wrenches?: boolean
           updated_at?: string
           username?: string | null
+          uses_ai_tools?: boolean
           workspace_id: string
         }
         Update: {
           active?: boolean
+          can_mention_wrenchlane?: boolean
           created_at?: string
           id?: string
           notes?: string | null
           owner_label?: string
+          persona_note?: string | null
           slack_user_id?: string | null
           subreddits?: string[]
+          turns_wrenches?: boolean
           updated_at?: string
           username?: string | null
+          uses_ai_tools?: boolean
           workspace_id?: string
         }
         Relationships: [

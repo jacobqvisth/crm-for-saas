@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
+import { stripLongDashes } from "@/lib/ai/no-long-dash";
 import type { ForumMentionLevel, ReplySource } from "./replies";
 
 // Sonnet for creative quality — same call as the post generator. These are
@@ -94,7 +95,7 @@ export async function generateForumReply(opts: {
   const body = parseBody(raw);
   if (!body) return { ok: false, reason: "could not parse model output" };
   if (!body.trim()) return { ok: false, reason: "empty reply from model" };
-  return { ok: true, body: body.trim(), model: MODEL };
+  return { ok: true, body: stripLongDashes(body.trim()), model: MODEL };
 }
 
 // The model is told to return bare JSON; be defensive about fences.

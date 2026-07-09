@@ -117,3 +117,34 @@ export interface ForumCommentAssignment {
   created_at: string;
   updated_at: string;
 }
+
+// A drafted reply to ONE real comment on a posted thread — the "reply to other
+// people's comments" flow on the per-post sub-page. Produced by the thread
+// analyzer (src/lib/forums/thread-analyze.ts) and tracked per comment.
+export type ThreadReplyStatus = "suggested" | "posted" | "skipped";
+export type ThreadReplyConfirmedVia = "crm" | "reddit_detected";
+
+export interface ForumThreadReply {
+  id: string;
+  workspace_id: string;
+  source: "distribution" | "post";
+  source_id: string;
+  reddit_comment_id: string;
+  reddit_comment_url: string | null;
+  comment_author: string | null;
+  comment_excerpt: string | null;
+  comment_score: number | null;
+  why: string | null;
+  priority: number;
+  assigned_owner_label: string | null;
+  account_id: string | null;
+  mention_level: ForumMentionLevel;
+  reply_text: string | null;
+  status: ThreadReplyStatus;
+  posted_url: string | null;
+  posted_at: string | null;
+  confirmed_via: ThreadReplyConfirmedVia | null;
+  model: string | null;
+  created_at: string;
+  updated_at: string;
+}
