@@ -10,6 +10,10 @@ const patchSchema = z.object({
   slack_user_id: z.string().max(50).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   active: z.boolean().optional(),
+  turns_wrenches: z.boolean().optional(),
+  uses_ai_tools: z.boolean().optional(),
+  can_mention_wrenchlane: z.boolean().optional(),
+  persona_note: z.string().max(2000).nullable().optional(),
 });
 
 // PATCH /api/forums/accounts/[id] → { account }

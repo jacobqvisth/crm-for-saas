@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { ForumCommentAssignment } from "./types";
+import type { PersonaMember } from "./thread-analyze";
 
 type DB = Awaited<ReturnType<typeof createClient>>;
 
@@ -70,4 +71,44 @@ export async function fetchAssignmentsBySource(
     grouped.set(row.source_id, list);
   }
   return grouped;
+}
+
+/**
+ * Load the active roster with persona flags, one entry per team member, for the
+ * thread analyzer. De-dupes by owner_label (a member may run several accounts)
+ * — persona is OR'd across their accounts so any capability they hold counts.
+ */
+export async function loadPersonaRoster(
+  supabase: DB,
+  workspaceId: string,
+): Promise<PersonaMember[]> {
+  const { data } = await supabase
+    .from("reddit_accounts")
+    .select(
+      "id, owner_label, turns_wrenches, uses_ai_tools, can_mention_wrenchlane, persona_note",
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("active", true)
+    .order("owner_label", { ascending: true });
+
+  const byLabel = new Map<string, PersonaMember>();
+  for (const r of data ?? []) {
+    const existing = byLabel.get(r.owner_label);
+    if (existing) {
+      existing.turns_wrenches ||= Boolean(r.turns_wrenches);
+      existing.uses_ai_tools ||= Boolean(r.uses_ai_tools);
+      existing.can_mention_wrenchlane ||= Boolean(r.can_mention_wrenchlane);
+      if (!existing.persona_note && r.persona_note) existing.persona_note = r.persona_note;
+      continue;
+    }
+    byLabel.set(r.owner_label, {
+      owner_label: r.owner_label,
+      account_id: r.id,
+      turns_wrenches: Boolean(r.turns_wrenches),
+      uses_ai_tools: Boolean(r.uses_ai_tools),
+      can_mention_wrenchlane: Boolean(r.can_mention_wrenchlane),
+      persona_note: r.persona_note ?? null,
+    });
+  }
+  return [...byLabel.values()];
 }

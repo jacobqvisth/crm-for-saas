@@ -19,6 +19,7 @@ import {
   apifyFetchRedditPost,
   apifyFetchRedditTraction,
   apifyFetchRedditCommenters,
+  apifyFetchRedditComments,
 } from "./reddit-apify";
 
 const UA = "web:wrenchlane-crm:1.0 (forum traction tracker)";
@@ -311,6 +312,17 @@ export interface RedditCommenter {
   permalink: string | null; // full URL to the comment, when known
 }
 
+// A single comment WITH its text — for the thread analyzer that decides which
+// comments are worth replying to. `depth` is 0 for top-level (unknown = 0).
+export interface RedditComment {
+  id: string; // base-36 comment id, no "t1_"
+  author: string | null; // bare handle, no "u/"
+  body: string;
+  permalink: string | null; // full URL to the comment
+  score: number | null;
+  depth: number;
+}
+
 // Recursively collect comment authors + permalinks from a Reddit comments
 // listing (the t1 tree returned by the comments endpoint / anon .json).
 function collectCommenters(
@@ -388,6 +400,102 @@ export async function fetchRedditCommenters(
       }
       if (res.status === 403) {
         return { ok: false, reason: "Reddit blocked the request (403) — add an APIFY_TOKEN or Reddit API keys to auto-detect commenters" };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  return { ok: false, reason: "Could not read Reddit comments" };
+}
+
+// Recursively collect comments WITH their bodies from a Reddit comments listing
+// (the t1 tree). Unlike collectCommenters this keeps text/score/permalink so the
+// thread can be analyzed. Skips deleted/removed and "more" stubs.
+function collectComments(listing: unknown, out: RedditComment[], depth = 0): void {
+  if (depth > 12 || out.length > 500) return;
+  const children = (listing as { data?: { children?: unknown[] } })?.data?.children;
+  if (!Array.isArray(children)) return;
+  for (const child of children) {
+    const c = child as { kind?: string; data?: Record<string, unknown> };
+    if (c.kind !== "t1" || !c.data) continue;
+    const author =
+      typeof c.data.author === "string" ? c.data.author.replace(/^\/?u\//i, "") : "";
+    const body = typeof c.data.body === "string" ? c.data.body.trim() : "";
+    if (body && body !== "[deleted]" && body !== "[removed]") {
+      const permalink = typeof c.data.permalink === "string" ? c.data.permalink : null;
+      out.push({
+        id: typeof c.data.id === "string" ? c.data.id : "",
+        author: author && author !== "[deleted]" ? author : null,
+        body,
+        permalink: permalink ? `https://www.reddit.com${permalink}` : null,
+        score: num(c.data.score) ?? num(c.data.ups),
+        depth,
+      });
+    }
+    if (c.data.replies && typeof c.data.replies === "object") {
+      collectComments(c.data.replies, out, depth + 1);
+    }
+  }
+}
+
+// Fetch a thread's comments WITH their text so the analyzer can pick which ones
+// are worth replying to. Apify first (residential IPs, our configured path),
+// OAuth comments endpoint next, anonymous .json last. Never throws.
+export async function fetchRedditThreadComments(
+  postUrl: string,
+): Promise<{ ok: true; comments: RedditComment[] } | { ok: false; reason: string }> {
+  const fullname = redditFullname(postUrl);
+  if (!fullname) return { ok: false, reason: "Not a recognizable Reddit post URL" };
+
+  // 1. Apify (residential IPs) — authoritative when configured.
+  if (isApifyConfigured()) {
+    const comments = await apifyFetchRedditComments(postUrl);
+    if (comments.length > 0) return { ok: true, comments };
+    // Empty from Apify may be a genuinely comment-less thread OR a slow/blocked
+    // scrape; fall through to the OAuth path when creds are also set.
+    if (!(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET)) {
+      return { ok: true, comments };
+    }
+  }
+
+  // 2. OAuth comments endpoint.
+  const id = fullname.replace(/^t3_/, "");
+  const token = await getAppToken();
+  if (token) {
+    try {
+      const res = await fetch(
+        `https://oauth.reddit.com/comments/${id}?raw_json=1&limit=500&depth=10&sort=top`,
+        { headers: { Authorization: `Bearer ${token}`, "User-Agent": UA }, cache: "no-store" },
+      );
+      if (res.ok) {
+        const json = (await res.json()) as unknown[];
+        const out: RedditComment[] = [];
+        collectComments(Array.isArray(json) ? json[1] : undefined, out);
+        return { ok: true, comments: out };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // 3. Anonymous .json (often 403s from datacenter IPs).
+  const jsonUrl = redditJsonUrl(postUrl);
+  if (jsonUrl) {
+    try {
+      const res = await fetch(jsonUrl, { headers: { "User-Agent": UA }, cache: "no-store" });
+      if (res.ok) {
+        const json = (await res.json()) as unknown[];
+        const out: RedditComment[] = [];
+        collectComments(Array.isArray(json) ? json[1] : undefined, out);
+        return { ok: true, comments: out };
+      }
+      if (res.status === 403) {
+        return {
+          ok: false,
+          reason:
+            "Reddit blocked the request (403) — add an APIFY_TOKEN or Reddit API keys to read the thread",
+        };
       }
     } catch {
       // fall through

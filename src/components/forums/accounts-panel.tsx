@@ -151,6 +151,10 @@ function AccountRow({
   const [subs, setSubs] = useState(account.subreddits.join(", "));
   const [slackId, setSlackId] = useState(account.slack_user_id ?? "");
   const [notes, setNotes] = useState(account.notes ?? "");
+  const [turnsWrenches, setTurnsWrenches] = useState(account.turns_wrenches);
+  const [usesAi, setUsesAi] = useState(account.uses_ai_tools);
+  const [canMention, setCanMention] = useState(account.can_mention_wrenchlane);
+  const [personaNote, setPersonaNote] = useState(account.persona_note ?? "");
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
@@ -180,6 +184,10 @@ function AccountRow({
         .filter(Boolean),
       slack_user_id: slackId.trim() || null,
       notes: notes.trim() || null,
+      turns_wrenches: turnsWrenches,
+      uses_ai_tools: usesAi,
+      can_mention_wrenchlane: canMention,
+      persona_note: personaNote.trim() || null,
     });
     if (ok) setEditing(false);
   }
@@ -236,6 +244,62 @@ function AccountRow({
             className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
           />
         </label>
+
+        {/* Persona — drives which drafted replies this person gets and what
+            they're allowed to say when replying to real comments. */}
+        <div className="mt-3 rounded-md border border-indigo-100 bg-indigo-50/40 px-2.5 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
+            Persona (for thread replies)
+          </p>
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            <label className="flex items-start gap-2 text-[11px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={turnsWrenches}
+                onChange={(e) => setTurnsWrenches(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-slate-700">Turns wrenches</span> — real hands-on
+                mechanic; gets the diagnostic / bench-experience replies.
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-[11px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={usesAi}
+                onChange={(e) => setUsesAi(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-slate-700">Uses AI tools</span> — may drop a
+                natural &ldquo;I ran it through an AI app&rdquo; aside (no brand name).
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-[11px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={canMention}
+                onChange={(e) => setCanMention(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-slate-700">May mention Wrenchlane</span> — allowed
+                to name it, sparingly. Keep this to a couple of people.
+              </span>
+            </label>
+          </div>
+          <label className="mt-2 block text-[11px] text-slate-500">
+            Background note (optional)
+            <input
+              value={personaNote}
+              onChange={(e) => setPersonaNote(e.target.value)}
+              placeholder="e.g. indie shop, lots of German cars"
+              className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+          </label>
+        </div>
+
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={save}
@@ -277,6 +341,23 @@ function AccountRow({
       {account.subreddits.length > 0 && (
         <span className="truncate text-slate-400">{account.subreddits.map((s) => `r/${s}`).join(", ")}</span>
       )}
+      <span className="flex flex-shrink-0 items-center gap-1">
+        {account.turns_wrenches && (
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600" title="Turns wrenches">
+            wrench
+          </span>
+        )}
+        {account.uses_ai_tools && (
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title="Uses AI tools">
+            AI
+          </span>
+        )}
+        {account.can_mention_wrenchlane && (
+          <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700" title="May mention Wrenchlane">
+            WL
+          </span>
+        )}
+      </span>
       <button
         onClick={() => setEditing(true)}
         className="ml-auto inline-flex items-center gap-1 text-slate-400 hover:text-slate-700"
