@@ -13,6 +13,28 @@ updated: 2026-05-26
 
 ---
 
+## No em/en dashes in any AI-generated text — 2026-07-09 — PR #532 — feat/no-em-dash-generated-text
+
+Jacob: the long dash (em-dash `—` / en-dash `–`) is a tell that copy was written by an AI, so it must never appear in text the CRM generates or sends on a human's behalf — forum posts, comments, cold emails, sequence steps, inbox replies, translations. Rule should apply from now on across all generation.
+
+**Files:**
+- `src/lib/ai/no-long-dash.ts` (new) — shared utility. `NO_LONG_DASH_INSTRUCTION` (appended to every generation system prompt so the model avoids the char up front, keeping prose natural) + `stripLongDashes()` (deterministic post-processor guaranteeing the rule: replaces `—`/`–` with a comma by default, keeps numeric ranges as a plain hyphen, normalizes HTML-entity forms `&mdash;`/`&ndash;`/numeric, tidies doubled punctuation; safe on plain text and HTML).
+- `src/lib/forums/generate.ts` — instruction + `stripLongDashes` on title/body (forum + Reddit posts/comments).
+- `src/app/api/ai/generate-email/route.ts` — instruction + sanitize subject/body (cold outreach).
+- `src/app/api/ai/generate-variants/route.ts` — instruction + sanitize each A/B variant's subject/body.
+- `src/app/api/sequences/duplicate/route.ts` — instruction + sanitize translated step subject/body.
+- `src/lib/inbox/draft-reply.ts` — instruction + sanitize reply draft.
+- `src/lib/inbox/translate-outbound.ts` — instruction + sanitize both `translateOutboundReply` and `translateOutboundEmail` (subject + HTML body).
+- `src/lib/calls/ai-summary.ts` — instruction + sanitize suggested follow-up email subject/body and the summaries.
+
+**Behaviour / Why:** two layers on purpose — the prompt instruction keeps output natural (model rephrases rather than mechanically comma-substitutes), and the sanitizer is the hard guarantee for when the model slips. Inbound translation (`translate-inbound`) is deliberately NOT sanitized, since altering a customer's actual words would be wrong. Enrichment sites (`find-website`/`find-phone`) are data lookups, not copy, so untouched.
+
+**Verification:** `npx tsc --noEmit` clean · `eslint` clean on changed files · `npm run build` ✅. Unit-checked the sanitizer against Jacob's exact example ("…stuck on — said it…" → "…stuck on, said it…"), plus hyphen preservation (follow-up/co-op), numeric ranges (9–5 → 9-5), and `&mdash;` in HTML.
+
+**Deploy:** squash-merged (8d45af0, 2026-07-09T13:28:24Z); Vercel deploy dpl_4RiWWWBA9KaxWKcdbkudjEggSggT reached READY on crm-for-saas.vercel.app (aliases incl. link.wrenchlane.se).
+
+**Out of scope:** did not sanitize inbound-email translation or enrichment lookups; no schema change; did not retro-clean existing stored generated text (rule applies to new generation going forward).
+
 ## Call follow-up email: edit in Swedish/English, editable subject, sender selector — 2026-07-06 — PR #510 — feature/followup-email-subject-sender
 
 Jacob (from a screenshot of the call drawer's **Suggested follow-up email** card): needs to edit the subject line, see/change the sender, and edit the email *in Swedish* — the translated "Recipient sees" preview was read-only and the sender was invisible. Follow-ups clarified the full model: edit in English OR Swedish, and independently choose the send language.
