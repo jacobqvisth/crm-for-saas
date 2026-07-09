@@ -34,6 +34,27 @@ Jacob (from screenshots of `/forums/answers`): "Find posts to answer" spun ~90s 
 **Verification:** `npx tsc --noEmit` clean, `eslint` clean, `next build` clean (both PRs); Build & Lint ✅ on #537; Apify actor exercised live (single 5-URL run → 400 at 281s; 5 parallel single-sub runs → all 201 with posts). #537 deploy verified state=READY for commit 82a20f0.
 
 **Out of scope / follow-up:** durable upgrades if cold-start spin is still too long — Reddit OAuth creds (`REDDIT_CLIENT_ID/SECRET` → fast `oauth.reddit.com`, if the dev-program gate allows) or an async Apify run + client polling. Neither needed for this fix.
+## Forums: rotatable distribution topics + AI-failure Gap log — 2026-07-09 — PR #538 — feat/forum-topic-rotation
+
+**Branch:** feat/forum-topic-rotation → main (squash merge 2026-07-09T15:22:37Z, commit 2f56f4f8).
+**Deploy:** live on crm-for-saas.vercel.app; Vercel prod deploy for 2f56f4f8 verified state=READY.
+
+Jacob's ask (from a colleague's Slack idea): harvest people's AI-diagnosis "journeys" — especially the epic failures (expensive part replaced on a wrong AI call) — and stop posting the same Distribution topic every week. Two parts:
+
+**1. Rotatable topics on `/forums/distribution`.** The board was locked to one concept ("Will AI take over car diagnostics?"). The API + `forum_distribution.topic` were already `?topic=`-aware and self-seed per topic, so this was mostly content + a `<select>`.
+- `src/lib/forums/distribution.ts` — `TOPICS` grew to 5 (added `menuLabel` + `goal` fields); `DISTRIBUTION_SEED` grew 23 tailored rows (per-community title/body/angle/rules, **no em/en dashes**) across 4 new topics: `ai-repair-horror-stories` (flagship story-bait — open with a painful AI-misdiagnosis story, invite people to share when theirs went south), `ai-diagnostics-wins`, `code-is-not-a-diagnosis`, `diy-confidence-with-ai`.
+- `src/components/forums/distribution-client.tsx` — "Topic to post" dropdown drives `selectedTopic` → refetch `?topic=`, header/summary/goal, and refreshAll. Merged on top of PR #535's board-view refactor (rebase conflict; took main's version + re-applied the dropdown).
+
+**2. Gap log — the "would we have done better?" R&D loop.** New tab `/forums/gaps`.
+- Migration `20260709210000_ai_failure_stories.sql` — table `ai_failure_stories` (workspace-scoped, RLS mirrors forum_distribution). Applied to prod via Supabase MCP `apply_migration`.
+- `src/lib/forums/gaps.ts` (types + option meta), `src/app/api/forums/gaps/route.ts` (GET/POST), `src/app/api/forums/gaps/[id]/route.ts` (PATCH/DELETE), `src/components/forums/gaps-client.tsx` (form + list + editable verdict).
+- Logs each harvested story: symptom / AI tool / AI's claimed cause / part replaced / true root cause / cost / outcome, plus an editable **verdict** (would_have_caught / would_have_missed / unsure) to score against Wrenchlane. Summary chips track review progress.
+- "Gap log" tab added to all 4 forum tab bars (forums / distribution / answers / gaps clients).
+- `src/lib/database.types.ts` — hand-added `ai_failure_stories` block (mirrors forum_distribution shape) since gen output is one 169k-char line.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean (one pre-existing unrelated warning in call-provider.tsx), `npm run build` compiled with `/forums/gaps` + both gap APIs in the manifest. Migration confirmed on prod; deploy READY.
+
+**Out of scope:** did not touch the pre-existing em/en dashes in the original topic's seed rows / TIER_META blurbs (UI chrome, not this PR); no Reddit auto-posting; the Gap log is manual-entry (no auto-harvest from thread replies yet — natural phase 2).
 
 ## Call follow-up email: edit in Swedish/English, editable subject, sender selector — 2026-07-06 — PR #510 — feature/followup-email-subject-sender
 
@@ -5462,6 +5483,67 @@ comments" button to backfill.
 
 No schema change. **Checks:** `tsc` exit 0, eslint clean (1 pre-existing),
 `npm run build` OK. Merged; prod deploy verified for f28ce08.
+
+---
+
+## Forums — per-post thread sub-page + reply-to-comments with personas
+
+**Date:** 2026-07-09 · **PR #533** · branch `worktree-forums-thread-subpages` (merged, commit e4bf152)
+
+Our top distribution posts (r/AutoRepair, r/askcarguys) started drawing real
+comment threads, so the team needs to reply to OTHER people's comments, not just
+drop a top-level comment. Built the per-post workspace + an AI thread analyzer.
+(PR #535 then built on this, porting the board's mark-posted/copy/traction
+controls into the sub-page and turning the board into a summary list.)
+
+**New sub-page `/forums/distribution/[id]`** (`app/(dashboard)/forums/distribution/[id]/page.tsx`
+→ `components/forums/thread-client.tsx`): the post + live traction, the existing
+per-member top-level `TeamComments`, and a new "reply to other people's
+comments" section.
+
+**"Analyze thread":**
+- New primitive — reads the live Reddit comment tree WITH bodies:
+  `fetchRedditThreadComments` in `reddit.ts` + `apifyFetchRedditComments` in
+  `reddit-apify.ts` + a `RedditComment` type. The prior commenter fetch kept only
+  author+permalink and discarded the text.
+- `src/lib/forums/thread-analyze.ts` (`analyzeThreadReplies`, Sonnet 4.6) ranks
+  which comments are worth a reply, drafts one reply each, assigns the best-fit
+  teammate, and clamps the mention level to that teammate's persona. Route
+  `POST /api/forums/thread/analyze` (maxDuration 300; deletes stale `suggested`
+  rows then upserts, preserving posted/skipped).
+
+**Personas on `reddit_accounts`:** `turns_wrenches` / `uses_ai_tools` /
+`can_mention_wrenchlane` + `persona_note`. Editable in `accounts-panel.tsx`
+(checkboxes + chips); `loadPersonaRoster` in `forums/server.ts` OR's flags across
+a member's accounts. Founder accounts backfilled in the migration.
+
+**New table `forum_thread_replies`** (workspace-scoped, RLS mirrors
+`forum_comment_assignments`) + routes `GET /api/forums/thread`,
+`POST /api/forums/thread/analyze`, `PATCH|DELETE /api/forums/thread/[id]`. Type
+`ForumThreadReply` in `forums/types.ts`; `database.types.ts` updated.
+
+**Files:**
+- `src/lib/forums/thread-analyze.ts` — new; the analyzer + persona clamp.
+- `src/lib/forums/reddit.ts`, `reddit-apify.ts` — comment-tree-with-bodies fetch.
+- `src/lib/forums/server.ts` — `loadPersonaRoster`.
+- `src/lib/forums/accounts.ts` — persona fields + seed defaults.
+- `src/lib/forums/{comment,reply-generate}.ts` — post-process via `stripLongDashes`.
+- `src/lib/ai/no-long-dash.ts` — added in this branch; superseded by PR #532's
+  canonical version on merge (add/add conflict resolved by taking theirs).
+- `src/app/(dashboard)/forums/distribution/[id]/page.tsx`, `components/forums/thread-client.tsx` — new sub-page.
+- `src/app/api/forums/thread/**` — new routes; `accounts` routes gained persona fields.
+- `supabase/migrations/20260709200000_forum_thread_replies.sql` — new table + 4 persona cols + founder backfill.
+
+**Migration:** applied to prod `wdgiwuhehqpkhpvdzzzl` via Supabase MCP
+`apply_migration` (classifier blocked the first attempt; applied after plain-chat
+yes). Verified: 22-col table, RLS policy live, 4 persona cols present.
+
+**Checks:** `tsc --noEmit` clean, eslint clean, `next build --webpack` green
+(`/forums/distribution/[id]` builds as a dynamic route). Merged; prod deploy
+verified READY for the merge commit.
+
+**Out of scope:** post-generator board sub-page (distribution only for now);
+Slack fan-out for thread replies (top-level comments already do this).
 
 ---
 
