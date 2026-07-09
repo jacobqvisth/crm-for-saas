@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { WRENCHLANE_KNOWLEDGE } from "./wrenchlane-knowledge";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -19,6 +20,7 @@ How to draft:
 - Don't oversell. If they declined or scoped themselves out (e.g. "we only work with Subaru"), respect it — one polite acknowledgement and close the loop, or one clarifying question.
 - Don't include a signature, greeting line, or "Best regards" closer — a per-sender signature is appended at send time.
 - Don't repeat their words back at them; sound like a human peer, not a chatbot.
+- ${NO_LONG_DASH_INSTRUCTION}
 
 When (and how) to include a video or article link:
 - If — and only if — one of the videos or articles in the knowledge document above directly answers their question, include its URL on its own line in the draft.
@@ -116,7 +118,7 @@ export async function draftReplyInEnglish(ctx: DraftContext): Promise<DraftResul
     };
   }
 
-  const draft = raw.trim();
+  const draft = stripLongDashes(raw.trim());
   if (!draft) return { ok: false, reason: "empty draft from model" };
 
   return { ok: true, draft, model: MODEL };

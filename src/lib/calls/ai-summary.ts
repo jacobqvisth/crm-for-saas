@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CALL_OUTCOMES, type CallOutcome } from "./decision";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 // AI summarization of a recorded call. One Sonnet tool-call returns both the
 // human summary and the structured follow-up suggestions, so the CRM can
@@ -195,6 +196,8 @@ LANGUAGE RULE (important):
 ${ctx.knowledgeMd}
 === END PRODUCT KNOWLEDGE ===
 
+${NO_LONG_DASH_INSTRUCTION} This applies to every text field, especially the follow-up email subject and body.
+
 Today's date is ${ctx.today}. Call the record_call_analysis tool exactly once with your analysis. Be honest: if the transcript is empty, garbled, or clearly a voicemail/no-answer, reflect that in the outcome and do not fabricate content.`;
 
   const userParts: string[] = [];
@@ -234,6 +237,16 @@ Today's date is ${ctx.today}. Call the record_call_analysis tool exactly once wi
         : "";
     analysis.contact_language =
       rawLang || (ctx.languageHint === "sv" ? "sv" : "en");
+    // Strip long dashes from every human-facing text field the CRM will show or
+    // send. The suggested follow-up email is the one that gets sent to a contact.
+    const email = analysis.suggested_followup_email;
+    if (email) {
+      if (typeof email.subject === "string") email.subject = stripLongDashes(email.subject);
+      if (typeof email.body === "string") email.body = stripLongDashes(email.body);
+    }
+    if (typeof analysis.summary === "string") analysis.summary = stripLongDashes(analysis.summary);
+    if (typeof analysis.summary_native === "string")
+      analysis.summary_native = stripLongDashes(analysis.summary_native);
     return { ok: true, analysis, model: MODEL };
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : "analyzeCall failed" };

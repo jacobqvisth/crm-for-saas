@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 const ALLOWED_TOKENS = [
   "first_name",
@@ -169,6 +170,7 @@ ${ctaLock ? `- The CTA must include this phrase verbatim: "${ctaLock}"` : "- The
 Output rules:
 - Each variant must be substantially different from every other variant AND from any existing variant shown below — different opener, different rhythm, different word choices. Do NOT just rephrase one sentence.
 - Subject lines: 5–8 words, no exclamation marks, do NOT mention "AI"
+- ${NO_LONG_DASH_INSTRUCTION}
 - Body: HTML with only <p> tags. No bold, no lists, no headers. Short paragraphs (max 3–4 sentences each).
 - Salutation: write it exactly as "Hi{{first_name_optional}}," (no space before the token). At send time this renders to "Hi Jane," when the contact has a first name and "Hi," when they don't — never use the bare {{first_name}} token in the salutation, and never invent your own greeting
 - Return ONLY valid JSON: an array of exactly ${count} objects, each { "name": string, "subject": string, "body": string }
@@ -247,7 +249,11 @@ Return the JSON array now.`;
         continue;
       }
     }
-    validVariants.push(v);
+    validVariants.push({
+      ...v,
+      subject: stripLongDashes(v.subject),
+      body: stripLongDashes(v.body),
+    });
   }
 
   if (validVariants.length === 0) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 type PersonaAngle = "shop_owner" | "service_advisor" | "technician";
 
@@ -128,6 +129,7 @@ ${PERSONA_CONTEXT[body.personaAngle]}
 Rules:
 - Write in plain, conversational English (not Swedish — the tool is sold in Nordic markets but emails are in English)
 - NO buzzwords like "revolutionize", "game-changer", "leverage", "synergy"
+- ${NO_LONG_DASH_INSTRUCTION}
 - DO NOT mention "AI" in the subject line — it triggers spam filters
 - Subject line: 5–8 words, plain language, no exclamation marks
 - Body: short paragraphs, max 3–4 sentences each, exactly 1 soft CTA at the end (not "book a demo" — try "worth a quick chat?" or "open to a 15-min call?")
@@ -195,7 +197,10 @@ Return the email as JSON: {"subject": "...", "body": "..."}`;
         { onConflict: "workspace_id" }
       );
 
-    return NextResponse.json({ subject: parsed.subject, body: parsed.body });
+    return NextResponse.json({
+      subject: stripLongDashes(parsed.subject),
+      body: stripLongDashes(parsed.body),
+    });
   } catch {
     return NextResponse.json(
       { error: "AI service unavailable. Try again." },
