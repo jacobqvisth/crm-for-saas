@@ -5443,6 +5443,67 @@ No schema change. **Checks:** `tsc` exit 0, eslint clean (1 pre-existing),
 
 ---
 
+## Forums — per-post thread sub-page + reply-to-comments with personas
+
+**Date:** 2026-07-09 · **PR #533** · branch `worktree-forums-thread-subpages` (merged, commit e4bf152)
+
+Our top distribution posts (r/AutoRepair, r/askcarguys) started drawing real
+comment threads, so the team needs to reply to OTHER people's comments, not just
+drop a top-level comment. Built the per-post workspace + an AI thread analyzer.
+(PR #535 then built on this, porting the board's mark-posted/copy/traction
+controls into the sub-page and turning the board into a summary list.)
+
+**New sub-page `/forums/distribution/[id]`** (`app/(dashboard)/forums/distribution/[id]/page.tsx`
+→ `components/forums/thread-client.tsx`): the post + live traction, the existing
+per-member top-level `TeamComments`, and a new "reply to other people's
+comments" section.
+
+**"Analyze thread":**
+- New primitive — reads the live Reddit comment tree WITH bodies:
+  `fetchRedditThreadComments` in `reddit.ts` + `apifyFetchRedditComments` in
+  `reddit-apify.ts` + a `RedditComment` type. The prior commenter fetch kept only
+  author+permalink and discarded the text.
+- `src/lib/forums/thread-analyze.ts` (`analyzeThreadReplies`, Sonnet 4.6) ranks
+  which comments are worth a reply, drafts one reply each, assigns the best-fit
+  teammate, and clamps the mention level to that teammate's persona. Route
+  `POST /api/forums/thread/analyze` (maxDuration 300; deletes stale `suggested`
+  rows then upserts, preserving posted/skipped).
+
+**Personas on `reddit_accounts`:** `turns_wrenches` / `uses_ai_tools` /
+`can_mention_wrenchlane` + `persona_note`. Editable in `accounts-panel.tsx`
+(checkboxes + chips); `loadPersonaRoster` in `forums/server.ts` OR's flags across
+a member's accounts. Founder accounts backfilled in the migration.
+
+**New table `forum_thread_replies`** (workspace-scoped, RLS mirrors
+`forum_comment_assignments`) + routes `GET /api/forums/thread`,
+`POST /api/forums/thread/analyze`, `PATCH|DELETE /api/forums/thread/[id]`. Type
+`ForumThreadReply` in `forums/types.ts`; `database.types.ts` updated.
+
+**Files:**
+- `src/lib/forums/thread-analyze.ts` — new; the analyzer + persona clamp.
+- `src/lib/forums/reddit.ts`, `reddit-apify.ts` — comment-tree-with-bodies fetch.
+- `src/lib/forums/server.ts` — `loadPersonaRoster`.
+- `src/lib/forums/accounts.ts` — persona fields + seed defaults.
+- `src/lib/forums/{comment,reply-generate}.ts` — post-process via `stripLongDashes`.
+- `src/lib/ai/no-long-dash.ts` — added in this branch; superseded by PR #532's
+  canonical version on merge (add/add conflict resolved by taking theirs).
+- `src/app/(dashboard)/forums/distribution/[id]/page.tsx`, `components/forums/thread-client.tsx` — new sub-page.
+- `src/app/api/forums/thread/**` — new routes; `accounts` routes gained persona fields.
+- `supabase/migrations/20260709200000_forum_thread_replies.sql` — new table + 4 persona cols + founder backfill.
+
+**Migration:** applied to prod `wdgiwuhehqpkhpvdzzzl` via Supabase MCP
+`apply_migration` (classifier blocked the first attempt; applied after plain-chat
+yes). Verified: 22-col table, RLS policy live, 4 persona cols present.
+
+**Checks:** `tsc --noEmit` clean, eslint clean, `next build --webpack` green
+(`/forums/distribution/[id]` builds as a dynamic route). Merged; prod deploy
+verified READY for the merge commit.
+
+**Out of scope:** post-generator board sub-page (distribution only for now);
+Slack fan-out for thread replies (top-level comments already do this).
+
+---
+
 ## Forums Distribution UX — summary board + Posted/To-be-posted tabs
 
 **Date:** 2026-07-09 · **PR #535** · branch `worktree-forums-distribution-ux` (merged, commit e641026)
