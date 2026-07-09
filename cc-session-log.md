@@ -5377,3 +5377,39 @@ via the existing webhook.
 **Checks:** `tsc --noEmit` exit 0, eslint clean (1 pre-existing warning), local
 `npm run build` OK. Rebased onto #522/#523/#524 (only an import conflict in
 distribution-client). Merged; prod deploy verified for af577cf.
+
+## Forums — contributor tracking (who actually commented)
+**Date:** 2026-07-09 · **PR:** #527 · **Branch:** feature/forums-contributor-tracking
+
+Follow-up to #525: track **which team members actually contributed** to a
+posted forum item. Two trustworthy signals count (Jacob's call — CRM manual
+marks and Slack-thread chatter deliberately excluded):
+- **`reddit_detected`** — their roster Reddit handle appears as a commenter on
+  the real thread. Authoritative. Read via Apify (reddit-scraper-lite with
+  comments on): `fetchRedditCommenters()` (Apify → OAuth → anon comment-tree
+  fallback); `scanRedditContributors()` matches authors to
+  `reddit_accounts.username`, marks the member's assignment posted +
+  `confirmed_via='reddit_detected'` (+ comment permalink + author).
+- **`slack_reaction`** — the ✅ roundtrip from #525.
+
+Surfaces (all three Jacob picked):
+- **Per-post card:** `TeamComments` shows each member's contribution source
+  (Reddit ✅ / Slack ✅ / CRM) + link to the detected comment + "N/M
+  contributed", and a **"Scan Reddit for our comments"** button
+  (`POST /api/forums/contributors/scan`).
+- **Aggregate leaderboard:** collapsible "Team contributions" panel on the
+  Distribution board (`GET /api/forums/contributors`).
+- **Slack thread summary:** a "contributors so far" message posted + kept
+  updated via `chat.update`, refreshed on scan and on each ✅ event.
+
+**Migration (applied to prod):** `20260709100000_forum_contributor_tracking.sql`
+— `confirmed_via` CHECK += `reddit_detected`; `reddit_comment_url` +
+`detected_author` on `forum_comment_assignments`; `slack_summary_ts` +
+`slack_summary_channel` on both boards.
+
+**Caveat:** Reddit auto-detection only finds members whose Reddit handle is in
+the roster; teammates become detectable once they add theirs (roster editor).
+Slack ✅ still needs the one-time bot setup from `docs/forums-slack-setup.md`.
+
+**Checks:** `tsc` exit 0, eslint clean (1 pre-existing), `npm run build` OK.
+Merged; prod deploy verified for ddb66af.
