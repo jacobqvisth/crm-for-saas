@@ -147,17 +147,24 @@ export async function apifySearchRedditPosts(opts: {
   const query = opts.query?.trim() || undefined;
   const sort = opts.sort ?? "new";
 
+  // Cap each run at 180s: the runs are awaited together, so the whole search
+  // can only be as fast as its slowest subreddit. A warm/normal subreddit
+  // returns in ~75-130s (measured), so 180s captures those while cutting a cold
+  // straggler loose early — partial results still include every fast subreddit.
   const results = await Promise.all(
     subs.map((sub) =>
-      runActor({
-        startUrls: startUrls([sub], query, sort),
-        skipComments: true,
-        skipUserPosts: true,
-        skipCommunity: true,
-        includeMediaLinks: true, // brings upVotes + numberOfComments
-        maxItems: perSub,
-        maxPostCount: perSub,
-      }),
+      runActor(
+        {
+          startUrls: startUrls([sub], query, sort),
+          skipComments: true,
+          skipUserPosts: true,
+          skipCommunity: true,
+          includeMediaLinks: true, // brings upVotes + numberOfComments
+          maxItems: perSub,
+          maxPostCount: perSub,
+        },
+        { serverTimeout: 180, clientTimeout: 190_000 },
+      ),
     ),
   );
 
