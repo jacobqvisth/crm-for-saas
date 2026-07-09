@@ -415,12 +415,22 @@ export async function searchRedditPosts(opts: {
   if (!token) {
     // No OAuth — scrape via Apify (residential IPs) when configured.
     if (isApifyConfigured()) {
-      const posts = await apifySearchRedditPosts({
+      const { posts, failed, timedOut } = await apifySearchRedditPosts({
         subreddits: subs,
         query: opts.query,
         sort: opts.sort,
         limit: opts.limit,
       });
+      // Don't pass a timeout/error off as "no posts found" — the actor
+      // cold-starts and can be slow, so a clear retry message matters.
+      if (failed) {
+        return {
+          ok: false,
+          reason: timedOut
+            ? "Reddit search timed out — the scraper was still warming up. Try again in a moment."
+            : "Couldn't reach the Reddit scraper. Try again shortly.",
+        };
+      }
       return { ok: true, posts };
     }
     return {
