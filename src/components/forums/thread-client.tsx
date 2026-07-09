@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Pencil,
   User,
+  Send,
 } from "lucide-react";
 import type { DistributionRec } from "@/lib/forums/distribution";
 import type {
@@ -42,6 +43,15 @@ export function ThreadClient({ recId }: { recId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Mark-posted + manual-traction editing. Moved here from the board so the
+  // post's own page is where you manage everything about it.
+  const [showPostedInput, setShowPostedInput] = useState(false);
+  const [postedUrl, setPostedUrl] = useState("");
+  const [postedByAccountId, setPostedByAccountId] = useState("");
+  const [editingTraction, setEditingTraction] = useState(false);
+  const [manualScore, setManualScore] = useState("");
+  const [manualComments, setManualComments] = useState("");
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
@@ -75,7 +85,19 @@ export function ThreadClient({ recId }: { recId: string }) {
     })();
   }, [load]);
 
-  // Patch the parent distribution rec (traction refresh, draft/send Slack).
+  // Keep the mark-posted / traction inputs in sync with the loaded rec.
+  useEffect(() => {
+    if (!rec) return;
+    setPostedUrl(rec.posted_url ?? "");
+    setPostedByAccountId(rec.posted_by_account_id ?? "");
+    setManualScore(rec.score?.toString() ?? "");
+    setManualComments(rec.num_comments?.toString() ?? "");
+    // Only re-seed when we switch to a different rec, not on every traction poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec?.id]);
+
+  // Patch the parent distribution rec (traction refresh, draft/send Slack,
+  // mark posted, skip). Returns whether the save succeeded.
   async function patchRec(body: Record<string, unknown>) {
     setBusy(true);
     try {
@@ -88,10 +110,30 @@ export function ThreadClient({ recId }: { recId: string }) {
       if (res.ok) {
         setRec(data.rec as DistributionRec);
         if (data.rec?.assignments) setAssignments(data.rec.assignments as ForumCommentAssignment[]);
+        return true;
       }
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  async function markPosted() {
+    const ok = await patchRec({
+      status: "posted",
+      posted_url: postedUrl || null,
+      posted_by_account_id: postedByAccountId || null,
+      refresh: Boolean(postedUrl),
+    });
+    if (ok) setShowPostedInput(false);
+  }
+
+  async function saveManualTraction() {
+    const ok = await patchRec({
+      score: manualScore === "" ? null : Number(manualScore),
+      num_comments: manualComments === "" ? null : Number(manualComments),
+    });
+    if (ok) setEditingTraction(false);
   }
 
   async function analyze() {
@@ -142,13 +184,21 @@ export function ThreadClient({ recId }: { recId: string }) {
   }
 
   const posted = rec.status === "posted";
+  const skipped = rec.status === "skipped";
   const postedCount = replies.filter((r) => r.status === "posted").length;
+  const postedByAccount = accounts.find((a) => a.id === rec.posted_by_account_id) ?? null;
+  // The Reddit handle Reddit reports as the author — flag it when it doesn't
+  // match the picked account's handle.
+  const authorMismatch =
+    !!rec.posted_by_username &&
+    !!postedByAccount?.username &&
+    rec.posted_by_username.toLowerCase() !== postedByAccount.username.toLowerCase();
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <BackLink />
 
-      {/* Post header */}
+      {/* Post header — everything about this recommendation */}
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex items-start justify-between gap-3">
           <a
@@ -172,53 +222,231 @@ export function ThreadClient({ recId }: { recId: string }) {
           </span>
         </div>
 
+        {/* Why this community fits */}
+        {rec.fit_reason && <p className="mt-2 text-xs text-slate-600">{rec.fit_reason}</p>}
+
+        {/* The post to paste — title + body, both copyable */}
         {rec.suggested_title && (
-          <h1 className="mt-3 text-xl font-semibold text-slate-900">{rec.suggested_title}</h1>
+          <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Suggested title
+              </span>
+              <CopyButton text={rec.suggested_title} label="Copy" />
+            </div>
+            <h1 className="text-base font-semibold text-slate-900">{rec.suggested_title}</h1>
+          </div>
         )}
         {rec.suggested_body && (
-          <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm text-slate-600">
-            {rec.suggested_body}
+          <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Body
+              </span>
+              <CopyButton text={rec.suggested_body} label="Copy" />
+            </div>
+            <p className="max-h-60 overflow-y-auto whitespace-pre-wrap text-sm text-slate-700">
+              {rec.suggested_body}
+            </p>
+            {rec.suggested_title && (
+              <div className="mt-2 flex justify-end">
+                <CopyButton
+                  text={`${rec.suggested_title}\n\n${rec.suggested_body}`}
+                  label="Copy title + body"
+                  prominent
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Angle + rules */}
+        <div className="mt-2 space-y-1">
+          {rec.recommended_angle && (
+            <p className="text-[11px] text-slate-500">
+              <span className="font-medium text-slate-600">Angle:</span> {rec.recommended_angle}
+            </p>
+          )}
+          {rec.rules_note && (
+            <p className="text-[11px] text-amber-700">
+              <span className="font-medium">Rules:</span> {rec.rules_note}
+            </p>
+          )}
+        </div>
+
+        {/* Live traction (posted only) */}
+        {posted && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs">
+            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+              <ArrowUpToLine className="h-3.5 w-3.5 text-slate-400" />
+              {rec.score ?? "—"} <span className="font-normal text-slate-500">upvotes</span>
+            </span>
+            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+              <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+              {rec.num_comments ?? "—"} <span className="font-normal text-slate-500">comments</span>
+            </span>
+            {typeof rec.upvote_ratio === "number" && (
+              <span className="text-slate-500">{Math.round(rec.upvote_ratio * 100)}% upvoted</span>
+            )}
+            {rec.posted_url && (
+              <a
+                href={rec.posted_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900"
+              >
+                <ExternalLink className="h-3 w-3" /> view thread on Reddit
+              </a>
+            )}
+            {rec.posted_url && (
+              <button
+                onClick={() => patchRec({ refresh: true })}
+                disabled={busy}
+                className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 disabled:opacity-50"
+                title="Refresh upvotes + comments from Reddit"
+              >
+                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                refresh
+              </button>
+            )}
+            <button
+              onClick={() => setEditingTraction((v) => !v)}
+              className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+              title="Enter upvotes / comments manually"
+            >
+              <Pencil className="h-3 w-3" /> edit
+            </button>
+            {rec.last_checked_at && (
+              <span className="text-slate-400">
+                checked {new Date(rec.last_checked_at).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        )}
+        {posted && rec.traction_note && (
+          <p className="mt-1 text-[11px] text-amber-700">{rec.traction_note}</p>
+        )}
+        {posted && editingTraction && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <label className="inline-flex items-center gap-1 text-slate-500">
+              <ArrowUpToLine className="h-3.5 w-3.5" />
+              <input
+                type="number"
+                value={manualScore}
+                onChange={(e) => setManualScore(e.target.value)}
+                placeholder="upvotes"
+                className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+              />
+            </label>
+            <label className="inline-flex items-center gap-1 text-slate-500">
+              <MessageSquare className="h-3.5 w-3.5" />
+              <input
+                type="number"
+                value={manualComments}
+                onChange={(e) => setManualComments(e.target.value)}
+                placeholder="comments"
+                className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+              />
+            </label>
+            <button
+              onClick={saveManualTraction}
+              disabled={busy}
+              className="rounded-lg bg-green-600 px-3 py-1 font-medium text-white hover:bg-green-700 disabled:opacity-60"
+            >
+              Save
+            </button>
+          </div>
+        )}
+        {posted && (postedByAccount || rec.posted_by_username) && (
+          <p className="mt-2 inline-flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+            <User className="h-3 w-3 text-slate-400" />
+            <span className="font-medium text-slate-600">Posted by</span>{" "}
+            {postedByAccount ? (
+              <span>{accountLabel(postedByAccount)}</span>
+            ) : (
+              <span>u/{rec.posted_by_username}</span>
+            )}
+            {authorMismatch && (
+              <span className="text-amber-700">— Reddit says u/{rec.posted_by_username}</span>
+            )}
           </p>
         )}
 
-        {/* Live traction */}
-        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs">
-          <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-            <ArrowUpToLine className="h-3.5 w-3.5 text-slate-400" />
-            {rec.score ?? "—"} <span className="font-normal text-slate-500">upvotes</span>
-          </span>
-          <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-            <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
-            {rec.num_comments ?? "—"} <span className="font-normal text-slate-500">comments</span>
-          </span>
-          {rec.posted_url && (
-            <a
-              href={rec.posted_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900"
-            >
-              <ExternalLink className="h-3 w-3" /> view thread on Reddit
-            </a>
-          )}
-          {posted && rec.posted_url && (
+        {/* Post lifecycle actions */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          {!posted ? (
             <button
-              onClick={() => patchRec({ refresh: true })}
+              onClick={() => setShowPostedInput((v) => !v)}
               disabled={busy}
-              className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 disabled:opacity-50"
-              title="Refresh upvotes + comments from Reddit"
+              className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
             >
-              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-              refresh
+              <Send className="h-3.5 w-3.5" /> Mark posted
+            </button>
+          ) : (
+            <button
+              onClick={() => patchRec({ status: "recommended", posted_url: null })}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Unmark
             </button>
           )}
-          {rec.last_checked_at && (
-            <span className="text-slate-400">
-              checked {new Date(rec.last_checked_at).toLocaleDateString()}
-            </span>
-          )}
+          {!posted &&
+            (skipped ? (
+              <button
+                onClick={() => patchRec({ status: "recommended" })}
+                disabled={busy}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Restore
+              </button>
+            ) : (
+              <button
+                onClick={() => patchRec({ status: "skipped" })}
+                disabled={busy}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-60"
+              >
+                <CircleSlash className="h-3.5 w-3.5" /> Skip
+              </button>
+            ))}
         </div>
-        {rec.traction_note && <p className="mt-1 text-[11px] text-amber-700">{rec.traction_note}</p>}
+
+        {showPostedInput && !posted && (
+          <div className="mt-2 flex flex-col gap-2">
+            <label className="flex items-center gap-2">
+              <User className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+              <select
+                value={postedByAccountId}
+                onChange={(e) => setPostedByAccountId(e.target.value)}
+                className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+              >
+                <option value="">Posted by… (which Reddit account?)</option>
+                {accounts
+                  .filter((a) => a.active)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {accountLabel(a)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={postedUrl}
+                onChange={(e) => setPostedUrl(e.target.value)}
+                placeholder="Paste the Reddit post URL"
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
+              />
+              <button
+                onClick={markPosted}
+                disabled={busy}
+                className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Reply to the post itself (per-member top-level comments) */}
@@ -287,11 +515,8 @@ export function ThreadClient({ recId }: { recId: string }) {
 
         {!posted && (
           <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
-            Mark this recommendation posted (with its Reddit URL) on the{" "}
-            <Link href="/forums/distribution" className="font-medium underline">
-              Distribution board
-            </Link>{" "}
-            before analyzing its thread.
+            Hit <span className="font-medium">Mark posted</span> above (with its Reddit URL) before
+            analyzing its thread.
           </div>
         )}
 
@@ -325,6 +550,52 @@ function BackLink() {
     >
       <ArrowLeft className="h-4 w-4" /> Back to Distribution
     </Link>
+  );
+}
+
+// "Owner · u/handle" (or just the owner when the handle isn't filled in yet).
+function accountLabel(a: RedditAccount): string {
+  return a.username ? `${a.owner_label} · u/${a.username}` : `${a.owner_label} (handle pending)`;
+}
+
+function CopyButton({
+  text,
+  label,
+  prominent,
+}: {
+  text: string;
+  label: string;
+  prominent?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  }
+  if (prominent) {
+    return (
+      <button
+        onClick={copy}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? "Copied" : label}
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={copy}
+      className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800"
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied" : label}
+    </button>
   );
 }
 
