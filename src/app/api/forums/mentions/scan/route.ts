@@ -56,9 +56,10 @@ export async function GET(request: NextRequest) {
       const sub = m.subreddit ? `r/${m.subreddit.replace(/^r\//i, "")}` : "Reddit";
       const who = m.author ? `u/${m.author}` : "someone";
       const kind = m.kind === "link" ? "linked to Wrenchlane" : "mentioned Wrenchlane";
+      const mood = m.sentiment ? ` _(${m.sentiment})_` : "";
       const text =
-        `:eyes: *New Wrenchlane mention on Reddit* — ${who} ${kind} in ${sub}\n` +
-        (m.excerpt ? `> ${m.excerpt}\n` : "") +
+        `:eyes: *New Wrenchlane mention on Reddit*${mood} — ${who} ${kind} in ${sub}\n` +
+        (m.summary ? `${m.summary}\n` : m.excerpt ? `> ${m.excerpt}\n` : "") +
         `<${m.source_url}|Open the thread> — worth a genuine reply from someone whose account fits.`;
       const posted = await postSlackMessage({ channel, text });
       if (posted.ok) {

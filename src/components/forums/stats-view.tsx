@@ -17,6 +17,13 @@ function pct(n: number, d: number): number {
   return d > 0 ? Math.round((n / d) * 100) : 0;
 }
 
+const SENTIMENT_CLASS: Record<string, string> = {
+  positive: "bg-green-50 text-green-700",
+  negative: "bg-red-50 text-red-700",
+  neutral: "bg-slate-100 text-slate-600",
+  competitor: "bg-amber-50 text-amber-700",
+};
+
 function KpiTile({
   icon,
   label,
@@ -351,27 +358,35 @@ function WrenchlaneExposureCard({ stats }: { stats: ForumStats }) {
       ) : (
         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
           {w.recent.map((m) => (
-            <li key={m.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  m.audience === "us" ? "bg-orange-50 text-orange-700" : "bg-sky-50 text-sky-700"
-                }`}
-              >
-                {m.audience === "us" ? "Us" : "Third party"}
-              </span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                {m.kind === "link" ? "Link" : "Mention"}
-              </span>
-              <span className="text-slate-500">{m.subreddit ? `r/${m.subreddit.replace(/^r\//i, "")}` : "—"}</span>
-              {m.author ? <span className="text-slate-400">u/{m.author}</span> : null}
-              <Link
-                href={m.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto truncate text-slate-500 hover:text-orange-600"
-              >
-                {m.matched_domain ?? "view thread"}
-              </Link>
+            <li key={m.id} className="px-4 py-2.5 text-sm">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    m.audience === "us" ? "bg-orange-50 text-orange-700" : "bg-sky-50 text-sky-700"
+                  }`}
+                >
+                  {m.audience === "us" ? "Us" : "Third party"}
+                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                  {m.kind === "link" ? "Link" : "Mention"}
+                </span>
+                {m.sentiment ? (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SENTIMENT_CLASS[m.sentiment] ?? "bg-slate-100 text-slate-600"}`}>
+                    {m.sentiment}
+                  </span>
+                ) : null}
+                <span className="text-slate-500">{m.subreddit ? `r/${m.subreddit.replace(/^r\//i, "")}` : "—"}</span>
+                {m.author ? <span className="text-slate-400">u/{m.author}</span> : null}
+                <Link
+                  href={m.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto shrink-0 text-slate-500 hover:text-orange-600"
+                >
+                  {m.matched_domain ?? "view thread"}
+                </Link>
+              </div>
+              {m.ai_summary ? <p className="mt-1 text-xs text-slate-500">{m.ai_summary}</p> : null}
             </li>
           ))}
         </ul>

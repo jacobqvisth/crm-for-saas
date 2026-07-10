@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { apifySearchRedditPosts, apifyFetchRedditComments, isApifyConfigured } from "./reddit-apify";
 import { REPLY_SUBREDDITS } from "./replies";
 import { detectWrenchlane, wrenchlaneExcerpt } from "./wl-domains";
+import { enrichMention } from "./mention-enrich";
 
 type RawDB = SupabaseClient;
 
@@ -26,7 +27,8 @@ export interface ScanMentionsResult {
   postsScanned: number;
   threadsSwept: number;
   found: number;
-  // Third-party hits that are new this run — the route Slack-alerts these.
+  // New, AI-confirmed third-party hits this run — the route Slack-alerts these.
+  // Noise (is_about_us=false) is auto-dismissed and excluded here.
   newThirdParty: {
     id: string;
     kind: string;
@@ -34,6 +36,8 @@ export interface ScanMentionsResult {
     author: string | null;
     source_url: string;
     excerpt: string | null;
+    sentiment: string | null;
+    summary: string | null;
   }[];
 }
 
@@ -188,23 +192,51 @@ export async function scanRedditMentions(opts: {
     source_url: string;
     excerpt: string | null;
   };
-  const newThirdParty = ((upserted ?? []) as UpsertedRow[])
-    .filter((u) => u.audience === "third_party" && !existingKeys.has(`${u.source_url}|${u.author ?? ""}`))
-    .map((u) => ({
-      id: u.id,
-      kind: u.kind,
-      subreddit: u.subreddit,
-      author: u.author,
-      source_url: u.source_url,
-      excerpt: u.excerpt,
-    }));
+  const freshThirdParty = ((upserted ?? []) as UpsertedRow[]).filter(
+    (u) => u.audience === "third_party" && !existingKeys.has(`${u.source_url}|${u.author ?? ""}`),
+  );
+
+  // Enrich fresh third-party hits: sentiment + a noise filter. is_about_us=false
+  // is auto-dismissed so the review queue and Slack only see real mentions.
+  // Capped so a big burst can't blow maxDuration; leftovers get enriched by the
+  // on-demand /enrich route or the next run.
+  const ENRICH_CAP = 20;
+  const confirmed: ScanMentionsResult["newThirdParty"] = [];
+  for (const u of freshThirdParty.slice(0, ENRICH_CAP)) {
+    const res = await enrichMention({ subreddit: u.subreddit, author: u.author, text: u.excerpt ?? "" });
+    if (!res.ok) {
+      // Leave it status='new', unenriched — a human still sees it in the queue.
+      confirmed.push({
+        id: u.id, kind: u.kind, subreddit: u.subreddit, author: u.author,
+        source_url: u.source_url, excerpt: u.excerpt, sentiment: null, summary: null,
+      });
+      continue;
+    }
+    const e = res.enrichment;
+    await supabase
+      .from("reddit_mentions")
+      .update({
+        sentiment: e.sentiment,
+        context_tag: e.contextTag,
+        ai_summary: e.summary,
+        is_about_us: e.isAboutUs,
+        status: e.isAboutUs ? "new" : "dismissed",
+      })
+      .eq("id", u.id);
+    if (e.isAboutUs) {
+      confirmed.push({
+        id: u.id, kind: u.kind, subreddit: u.subreddit, author: u.author,
+        source_url: u.source_url, excerpt: u.excerpt, sentiment: e.sentiment, summary: e.summary,
+      });
+    }
+  }
 
   return {
     ok: true,
     postsScanned: search.posts.length,
     threadsSwept: posted.length,
     found: rows.length,
-    newThirdParty,
+    newThirdParty: confirmed,
   };
 }
 
