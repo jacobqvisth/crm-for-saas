@@ -22,6 +22,8 @@ const patchSchema = z.object({
   generated_body: z.string().max(20000).nullable().optional(),
   // Which roster account should post this draft (null = unassigned).
   assigned_account_id: z.string().uuid().nullable().optional(),
+  // Which roster account actually posted it (recorded at mark-posted time).
+  posted_by_account_id: z.string().uuid().nullable().optional(),
   // When true, re-run the model from the post's stored scenario + settings.
   regenerate: z.boolean().optional(),
   // When true, re-fetch this post's traction (upvotes/comments) from Reddit.
@@ -88,6 +90,8 @@ export async function PATCH(
         update.score = result.traction.score;
         update.num_comments = result.traction.num_comments;
         update.upvote_ratio = result.traction.upvote_ratio;
+        // Capture the real author handle so the card can flag an account mismatch.
+        if (result.traction.author) update.posted_by_username = result.traction.author;
         update.traction_note = null;
       } else {
         update.traction_note = result.reason;

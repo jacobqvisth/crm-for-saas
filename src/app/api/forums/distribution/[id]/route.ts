@@ -10,6 +10,9 @@ export const maxDuration = 300;
 const patchSchema = z.object({
   status: z.enum(["recommended", "posted", "skipped"]).optional(),
   posted_url: z.string().max(2000).nullable().optional(),
+  // Hand-edited post title/body.
+  suggested_title: z.string().max(500).nullable().optional(),
+  suggested_body: z.string().max(20000).nullable().optional(),
   // Which roster account posted this (picked when marking posted).
   posted_by_account_id: z.string().uuid().nullable().optional(),
   traction_note: z.string().max(2000).nullable().optional(),

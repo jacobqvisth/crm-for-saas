@@ -17,6 +17,7 @@ import {
   Send,
   ArrowUpToLine,
   MessageSquare,
+  User,
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { submitUrlWithTitle } from "@/lib/forums/wlpost";
@@ -519,6 +520,14 @@ export function PostCard({
   const [editingTraction, setEditingTraction] = useState(false);
   const [manualScore, setManualScore] = useState(post.score?.toString() ?? "");
   const [manualComments, setManualComments] = useState(post.num_comments?.toString() ?? "");
+  const [postedByAccountId, setPostedByAccountId] = useState(post.posted_by_account_id ?? "");
+
+  const postedByAccount = accounts.find((a) => a.id === post.posted_by_account_id) ?? null;
+  // Flag when Reddit reports a different author than the picked account.
+  const authorMismatch =
+    !!post.posted_by_username &&
+    !!postedByAccount?.username &&
+    post.posted_by_username.toLowerCase() !== postedByAccount.username.toLowerCase();
 
   const target = getForumTarget(post.forum_target);
   const subreddit = post.forum_target.split(":")[1] ?? "";
@@ -560,6 +569,7 @@ export function PostCard({
     const ok = await patch({
       status: "posted",
       posted_url: postedUrl || null,
+      posted_by_account_id: postedByAccountId || null,
       refresh: Boolean(postedUrl),
     });
     if (ok) setShowPostedInput(false);
@@ -657,6 +667,25 @@ export function PostCard({
           )}
           {post.traction_note && (
             <span className="text-amber-700">{post.traction_note}</span>
+          )}
+        </div>
+      )}
+
+      {/* Who posted it (posted only) */}
+      {post.status === "posted" && (postedByAccount || post.posted_by_username) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+          <User className="h-3 w-3 text-slate-400" />
+          <span className="font-medium text-slate-600">Posted by</span>
+          {postedByAccount ? (
+            <span>
+              {postedByAccount.owner_label}
+              {postedByAccount.username ? ` · u/${postedByAccount.username}` : ""}
+            </span>
+          ) : (
+            <span>u/{post.posted_by_username}</span>
+          )}
+          {authorMismatch && (
+            <span className="text-amber-700">— Reddit says u/{post.posted_by_username}</span>
           )}
         </div>
       )}
@@ -840,13 +869,23 @@ export function PostCard({
               <Send className="h-3.5 w-3.5" /> Mark posted
             </button>
           ) : (
-            <button
-              onClick={() => patch({ status: "archived" })}
-              disabled={busy}
-              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-60"
-            >
-              Archive
-            </button>
+            <>
+              <button
+                onClick={() => patch({ status: "drafted", posted_url: null })}
+                disabled={busy}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                title="Move back to drafted and clear the posted URL"
+              >
+                Unmark
+              </button>
+              <button
+                onClick={() => patch({ status: "archived" })}
+                disabled={busy}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-60"
+              >
+                Archive
+              </button>
+            </>
           )}
           <button
             onClick={remove}
@@ -859,20 +898,40 @@ export function PostCard({
       )}
 
       {showPostedInput && !editing && (
-        <div className="mt-2 flex gap-2">
-          <input
-            value={postedUrl}
-            onChange={(e) => setPostedUrl(e.target.value)}
-            placeholder="Paste the URL where you posted it (optional)"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
-          />
-          <button
-            onClick={markPosted}
-            disabled={busy}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
-          >
-            Save
-          </button>
+        <div className="mt-2 flex flex-col gap-2">
+          <label className="flex items-center gap-2">
+            <User className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+            <select
+              value={postedByAccountId}
+              onChange={(e) => setPostedByAccountId(e.target.value)}
+              className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+            >
+              <option value="">Posted by… (which Reddit account?)</option>
+              {accounts
+                .filter((a) => a.active)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.owner_label}
+                    {a.username ? ` · u/${a.username}` : ""}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={postedUrl}
+              onChange={(e) => setPostedUrl(e.target.value)}
+              placeholder="Paste the URL where you posted it (optional)"
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
+            />
+            <button
+              onClick={markPosted}
+              disabled={busy}
+              className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-60"
+            >
+              Save
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -497,6 +497,8 @@ export type Database = {
           num_comments: number | null
           post_type: string
           posted_at: string | null
+          posted_by_account_id: string | null
+          posted_by_username: string | null
           posted_url: string | null
           scenario_snapshot: Json
           score: number | null
@@ -527,6 +529,8 @@ export type Database = {
           num_comments?: number | null
           post_type?: string
           posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
           posted_url?: string | null
           scenario_snapshot?: Json
           score?: number | null
@@ -557,6 +561,8 @@ export type Database = {
           num_comments?: number | null
           post_type?: string
           posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
           posted_url?: string | null
           scenario_snapshot?: Json
           score?: number | null

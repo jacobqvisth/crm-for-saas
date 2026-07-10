@@ -66,6 +66,9 @@ export interface ForumPost {
   model: string | null;
   // Roster account assigned to post this draft (semi-automated flow).
   assigned_account_id: string | null;
+  // Roster account that actually posted it + the Reddit-reported author handle.
+  posted_by_account_id: string | null;
+  posted_by_username: string | null;
   // Traction pulled from Reddit's public JSON (see src/lib/forums/reddit.ts).
   score: number | null;
   num_comments: number | null;
