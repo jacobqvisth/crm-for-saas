@@ -29,7 +29,9 @@ type BoardView = "todo" | "posted";
 // Topics in dropdown order (object insertion order in TOPICS).
 const TOPIC_LIST = Object.values(TOPICS);
 
-export function DistributionClient() {
+// `embedded` = rendered inside the unified Posts hub, which owns the page
+// header + tab bar, so we suppress our own and drop the outer page padding.
+export function DistributionClient({ embedded = false }: { embedded?: boolean } = {}) {
   const [selectedTopic, setSelectedTopic] = useState<string>(DEFAULT_TOPIC);
   const topic = TOPICS[selectedTopic] ?? TOPICS[DEFAULT_TOPIC];
   const [recs, setRecs] = useState<DistributionRec[]>([]);
@@ -100,22 +102,26 @@ export function DistributionClient() {
   const shown = view === "posted" ? postedRecs : todoRecs;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
-      {/* Header */}
-      <div className="flex items-start gap-3 mb-2">
-        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
-          <Share2 className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Distribution</h1>
-          <p className="text-sm text-slate-500">
-            Where to post <span className="font-medium text-slate-700">“{topic.title}”</span>.
-            Track what you&apos;ve posted and how it&apos;s doing.
-          </p>
-        </div>
-      </div>
+    <div className={embedded ? "" : "max-w-6xl mx-auto px-6 py-8"}>
+      {!embedded && (
+        <>
+          {/* Header */}
+          <div className="flex items-start gap-3 mb-2">
+            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+              <Share2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">Distribution</h1>
+              <p className="text-sm text-slate-500">
+                Where to post <span className="font-medium text-slate-700">“{topic.title}”</span>.
+                Track what you&apos;ve posted and how it&apos;s doing.
+              </p>
+            </div>
+          </div>
 
-      <ForumsTabs active="distribution" />
+          <ForumsTabs active="posts" />
+        </>
+      )}
 
       {/* Topic picker — rotate the angle so we're not posting the same thing every week */}
       <div className="mt-5 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4">

@@ -1,9 +1,7 @@
-import { DistributionClient } from "@/components/forums/distribution-client";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Forums · Distribution",
-};
-
+// Distribution merged into the unified Posts board. Keep this route as a
+// permanent deep-link into the "Topic campaigns" view.
 export default function ForumsDistributionPage() {
-  return <DistributionClient />;
+  redirect("/forums?view=topics");
 }

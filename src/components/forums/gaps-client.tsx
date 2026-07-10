@@ -261,8 +261,8 @@ export function GapsClient() {
           <Target className="mx-auto h-8 w-8 text-slate-300" />
           <p className="mt-3 text-sm font-medium text-slate-700">No stories logged yet</p>
           <p className="mt-1 text-xs text-slate-500">
-            Post the &ldquo;AI repair horror stories&rdquo; topic from the Distribution tab, then log
-            the replies here as they come in.
+            Post the &ldquo;AI repair horror stories&rdquo; topic from Posts → Topic campaigns, then
+            log the replies here as they come in.
           </p>
         </div>
       ) : (

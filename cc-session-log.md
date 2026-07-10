@@ -5574,3 +5574,40 @@ weren't separated.
 
 No schema change. Checks: tsc --noEmit clean, eslint clean, npm run build OK.
 Merged; prod deploy verified READY for e641026 (Vercel check success).
+
+---
+
+## Forums — Answer-posts parity + unified Posts board (2026-07-10, PR #545 + PR TBD)
+
+Two-phase Forums rework requested by Jacob (bring Distribution's power to
+Answer posts; look into merging Post generator + Distribution).
+
+**Phase 1 — Answer posts: who-posted + traction (PR #545, MERGED + deployed):**
+- Migration `20260710120000_forum_replies_traction.sql` adds
+  `posted_by_account_id`, `posted_by_username`, `score`, `num_comments`,
+  `upvote_ratio`, `traction_note`, `last_checked_at` to `forum_replies`
+  (mirrors `forum_distribution`). Applied to prod via MCP (Jacob approved).
+- `replies/[id]` PATCH accepts a poster account + manual/auto traction;
+  `refresh` pulls live upvotes/comments from Reddit and captures the real
+  author handle. New `replies/refresh` route sweeps all posted replies.
+- Answers UI: mark-posted now has a "Posted by…" roster picker; posted replies
+  show a traction row (upvotes/replies/ratio + auto-refresh + manual edit +
+  last-checked) and a "Posted by" line with author-mismatch flag; stats bar +
+  bulk Refresh traction; widened to full width.
+- Shared `ForumsTabs` component replaces four hand-rolled tab bars.
+
+**Phase 2 — unified "Posts" board (this PR):**
+- `/forums` is now a hub with an All / Topic campaigns / From diagnostics
+  switch. Tab bar collapses to Posts / Answer posts / Gap log. No data
+  migration — federates at the UI layer.
+- `ForumsClient` + `DistributionClient` gained an `embedded` prop (suppress
+  their own header + tabs) so the hub composes them as the two workflow panels.
+- New `AllPanel` federates `forum_posts` + all `forum_distribution` recs into
+  one filterable list (status + text filter, stats bar). Topic rows link to
+  their detail page; diagnostic rows jump to the From-diagnostics view.
+- `distribution GET` gains `?topic=all` (read-only, no seeding).
+- `/forums/distribution` now redirects to `/forums?view=topics`; thread
+  BackLink points at the hub. `ForumsTabs` is now Posts / Answer posts / Gap log.
+
+Checks (both phases): tsc --noEmit clean, eslint clean (1 pre-existing unrelated
+warning), npm run build OK.

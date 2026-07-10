@@ -17,6 +17,28 @@ export async function GET(request: NextRequest) {
 
   const topic = request.nextUrl.searchParams.get("topic") || DEFAULT_TOPIC;
 
+  // topic=all → the unified Posts hub asking for every campaign rec across all
+  // topics. Read-only: never seeds (that stays a per-topic first-visit action).
+  if (topic === "all") {
+    const { data, error: allErr } = await supabase
+      .from("forum_distribution")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("topic", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 });
+    const recs = (data ?? []) as unknown as DistributionRec[];
+    const grouped = await fetchAssignmentsBySource(
+      supabase,
+      workspaceId,
+      "distribution",
+      recs.map((r) => r.id),
+    );
+    return NextResponse.json({
+      recs: recs.map((r) => ({ ...r, assignments: grouped.get(r.id) ?? [] })),
+    });
+  }
+
   const { data: existing, error: readErr } = await supabase
     .from("forum_distribution")
     .select("*")
