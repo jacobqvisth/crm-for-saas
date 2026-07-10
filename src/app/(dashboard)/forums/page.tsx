@@ -14,6 +14,6 @@ export default async function ForumsPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const { view } = await searchParams;
-  const initialView = ALLOWED.includes(view as HubView) ? (view as HubView) : "topics";
+  const initialView = ALLOWED.includes(view as HubView) ? (view as HubView) : "all";
   return <ForumsHub initialView={initialView} />;
 }

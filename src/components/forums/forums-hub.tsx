@@ -16,7 +16,7 @@ import {
   User,
 } from "lucide-react";
 import { ForumsTabs } from "./forums-tabs";
-import { ForumsClient } from "./forums-client";
+import { ForumsClient, PostCard } from "./forums-client";
 import { DistributionClient } from "./distribution-client";
 import { TOPICS, type DistributionRec } from "@/lib/forums/distribution";
 import { getForumTarget } from "@/lib/forums/targets";
@@ -29,12 +29,12 @@ import type { RedditAccount } from "@/lib/forums/accounts";
 export type HubView = "all" | "topics" | "diagnostics";
 
 const VIEWS: Array<{ key: HubView; label: string; icon: typeof Layers; hint: string }> = [
-  { key: "topics", label: "Topic campaigns", icon: Share2, hint: "One message across many subreddits" },
-  { key: "diagnostics", label: "From diagnostics", icon: Car, hint: "AI-written from a real scenario" },
-  { key: "all", label: "All posts", icon: Layers, hint: "Everything tracked, both kinds" },
+  { key: "all", label: "All posts", icon: Layers, hint: "Every post you're tracking, both kinds" },
+  { key: "topics", label: "New: topic campaign", icon: Share2, hint: "One message across many subreddits" },
+  { key: "diagnostics", label: "New: from a diagnostic", icon: Car, hint: "AI-written from a real diagnostic case" },
 ];
 
-export function ForumsHub({ initialView = "topics" }: { initialView?: HubView }) {
+export function ForumsHub({ initialView = "all" }: { initialView?: HubView }) {
   const [view, setView] = useState<HubView>(initialView);
 
   return (
@@ -85,7 +85,12 @@ export function ForumsHub({ initialView = "topics" }: { initialView?: HubView })
       {/* Active view. The two workflow panels are the existing clients, embedded
           (they render their own body but not the page header/tabs). */}
       <div className="mt-6">
-        {view === "all" && <AllPanel onOpenDiagnostics={() => setView("diagnostics")} />}
+        {view === "all" && (
+          <AllPanel
+            onNewTopic={() => setView("topics")}
+            onNewDiagnostic={() => setView("diagnostics")}
+          />
+        )}
         {view === "topics" && <DistributionClient embedded />}
         {view === "diagnostics" && <ForumsClient embedded />}
       </div>
@@ -110,7 +115,8 @@ interface UnifiedRow {
   numComments: number | null;
   upvoteRatio: number | null;
   postedUrl: string | null;
-  href: string | null; // manage link (topic recs have a detail page)
+  href: string | null; // topic recs manage on their own detail page
+  diagPostId: string | null; // diagnostic posts manage inline on this board
 }
 
 const STATUS_META: Record<UnifiedStatus, { label: string; cls: string }> = {
@@ -143,7 +149,13 @@ function carLabel(p: ForumPost): string {
   return parts.length ? parts.join(" ") : "Diagnostic post";
 }
 
-function AllPanel({ onOpenDiagnostics }: { onOpenDiagnostics: () => void }) {
+function AllPanel({
+  onNewTopic,
+  onNewDiagnostic,
+}: {
+  onNewTopic: () => void;
+  onNewDiagnostic: () => void;
+}) {
   const [recs, setRecs] = useState<DistributionRec[]>([]);
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
@@ -151,6 +163,8 @@ function AllPanel({ onOpenDiagnostics }: { onOpenDiagnostics: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | UnifiedStatus>("all");
   const [q, setQ] = useState("");
+  // Which diagnostic row is expanded to its full inline PostCard.
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +211,7 @@ function AllPanel({ onOpenDiagnostics }: { onOpenDiagnostics: () => void }) {
       upvoteRatio: r.upvote_ratio,
       postedUrl: r.posted_url,
       href: `/forums/distribution/${r.id}`,
+      diagPostId: null,
     }));
     const fromPosts: UnifiedRow[] = posts.map((p) => ({
       key: `diag:${p.id}`,
@@ -212,6 +227,7 @@ function AllPanel({ onOpenDiagnostics }: { onOpenDiagnostics: () => void }) {
       upvoteRatio: p.upvote_ratio,
       postedUrl: p.posted_url,
       href: null,
+      diagPostId: p.id,
     }));
     return [...fromRecs, ...fromPosts];
   }, [recs, posts]);
@@ -261,6 +277,23 @@ function AllPanel({ onOpenDiagnostics }: { onOpenDiagnostics: () => void }) {
 
   return (
     <div>
+      {/* Create a new post — both sources land on this same board */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-400">New post:</span>
+        <button
+          onClick={onNewTopic}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-orange-300 hover:text-orange-700"
+        >
+          <Share2 className="h-4 w-4 text-orange-600" /> From a topic
+        </button>
+        <button
+          onClick={onNewDiagnostic}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-orange-300 hover:text-orange-700"
+        >
+          <Car className="h-4 w-4 text-blue-600" /> From a diagnostic
+        </button>
+      </div>
+
       {/* Stats */}
       <div className="flex flex-wrap items-center gap-3">
         <StatChip label="Total posts" value={stats.total} />
@@ -374,30 +407,44 @@ function AllPanel({ onOpenDiagnostics }: { onOpenDiagnostics: () => void }) {
                 <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
               </div>
             );
-            return r.href ? (
-              <Link key={r.key} href={r.href} className="block">
-                {inner}
-              </Link>
-            ) : (
-              <button
-                key={r.key}
-                onClick={onOpenDiagnostics}
-                className="block w-full text-left"
-                title="Manage in the From diagnostics view"
-              >
-                {inner}
-              </button>
+            if (r.href) {
+              return (
+                <Link key={r.key} href={r.href} className="block">
+                  {inner}
+                </Link>
+              );
+            }
+            const diagPost = posts.find((p) => p.id === r.diagPostId) ?? null;
+            const isOpen = expanded === r.key;
+            return (
+              <div key={r.key}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : r.key)}
+                  className="block w-full text-left"
+                  title={isOpen ? "Collapse" : "Open to manage this post"}
+                >
+                  {inner}
+                </button>
+                {isOpen && diagPost && (
+                  <div className="border-t border-slate-100 bg-slate-50/60 p-4">
+                    <PostCard
+                      post={diagPost}
+                      accounts={accounts}
+                      onPatched={(updated) =>
+                        setPosts((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+                      }
+                      onRemoved={() => {
+                        setPosts((prev) => prev.filter((x) => x.id !== diagPost.id));
+                        setExpanded(null);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
       )}
-      <p className="mt-3 text-[11px] text-slate-400">
-        Topic-campaign rows open their own page. Diagnostic posts are managed in the{" "}
-        <button onClick={onOpenDiagnostics} className="font-medium text-orange-600 hover:underline">
-          From diagnostics
-        </button>{" "}
-        view.
-      </p>
     </div>
   );
 }
