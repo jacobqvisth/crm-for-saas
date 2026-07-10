@@ -19,7 +19,8 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
-import { submitUrlWithTitle, wlpostLink } from "@/lib/forums/wlpost";
+import { submitUrlWithTitle } from "@/lib/forums/wlpost";
+import { OpenAsButton } from "./open-in-profile";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
 import type { RedditAccount } from "@/lib/forums/accounts";
@@ -800,9 +801,9 @@ function PostCard({
                 </select>
               </label>
               {assigned?.username ? (
-                <OpenInProfileButton
+                <OpenAsButton
                   account={assigned}
-                  submitUrl={submitUrlTitled}
+                  targetUrl={submitUrlTitled}
                   body={post.generated_body ?? ""}
                 />
               ) : (
@@ -881,45 +882,6 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
-  );
-}
-
-// Copies the post body to the clipboard and fires a wlpost:// link so the local
-// helper opens the prefilled submit page in the Chrome profile logged into this
-// account's Reddit login. Falls back to a normal new-tab open if the wlpost://
-// handler is not installed (the browser just ignores the unregistered scheme,
-// so we also open the submit page in a background tab as a safety net).
-function OpenInProfileButton({
-  account,
-  submitUrl,
-  body,
-}: {
-  account: RedditAccount;
-  submitUrl: string;
-  body: string;
-}) {
-  const [opening, setOpening] = useState(false);
-  async function open() {
-    try {
-      await navigator.clipboard.writeText(body);
-    } catch {
-      // clipboard may be blocked; the submit page still opens
-    }
-    setOpening(true);
-    setTimeout(() => setOpening(false), 2500);
-    if (account.username) {
-      window.location.href = wlpostLink(account.username, submitUrl);
-    }
-  }
-  return (
-    <button
-      onClick={open}
-      title={`Copy the body and open the submit page in the Chrome profile logged into u/${account.username}, then paste and post`}
-      className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
-    >
-      <ExternalLink className="h-3.5 w-3.5" />
-      {opening ? "Body copied, opening…" : `Open as ${account.owner_label}`}
-    </button>
   );
 }
 
