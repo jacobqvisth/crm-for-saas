@@ -25,6 +25,7 @@ import { REPLY_SUBREDDITS, type ForumReply, type ReplySource } from "@/lib/forum
 import type { ForumMentionLevel } from "@/lib/forums/types";
 import type { RedditPost } from "@/lib/forums/reddit";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import { OpenInProfile } from "./open-in-profile";
 import { ForumsTabs } from "./forums-tabs";
 
 const MENTION_LABEL: Record<ForumMentionLevel, string> = {
@@ -869,6 +870,18 @@ function ReplyCard({
           </a>
         )}
       </div>
+
+      {/* Open the original thread in the chosen account's Chrome profile to reply */}
+      {!posted && reply.source_url && (
+        <div className="mt-3">
+          <OpenInProfile
+            accounts={accounts}
+            targetUrl={reply.source_url}
+            body={reply.generated_body ?? ""}
+            prefix="Reply as"
+          />
+        </div>
+      )}
 
       {/* Traction (posted only) */}
       {posted && (
