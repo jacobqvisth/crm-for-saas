@@ -3,7 +3,13 @@ import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { generateForumReply } from "@/lib/forums/reply-generate";
 import { fetchRedditTraction } from "@/lib/forums/reddit";
+import {
+  generationOptionsSchema,
+  normalizeOptions,
+  type ForumGenerationOptions,
+} from "@/lib/forums/generation-options";
 import type { ForumReply, ReplySource } from "@/lib/forums/replies";
+import type { Json } from "@/lib/database.types";
 
 // A traction refresh may run via an Apify scrape (~30-90s); raise the timeout.
 export const maxDuration = 300;
@@ -13,6 +19,8 @@ const patchSchema = z.object({
   posted_url: z.string().max(2000).nullable().optional(),
   generated_body: z.string().max(20000).optional(),
   mention_level: z.enum(["none", "subtle", "explicit"]).optional(),
+  // New style options for a regenerate (else the stored ones are reused).
+  options: generationOptionsSchema.optional(),
   // Which roster account posted our reply (picked when marking posted).
   posted_by_account_id: z.string().uuid().nullable().optional(),
   // Manual traction entry (used when auto-fetch is blocked).
@@ -42,7 +50,7 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, refresh, status, mention_level, ...rest } = parsed.data;
+  const { regenerate, refresh, status, mention_level, options, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (mention_level) update.mention_level = mention_level;
@@ -106,12 +114,19 @@ export async function PATCH(
       score: existing.source_score,
       num_comments: existing.source_num_comments,
     };
-    const level = mention_level ?? existing.mention_level;
-    const result = await generateForumReply({ source, mentionLevel: level });
+    // New options win; else reuse the stored mention_level + generation_options.
+    const genOptions = normalizeOptions({
+      mentionLevel: existing.mention_level,
+      ...((existing.generation_options ?? {}) as Partial<ForumGenerationOptions>),
+      ...(mention_level ? { mentionLevel: mention_level } : {}),
+      ...(options ?? {}),
+    });
+    const result = await generateForumReply({ source, options: genOptions });
     if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 502 });
     update.generated_body = result.body;
     update.model = result.model;
-    update.mention_level = level;
+    update.mention_level = genOptions.mentionLevel;
+    update.generation_options = genOptions as unknown as Json;
   }
 
   const { data: reply, error } = await supabase

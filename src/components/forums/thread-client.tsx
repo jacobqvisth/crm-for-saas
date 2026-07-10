@@ -26,10 +26,15 @@ import type {
   ForumThreadReply,
 } from "@/lib/forums/types";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import {
+  DEFAULT_GENERATION_OPTIONS,
+  type ForumGenerationOptions,
+} from "@/lib/forums/generation-options";
 import { submitUrlWithTitle } from "@/lib/forums/wlpost";
 import { OpenInProfile } from "./open-in-profile";
 import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { ThreadRepliesPanel } from "./thread-replies-panel";
+import { GenerationOptions } from "./generation-options";
 import { TeamComments } from "./team-comments";
 
 // The per-post thread workspace. One posted distribution rec gets its own page
@@ -62,6 +67,10 @@ export function ThreadClient({ recId }: { recId: string }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
 
+
+  // Shared draft options for both this page's generators: the per-member
+  // comments on the post AND the drafted replies to other people's comments.
+  const [options, setOptions] = useState<ForumGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
 
   const load = useCallback(async () => {
     try {
@@ -544,6 +553,18 @@ export function ThreadClient({ recId }: { recId: string }) {
 
       {/* Reply to the post itself (per-member top-level comments) */}
       {posted && (
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">Draft options</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Applies to both the per-member comments and the drafted replies to other people&apos;s
+            comments below. Mention level on thread replies is still auto-picked per comment and
+            capped by each account&apos;s persona.
+          </p>
+          <GenerationOptions value={options} onChange={setOptions} />
+        </section>
+      )}
+
+      {posted && (
         <section className="mt-6">
           <h2 className="text-sm font-semibold text-slate-800">Comments on the post</h2>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -554,7 +575,7 @@ export function ThreadClient({ recId }: { recId: string }) {
             source="distribution"
             sourceId={rec.id}
             slackNotifiedAt={rec.slack_notified_at}
-            onRedraft={() => patchRec({ draft: true })}
+            onRedraft={() => patchRec({ draft: true, options })}
             onSend={() => patchRec({ send_slack: true })}
             busy={busy}
           />
@@ -568,6 +589,7 @@ export function ThreadClient({ recId }: { recId: string }) {
         posted={posted}
         accounts={accounts}
         initialReplies={replies}
+        options={options}
       />
     </div>
   );

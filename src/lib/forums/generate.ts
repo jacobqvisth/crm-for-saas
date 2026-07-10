@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
-import type {
-  ForumMentionLevel,
-  ForumPostType,
-  ForumScenario,
-  ForumTarget,
-} from "./types";
+import {
+  buildStyleGuidance,
+  MENTION_GUIDANCE,
+  mentionKnowledgeBlock,
+  normalizeOptions,
+  type ForumGenerationOptions,
+} from "./generation-options";
+import type { ForumPostType, ForumScenario, ForumTarget } from "./types";
 
 // Sonnet for creative quality — these are public-facing posts that have to read
 // like a real person wrote them (decided 2026-06-16). Low volume, so cost is
@@ -22,21 +23,13 @@ const POST_TYPE_GUIDANCE: Record<ForumPostType, string> = {
     "Write as a knowledgeable person answering a common version of this problem for whoever searches it later. Lead with the most likely cause, explain how to confirm it, and cover the runner-up causes briefly. Confident but not condescending.",
 };
 
-const MENTION_GUIDANCE: Record<ForumMentionLevel, string> = {
-  none: "Do NOT mention Wrenchlane, any app, or any product at all. This is a pure community post.",
-  subtle:
-    "You MAY mention, in one passing and natural aside, that you ran the symptoms through an AI car-diagnosis app to narrow things down — without naming a brand or linking anything. Keep it incidental; the post must stand on its own as helpful even if that line were deleted.",
-  explicit:
-    "You may name Wrenchlane once, naturally, as the tool you used to diagnose this (e.g. 'I put the symptoms into Wrenchlane and it flagged X as the most likely cause'). One mention only, no link, no sales language. The post must still read as a genuine owner/helper post, never an ad.",
-};
-
 function buildSystemPrompt(opts: {
   target: ForumTarget;
   postType: ForumPostType;
-  mentionLevel: ForumMentionLevel;
+  options: ForumGenerationOptions;
   language: string;
 }): string {
-  const { target, postType, mentionLevel, language } = opts;
+  const { target, postType, options, language } = opts;
   return `You write authentic posts for car forums. The output will be copy-pasted, by a human, into ${target.name} (${target.platform}). Your job is to produce ONE post that reads exactly like a real person in that community wrote it.
 
 Community tone for ${target.name}: ${target.tone}
@@ -44,27 +37,21 @@ Community posting norms (respect these): ${target.rulesNote}
 
 Post angle: ${POST_TYPE_GUIDANCE[postType]}
 
-Brand-mention rule: ${MENTION_GUIDANCE[mentionLevel]}
+Brand-mention rule: ${MENTION_GUIDANCE[options.mentionLevel]}
+
+How to write this one:
+${buildStyleGuidance(options)}
 
 Language: Write the entire post (title and body) in ${language === "sv" ? "Swedish" : "English"}.
 
 How to sound human, not like AI:
 - Use the real car facts you're given. Don't invent a different car, mileage, or codes.
 - Imperfect and specific beats polished and generic. Real people ramble a little, use contractions, and mention concrete details ("started about two weeks ago, mostly when cold").
-- No corporate phrasing, no bullet-point listicles unless the angle is helpful_answer. No emojis unless they'd be natural. Don't end with "Any help appreciated!" every time — vary it.
+- No corporate phrasing, no bullet-point listicles unless the angle is helpful_answer. No emojis unless they'd be natural. Don't end with "Any help appreciated!" every time, vary it.
 - Never sound like marketing. If the brand-mention rule is "none", there is zero product talk.
-- Keep it realistic in length: a help question is a short paragraph or two; a solved story or helpful answer can be a bit longer.
 - ${NO_LONG_DASH_INSTRUCTION}
 
-${
-  mentionLevel === "none"
-    ? ""
-    : `For grounding ONLY (so any mention is accurate — do not paste this in):
-=== WRENCHLANE PRODUCT KNOWLEDGE ===
-${WRENCHLANE_KNOWLEDGE}
-=== END ===
-`
-}
+${mentionKnowledgeBlock(options.mentionLevel)}
 Return ONLY a JSON object, no markdown fences, no commentary, of exactly this shape:
 {"title": "<the forum post title>", "body": "<the post body, plain text, real line breaks as \\n>"}`;
 }
@@ -97,14 +84,15 @@ export async function generateForumPost(opts: {
   scenario: ForumScenario;
   target: ForumTarget;
   postType: ForumPostType;
-  mentionLevel: ForumMentionLevel;
+  options: ForumGenerationOptions;
   language: string;
 }): Promise<GenerateForumPostResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
 
+  const options = normalizeOptions(opts.options);
   const client = new Anthropic({ apiKey });
-  const systemPrompt = buildSystemPrompt(opts);
+  const systemPrompt = buildSystemPrompt({ ...opts, options });
   const userPrompt = `Here is the real diagnostic scenario to base the post on:\n\n${describeScenario(
     opts.scenario,
   )}\n\nWrite the post now. Return only the JSON object.`;

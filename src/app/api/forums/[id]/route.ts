@@ -5,12 +5,13 @@ import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
 import { fetchRedditTraction } from "@/lib/forums/reddit";
 import { draftForumComments, sendForumPostToSlack } from "@/lib/forums/notify-posted";
-import type {
-  ForumMentionLevel,
-  ForumPost,
-  ForumPostType,
-  ForumScenario,
-} from "@/lib/forums/types";
+import {
+  generationOptionsSchema,
+  normalizeOptions,
+  type ForumGenerationOptions,
+} from "@/lib/forums/generation-options";
+import type { ForumPost, ForumPostType, ForumScenario } from "@/lib/forums/types";
+import type { Json } from "@/lib/database.types";
 
 // A traction refresh may run via an Apify scrape (~30-90s); raise the timeout.
 export const maxDuration = 300;
@@ -26,6 +27,9 @@ const patchSchema = z.object({
   posted_by_account_id: z.string().uuid().nullable().optional(),
   // When true, re-run the model from the post's stored scenario + settings.
   regenerate: z.boolean().optional(),
+  // Optional new generation options for a regenerate / redraft (else the
+  // stored ones are reused).
+  options: generationOptionsSchema.optional(),
   // When true, re-fetch this post's traction (upvotes/comments) from Reddit.
   refresh: z.boolean().optional(),
   // Manual traction entry (used when auto-fetch is blocked).
@@ -54,7 +58,7 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { regenerate, refresh, draft, send_slack, status, ...rest } = parsed.data;
+  const { regenerate, refresh, draft, send_slack, status, options, ...rest } = parsed.data;
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
@@ -113,11 +117,19 @@ export async function PATCH(
     if (!target) {
       return NextResponse.json({ error: "Unknown forum target" }, { status: 400 });
     }
+    // New options win; else reuse what was stored (mention_level column +
+    // generation_options jsonb), falling back to defaults for older rows.
+    const stored = (existing.generation_options ?? {}) as Partial<ForumGenerationOptions>;
+    const genOptions = normalizeOptions({
+      mentionLevel: existing.mention_level as ForumGenerationOptions["mentionLevel"],
+      ...stored,
+      ...(options ?? {}),
+    });
     const result = await generateForumPost({
       scenario: existing.scenario_snapshot as unknown as ForumScenario,
       target,
       postType: existing.post_type as ForumPostType,
-      mentionLevel: existing.mention_level as ForumMentionLevel,
+      options: genOptions,
       language: target.language,
     });
     if (!result.ok) {
@@ -126,6 +138,8 @@ export async function PATCH(
     update.generated_title = result.title;
     update.generated_body = result.body;
     update.model = result.model;
+    update.mention_level = genOptions.mentionLevel;
+    update.generation_options = genOptions as unknown as Json;
   }
 
   // Some actions carry no column changes (send_slack / draft on their own):
@@ -155,6 +169,13 @@ export async function PATCH(
   // Two decoupled steps, both best-effort: auto-draft once on first posting,
   // `draft` redrafts everyone, `send_slack` posts the current drafts.
   const target = getForumTarget(post.forum_target);
+  // Per-member comments follow the post's own generation options (mention +
+  // style), plus any override sent with this request.
+  const commentOptions = normalizeOptions({
+    mentionLevel: post.mention_level,
+    ...((post.generation_options ?? {}) as Partial<ForumGenerationOptions>),
+    ...(options ?? {}),
+  });
   const common = {
     supabase,
     workspaceId,
@@ -165,6 +186,7 @@ export async function PATCH(
     rulesNote: target?.rulesNote,
     title: post.generated_title ?? (target?.name ?? post.forum_target),
     body: post.generated_body,
+    options: commentOptions,
   };
   const firstPost = status === "posted" && post.posted_url;
 
