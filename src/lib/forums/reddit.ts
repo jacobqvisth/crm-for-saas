@@ -109,9 +109,14 @@ async function getAppToken(): Promise<string | null> {
 // since anon JSON 403s from datacenter IPs). The UI uses this to decide between
 // the live "find posts" flow and the paste-a-URL / paste-the-text fallback.
 export function isRedditConfigured(): boolean {
-  return (
-    !!(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET) || isApifyConfigured()
-  );
+  return isRedditOAuthConfigured() || isApifyConfigured();
+}
+
+// True when app-only Reddit OAuth creds are set. The OAuth read path is fast and
+// works from datacenter IPs, so the discover route runs it inline; without it we
+// fall back to the (slow, async-polled) Apify scrape.
+export function isRedditOAuthConfigured(): boolean {
+  return !!(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET);
 }
 
 // A candidate post to reply to, as returned by discovery/fetch.
