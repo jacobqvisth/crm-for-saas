@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { submitUrlWithTitle, wlpostLink } from "@/lib/forums/wlpost";
-import { AccountsPanel } from "./accounts-panel";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
 import type { RedditAccount } from "@/lib/forums/accounts";
@@ -192,9 +191,6 @@ export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) 
 
       {!loading && !error && (
         <>
-          {/* Reddit account roster */}
-          <AccountsPanel accounts={accounts} onChange={setAccounts} />
-
           {/* Generated posts */}
           <section className="mt-10">
             <div className="flex items-center justify-between mb-4">

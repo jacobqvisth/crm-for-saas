@@ -9,11 +9,16 @@ import type { RedditAccount } from "@/lib/forums/accounts";
 export function AccountsPanel({
   accounts,
   onChange,
+  standalone = false,
 }: {
   accounts: RedditAccount[];
   onChange: (accounts: RedditAccount[]) => void;
+  // `standalone` = rendered as its own page (the Reddit accounts tab) rather
+  // than a collapsible section embedded in the Posts board. It stays expanded
+  // and shows a static heading instead of the collapse toggle.
+  standalone?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(standalone);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -48,24 +53,36 @@ export function AccountsPanel({
     onChange(accounts.filter((a) => a.id !== id));
   }
 
+  const countLabel = (
+    <>
+      {accounts.length} account{accounts.length === 1 ? "" : "s"}
+      {pending > 0 && ` · ${pending} need a username`}
+    </>
+  );
+
   return (
-    <section className="mt-8 rounded-xl border border-slate-200 bg-white">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left"
-      >
-        {open ? (
-          <ChevronDown className="h-4 w-4 text-slate-400" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-slate-400" />
-        )}
-        <Users className="h-4 w-4 text-orange-600" />
-        <span className="text-sm font-medium text-slate-800">Reddit accounts</span>
-        <span className="text-xs text-slate-400">
-          {accounts.length} account{accounts.length === 1 ? "" : "s"}
-          {pending > 0 && ` · ${pending} need a username`}
-        </span>
-      </button>
+    <section className={`rounded-xl border border-slate-200 bg-white ${standalone ? "mt-6" : "mt-8"}`}>
+      {standalone ? (
+        <div className="flex w-full items-center gap-2 px-4 py-3">
+          <Users className="h-4 w-4 text-orange-600" />
+          <span className="text-sm font-medium text-slate-800">Reddit accounts</span>
+          <span className="text-xs text-slate-400">{countLabel}</span>
+        </div>
+      ) : (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-2 px-4 py-3 text-left"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-slate-400" />
+          )}
+          <Users className="h-4 w-4 text-orange-600" />
+          <span className="text-sm font-medium text-slate-800">Reddit accounts</span>
+          <span className="text-xs text-slate-400">{countLabel}</span>
+        </button>
+      )}
 
       {open && (
         <div className="border-t border-slate-100 p-4">
