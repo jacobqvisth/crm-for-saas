@@ -29,12 +29,12 @@ import type { RedditAccount } from "@/lib/forums/accounts";
 export type HubView = "all" | "topics" | "diagnostics";
 
 const VIEWS: Array<{ key: HubView; label: string; icon: typeof Layers; hint: string }> = [
-  { key: "all", label: "All posts", icon: Layers, hint: "Everything tracked, both kinds" },
   { key: "topics", label: "Topic campaigns", icon: Share2, hint: "One message across many subreddits" },
   { key: "diagnostics", label: "From diagnostics", icon: Car, hint: "AI-written from a real scenario" },
+  { key: "all", label: "All posts", icon: Layers, hint: "Everything tracked, both kinds" },
 ];
 
-export function ForumsHub({ initialView = "all" }: { initialView?: HubView }) {
+export function ForumsHub({ initialView = "topics" }: { initialView?: HubView }) {
   const [view, setView] = useState<HubView>(initialView);
 
   return (
