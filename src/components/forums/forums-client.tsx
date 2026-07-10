@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   MessagesSquare,
   ExternalLink,
@@ -22,6 +21,7 @@ import {
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { AccountsPanel } from "./accounts-panel";
 import { TeamComments } from "./team-comments";
+import { ForumsTabs } from "./forums-tabs";
 import type { RedditAccount } from "@/lib/forums/accounts";
 import type {
   ForumMentionLevel,
@@ -134,30 +134,7 @@ export function ForumsClient() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mt-4 flex items-center gap-1 border-b border-slate-200">
-        <span className="border-b-2 border-orange-500 px-3 py-2 text-sm font-medium text-orange-700">
-          Post generator
-        </span>
-        <Link
-          href="/forums/distribution"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Distribution
-        </Link>
-        <Link
-          href="/forums/answers"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Answer posts
-        </Link>
-        <Link
-          href="/forums/gaps"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Gap log
-        </Link>
-      </div>
+      <ForumsTabs active="generator" />
 
       {/* Workflow note */}
       <div className="mt-4 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">

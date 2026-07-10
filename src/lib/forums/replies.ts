@@ -61,6 +61,16 @@ export interface ForumReply {
   posted_url: string | null;
   posted_at: string | null;
   model: string | null;
+  // Who posted our reply — the roster account picked when marking it posted,
+  // plus the real Reddit handle captured on traction refresh (cross-check).
+  posted_by_account_id: string | null;
+  posted_by_username: string | null;
+  // Live traction on OUR reply's comment, mirroring forum_distribution.
+  score: number | null;
+  num_comments: number | null;
+  upvote_ratio: number | null;
+  traction_note: string | null;
+  last_checked_at: string | null;
   created_at: string;
   updated_at: string;
 }
