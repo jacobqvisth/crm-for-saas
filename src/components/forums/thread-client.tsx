@@ -57,6 +57,10 @@ export function ThreadClient({ recId }: { recId: string }) {
   const [editingTraction, setEditingTraction] = useState(false);
   const [manualScore, setManualScore] = useState("");
   const [manualComments, setManualComments] = useState("");
+  // Edit the post's own title/body (parity with the diagnostic card).
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftBody, setDraftBody] = useState("");
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
@@ -97,6 +101,8 @@ export function ThreadClient({ recId }: { recId: string }) {
     setPostedByAccountId(rec.posted_by_account_id ?? "");
     setManualScore(rec.score?.toString() ?? "");
     setManualComments(rec.num_comments?.toString() ?? "");
+    setDraftTitle(rec.suggested_title ?? "");
+    setDraftBody(rec.suggested_body ?? "");
     // Only re-seed when we switch to a different rec, not on every traction poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rec?.id]);
@@ -128,6 +134,11 @@ export function ThreadClient({ recId }: { recId: string }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveEdit() {
+    const ok = await patchRec({ suggested_title: draftTitle, suggested_body: draftBody });
+    if (ok) setEditing(false);
   }
 
   async function markPosted() {
@@ -246,39 +257,78 @@ export function ThreadClient({ recId }: { recId: string }) {
         {/* Why this community fits */}
         {rec.fit_reason && <p className="mt-2 text-xs text-slate-600">{rec.fit_reason}</p>}
 
-        {/* The post to paste — title + body, both copyable */}
-        {rec.suggested_title && (
-          <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                Suggested title
-              </span>
-              <CopyButton text={rec.suggested_title} label="Copy" />
+        {/* The post to paste — title + body, editable + copyable */}
+        {editing ? (
+          <div className="mt-3 space-y-2">
+            <input
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              placeholder="Title"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"
+            />
+            <textarea
+              value={draftBody}
+              onChange={(e) => setDraftBody(e.target.value)}
+              rows={8}
+              placeholder="Body"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={saveEdit}
+                disabled={busy}
+                className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900 disabled:opacity-60"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(false);
+                  setDraftTitle(rec.suggested_title ?? "");
+                  setDraftBody(rec.suggested_body ?? "");
+                }}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
             </div>
-            <h1 className="text-base font-semibold text-slate-900">{rec.suggested_title}</h1>
           </div>
-        )}
-        {rec.suggested_body && (
-          <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                Body
-              </span>
-              <CopyButton text={rec.suggested_body} label="Copy" />
-            </div>
-            <p className="max-h-60 overflow-y-auto whitespace-pre-wrap text-sm text-slate-700">
-              {rec.suggested_body}
-            </p>
+        ) : (
+          <>
             {rec.suggested_title && (
-              <div className="mt-2 flex justify-end">
-                <CopyButton
-                  text={`${rec.suggested_title}\n\n${rec.suggested_body}`}
-                  label="Copy title + body"
-                  prominent
-                />
+              <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    Suggested title
+                  </span>
+                  <CopyButton text={rec.suggested_title} label="Copy" />
+                </div>
+                <h1 className="text-base font-semibold text-slate-900">{rec.suggested_title}</h1>
               </div>
             )}
-          </div>
+            {rec.suggested_body && (
+              <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    Body
+                  </span>
+                  <CopyButton text={rec.suggested_body} label="Copy" />
+                </div>
+                <p className="max-h-60 overflow-y-auto whitespace-pre-wrap text-sm text-slate-700">
+                  {rec.suggested_body}
+                </p>
+                {rec.suggested_title && (
+                  <div className="mt-2 flex justify-end">
+                    <CopyButton
+                      text={`${rec.suggested_title}\n\n${rec.suggested_body}`}
+                      label="Copy title + body"
+                      prominent
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {/* Open the prefilled submit page in the chosen account's Chrome profile */}
@@ -410,6 +460,15 @@ export function ThreadClient({ recId }: { recId: string }) {
 
         {/* Post lifecycle actions */}
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          {!editing && (
+            <button
+              onClick={() => setEditing(true)}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </button>
+          )}
           {!posted ? (
             <button
               onClick={() => setShowPostedInput((v) => !v)}
