@@ -19,9 +19,9 @@ const bodySchema = z.object({
 });
 
 // POST /api/forums/replies/discover → { posts, redditConfigured }
-// Find candidate posts to reply to across the diagnostic subreddits. Needs
-// Reddit OAuth creds; when they're missing it returns redditConfigured:false so
-// the UI can steer to the paste-a-URL flow instead.
+// Find candidate posts to reply to across the diagnostic subreddits. Reads via
+// Apify; when APIFY_TOKEN is missing it returns redditConfigured:false so the UI
+// can steer to the paste-a-URL flow instead.
 export async function POST(request: NextRequest) {
   const ws = await resolveWorkspace();
   if (ws.error) return ws.error;
