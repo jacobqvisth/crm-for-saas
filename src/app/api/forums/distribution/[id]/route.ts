@@ -119,28 +119,41 @@ export async function PATCH(
     await draftForumComments({ ...common, regenerate: Boolean(draft) });
   }
 
-  if (send_slack && rec.posted_url && rec.suggested_title) {
-    const result = await sendForumPostToSlack({ ...common, url: rec.posted_url });
-    const postUpdate: Record<string, unknown> = {};
-    if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
-    if (result.threadTs) postUpdate.slack_thread_ts = result.threadTs;
-    if (result.channelId) postUpdate.slack_channel_id = result.channelId;
-    if (Object.keys(postUpdate).length) {
-      const { data: reUpdated } = await supabase
-        .from("forum_distribution")
-        .update(postUpdate)
-        .eq("id", id)
-        .eq("workspace_id", workspaceId)
-        .select()
-        .single();
-      if (reUpdated) rec = reUpdated as unknown as DistributionRec;
+  // The Slack send is best-effort and never fails the save, but we return a
+  // human-readable reason when it doesn't land so the UI can show it instead of
+  // silently doing nothing.
+  let slackReason: string | undefined;
+  if (send_slack) {
+    if (!rec.posted_url || !rec.suggested_title) {
+      slackReason = "Mark this post as posted (with its Reddit URL) before sending to Slack.";
+    } else {
+      const result = await sendForumPostToSlack({ ...common, url: rec.posted_url });
+      const postUpdate: Record<string, unknown> = {};
+      if (result.notifiedAt) postUpdate.slack_notified_at = result.notifiedAt;
+      if (result.threadTs) postUpdate.slack_thread_ts = result.threadTs;
+      if (result.channelId) postUpdate.slack_channel_id = result.channelId;
+      if (Object.keys(postUpdate).length) {
+        const { data: reUpdated } = await supabase
+          .from("forum_distribution")
+          .update(postUpdate)
+          .eq("id", id)
+          .eq("workspace_id", workspaceId)
+          .select()
+          .single();
+        if (reUpdated) rec = reUpdated as unknown as DistributionRec;
+      }
+      if (!result.notifiedAt) {
+        slackReason = result.slackConfigured
+          ? `Slack didn't accept the message: ${result.reason ?? "unknown error"}.`
+          : "Slack isn't set up yet (SLACK_FORUM_POSTS_WEBHOOK_URL is missing on the server).";
+      }
     }
   }
 
   const grouped = await fetchAssignmentsBySource(supabase, workspaceId, "distribution", [id]);
   rec.assignments = grouped.get(id) ?? [];
 
-  return NextResponse.json({ rec });
+  return NextResponse.json(slackReason ? { rec, slackReason } : { rec });
 }
 
 // DELETE /api/forums/distribution/[id] → { ok: true }

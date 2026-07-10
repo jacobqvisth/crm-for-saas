@@ -159,7 +159,7 @@ export function AnswersClient() {
         return;
       }
 
-      // Inline path (OAuth, nothing configured, or a start error).
+      // Inline "done" path (nothing configured, or a start error).
       if (data.error) setDiscoverError(data.error);
       setPosts(data.posts ?? []);
     } catch (e) {
@@ -342,11 +342,9 @@ export function AnswersClient() {
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <span>
-              Reddit API isn&apos;t connected, so live search is off. Add{" "}
-              <code className="rounded bg-amber-100 px-1">REDDIT_CLIENT_ID</code> and{" "}
-              <code className="rounded bg-amber-100 px-1">REDDIT_CLIENT_SECRET</code> (a
-              &quot;script&quot; app at reddit.com/prefs/apps) to enable it. You can still paste a
-              post URL below to draft a reply.
+              Reddit reads aren&apos;t set up, so live search is off. Add an{" "}
+              <code className="rounded bg-amber-100 px-1">APIFY_TOKEN</code> to enable it. You can
+              still paste a post URL below to draft a reply.
             </span>
           </div>
         )}

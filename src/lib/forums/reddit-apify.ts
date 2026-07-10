@@ -1,9 +1,8 @@
-// Reddit reads via Apify — the fallback for when the OAuth API isn't available
-// (Reddit gates its Data API behind the dev-builder program, and the anonymous
-// .json endpoints 403 from datacenter IPs like Vercel). Apify runs the scrape
-// from residential/rotating IPs Reddit doesn't block, using the existing
-// APIFY_TOKEN (SCALE plan). Powers "Find posts to answer", loading a pasted
-// post, and traction reads when OAuth is off.
+// Reddit reads via Apify — our only live read path. We don't use Reddit's
+// official API; the anonymous .json endpoints 403 from datacenter IPs like
+// Vercel. Apify runs the scrape from residential/rotating IPs Reddit doesn't
+// block, using the existing APIFY_TOKEN (SCALE plan). Powers "Find posts to
+// answer", loading a pasted post, and traction reads.
 //
 // Actor: trudax/reddit-scraper-lite (run-sync-get-dataset-items). Post items
 // look like: { id: "t3_..", parsedId, url, username, title, body, html,

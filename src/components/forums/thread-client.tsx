@@ -43,6 +43,8 @@ export function ThreadClient({ recId }: { recId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Feedback for an action (save/send/refresh) so failures aren't silent.
+  const [actionNote, setActionNote] = useState<string | null>(null);
 
   // Mark-posted + manual-traction editing. Moved here from the board so the
   // post's own page is where you manage everything about it.
@@ -100,18 +102,25 @@ export function ThreadClient({ recId }: { recId: string }) {
   // mark posted, skip). Returns whether the save succeeded.
   async function patchRec(body: Record<string, unknown>) {
     setBusy(true);
+    setActionNote(null);
     try {
       const res = await fetch(`/api/forums/distribution/${recId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setRec(data.rec as DistributionRec);
         if (data.rec?.assignments) setAssignments(data.rec.assignments as ForumCommentAssignment[]);
+        // The Slack send is best-effort server-side; surface why it didn't land.
+        if (typeof data.slackReason === "string") setActionNote(data.slackReason);
         return true;
       }
+      setActionNote(typeof data?.error === "string" ? data.error : `Request failed (${res.status})`);
+      return false;
+    } catch {
+      setActionNote("Network error — please try again.");
       return false;
     } finally {
       setBusy(false);
@@ -119,13 +128,19 @@ export function ThreadClient({ recId }: { recId: string }) {
   }
 
   async function markPosted() {
+    // Save the URL + status first and return immediately — never block the save
+    // on a Reddit traction fetch (it can take 30-200s via Apify or be blocked),
+    // which made the Save button appear to hang. Pull traction afterwards in the
+    // background so the numbers still fill in on their own.
     const ok = await patchRec({
       status: "posted",
       posted_url: postedUrl || null,
       posted_by_account_id: postedByAccountId || null,
-      refresh: Boolean(postedUrl),
     });
-    if (ok) setShowPostedInput(false);
+    if (ok) {
+      setShowPostedInput(false);
+      if (postedUrl) void patchRec({ refresh: true });
+    }
   }
 
   async function saveManualTraction() {
@@ -448,6 +463,12 @@ export function ThreadClient({ recId }: { recId: string }) {
           </div>
         )}
       </div>
+
+      {actionNote && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {actionNote}
+        </div>
+      )}
 
       {/* Reply to the post itself (per-member top-level comments) */}
       {posted && (
