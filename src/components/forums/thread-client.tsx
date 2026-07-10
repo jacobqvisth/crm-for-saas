@@ -566,10 +566,10 @@ export function ThreadClient({ recId }: { recId: string }) {
 function BackLink() {
   return (
     <Link
-      href="/forums/distribution"
+      href="/forums?view=topics"
       className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800"
     >
-      <ArrowLeft className="h-4 w-4" /> Back to Distribution
+      <ArrowLeft className="h-4 w-4" /> Back to campaigns
     </Link>
   );
 }

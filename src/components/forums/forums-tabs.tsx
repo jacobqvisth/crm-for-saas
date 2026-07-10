@@ -3,11 +3,14 @@ import Link from "next/link";
 // One shared tab bar for every Forums page so navigation is identical and
 // stays in sync. Each page passes the tab it's on; that one renders as the
 // active (non-link) tab.
-export type ForumsTab = "generator" | "distribution" | "answers" | "gaps";
+//
+// "Posts" is the unified board at /forums — it merges the old "Post generator"
+// and "Distribution" tabs into one page with an All / Topic campaigns / From
+// diagnostics switch (see ForumsHub).
+export type ForumsTab = "posts" | "answers" | "gaps";
 
 const TABS: Array<{ key: ForumsTab; label: string; href: string }> = [
-  { key: "generator", label: "Post generator", href: "/forums" },
-  { key: "distribution", label: "Distribution", href: "/forums/distribution" },
+  { key: "posts", label: "Posts", href: "/forums" },
   { key: "answers", label: "Answer posts", href: "/forums/answers" },
   { key: "gaps", label: "Gap log", href: "/forums/gaps" },
 ];

@@ -45,7 +45,9 @@ const MENTION_LABEL: Record<ForumMentionLevel, string> = {
 const STATUS_FILTERS = ["all", "drafted", "posted", "archived"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-export function ForumsClient() {
+// `embedded` = rendered inside the unified Posts hub, which owns the page
+// header + tab bar, so we suppress our own and drop the outer page padding.
+export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) {
   const [scenarios, setScenarios] = useState<ForumScenario[]>([]);
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
@@ -120,21 +122,25 @@ export function ForumsClient() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
-      {/* Header */}
-      <div className="flex items-start gap-3 mb-2">
-        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
-          <MessagesSquare className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Forums</h1>
-          <p className="text-sm text-slate-500">
-            Turn real diagnostic scenarios into ready-to-paste forum posts.
-          </p>
-        </div>
-      </div>
+    <div className={embedded ? "" : "max-w-6xl mx-auto px-6 py-8"}>
+      {!embedded && (
+        <>
+          {/* Header */}
+          <div className="flex items-start gap-3 mb-2">
+            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+              <MessagesSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">Forums</h1>
+              <p className="text-sm text-slate-500">
+                Turn real diagnostic scenarios into ready-to-paste forum posts.
+              </p>
+            </div>
+          </div>
 
-      <ForumsTabs active="generator" />
+          <ForumsTabs active="posts" />
+        </>
+      )}
 
       {/* Workflow note */}
       <div className="mt-4 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">
