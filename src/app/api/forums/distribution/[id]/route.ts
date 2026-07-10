@@ -86,13 +86,24 @@ export async function PATCH(
     }
   }
 
-  const { data: updated, error } = await supabase
-    .from("forum_distribution")
-    .update(update)
-    .eq("id", id)
-    .eq("workspace_id", workspaceId)
-    .select()
-    .single();
+  // Some actions carry no column changes (send_slack / draft on their own):
+  // updating with an empty object makes PostgREST 500, so just read the row
+  // instead and let the Slack/draft steps below run on it.
+  const hasColumnChanges = Object.keys(update).length > 0;
+  const { data: updated, error } = hasColumnChanges
+    ? await supabase
+        .from("forum_distribution")
+        .update(update)
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .select()
+        .single()
+    : await supabase
+        .from("forum_distribution")
+        .select()
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
