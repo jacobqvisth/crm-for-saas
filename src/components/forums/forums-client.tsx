@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { submitUrlWithTitle } from "@/lib/forums/wlpost";
-import { OpenAsButton } from "./open-in-profile";
+import { OpenInProfile } from "./open-in-profile";
 import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
@@ -499,7 +499,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function PostCard({
+export function PostCard({
   post,
   accounts,
   onPatched,
@@ -748,6 +748,18 @@ function PostCard({
         </div>
       )}
 
+      {/* Open the prefilled submit page in the chosen account's Chrome profile */}
+      {!editing && post.status !== "posted" && (
+        <div className="mt-3">
+          <OpenInProfile
+            accounts={accounts}
+            targetUrl={submitUrlTitled}
+            body={post.generated_body ?? ""}
+            prefix="Open submit page as"
+          />
+        </div>
+      )}
+
       {/* Per-member team comments (posted only) */}
       {post.status === "posted" && !editing && (
         <TeamComments
@@ -808,23 +820,15 @@ function PostCard({
                   ))}
                 </select>
               </label>
-              {assigned?.username ? (
-                <OpenAsButton
-                  account={assigned}
-                  targetUrl={submitUrlTitled}
-                  body={post.generated_body ?? ""}
-                />
-              ) : (
-                <a
-                  href={submitUrlTitled}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Open the subreddit's submit page in a new tab, then paste"
-                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Open submit page
-                </a>
-              )}
+              <a
+                href={submitUrlTitled}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open the subreddit's submit page in a new tab (current profile)"
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open submit page
+              </a>
             </>
           )}
           {post.status !== "posted" ? (
