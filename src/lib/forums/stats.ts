@@ -14,6 +14,9 @@ import type { FailureOutcome, GapVerdict } from "./gaps";
 import { getContributorLeaderboard, type ContributorTotal } from "./contributors";
 
 type DB = SupabaseClient<Database>;
+// reddit_mentions isn't in the generated Database types yet (added by the
+// 20260710120000 migration). Access it through an untyped client view.
+type RawDB = SupabaseClient;
 
 export interface StatusCount {
   total: number;
@@ -53,9 +56,71 @@ export interface ForumStats {
     byVerdict: Record<GapVerdict, number>;
   };
   timeline: TimelinePoint[];
-  // Placeholder until the reddit_mentions phase lands — the UI shows "coming
-  // soon" rather than a fake zero.
-  wrenchlaneTracked: false;
+  wrenchlane: WrenchlaneExposure;
+}
+
+export interface WrenchlaneExposure {
+  // False until the reddit_mentions table exists — the UI then shows the
+  // "coming soon" note instead of a misleading row of zeros.
+  tracked: boolean;
+  us: { links: number; mentions: number };
+  thirdParty: { links: number; mentions: number };
+  recent: {
+    id: string;
+    audience: string;
+    kind: string;
+    subreddit: string | null;
+    author: string | null;
+    source_url: string;
+    matched_domain: string | null;
+    sentiment: string | null;
+    first_seen_at: string;
+  }[];
+}
+
+// Wrenchlane footprint on Reddit. Guarded: if the reddit_mentions table hasn't
+// been created yet the query errors and we report tracked:false rather than
+// throwing, so the Stats page keeps working through the rollout.
+export async function getWrenchlaneExposure(
+  supabase: RawDB,
+  workspaceId: string,
+): Promise<WrenchlaneExposure> {
+  const empty: WrenchlaneExposure = {
+    tracked: false,
+    us: { links: 0, mentions: 0 },
+    thirdParty: { links: 0, mentions: 0 },
+    recent: [],
+  };
+  try {
+    const { data, error } = await supabase
+      .from("reddit_mentions")
+      .select(
+        "id, audience, kind, subreddit, author, source_url, matched_domain, sentiment, first_seen_at",
+      )
+      .eq("workspace_id", workspaceId)
+      .neq("status", "dismissed")
+      .order("first_seen_at", { ascending: false });
+    if (error || !data) return empty;
+
+    const rows = data as WrenchlaneExposure["recent"][number][] & {
+      audience: string;
+      kind: string;
+    }[];
+    const out: WrenchlaneExposure = {
+      tracked: true,
+      us: { links: 0, mentions: 0 },
+      thirdParty: { links: 0, mentions: 0 },
+      recent: rows.slice(0, 20),
+    };
+    for (const r of rows) {
+      const bucket = r.audience === "us" ? out.us : out.thirdParty;
+      if (r.kind === "link") bucket.links++;
+      else bucket.mentions++;
+    }
+    return out;
+  } catch {
+    return empty;
+  }
 }
 
 const n = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -284,6 +349,8 @@ export async function getForumStats(supabase: DB, workspaceId: string): Promise<
     .map(([week, count]) => ({ week, posts: count }))
     .sort((a, b) => a.week.localeCompare(b.week));
 
+  const wrenchlane = await getWrenchlaneExposure(supabase as unknown as RawDB, workspaceId);
+
   return {
     posts,
     distribution,
@@ -296,6 +363,6 @@ export async function getForumStats(supabase: DB, workspaceId: string): Promise<
     roster,
     gaps: { total: gapRows.length, byOutcome, byVerdict },
     timeline,
-    wrenchlaneTracked: false,
+    wrenchlane,
   };
 }

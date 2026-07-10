@@ -311,19 +311,71 @@ export function StatsView({ stats }: { stats: ForumStats }) {
         <GapRollup stats={stats} />
       </div>
 
-      {/* Wrenchlane exposure — next phase */}
+      {/* Wrenchlane exposure */}
       <h2 className="mb-2 mt-8 text-sm font-semibold text-slate-800">Wrenchlane exposure</h2>
+      <WrenchlaneExposureCard stats={stats} />
+    </div>
+  );
+}
+
+function WrenchlaneExposureCard({ stats }: { stats: ForumStats }) {
+  const w = stats.wrenchlane;
+
+  if (!w.tracked) {
+    return (
       <div className="flex items-start gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-600">
         <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
         <div>
-          <p className="font-medium text-slate-700">Coming next: brand tracking.</p>
+          <p className="font-medium text-slate-700">Brand tracking is being switched on.</p>
           <p className="mt-0.5 text-slate-500">
-            How many times we posted a Wrenchlane link, plus links and plaintext mentions of Wrenchlane
-            by other Reddit users — with sentiment. This lands with the <code className="rounded bg-slate-200 px-1">reddit_mentions</code>{" "}
-            table and a scan job (Phase 2+). Today only the four boards above are tracked.
+            Once the <code className="rounded bg-slate-200 px-1">reddit_mentions</code> table is live and
+            backfilled, this shows how many times we posted a Wrenchlane link, plus links and plaintext
+            mentions of Wrenchlane by other Reddit users (with sentiment). Third-party detection arrives
+            with the scan job (next phase).
           </p>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiTile icon={<Link2 className="h-4 w-4" />} label="Our links" value={w.us.links} />
+        <KpiTile icon={<MessageSquare className="h-4 w-4" />} label="Our mentions" value={w.us.mentions} />
+        <KpiTile icon={<Link2 className="h-4 w-4" />} label="Others' links" value={w.thirdParty.links} />
+        <KpiTile icon={<MessageSquare className="h-4 w-4" />} label="Others' mentions" value={w.thirdParty.mentions} />
+      </div>
+      {w.recent.length === 0 ? (
+        <p className="text-sm text-slate-400">No Wrenchlane footprint detected on Reddit yet.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+          {w.recent.map((m) => (
+            <li key={m.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  m.audience === "us" ? "bg-orange-50 text-orange-700" : "bg-sky-50 text-sky-700"
+                }`}
+              >
+                {m.audience === "us" ? "Us" : "Third party"}
+              </span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                {m.kind === "link" ? "Link" : "Mention"}
+              </span>
+              <span className="text-slate-500">{m.subreddit ? `r/${m.subreddit.replace(/^r\//i, "")}` : "—"}</span>
+              {m.author ? <span className="text-slate-400">u/{m.author}</span> : null}
+              <Link
+                href={m.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto truncate text-slate-500 hover:text-orange-600"
+              >
+                {m.matched_domain ?? "view thread"}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
