@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import Link from "next/link";
 import {
   MessagesSquare,
   ExternalLink,
@@ -19,10 +18,14 @@ import {
   Send,
   AlertTriangle,
   Info,
+  User,
+  Pencil,
 } from "lucide-react";
 import { REPLY_SUBREDDITS, type ForumReply, type ReplySource } from "@/lib/forums/replies";
 import type { ForumMentionLevel } from "@/lib/forums/types";
 import type { RedditPost } from "@/lib/forums/reddit";
+import type { RedditAccount } from "@/lib/forums/accounts";
+import { ForumsTabs } from "./forums-tabs";
 
 const MENTION_LABEL: Record<ForumMentionLevel, string> = {
   none: "No mention",
@@ -32,6 +35,11 @@ const MENTION_LABEL: Record<ForumMentionLevel, string> = {
 
 const STATUS_FILTERS = ["all", "draft", "posted", "archived"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+// "Owner · u/handle" (or just the owner when the handle isn't filled in yet).
+function accountLabel(a: RedditAccount): string {
+  return a.username ? `${a.owner_label} · u/${a.username}` : `${a.owner_label} (handle pending)`;
+}
 
 function timeAgo(unixSeconds: number | null): string {
   if (!unixSeconds) return "";
@@ -44,9 +52,11 @@ function timeAgo(unixSeconds: number | null): string {
 
 export function AnswersClient() {
   const [replies, setReplies] = useState<ForumReply[]>([]);
+  const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   // Shared mention level for all drafting actions.
   const [mentionLevel, setMentionLevel] = useState<ForumMentionLevel>("none");
@@ -75,10 +85,17 @@ export function AnswersClient() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/forums/replies");
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load");
-        if (!cancelled) setReplies(data.replies ?? []);
+        const [rRes, aRes] = await Promise.all([
+          fetch("/api/forums/replies"),
+          fetch("/api/forums/accounts"),
+        ]);
+        const rData = await rRes.json();
+        if (!rRes.ok) throw new Error(rData.error ?? "Failed to load");
+        const aData = aRes.ok ? await aRes.json() : { accounts: [] };
+        if (!cancelled) {
+          setReplies(rData.replies ?? []);
+          setAccounts(aData.accounts ?? []);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -206,51 +223,55 @@ export function AnswersClient() {
     }
   }
 
+  async function refreshAllTraction() {
+    setRefreshingAll(true);
+    try {
+      const res = await fetch("/api/forums/replies/refresh", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) setReplies(data.replies ?? []);
+    } finally {
+      setRefreshingAll(false);
+    }
+  }
+
   const filtered = replies.filter((r) => statusFilter === "all" || r.status === statusFilter);
 
+  const stats = useMemo(() => {
+    const posted = replies.filter((r) => r.status === "posted");
+    return {
+      total: replies.length,
+      posted: posted.length,
+      upvotes: posted.reduce((n, r) => n + (r.score ?? 0), 0),
+      comments: posted.reduce((n, r) => n + (r.num_comments ?? 0), 0),
+    };
+  }, [replies]);
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start gap-3 mb-2">
+        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+          <MessagesSquare className="h-5 w-5" />
+        </div>
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Answer posts</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Find real questions people are asking and draft a genuinely helpful reply to post.
+          <p className="text-sm text-slate-500">
+            Find real questions people are asking and draft a genuinely helpful reply — then track
+            who posted it and how it&apos;s doing.
           </p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mt-4 flex items-center gap-1 border-b border-slate-200">
-        <Link
-          href="/forums"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Post generator
-        </Link>
-        <Link
-          href="/forums/distribution"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Distribution
-        </Link>
-        <span className="border-b-2 border-orange-500 px-3 py-2 text-sm font-medium text-orange-700">
-          Answer posts
-        </span>
-        <Link
-          href="/forums/gaps"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Gap log
-        </Link>
-      </div>
+      <ForumsTabs active="answers" />
 
       {/* How this works */}
       <div className="mt-4 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">
         <span className="font-medium">How this works:</span> find an open question below (or paste a
         Reddit post URL), and I&apos;ll draft a helpful reply grounded in the actual problem. Copy it,
-        post it as a comment yourself, and mark where you replied. Keep replies genuinely useful —
-        the mention level controls whether Wrenchlane comes up at all.
+        post it as a comment from one of your team&apos;s Reddit accounts, then mark it posted — pick{" "}
+        <span className="font-medium">who posted it</span> and paste the link so we can{" "}
+        <span className="font-medium">pull its upvotes and replies</span> later. Keep replies
+        genuinely useful — the mention level controls whether Wrenchlane comes up at all.
       </div>
 
       {/* Shared mention-level control */}
@@ -379,7 +400,7 @@ export function AnswersClient() {
 
         {/* Results */}
         {posts.length > 0 && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
             {posts.map((p) => {
               const key = `post:${p.id}`;
               return (
@@ -460,10 +481,15 @@ export function AnswersClient() {
       />
 
       {/* Drafted replies board */}
-      <section className="mt-8 scroll-mt-4" ref={draftedRef}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800">Your drafted replies</h2>
-          <div className="flex gap-1">
+      <section className="mt-10 scroll-mt-4" ref={draftedRef}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">Your drafted replies</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Mark each one posted with who sent it, then refresh to see its traction.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f}
@@ -478,6 +504,35 @@ export function AnswersClient() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Stats + bulk refresh */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <StatChip label="Drafted" value={stats.total} />
+          <StatChip label="Posted" value={`${stats.posted}/${stats.total}`} />
+          <StatChip
+            label="Total upvotes"
+            value={stats.upvotes}
+            icon={<ArrowUpToLine className="h-3.5 w-3.5" />}
+          />
+          <StatChip
+            label="Total replies"
+            value={stats.comments}
+            icon={<MessageSquare className="h-3.5 w-3.5" />}
+          />
+          <button
+            onClick={refreshAllTraction}
+            disabled={refreshingAll || stats.posted === 0}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+            title={stats.posted === 0 ? "Mark a reply posted first" : "Pull live upvotes + replies from Reddit"}
+          >
+            {refreshingAll ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Refresh traction
+          </button>
         </div>
 
         {loading ? (
@@ -501,6 +556,7 @@ export function AnswersClient() {
               >
                 <ReplyCard
                   reply={r}
+                  accounts={accounts}
                   onChange={(u) => setReplies((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
                   onRemoved={() => setReplies((prev) => prev.filter((x) => x.id !== r.id))}
                 />
@@ -509,6 +565,24 @@ export function AnswersClient() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5">
+      {icon && <span className="text-slate-400">{icon}</span>}
+      <span className="text-sm font-semibold text-slate-900">{value}</span>
+      <span className="text-xs text-slate-500">{label}</span>
     </div>
   );
 }
@@ -669,10 +743,12 @@ function StatusBadge({ status }: { status: ForumReply["status"] }) {
 
 function ReplyCard({
   reply,
+  accounts,
   onChange,
   onRemoved,
 }: {
   reply: ForumReply;
+  accounts: RedditAccount[];
   onChange: (r: ForumReply) => void;
   onRemoved: () => void;
 }) {
@@ -682,6 +758,18 @@ function ReplyCard({
   const [draft, setDraft] = useState(reply.generated_body ?? "");
   const [showPosted, setShowPosted] = useState(false);
   const [postedUrl, setPostedUrl] = useState(reply.posted_url ?? "");
+  const [postedByAccountId, setPostedByAccountId] = useState(reply.posted_by_account_id ?? "");
+  const [editingTraction, setEditingTraction] = useState(false);
+  const [manualScore, setManualScore] = useState(reply.score?.toString() ?? "");
+  const [manualComments, setManualComments] = useState(reply.num_comments?.toString() ?? "");
+
+  const posted = reply.status === "posted";
+  const postedByAccount = accounts.find((a) => a.id === reply.posted_by_account_id) ?? null;
+  // Flag when Reddit reports a different author than the picked account.
+  const authorMismatch =
+    !!reply.posted_by_username &&
+    !!postedByAccount?.username &&
+    reply.posted_by_username.toLowerCase() !== postedByAccount.username.toLowerCase();
 
   async function patch(payload: Record<string, unknown>): Promise<boolean> {
     setBusy(true);
@@ -715,8 +803,26 @@ function ReplyCard({
   }
 
   async function markPosted() {
-    const ok = await patch({ status: "posted", posted_url: postedUrl || null });
-    if (ok) setShowPosted(false);
+    // Save URL + who posted first and return immediately — never block the save
+    // on a Reddit traction fetch (it can be slow or blocked). Pull traction
+    // afterwards in the background so the numbers still fill in on their own.
+    const ok = await patch({
+      status: "posted",
+      posted_url: postedUrl || null,
+      posted_by_account_id: postedByAccountId || null,
+    });
+    if (ok) {
+      setShowPosted(false);
+      if (postedUrl) void patch({ refresh: true });
+    }
+  }
+
+  async function saveManualTraction() {
+    const ok = await patch({
+      score: manualScore === "" ? null : Number(manualScore),
+      num_comments: manualComments === "" ? null : Number(manualComments),
+    });
+    if (ok) setEditingTraction(false);
   }
 
   async function remove() {
@@ -763,6 +869,94 @@ function ReplyCard({
           </a>
         )}
       </div>
+
+      {/* Traction (posted only) */}
+      {posted && (
+        <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-green-100 bg-green-50/50 px-3 py-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 font-medium text-green-800">
+            <ArrowUpToLine className="h-3.5 w-3.5" />
+            {reply.score ?? "—"}
+            <span className="font-normal text-green-700">upvotes</span>
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium text-green-800">
+            <MessageSquare className="h-3.5 w-3.5" />
+            {reply.num_comments ?? "—"}
+            <span className="font-normal text-green-700">replies</span>
+          </span>
+          {typeof reply.upvote_ratio === "number" && (
+            <span className="text-green-700">{Math.round(reply.upvote_ratio * 100)}% upvoted</span>
+          )}
+          <button
+            onClick={() => patch({ refresh: true })}
+            disabled={busy || !reply.posted_url}
+            title={reply.posted_url ? "Auto-refresh from Reddit" : "Add the reply URL to auto-refresh"}
+            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+          </button>
+          <button
+            onClick={() => setEditingTraction((v) => !v)}
+            className="inline-flex items-center gap-1 text-green-700 hover:text-green-900"
+            title="Enter upvotes / replies manually"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          {reply.last_checked_at && (
+            <span className="text-green-600/70">
+              checked {new Date(reply.last_checked_at).toLocaleDateString()}
+            </span>
+          )}
+          {reply.traction_note && <span className="text-amber-700">{reply.traction_note}</span>}
+        </div>
+      )}
+
+      {posted && editingTraction && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label className="inline-flex items-center gap-1 text-slate-500">
+            <ArrowUpToLine className="h-3.5 w-3.5" />
+            <input
+              type="number"
+              value={manualScore}
+              onChange={(e) => setManualScore(e.target.value)}
+              placeholder="upvotes"
+              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <label className="inline-flex items-center gap-1 text-slate-500">
+            <MessageSquare className="h-3.5 w-3.5" />
+            <input
+              type="number"
+              value={manualComments}
+              onChange={(e) => setManualComments(e.target.value)}
+              placeholder="replies"
+              className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <button
+            onClick={saveManualTraction}
+            disabled={busy}
+            className="rounded-lg bg-green-600 px-3 py-1 font-medium text-white hover:bg-green-700 disabled:opacity-60"
+          >
+            Save
+          </button>
+        </div>
+      )}
+
+      {/* Posted-by attribution */}
+      {posted && (postedByAccount || reply.posted_by_username) && (
+        <p className="mt-2 inline-flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+          <User className="h-3 w-3 text-slate-400" />
+          <span className="font-medium text-slate-600">Posted by</span>{" "}
+          {postedByAccount ? (
+            <span>{accountLabel(postedByAccount)}</span>
+          ) : (
+            <span>u/{reply.posted_by_username}</span>
+          )}
+          {authorMismatch && (
+            <span className="text-amber-700">— Reddit says u/{reply.posted_by_username}</span>
+          )}
+        </p>
+      )}
 
       {/* Source question */}
       {reply.source_title && (
@@ -884,23 +1078,42 @@ function ReplyCard({
         )}
       </div>
 
-      {/* Mark-posted URL input */}
+      {/* Mark-posted panel — who posted it + the comment URL */}
       {showPosted && reply.status !== "posted" && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            value={postedUrl}
-            onChange={(e) => setPostedUrl(e.target.value)}
-            placeholder="Link to your comment (optional)"
-            className="flex-1 min-w-[220px] rounded-lg border border-slate-300 px-3 py-1.5 text-xs outline-none focus:border-green-400"
-          />
-          <button
-            onClick={markPosted}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-            Confirm
-          </button>
+        <div className="mt-2 flex flex-col gap-2">
+          <label className="flex items-center gap-2">
+            <User className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+            <select
+              value={postedByAccountId}
+              onChange={(e) => setPostedByAccountId(e.target.value)}
+              className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+            >
+              <option value="">Posted by… (which Reddit account?)</option>
+              {accounts
+                .filter((a) => a.active)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {accountLabel(a)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={postedUrl}
+              onChange={(e) => setPostedUrl(e.target.value)}
+              placeholder="Link to your comment (optional)"
+              className="flex-1 min-w-[220px] rounded-lg border border-slate-300 px-3 py-1.5 text-xs outline-none focus:border-green-400"
+            />
+            <button
+              onClick={markPosted}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              Confirm
+            </button>
+          </div>
         </div>
       )}
     </div>

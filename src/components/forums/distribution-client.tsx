@@ -20,6 +20,7 @@ import {
   type DistributionTier,
 } from "@/lib/forums/distribution";
 import { ContributorsPanel } from "./contributors-panel";
+import { ForumsTabs } from "./forums-tabs";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
@@ -114,30 +115,7 @@ export function DistributionClient() {
         </div>
       </div>
 
-      {/* Section tabs */}
-      <div className="mt-4 flex items-center gap-1 border-b border-slate-200">
-        <Link
-          href="/forums"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Post generator
-        </Link>
-        <span className="border-b-2 border-orange-500 px-3 py-2 text-sm font-medium text-orange-700">
-          Distribution
-        </span>
-        <Link
-          href="/forums/answers"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Answer posts
-        </Link>
-        <Link
-          href="/forums/gaps"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Gap log
-        </Link>
-      </div>
+      <ForumsTabs active="distribution" />
 
       {/* Topic picker — rotate the angle so we're not posting the same thing every week */}
       <div className="mt-5 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4">

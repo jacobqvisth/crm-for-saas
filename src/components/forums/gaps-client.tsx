@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   Target,
   Loader2,
@@ -19,6 +18,7 @@ import {
   OUTCOME_OPTIONS,
   VERDICT_OPTIONS,
 } from "@/lib/forums/gaps";
+import { ForumsTabs } from "./forums-tabs";
 
 // Blank draft for the "log a story" form.
 const EMPTY_DRAFT = {
@@ -122,30 +122,7 @@ export function GapsClient() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mt-4 flex items-center gap-1 border-b border-slate-200">
-        <Link
-          href="/forums"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Post generator
-        </Link>
-        <Link
-          href="/forums/distribution"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Distribution
-        </Link>
-        <Link
-          href="/forums/answers"
-          className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
-        >
-          Answer posts
-        </Link>
-        <span className="border-b-2 border-orange-500 px-3 py-2 text-sm font-medium text-orange-700">
-          Gap log
-        </span>
-      </div>
+      <ForumsTabs active="gaps" />
 
       {/* What this is */}
       <div className="mt-5 rounded-lg border border-orange-100 bg-orange-50/60 px-4 py-3 text-sm text-orange-900">
