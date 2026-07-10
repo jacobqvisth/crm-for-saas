@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import Link from "next/link";
 import {
   MessagesSquare,
@@ -61,9 +62,14 @@ export function AnswersClient() {
   const [redditConfigured, setRedditConfigured] = useState<boolean | null>(null);
   const [posts, setPosts] = useState<RedditPost[]>([]);
   const [searched, setSearched] = useState(false);
+  // Live progress while the async Reddit scrape runs (one run per subreddit).
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Which source is currently being drafted (keyed by a stable id).
   const [draftingKey, setDraftingKey] = useState<string | null>(null);
+  // Newest drafted reply — briefly highlighted so the user sees where it landed.
+  const [newReplyId, setNewReplyId] = useState<string | null>(null);
+  const draftedRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +103,8 @@ export function AnswersClient() {
     setDiscovering(true);
     setDiscoverError(null);
     setSearched(true);
+    setPosts([]);
+    setProgress(null);
     try {
       const res = await fetch("/api/forums/replies/discover", {
         method: "POST",
@@ -109,18 +117,65 @@ export function AnswersClient() {
       });
       const data = await res.json();
       setRedditConfigured(data.redditConfigured ?? null);
+
+      // Async Apify path: poll for progress, streaming posts in as each
+      // subreddit's run finishes.
+      if (data.mode === "async" && Array.isArray(data.runs) && data.runs.length > 0) {
+        const runs = data.runs;
+        setProgress({ done: 0, total: runs.length });
+        const deadline = Date.now() + 300_000; // give up after ~5 min
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 4000));
+          let poll: {
+            done?: boolean;
+            posts?: RedditPost[];
+            perSub?: { sub: string; status: string }[];
+          };
+          try {
+            const pres = await fetch("/api/forums/replies/discover/status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ runs }),
+            });
+            poll = await pres.json();
+          } catch {
+            continue; // transient — try again on the next tick
+          }
+          if (Array.isArray(poll.posts)) setPosts(poll.posts);
+          const finished = (poll.perSub ?? []).filter(
+            (s) => s.status === "succeeded" || s.status === "failed",
+          ).length;
+          setProgress({ done: finished, total: runs.length });
+          if (poll.done) {
+            const allFailed =
+              (poll.perSub ?? []).length > 0 &&
+              (poll.perSub ?? []).every((s) => s.status === "failed");
+            if ((poll.posts?.length ?? 0) === 0 && allFailed) {
+              setDiscoverError("Reddit search failed or timed out. Try again in a moment.");
+            }
+            break;
+          }
+        }
+        return;
+      }
+
+      // Inline path (OAuth, nothing configured, or a start error).
       if (data.error) setDiscoverError(data.error);
       setPosts(data.posts ?? []);
     } catch (e) {
       setDiscoverError(e instanceof Error ? e.message : "Failed to search");
     } finally {
       setDiscovering(false);
+      setProgress(null);
     }
   }
 
-  // Draft a reply from any source; prepend the new reply to the board.
+  // Draft a reply from any source; prepend the new reply to the board. The
+  // board sits well below the post list, so on success we toast + scroll to it
+  // and briefly highlight the new card — otherwise the click looks like a no-op.
   async function draftReply(source: ReplySource, key: string) {
     setDraftingKey(key);
+    const toastId = toast.loading("Drafting a reply…");
     try {
       const res = await fetch("/api/forums/replies/generate", {
         method: "POST",
@@ -130,12 +185,22 @@ export function AnswersClient() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Failed to draft reply");
+        toast.error(data.error ?? "Failed to draft reply", { id: toastId });
         return;
       }
-      setReplies((prev) => [data.reply as ForumReply, ...prev]);
+      const reply = data.reply as ForumReply;
+      setReplies((prev) => [reply, ...prev]);
+      setStatusFilter("all");
       setError(null);
+      toast.success("Reply drafted — added below", { id: toastId });
+      setNewReplyId(reply.id);
+      // Let the new card render, then bring it into view + fade the highlight.
+      setTimeout(() => draftedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      setTimeout(() => setNewReplyId(null), 2500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to draft reply");
+      const msg = e instanceof Error ? e.message : "Failed to draft reply";
+      setError(msg);
+      toast.error(msg, { id: toastId });
     } finally {
       setDraftingKey(null);
     }
@@ -291,6 +356,29 @@ export function AnswersClient() {
           </div>
         )}
 
+        {/* Live progress while the async scrape runs */}
+        {discovering && progress && (
+          <div className="mt-3 space-y-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-xs font-medium text-orange-800">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Searching Reddit… {progress.done}/{progress.total} subreddits done
+              {posts.length > 0 && ` · ${posts.length} found so far`}
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100">
+              <div
+                className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                style={{
+                  width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%`,
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-orange-700/80">
+              The first search can take a couple of minutes while the scraper warms up — results
+              appear here as each subreddit finishes.
+            </p>
+          </div>
+        )}
+
         {/* Results */}
         {posts.length > 0 && (
           <div className="mt-4 space-y-2">
@@ -374,7 +462,7 @@ export function AnswersClient() {
       />
 
       {/* Drafted replies board */}
-      <section className="mt-8">
+      <section className="mt-8 scroll-mt-4" ref={draftedRef}>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">Your drafted replies</h2>
           <div className="flex gap-1">
@@ -405,12 +493,20 @@ export function AnswersClient() {
         ) : (
           <div className="mt-4 space-y-3">
             {filtered.map((r) => (
-              <ReplyCard
+              <div
                 key={r.id}
-                reply={r}
-                onChange={(u) => setReplies((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
-                onRemoved={() => setReplies((prev) => prev.filter((x) => x.id !== r.id))}
-              />
+                className={
+                  r.id === newReplyId
+                    ? "rounded-xl ring-2 ring-orange-400 transition-shadow"
+                    : "transition-shadow"
+                }
+              >
+                <ReplyCard
+                  reply={r}
+                  onChange={(u) => setReplies((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+                  onRemoved={() => setReplies((prev) => prev.filter((x) => x.id !== r.id))}
+                />
+              </div>
             ))}
           </div>
         )}

@@ -188,6 +188,153 @@ export async function apifySearchRedditPosts(opts: {
   return { posts: posts.slice(0, totalLimit), failed, timedOut };
 }
 
+// ── Async search (start + poll) ───────────────────────────────────────────
+// The synchronous fan-out above still makes the user stare at a spinner for the
+// length of the slowest cold subreddit (~200s) with no feedback, and a fully
+// cold start can blow the per-run cap and return nothing. The answer-posts UI
+// instead STARTS the runs (returns immediately with run handles) and POLLS,
+// streaming each subreddit's posts in as its run finishes and showing live
+// progress. Each poll call is fast, so it isn't bound by a function timeout.
+
+// A started actor run for one subreddit.
+export interface ApifySearchRun {
+  sub: string;
+  runId: string;
+  datasetId: string;
+}
+
+// Snapshot of an in-flight (or finished) async search.
+export interface ApifySearchProgress {
+  done: boolean; // every run reached a terminal state
+  posts: RedditPost[]; // merged + de-duped across all finished runs
+  perSub: { sub: string; status: RunStatus }[];
+}
+
+type RunStatus = "pending" | "running" | "succeeded" | "failed";
+
+const TERMINAL = /^(SUCCEEDED|FAILED|TIMED-OUT|TIMED_OUT|ABORTED)$/i;
+
+// Kick off one async actor run per subreddit. Returns a handle per successfully
+// started run (bare names, deduped). Never throws — a subreddit whose run fails
+// to start is simply omitted; `failed` is true only when NONE started.
+export async function startApifySearchRuns(opts: {
+  subreddits: string[];
+  query?: string;
+  sort?: string;
+  limit?: number;
+}): Promise<{ runs: ApifySearchRun[]; failed: boolean }> {
+  const token = process.env.APIFY_TOKEN;
+  const subs = opts.subreddits.map((s) => s.replace(/^\/?r\//i, "").trim()).filter(Boolean);
+  if (!token || subs.length === 0) return { runs: [], failed: !token };
+  const totalLimit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const perSub = Math.max(Math.ceil(totalLimit / subs.length), 3);
+  const query = opts.query?.trim() || undefined;
+  const sort = opts.sort ?? "new";
+
+  const started = await Promise.all(
+    subs.map(async (sub): Promise<ApifySearchRun | null> => {
+      try {
+        const res = await fetch(
+          `https://api.apify.com/v2/acts/${ACTOR}/runs?token=${token}&timeout=230`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              proxy: { useApifyProxy: true },
+              startUrls: startUrls([sub], query, sort),
+              skipComments: true,
+              skipUserPosts: true,
+              skipCommunity: true,
+              includeMediaLinks: true,
+              maxItems: perSub,
+              maxPostCount: perSub,
+            }),
+            cache: "no-store",
+          },
+        );
+        if (!res.ok) return null;
+        const data = (await res.json()) as {
+          data?: { id?: string; defaultDatasetId?: string };
+        };
+        const runId = data.data?.id;
+        const datasetId = data.data?.defaultDatasetId;
+        if (!runId || !datasetId) return null;
+        return { sub, runId, datasetId };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const runs = started.filter((r): r is ApifySearchRun => r !== null);
+  return { runs, failed: runs.length === 0 };
+}
+
+// Poll a set of started runs. Fetches items from finished runs, merges +
+// de-dupes, and reports per-subreddit status. Never throws.
+export async function pollApifySearchRuns(
+  runs: ApifySearchRun[],
+  limit = 25,
+): Promise<ApifySearchProgress> {
+  const token = process.env.APIFY_TOKEN;
+  if (!token || runs.length === 0) {
+    return { done: true, posts: [], perSub: runs.map((r) => ({ sub: r.sub, status: "failed" })) };
+  }
+  const totalLimit = Math.min(Math.max(limit, 1), 100);
+
+  const perRun = await Promise.all(
+    runs.map(async (run) => {
+      try {
+        const res = await fetch(
+          `https://api.apify.com/v2/actor-runs/${run.runId}?token=${token}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return { run, status: "running" as RunStatus, items: [] as ApifyPostItem[] };
+        const data = (await res.json()) as { data?: { status?: string } };
+        const raw = data.data?.status ?? "";
+        if (!TERMINAL.test(raw)) {
+          return { run, status: "running" as RunStatus, items: [] as ApifyPostItem[] };
+        }
+        if (!/^SUCCEEDED$/i.test(raw)) {
+          return { run, status: "failed" as RunStatus, items: [] as ApifyPostItem[] };
+        }
+        // Succeeded → pull the dataset items.
+        const itemsRes = await fetch(
+          `https://api.apify.com/v2/datasets/${run.datasetId}/items?token=${token}&clean=true`,
+          { cache: "no-store" },
+        );
+        const items = itemsRes.ok ? ((await itemsRes.json()) as ApifyPostItem[]) : [];
+        return {
+          run,
+          status: "succeeded" as RunStatus,
+          items: Array.isArray(items) ? items : [],
+        };
+      } catch {
+        return { run, status: "running" as RunStatus, items: [] as ApifyPostItem[] };
+      }
+    }),
+  );
+
+  const seen = new Set<string>();
+  const posts: RedditPost[] = [];
+  for (const r of perRun) {
+    for (const item of r.items) {
+      if ((item.dataType ?? "post") !== "post") continue;
+      const post = toRedditPost(item);
+      if (!post || seen.has(post.id)) continue;
+      seen.add(post.id);
+      posts.push(post);
+    }
+  }
+  posts.sort((a, b) => (b.created_utc ?? 0) - (a.created_utc ?? 0));
+
+  return {
+    done: perRun.every((r) => r.status === "succeeded" || r.status === "failed"),
+    posts: posts.slice(0, totalLimit),
+    perSub: perRun.map((r) => ({ sub: r.run.sub, status: r.status })),
+  };
+}
+
 // Load a single post by URL.
 export async function apifyFetchRedditPost(postUrl: string): Promise<RedditPost | null> {
   const { items } = await runActor({
