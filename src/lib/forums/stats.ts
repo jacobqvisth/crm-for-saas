@@ -75,6 +75,7 @@ export interface WrenchlaneExposure {
     matched_domain: string | null;
     sentiment: string | null;
     ai_summary: string | null;
+    status: string;
     first_seen_at: string;
   }[];
 }
@@ -96,7 +97,7 @@ export async function getWrenchlaneExposure(
     const { data, error } = await supabase
       .from("reddit_mentions")
       .select(
-        "id, audience, kind, subreddit, author, source_url, matched_domain, sentiment, ai_summary, first_seen_at",
+        "id, audience, kind, subreddit, author, source_url, matched_domain, sentiment, ai_summary, status, first_seen_at",
       )
       .eq("workspace_id", workspaceId)
       .neq("status", "dismissed")
