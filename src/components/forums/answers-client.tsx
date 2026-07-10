@@ -22,17 +22,16 @@ import {
   Pencil,
 } from "lucide-react";
 import { REPLY_SUBREDDITS, type ForumReply, type ReplySource } from "@/lib/forums/replies";
-import type { ForumMentionLevel } from "@/lib/forums/types";
 import type { RedditPost } from "@/lib/forums/reddit";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import {
+  DEFAULT_GENERATION_OPTIONS,
+  MENTION_LABEL,
+  type ForumGenerationOptions,
+} from "@/lib/forums/generation-options";
+import { GenerationOptions } from "./generation-options";
 import { OpenInProfile } from "./open-in-profile";
 import { ForumsTabs } from "./forums-tabs";
-
-const MENTION_LABEL: Record<ForumMentionLevel, string> = {
-  none: "No mention",
-  subtle: "Subtle mention",
-  explicit: "Explicit mention",
-};
 
 const STATUS_FILTERS = ["all", "draft", "posted", "archived"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -59,8 +58,8 @@ export function AnswersClient() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [refreshingAll, setRefreshingAll] = useState(false);
 
-  // Shared mention level for all drafting actions.
-  const [mentionLevel, setMentionLevel] = useState<ForumMentionLevel>("none");
+  // Shared generation options (mention level + style) for all drafting actions.
+  const [options, setOptions] = useState<ForumGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
 
   // Discovery state.
   const [subs, setSubs] = useState<Set<string>>(
@@ -198,7 +197,7 @@ export function AnswersClient() {
       const res = await fetch("/api/forums/replies/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, mentionLevel }),
+        body: JSON.stringify({ source, options }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -275,22 +274,10 @@ export function AnswersClient() {
         genuinely useful — the mention level controls whether Wrenchlane comes up at all.
       </div>
 
-      {/* Shared mention-level control */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-slate-500">Wrenchlane mention:</span>
-        {(["none", "subtle", "explicit"] as ForumMentionLevel[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMentionLevel(m)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              mentionLevel === m
-                ? "border-orange-400 bg-orange-50 text-orange-700"
-                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-            }`}
-          >
-            {MENTION_LABEL[m]}
-          </button>
-        ))}
+      {/* Shared generation options applied to every Draft reply on this page */}
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">Draft options</h2>
+        <GenerationOptions value={options} onChange={setOptions} />
       </div>
 
       {error && (
@@ -475,11 +462,7 @@ export function AnswersClient() {
       </section>
 
       {/* Paste a URL */}
-      <PastePanel
-        mentionLevel={mentionLevel}
-        onDraft={draftReply}
-        draftingKey={draftingKey}
-      />
+      <PastePanel onDraft={draftReply} draftingKey={draftingKey} />
 
       {/* Drafted replies board */}
       <section className="mt-10 scroll-mt-4" ref={draftedRef}>
@@ -591,11 +574,9 @@ function StatChip({
 // --- Paste-a-URL panel (always-works path) ---------------------------------
 
 function PastePanel({
-  mentionLevel,
   onDraft,
   draftingKey,
 }: {
-  mentionLevel: ForumMentionLevel;
   onDraft: (source: ReplySource, key: string) => Promise<void>;
   draftingKey: string | null;
 }) {

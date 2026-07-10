@@ -213,6 +213,7 @@ export type Database = {
         Row: {
           account_id: string | null
           assigned_owner_label: string | null
+          generation_options: Json
           comment_author: string | null
           comment_excerpt: string | null
           comment_score: number | null
@@ -237,6 +238,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           assigned_owner_label?: string | null
+          generation_options?: Json
           comment_author?: string | null
           comment_excerpt?: string | null
           comment_score?: number | null
@@ -261,6 +263,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           assigned_owner_label?: string | null
+          generation_options?: Json
           comment_author?: string | null
           comment_excerpt?: string | null
           comment_score?: number | null
@@ -485,6 +488,7 @@ export type Database = {
         Row: {
           assigned_account_id: string | null
           created_at: string
+          generation_options: Json
           diagnostic_id: string | null
           forum_target: string
           generated_body: string | null
@@ -517,6 +521,7 @@ export type Database = {
         Insert: {
           assigned_account_id?: string | null
           created_at?: string
+          generation_options?: Json
           diagnostic_id?: string | null
           forum_target: string
           generated_body?: string | null
@@ -549,6 +554,7 @@ export type Database = {
         Update: {
           assigned_account_id?: string | null
           created_at?: string
+          generation_options?: Json
           diagnostic_id?: string | null
           forum_target?: string
           generated_body?: string | null
@@ -679,6 +685,7 @@ export type Database = {
         Row: {
           created_at: string
           generated_body: string | null
+          generation_options: Json
           id: string
           mention_level: string
           model: string | null
@@ -698,6 +705,7 @@ export type Database = {
         Insert: {
           created_at?: string
           generated_body?: string | null
+          generation_options?: Json
           id?: string
           mention_level?: string
           model?: string | null
@@ -717,6 +725,7 @@ export type Database = {
         Update: {
           created_at?: string
           generated_body?: string | null
+          generation_options?: Json
           id?: string
           mention_level?: string
           model?: string | null

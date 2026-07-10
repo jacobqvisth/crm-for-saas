@@ -1,48 +1,40 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
-import { stripLongDashes } from "@/lib/ai/no-long-dash";
-import type { ForumMentionLevel, ReplySource } from "./replies";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
+import {
+  buildStyleGuidance,
+  MENTION_GUIDANCE,
+  mentionKnowledgeBlock,
+  normalizeOptions,
+  type ForumGenerationOptions,
+} from "./generation-options";
+import type { ReplySource } from "./replies";
 
 // Sonnet for creative quality — same call as the post generator. These are
 // public-facing comments that have to read like a real, knowledgeable person
 // wrote them.
 const MODEL = "claude-sonnet-4-6";
 
-const MENTION_GUIDANCE: Record<ForumMentionLevel, string> = {
-  none: "Do NOT mention Wrenchlane, any app, or any product. This is a pure helpful reply — your only goal is to actually help this person fix their car.",
-  subtle:
-    "You MAY add one passing, natural aside that you ran the symptoms through an AI car-diagnosis app to narrow it down — without naming a brand or linking anything. It must be incidental; the reply has to stand on its own as genuinely useful even if that line were deleted. Do not add it if it would feel forced.",
-  explicit:
-    "You may name Wrenchlane once, naturally, as a tool that helped (e.g. 'I ran these symptoms through Wrenchlane and it flagged X'). One mention only, no link, no sales language. The reply must still read as a real mechanic/enthusiast helping out, never an ad — lead with real help, mention it at most as an afterthought.",
-};
-
-function buildSystemPrompt(mentionLevel: ForumMentionLevel, subreddit: string | null): string {
+function buildSystemPrompt(options: ForumGenerationOptions, subreddit: string | null): string {
   const where = subreddit ? `r/${subreddit.replace(/^r\//i, "")}` : "a car-repair subreddit";
-  return `You are an experienced mechanic and car enthusiast writing a reply to a real post on ${where}. The reply will be copy-pasted, by a human, as a Reddit comment. Your job is to write ONE genuinely helpful comment that reads exactly like a knowledgeable regular wrote it.
+  return `You are writing a reply to a real post on ${where}. The reply will be copy-pasted, by a human, as a Reddit comment. Your job is to write ONE genuinely helpful comment that reads exactly like a knowledgeable regular wrote it.
 
 What a good reply does:
-- Actually engages with THIS person's specific problem — reference their car, symptoms and what they've already tried. Never a generic checklist that ignores their details.
+- Actually engages with THIS person's specific problem: reference their car, symptoms and what they've already tried. Never a generic checklist that ignores their details.
 - Gives real diagnostic direction: the most likely cause given what they described, how to confirm it, and the next thing to check. If their described fix should have worked, explain why it might not have (e.g. air still in the system, wrong bleed order, a failing component upstream).
 - Is honest about uncertainty. If it could be several things, say what you'd rule out first and how. Don't pretend to be certain you can't be.
-- Asks a pointed follow-up question only if a specific missing detail would actually change the diagnosis.
 
-Brand-mention rule: ${MENTION_GUIDANCE[mentionLevel]}
+Brand-mention rule: ${MENTION_GUIDANCE[options.mentionLevel]}
+
+How to write this one:
+${buildStyleGuidance(options)}
 
 How to sound human, not like AI:
 - Reddit comment voice: conversational, contractions, gets to the point. No headings, no "Here are the steps:", no numbered listicle unless it genuinely reads better as a short list.
-- Match the effort to the question — usually a couple of tight paragraphs. Don't pad.
 - No corporate phrasing, no "I hope this helps!", no emojis unless natural. Don't restate their whole post back to them.
 - You're a peer helping out, not customer support. Confident but not condescending.
+- ${NO_LONG_DASH_INSTRUCTION}
 
-${
-  mentionLevel === "none"
-    ? ""
-    : `For grounding ONLY, so any mention is accurate (do not paste this in):
-=== WRENCHLANE PRODUCT KNOWLEDGE ===
-${WRENCHLANE_KNOWLEDGE}
-=== END ===
-`
-}Return ONLY a JSON object, no markdown fences, no commentary, of exactly this shape:
+${mentionKnowledgeBlock(options.mentionLevel)}Return ONLY a JSON object, no markdown fences, no commentary, of exactly this shape:
 {"body": "<the reply text, plain text, real line breaks as \\n>"}`;
 }
 
@@ -64,14 +56,15 @@ export type GenerateReplyResult =
 
 export async function generateForumReply(opts: {
   source: ReplySource;
-  mentionLevel: ForumMentionLevel;
+  options: ForumGenerationOptions;
 }): Promise<GenerateReplyResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
   if (!opts.source.title?.trim()) return { ok: false, reason: "The post has no title/question to reply to" };
 
+  const options = normalizeOptions(opts.options);
   const client = new Anthropic({ apiKey });
-  const systemPrompt = buildSystemPrompt(opts.mentionLevel, opts.source.subreddit ?? null);
+  const systemPrompt = buildSystemPrompt(options, opts.source.subreddit ?? null);
   const userPrompt = `Here is the real post to reply to:\n\n${describeSource(
     opts.source,
   )}\n\nWrite your reply now. Return only the JSON object.`;

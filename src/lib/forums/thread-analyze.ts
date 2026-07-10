@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
 import { stripLongDashes } from "@/lib/ai/no-long-dash";
+import { buildStyleGuidance, normalizeOptions, type ForumGenerationOptions } from "./generation-options";
 import type { RedditComment } from "./reddit";
 import type { ForumMentionLevel } from "./types";
 
@@ -94,10 +95,15 @@ export async function analyzeThreadReplies(opts: {
   comments: RedditComment[];
   members: PersonaMember[];
   maxPicks?: number;
+  // Length / voice / approach applied to every drafted reply in the batch.
+  // Mention level stays model-chosen per comment, then clamped per persona.
+  styleOptions?: Partial<ForumGenerationOptions> | null;
 }): Promise<AnalyzeThreadResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
   if (opts.members.length === 0) return { ok: false, reason: "no roster members to assign replies to" };
+
+  const style = normalizeOptions(opts.styleOptions);
 
   // Keep substantive comments only, best (highest score) first, capped so the
   // prompt stays bounded. One-liners ("this", "lol") rarely deserve a reply.
@@ -137,8 +143,11 @@ Assignment rules (hard):
 
 Writing rules:
 - Reply directly to THAT comment: engage its specific point, don't post a generic take. Confident peer, not customer support.
-- Human Reddit voice: contractions, gets to the point, 2 to 5 sentences. No headings, no listicles, no "hope this helps", no emojis unless natural.
+- Human Reddit voice: contractions, gets to the point. No headings, no listicles, no "hope this helps", no emojis unless natural.
 - Do NOT use long dashes (— or –); write with commas or periods instead.
+
+Apply this style to every reply:
+${buildStyleGuidance(style)}
 
 Team members you can assign to:
 ${opts.members.map(describeMember).join("\n")}

@@ -26,24 +26,19 @@ import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { ThreadRepliesPanel } from "./thread-replies-panel";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
+import { GenerationOptions } from "./generation-options";
 import type { RedditAccount } from "@/lib/forums/accounts";
-import type {
-  ForumMentionLevel,
-  ForumPost,
-  ForumPostType,
-  ForumScenario,
-} from "@/lib/forums/types";
+import type { ForumPost, ForumPostType, ForumScenario } from "@/lib/forums/types";
+import {
+  DEFAULT_GENERATION_OPTIONS,
+  MENTION_LABEL,
+  type ForumGenerationOptions,
+} from "@/lib/forums/generation-options";
 
 const POST_TYPE_LABEL: Record<ForumPostType, string> = {
   help_question: "Help question",
   solved_story: "Solved-it story",
   helpful_answer: "Helpful answer",
-};
-
-const MENTION_LABEL: Record<ForumMentionLevel, string> = {
-  none: "No mention",
-  subtle: "Subtle mention",
-  explicit: "Explicit mention",
 };
 
 const STATUS_FILTERS = ["all", "drafted", "posted", "archived"] as const;
@@ -373,7 +368,7 @@ function GenerateModal({
 }) {
   const [forumTarget, setForumTarget] = useState(FORUM_TARGETS[0].key);
   const [postType, setPostType] = useState<ForumPostType>("help_question");
-  const [mentionLevel, setMentionLevel] = useState<ForumMentionLevel>("none");
+  const [options, setOptions] = useState<ForumGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -386,7 +381,7 @@ function GenerateModal({
       const res = await fetch("/api/forums/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario, forumTarget, postType, mentionLevel }),
+        body: JSON.stringify({ scenario, forumTarget, postType, options }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -443,18 +438,8 @@ function GenerateModal({
             </select>
           </Field>
 
-          <Field label="Wrenchlane mention">
-            <select
-              value={mentionLevel}
-              onChange={(e) => setMentionLevel(e.target.value as ForumMentionLevel)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring-orange-500"
-            >
-              {(Object.keys(MENTION_LABEL) as ForumMentionLevel[]).map((k) => (
-                <option key={k} value={k}>
-                  {MENTION_LABEL[k]}
-                </option>
-              ))}
-            </select>
+          <Field label="How to write it">
+            <GenerationOptions value={options} onChange={setOptions} />
           </Field>
 
           {err && (

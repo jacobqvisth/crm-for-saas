@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { getForumTarget } from "@/lib/forums/targets";
 import { generateForumPost } from "@/lib/forums/generate";
+import { generationOptionsSchema, normalizeOptions } from "@/lib/forums/generation-options";
 import type { ForumPost, ForumScenario } from "@/lib/forums/types";
 import type { Json } from "@/lib/database.types";
 
@@ -33,7 +34,10 @@ const bodySchema = z.object({
   scenario: scenarioSchema,
   forumTarget: z.string(),
   postType: z.enum(["help_question", "solved_story", "helpful_answer"]),
-  mentionLevel: z.enum(["none", "subtle", "explicit"]),
+  // Back-compat: older clients send a bare mentionLevel; newer ones send the
+  // full options object. Accept both.
+  mentionLevel: z.enum(["none", "subtle", "explicit"]).optional(),
+  options: generationOptionsSchema.optional(),
 });
 
 // POST /api/forums/generate → { post: ForumPost }
@@ -48,18 +52,25 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { scenario, forumTarget, postType, mentionLevel } = parsed.data;
+  const { scenario, forumTarget, postType, mentionLevel, options } = parsed.data;
 
   const target = getForumTarget(forumTarget);
   if (!target) {
     return NextResponse.json({ error: "Unknown forum target" }, { status: 400 });
   }
 
+  // Merge the (optional) full options object over the (optional) bare
+  // mentionLevel, then normalize to a complete set.
+  const genOptions = normalizeOptions({
+    ...(mentionLevel ? { mentionLevel } : {}),
+    ...(options ?? {}),
+  });
+
   const result = await generateForumPost({
     scenario: scenario as ForumScenario,
     target,
     postType,
-    mentionLevel,
+    options: genOptions,
     language: target.language,
   });
   if (!result.ok) {
@@ -74,7 +85,8 @@ export async function POST(request: NextRequest) {
       scenario_snapshot: scenario as unknown as Json,
       forum_target: forumTarget,
       post_type: postType,
-      mention_level: mentionLevel,
+      mention_level: genOptions.mentionLevel,
+      generation_options: genOptions as unknown as Json,
       language: target.language,
       generated_title: result.title,
       generated_body: result.body,

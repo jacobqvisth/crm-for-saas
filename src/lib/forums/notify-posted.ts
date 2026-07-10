@@ -3,6 +3,7 @@ import type { Database } from "@/lib/database.types";
 import { generateForumComments } from "./comment";
 import { postForumPostMembers, FORUM_TEAM } from "@/lib/slack/notify";
 import { isSlackBotConfigured, forumChannelId, postSlackMessage } from "@/lib/slack/api";
+import type { ForumGenerationOptions } from "./generation-options";
 import type { ForumSource } from "./types";
 
 // Two DECOUPLED steps for a posted forum item (Distribution rec or generated
@@ -41,6 +42,8 @@ export type DraftForumCommentsInput = {
   body?: string | null;
   /** Redraft: regenerate every member's comment, not just the missing ones. */
   regenerate?: boolean;
+  /** How the comments should be written (mention level + style axes). */
+  options?: Partial<ForumGenerationOptions> | null;
 };
 
 // Generate + persist a distinct comment per active roster member. Returns how
@@ -73,6 +76,7 @@ export async function draftForumComments(
       title: input.title,
       body: input.body,
       members: needComments.map((m) => m.owner_label),
+      options: input.options,
     });
     if (gen.ok) for (const c of gen.comments) drafted.set(c.owner_label, c.comment);
   }

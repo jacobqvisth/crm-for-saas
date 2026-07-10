@@ -1,5 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { stripLongDashes } from "@/lib/ai/no-long-dash";
+import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
+import {
+  buildStyleGuidance,
+  MENTION_GUIDANCE,
+  mentionKnowledgeBlock,
+  normalizeOptions,
+  type ForumGenerationOptions,
+} from "./generation-options";
 
 // Drafts a Reddit *reply* the team can paste under one of our forum posts, so
 // members can add to the conversation from their own accounts. Sonnet for the
@@ -17,20 +24,27 @@ export async function generateForumComment(opts: {
   rulesNote?: string | null;
   title: string;
   body?: string | null;
+  options?: Partial<ForumGenerationOptions> | null;
 }): Promise<GenerateCommentResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
 
-  const system = `You write a single authentic reply to a car-forum post on ${opts.subreddit}. A real person on our team will paste it as a comment from their own account, so it must read exactly like a genuine community member replying — never like marketing.
+  const options = normalizeOptions(opts.options);
+  const system = `You write a single authentic reply to a car-forum post on ${opts.subreddit}. A real person on our team will paste it as a comment from their own account, so it must read exactly like a genuine community member replying, never like marketing.
 
 ${opts.tone ? `Community tone: ${opts.tone}\n` : ""}${opts.rulesNote ? `Community norms (respect these): ${opts.rulesNote}\n` : ""}
 Rules for the reply:
 - Add something real to the discussion: share a specific opinion, an experience, or a concrete example. Take a stance; don't just agree blandly.
-- Sound human — contractions, a little imperfect, specific over generic. 2–5 sentences.
-- Do NOT mention Wrenchlane, any app, brand, or product. No links. No sales language.
+- Sound human: contractions, a little imperfect, specific over generic.
 - Don't restate the whole question. Reply as if you're one of many commenters.
+- ${NO_LONG_DASH_INSTRUCTION}
 
-Return ONLY the reply text, no quotes, no preamble, no markdown.`;
+Brand-mention rule: ${MENTION_GUIDANCE[options.mentionLevel]}
+
+How to write this one:
+${buildStyleGuidance(options)}
+
+${mentionKnowledgeBlock(options.mentionLevel)}Return ONLY the reply text, no quotes, no preamble, no markdown.`;
 
   const user = `The post you're replying to:\n\nTitle: ${opts.title}\n\n${
     opts.body ? `Body:\n${opts.body}` : "(no body)"
@@ -75,6 +89,7 @@ export async function generateForumComments(opts: {
   title: string;
   body?: string | null;
   members: string[]; // owner labels, e.g. ["Hans", "Matteo", ...]
+  options?: Partial<ForumGenerationOptions> | null;
 }): Promise<GenerateCommentsResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
@@ -82,19 +97,24 @@ export async function generateForumComments(opts: {
   const members = opts.members.filter((m) => m && m.trim()).map((m) => m.trim());
   if (members.length === 0) return { ok: false, reason: "no members" };
 
-  const system = `You write authentic replies to a car-forum post on ${opts.subreddit}. ${members.length} different people on our team will each paste ONE of these as a comment from their own Reddit account, so each reply must read like a genuine, independent community member — never like marketing, and never like variations of the same message.
+  const options = normalizeOptions(opts.options);
+  const system = `You write authentic replies to a car-forum post on ${opts.subreddit}. ${members.length} different people on our team will each paste ONE of these as a comment from their own Reddit account, so each reply must read like a genuine, independent community member, never like marketing, and never like variations of the same message.
 
 ${opts.tone ? `Community tone: ${opts.tone}\n` : ""}${opts.rulesNote ? `Community norms (respect these): ${opts.rulesNote}\n` : ""}
 Write exactly ${members.length} replies, one per person, in this order: ${members.join(", ")}.
 
 Hard rules:
 - Each reply must be GENUINELY DIFFERENT from the others: a different specific experience or example, a different stance or angle, different sentence rhythm and length. Two of them should never feel interchangeable.
-- Sound human — contractions, a little imperfect, specific over generic. 2–5 sentences each.
 - Add something real: an opinion, an experience, a concrete example. Take a stance; don't just agree blandly.
-- Do NOT mention Wrenchlane, any app, brand, or product. No links. No sales language.
 - Don't restate the whole question. Reply as one of many commenters.
+- ${NO_LONG_DASH_INSTRUCTION}
 
-Return ONLY a JSON array of objects, no prose, no markdown fences:
+Brand-mention rule (applies to every reply): ${MENTION_GUIDANCE[options.mentionLevel]}
+
+How to write these:
+${buildStyleGuidance(options)}
+
+${mentionKnowledgeBlock(options.mentionLevel)}Return ONLY a JSON array of objects, no prose, no markdown fences:
 [{"member":"<name>","comment":"<the reply text>"}, ...]
 One object per person, in the order given.`;
 

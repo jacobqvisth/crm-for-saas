@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { ForumMentionLevel, ForumThreadReply } from "@/lib/forums/types";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import type { ForumGenerationOptions } from "@/lib/forums/generation-options";
 
 // "Reply to other people's comments" — reads the live Reddit thread, drafts a
 // reply to each comment worth engaging, assigns it to a teammate, and tracks it.
@@ -31,6 +32,7 @@ export function ThreadRepliesPanel({
   posted,
   accounts,
   initialReplies,
+  options,
 }: {
   source: "distribution" | "post";
   sourceId: string;
@@ -40,6 +42,9 @@ export function ThreadRepliesPanel({
   // When provided (the campaign thread page already loads them), seed from these
   // and skip the fetch. When omitted (inline diagnostic card), fetch on mount.
   initialReplies?: ForumThreadReply[];
+  // Length/voice/approach applied to the drafted replies. Mention level stays
+  // model-chosen per comment, clamped by persona.
+  options?: ForumGenerationOptions;
 }) {
   const [replies, setReplies] = useState<ForumThreadReply[]>(initialReplies ?? []);
   const [analyzing, setAnalyzing] = useState(false);
@@ -72,7 +77,7 @@ export function ThreadRepliesPanel({
       const res = await fetch(`/api/forums/thread/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, source_id: sourceId }),
+        body: JSON.stringify({ source, source_id: sourceId, options }),
       });
       const data = await res.json();
       if (!res.ok) {

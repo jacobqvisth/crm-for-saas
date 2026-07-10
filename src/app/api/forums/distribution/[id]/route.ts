@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveWorkspace, fetchAssignmentsBySource } from "@/lib/forums/server";
 import { fetchRedditTraction, type DistributionRec } from "@/lib/forums/distribution";
 import { draftForumComments, sendForumPostToSlack } from "@/lib/forums/notify-posted";
+import { generationOptionsSchema, normalizeOptions } from "@/lib/forums/generation-options";
 
 // A traction refresh may run via an Apify scrape (~30-90s); raise the timeout.
 export const maxDuration = 300;
@@ -23,6 +24,8 @@ const patchSchema = z.object({
   refresh: z.boolean().optional(),
   // Step 1: (re)generate the per-member comment drafts. No Slack.
   draft: z.boolean().optional(),
+  // How the per-member comments should be written (mention + style axes).
+  options: generationOptionsSchema.optional(),
   // Step 2: post the current drafts to #forum-posts.
   send_slack: z.boolean().optional(),
 });
@@ -44,7 +47,8 @@ export async function PATCH(
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { refresh, draft, send_slack, status, ...rest } = parsed.data;
+  const { refresh, draft, send_slack, status, options, ...rest } = parsed.data;
+  const commentOptions = normalizeOptions(options);
 
   const update: Record<string, unknown> = { ...rest };
   if (status) {
@@ -126,6 +130,7 @@ export async function PATCH(
     rulesNote: rec.rules_note,
     title: rec.suggested_title ?? rec.subreddit,
     body: rec.suggested_body,
+    options: commentOptions,
   };
   const firstPost = status === "posted" && rec.posted_url;
 

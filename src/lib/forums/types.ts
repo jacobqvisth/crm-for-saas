@@ -10,6 +10,21 @@ export type ForumPostType = "help_question" | "solved_story" | "helpful_answer";
 // How prominently Wrenchlane gets mentioned in the post body.
 export type ForumMentionLevel = "none" | "subtle" | "explicit";
 
+// The extra "how should this draft be written" style axes, shared by every
+// forum generator. Guidance text + label maps live in generation-options.ts;
+// the raw types live here (the leaf module) so both the DB-row interfaces below
+// and generation-options.ts can use them without a circular import.
+export type ForumReplyLength = "quick" | "balanced" | "thorough";
+export type ForumVoice = "owner" | "mechanic" | "neutral";
+export type ForumApproach = "direct" | "ask_questions" | "similar_experience" | "step_by_step";
+
+export interface ForumGenerationOptions {
+  mentionLevel: ForumMentionLevel;
+  length: ForumReplyLength;
+  voice: ForumVoice;
+  approach: ForumApproach;
+}
+
 export type ForumPostStatus = "idea" | "drafted" | "posted" | "archived";
 
 // A target forum. Reference data only (no DB row) — lives in
@@ -57,6 +72,9 @@ export interface ForumPost {
   forum_target: string;
   post_type: ForumPostType;
   mention_level: ForumMentionLevel;
+  // Extra style axes (length/voice/approach). Nullable for rows created before
+  // this column existed; readers normalize via normalizeOptions().
+  generation_options: Partial<ForumGenerationOptions> | null;
   language: string;
   generated_title: string | null;
   generated_body: string | null;
@@ -142,6 +160,7 @@ export interface ForumThreadReply {
   assigned_owner_label: string | null;
   account_id: string | null;
   mention_level: ForumMentionLevel;
+  generation_options: Partial<ForumGenerationOptions> | null;
   reply_text: string | null;
   status: ThreadReplyStatus;
   posted_url: string | null;

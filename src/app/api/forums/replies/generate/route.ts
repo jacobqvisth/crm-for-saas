@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { generateForumReply } from "@/lib/forums/reply-generate";
+import { generationOptionsSchema, normalizeOptions } from "@/lib/forums/generation-options";
 import type { ForumReply, ReplySource } from "@/lib/forums/replies";
+import type { Json } from "@/lib/database.types";
 
 const sourceSchema = z.object({
   url: z.string().max(2000).nullable().optional(),
@@ -16,7 +18,9 @@ const sourceSchema = z.object({
 
 const bodySchema = z.object({
   source: sourceSchema,
-  mentionLevel: z.enum(["none", "subtle", "explicit"]),
+  // Back-compat: accept a bare mentionLevel and/or the full options object.
+  mentionLevel: z.enum(["none", "subtle", "explicit"]).optional(),
+  options: generationOptionsSchema.optional(),
 });
 
 // POST /api/forums/replies/generate → { reply: ForumReply }
@@ -31,9 +35,14 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const { source, mentionLevel } = parsed.data;
+  const { source, mentionLevel, options } = parsed.data;
 
-  const result = await generateForumReply({ source: source as ReplySource, mentionLevel });
+  const genOptions = normalizeOptions({
+    ...(mentionLevel ? { mentionLevel } : {}),
+    ...(options ?? {}),
+  });
+
+  const result = await generateForumReply({ source: source as ReplySource, options: genOptions });
   if (!result.ok) {
     return NextResponse.json({ error: result.reason }, { status: 502 });
   }
@@ -49,7 +58,8 @@ export async function POST(request: NextRequest) {
       source_author: source.author ?? null,
       source_score: source.score ?? null,
       source_num_comments: source.num_comments ?? null,
-      mention_level: mentionLevel,
+      mention_level: genOptions.mentionLevel,
+      generation_options: genOptions as unknown as Json,
       generated_body: result.body,
       status: "draft",
       model: result.model,

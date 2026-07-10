@@ -8,7 +8,7 @@
 // A drafted reply is persisted as a forum_replies row (workspace-scoped,
 // mirrors forum_posts) so you can track which posts you've answered and where.
 
-import type { ForumMentionLevel } from "./types";
+import type { ForumGenerationOptions, ForumMentionLevel } from "./types";
 
 export type { ForumMentionLevel };
 
@@ -56,6 +56,7 @@ export interface ForumReply {
   source_score: number | null;
   source_num_comments: number | null;
   mention_level: ForumMentionLevel;
+  generation_options: Partial<ForumGenerationOptions> | null;
   generated_body: string | null;
   status: ForumReplyStatus;
   posted_url: string | null;

@@ -4,7 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveWorkspace, loadPersonaRoster } from "@/lib/forums/server";
 import { fetchRedditThreadComments } from "@/lib/forums/reddit";
 import { analyzeThreadReplies } from "@/lib/forums/thread-analyze";
-import type { Database } from "@/lib/database.types";
+import { generationOptionsSchema, normalizeOptions } from "@/lib/forums/generation-options";
+import type { Database, Json } from "@/lib/database.types";
 import type { ForumThreadReply } from "@/lib/forums/types";
 
 // Reading the live comment thread can run through an Apify scrape that
@@ -16,6 +17,9 @@ const bodySchema = z.object({
   source: z.enum(["distribution", "post"]).default("distribution"),
   source_id: z.string().uuid(),
   max_picks: z.number().int().min(1).max(15).optional(),
+  // Length/voice/approach applied to every drafted reply. Mention level stays
+  // model-chosen per comment, then clamped to each assignee's persona ceiling.
+  options: generationOptionsSchema.optional(),
 });
 
 // POST /api/forums/thread/analyze → { replies, analyzed, note? }
@@ -30,7 +34,8 @@ export async function POST(request: NextRequest) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  const { source, source_id, max_picks } = parsed.data;
+  const { source, source_id, max_picks, options } = parsed.data;
+  const styleOptions = normalizeOptions(options);
 
   const table = source === "post" ? "forum_posts" : "forum_distribution";
   const { data: recRow, error: recErr } = await supabase
@@ -85,6 +90,7 @@ export async function POST(request: NextRequest) {
     comments: thread.comments,
     members,
     maxPicks: max_picks,
+    styleOptions,
   });
   if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 500 });
 
@@ -113,6 +119,8 @@ export async function POST(request: NextRequest) {
     assigned_owner_label: p.assigned_owner_label,
     account_id: p.account_id,
     mention_level: p.mention_level,
+    // Style axes are batch-level; mention is the per-comment clamped level.
+    generation_options: { ...styleOptions, mentionLevel: p.mention_level } as unknown as Json,
     reply_text: p.reply_text,
     model: result.model,
   }));
