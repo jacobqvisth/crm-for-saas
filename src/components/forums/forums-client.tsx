@@ -23,6 +23,7 @@ import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { submitUrlWithTitle } from "@/lib/forums/wlpost";
 import { OpenInProfile } from "./open-in-profile";
 import { SubredditAccessBadge } from "./subreddit-access-badge";
+import { ThreadRepliesPanel } from "./thread-replies-panel";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
 import type { RedditAccount } from "@/lib/forums/accounts";
@@ -799,6 +800,17 @@ export function PostCard({
           onRedraft={() => patch({ draft: true })}
           onSend={() => patch({ send_slack: true })}
           busy={busy}
+        />
+      )}
+
+      {/* Reply to other people's comments (posted only) */}
+      {post.status === "posted" && !editing && (
+        <ThreadRepliesPanel
+          source="post"
+          sourceId={post.id}
+          postUrl={post.posted_url}
+          posted={post.status === "posted"}
+          accounts={accounts}
         />
       )}
 
