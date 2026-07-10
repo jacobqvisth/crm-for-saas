@@ -7,12 +7,13 @@ import Link from "next/link";
 // "Posts" is the unified board at /forums — it merges the old "Post generator"
 // and "Distribution" tabs into one page with an All / Topic campaigns / From
 // diagnostics switch (see ForumsHub).
-export type ForumsTab = "posts" | "answers" | "gaps";
+export type ForumsTab = "posts" | "answers" | "gaps" | "accounts";
 
 const TABS: Array<{ key: ForumsTab; label: string; href: string }> = [
   { key: "posts", label: "Posts", href: "/forums" },
   { key: "answers", label: "Answer posts", href: "/forums/answers" },
   { key: "gaps", label: "Gap log", href: "/forums/gaps" },
+  { key: "accounts", label: "Reddit accounts", href: "/forums/accounts" },
 ];
 
 export function ForumsTabs({ active }: { active: ForumsTab }) {
