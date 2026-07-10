@@ -211,10 +211,15 @@ export async function fetchRedditTraction(
     return { ok: false, reason: "Could not reach Reddit" };
   }
   if (res.status === 403) {
+    // We only reach the anonymous endpoint after the OAuth and Apify paths were
+    // unavailable or came back empty. If a live path IS configured, the fetch
+    // just failed/timed out this time — tell the user to retry, don't tell them
+    // to add keys they've already set.
+    const hasLivePath = Boolean(token) || isApifyConfigured();
     return {
       ok: false,
-      reason: token
-        ? "Reddit blocked the request (403)"
+      reason: hasLivePath
+        ? "Couldn't pull the numbers from Reddit this time — hit Refresh again in a minute, or enter them manually"
         : "Reddit blocked the request (403) — add Reddit API keys for reliable auto-tracking, or enter numbers manually",
     };
   }
