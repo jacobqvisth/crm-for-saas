@@ -19,6 +19,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
+import { submitUrlWithTitle, wlpostLink } from "@/lib/forums/wlpost";
 import { AccountsPanel } from "./accounts-panel";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
@@ -519,6 +520,7 @@ function PostCard({
   const submitUrl = subreddit
     ? `https://www.reddit.com/r/${subreddit}/submit`
     : (target?.url ?? "https://www.reddit.com");
+  const submitUrlTitled = submitUrlWithTitle(submitUrl, post.generated_title);
   const assigned = accounts.find((a) => a.id === post.assigned_account_id) ?? null;
 
   async function patch(body: Record<string, unknown>) {
@@ -801,15 +803,23 @@ function PostCard({
                   ))}
                 </select>
               </label>
-              <a
-                href={submitUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open the subreddit's submit page in a new tab, then paste"
-                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50"
-              >
-                <ExternalLink className="h-3.5 w-3.5" /> Open submit page
-              </a>
+              {assigned?.username ? (
+                <OpenInProfileButton
+                  account={assigned}
+                  submitUrl={submitUrlTitled}
+                  body={post.generated_body ?? ""}
+                />
+              ) : (
+                <a
+                  href={submitUrlTitled}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open the subreddit's submit page in a new tab, then paste"
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Open submit page
+                </a>
+              )}
             </>
           )}
           {post.status !== "posted" ? (
@@ -875,6 +885,45 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+// Copies the post body to the clipboard and fires a wlpost:// link so the local
+// helper opens the prefilled submit page in the Chrome profile logged into this
+// account's Reddit login. Falls back to a normal new-tab open if the wlpost://
+// handler is not installed (the browser just ignores the unregistered scheme,
+// so we also open the submit page in a background tab as a safety net).
+function OpenInProfileButton({
+  account,
+  submitUrl,
+  body,
+}: {
+  account: RedditAccount;
+  submitUrl: string;
+  body: string;
+}) {
+  const [opening, setOpening] = useState(false);
+  async function open() {
+    try {
+      await navigator.clipboard.writeText(body);
+    } catch {
+      // clipboard may be blocked; the submit page still opens
+    }
+    setOpening(true);
+    setTimeout(() => setOpening(false), 2500);
+    if (account.username) {
+      window.location.href = wlpostLink(account.username, submitUrl);
+    }
+  }
+  return (
+    <button
+      onClick={open}
+      title={`Copy the body and open the submit page in the Chrome profile logged into u/${account.username}, then paste and post`}
+      className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
+    >
+      <ExternalLink className="h-3.5 w-3.5" />
+      {opening ? "Body copied, opening…" : `Open as ${account.owner_label}`}
+    </button>
   );
 }
 
