@@ -30,6 +30,7 @@ import type {
 import type { RedditAccount } from "@/lib/forums/accounts";
 import { submitUrlWithTitle } from "@/lib/forums/wlpost";
 import { OpenInProfile } from "./open-in-profile";
+import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { TeamComments } from "./team-comments";
 
 // The per-post thread workspace. One posted distribution rec gets its own page
@@ -218,18 +219,21 @@ export function ThreadClient({ recId }: { recId: string }) {
       {/* Post header — everything about this recommendation */}
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex items-start justify-between gap-3">
-          <a
-            href={rec.subreddit_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-1.5"
-          >
-            <MessagesSquare className="h-4 w-4 text-orange-600" />
-            <span className="text-sm font-semibold text-slate-900 group-hover:text-orange-700">
-              {rec.subreddit}
-            </span>
-            <ExternalLink className="h-3 w-3 text-slate-400" />
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={rec.subreddit_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center gap-1.5"
+            >
+              <MessagesSquare className="h-4 w-4 text-orange-600" />
+              <span className="text-sm font-semibold text-slate-900 group-hover:text-orange-700">
+                {rec.subreddit}
+              </span>
+              <ExternalLink className="h-3 w-3 text-slate-400" />
+            </a>
+            <SubredditAccessBadge subreddit={rec.subreddit} />
+          </div>
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${
               posted ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"

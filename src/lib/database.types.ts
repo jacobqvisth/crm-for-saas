@@ -648,6 +648,27 @@ export type Database = {
           },
         ]
       }
+      subreddit_access: {
+        Row: {
+          access: string
+          checked_at: string
+          subreddit: string
+          title: string | null
+        }
+        Insert: {
+          access?: string
+          checked_at?: string
+          subreddit: string
+          title?: string | null
+        }
+        Update: {
+          access?: string
+          checked_at?: string
+          subreddit?: string
+          title?: string | null
+        }
+        Relationships: []
+      }
       forum_replies: {
         Row: {
           created_at: string
