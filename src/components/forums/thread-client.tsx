@@ -28,6 +28,8 @@ import type {
   ForumMentionLevel,
 } from "@/lib/forums/types";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import { submitUrlWithTitle } from "@/lib/forums/wlpost";
+import { OpenInProfile } from "./open-in-profile";
 import { TeamComments } from "./team-comments";
 
 // The per-post thread workspace. One posted distribution rec gets its own page
@@ -272,6 +274,21 @@ export function ThreadClient({ recId }: { recId: string }) {
                 />
               </div>
             )}
+          </div>
+        )}
+
+        {/* Open the prefilled submit page in the chosen account's Chrome profile */}
+        {!posted && (
+          <div className="mt-3">
+            <OpenInProfile
+              accounts={accounts}
+              targetUrl={submitUrlWithTitle(
+                `${(rec.subreddit_url ?? "").replace(/\/+$/, "")}/submit`,
+                rec.suggested_title,
+              )}
+              body={rec.suggested_body ?? ""}
+              prefix="Open submit page as"
+            />
           </div>
         )}
 
