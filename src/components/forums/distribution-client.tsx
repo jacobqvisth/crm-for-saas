@@ -20,6 +20,7 @@ import {
   type DistributionTier,
 } from "@/lib/forums/distribution";
 import { ContributorsPanel } from "./contributors-panel";
+import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { ForumsTabs } from "./forums-tabs";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
@@ -327,6 +328,7 @@ function SummaryCard({ rec }: { rec: DistributionRec }) {
           </span>
         </span>
         <div className="flex flex-shrink-0 items-center gap-1.5">
+          <SubredditAccessBadge subreddit={rec.subreddit} readOnly />
           <StatusBadge status={rec.status} />
           <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-orange-500" />
         </div>

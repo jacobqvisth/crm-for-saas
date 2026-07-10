@@ -21,6 +21,7 @@ import {
 import { FORUM_TARGETS, getForumTarget } from "@/lib/forums/targets";
 import { submitUrlWithTitle } from "@/lib/forums/wlpost";
 import { OpenAsButton } from "./open-in-profile";
+import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { AccountsPanel } from "./accounts-panel";
 import { TeamComments } from "./team-comments";
 import { ForumsTabs } from "./forums-tabs";
@@ -160,21 +161,28 @@ export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) 
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {FORUM_TARGETS.map((t) => (
-            <a
+            <div
               key={t.key}
-              href={t.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group rounded-lg border border-slate-200 bg-white p-3 hover:border-orange-300 hover:shadow-sm transition-colors"
+              className="rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-orange-300 hover:shadow-sm"
             >
-              <div className="flex items-center gap-2">
-                <MessagesSquare className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                <span className="text-sm font-medium text-slate-800 group-hover:text-orange-700 truncate">
-                  {t.name}
-                </span>
+              <a
+                href={t.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block"
+              >
+                <div className="flex items-center gap-2">
+                  <MessagesSquare className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                  <span className="text-sm font-medium text-slate-800 group-hover:text-orange-700 truncate">
+                    {t.name}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500 line-clamp-2">{t.blurb}</p>
+              </a>
+              <div className="mt-2">
+                <SubredditAccessBadge subreddit={t.key.split(":")[1] ?? t.name} />
               </div>
-              <p className="mt-1 text-xs text-slate-500 line-clamp-2">{t.blurb}</p>
-            </a>
+            </div>
           ))}
         </div>
       </section>

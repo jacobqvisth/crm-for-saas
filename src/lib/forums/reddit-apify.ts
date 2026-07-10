@@ -424,3 +424,43 @@ export async function apifyFetchRedditTraction(postUrl: string): Promise<RedditT
     author: post.author,
   };
 }
+
+// ── Subreddit posting-access probe ──────────────────────────────────────────
+// Scrape the subreddit's front page with the community item included and report
+// what we could see. A readable community page yields a real community title;
+// a private / approved-only sub only shows the generic login-wall shell, so the
+// scraper reports the page title as "Reddit - The heart of the internet" (or
+// returns nothing). Never throws. A failed/timed-out run reports access
+// "unknown" so callers never record a false "members_only".
+const GATE_TITLE = "Reddit - The heart of the internet";
+
+export type SubredditAccess = "open" | "members_only" | "unknown";
+
+export async function apifyCheckSubredditAccess(
+  sub: string,
+): Promise<{ ok: boolean; access: SubredditAccess; title: string | null }> {
+  const clean = sub.replace(/^\/?r\//i, "").trim();
+  if (!clean) return { ok: false, access: "unknown", title: null };
+  const res = await runActor(
+    {
+      startUrls: [{ url: `https://www.reddit.com/r/${clean}/` }],
+      skipComments: true,
+      skipUserPosts: true,
+      skipCommunity: false,
+      maxItems: 2,
+      maxPostCount: 1,
+    },
+    { serverTimeout: 120, clientTimeout: 130_000 },
+  );
+  if (res.failed) return { ok: false, access: "unknown", title: null };
+
+  const items = res.items as unknown as Array<Record<string, unknown>>;
+  const comm =
+    items.find((i) => String(i.dataType ?? "").toLowerCase() === "community") ?? items[0];
+  // A successful run that returned nothing = the scraper couldn't read it = gated.
+  if (!comm) return { ok: true, access: "members_only", title: null };
+
+  const title = typeof comm.title === "string" ? comm.title : null;
+  const gated = !title || title === GATE_TITLE;
+  return { ok: true, access: gated ? "members_only" : "open", title };
+}
