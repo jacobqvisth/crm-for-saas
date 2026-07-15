@@ -18,6 +18,7 @@ import {
   emailDomain,
   isRoleOrNoReplyAddress,
 } from "@/lib/contacts/match";
+import { applyStopOnReply } from "@/lib/sequences/stop-on-reply";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 
@@ -417,6 +418,33 @@ async function processThread(
           },
         });
         if (inserted) await touchContact(supabase, contactId, tsIso);
+
+        // Stop-on-reply. If this reply lands on a thread we used to send a
+        // sequence email, stop the enrollment right here. Historically only
+        // check-replies did this, but mailbox-sync runs on an offset schedule
+        // and frequently ingests the reply first — and because both crons
+        // dedupe on inbox_messages.gmail_message_id, once mailbox-sync stored
+        // the message check-replies would skip it and never cancel, so the
+        // next follow-up still went out. Doing it here closes that gap.
+        const send = await findThreadSequenceSend(supabase, threadId, account.id);
+        if (send) {
+          // Record the reply event for reply-rate stats (parity with
+          // check-replies). Per-message: this branch only runs when the
+          // inbox_messages row was genuinely new, so it can't double-count.
+          if (send.tracking_id) {
+            await supabase.from("email_events").insert({
+              tracking_id: send.tracking_id,
+              email_queue_id: send.id,
+              event_type: "reply",
+            });
+          }
+          if (send.enrollment_id) {
+            await applyStopOnReply(supabase, {
+              enrollmentId: send.enrollment_id,
+              workspaceId: account.workspace_id,
+            });
+          }
+        }
       }
     }
   }
@@ -441,6 +469,28 @@ async function touchContact(supabase: Supabase, contactId: string, tsIso: string
     .update({ last_contacted_at: tsIso })
     .eq("id", contactId)
     .or(`last_contacted_at.is.null,last_contacted_at.lt.${tsIso}`);
+}
+
+/**
+ * Find the newest sent sequence email on this thread from this mailbox, so an
+ * inbound reply can be tied back to its enrollment + tracking id. Mirrors how
+ * check-replies picks the thread's seed email (newest-first for the account).
+ */
+async function findThreadSequenceSend(
+  supabase: Supabase,
+  threadId: string,
+  senderAccountId: string,
+): Promise<{ id: string; enrollment_id: string | null; tracking_id: string | null } | null> {
+  const { data } = await supabase
+    .from("email_queue")
+    .select("id, enrollment_id, tracking_id")
+    .eq("gmail_thread_id", threadId)
+    .eq("sender_account_id", senderAccountId)
+    .eq("status", "sent")
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
 }
 
 /** Is this Gmail message already an email_queue send (logged by process-emails)? */
