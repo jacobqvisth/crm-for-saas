@@ -628,10 +628,34 @@ export function InboxClient() {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Failed to generate draft");
         }
-        const data = (await res.json()) as { draft: string };
+        const data = (await res.json()) as {
+          draft: string;
+          detectedLanguage?: string | null;
+          subjectTranslatedEn?: string | null;
+          bodyTranslatedEn?: string | null;
+        };
         setReplyBody(data.draft);
         setDraftPresent(true);
         setReplyOpen(true);
+        // The route self-heals language detection when it was missing. Reflect
+        // the freshly-detected language locally so the translation panel and
+        // the "Sends as …" preview light up without a refetch.
+        if (data.detectedLanguage !== undefined) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    detected_language: data.detectedLanguage ?? m.detected_language,
+                    subject_translated_en:
+                      data.subjectTranslatedEn ?? m.subject_translated_en,
+                    body_translated_en:
+                      data.bodyTranslatedEn ?? m.body_translated_en,
+                  }
+                : m,
+            ),
+          );
+        }
         // Kick off a preview so the translated panel renders alongside the
         // freshly-suggested draft without a second user action.
         void fetchPreview(messageId, data.draft);
@@ -1159,18 +1183,35 @@ export function InboxClient() {
 
             {/* Reply composer */}
             <div className="bg-white border-t border-slate-200 px-6 py-3">
-              <button
-                onClick={() => setReplyOpen((o) => !o)}
-                className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 mb-2"
-              >
-                <Send className="w-4 h-4" />
-                Reply
-                {replyOpen ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
+              <div className="flex items-center gap-4 mb-2">
+                <button
+                  onClick={() => setReplyOpen((o) => !o)}
+                  className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                >
+                  <Send className="w-4 h-4" />
+                  Reply
+                  {replyOpen ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+                {/* On-demand suggestion — works on ANY thread (English or not,
+                    language detected or not). Auto-suggest only fires for
+                    detected non-English threads, so this is the only way to get
+                    a draft on English or not-yet-detected threads. Hidden once a
+                    draft is present (the Regenerate control takes over) or when
+                    a human reply is already in progress. */}
+                {!draftPresent && !draftLoading && !replyBody.trim() && (
+                  <button
+                    onClick={() => fetchDraft(selectedMessage.id, false)}
+                    className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Suggest reply
+                  </button>
                 )}
-              </button>
+              </div>
               {replyOpen && (
                 <div>
                   {(draftLoading || draftPresent || draftError) && (

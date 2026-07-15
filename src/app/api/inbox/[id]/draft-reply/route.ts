@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { draftReplyInEnglish, htmlToText } from "@/lib/inbox/draft-reply";
 import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
+import { translateInboundMessage } from "@/lib/inbox/translate-inbound";
 
 /**
  * Generate (or fetch cached) an English-language draft reply for an inbox message.
@@ -63,7 +64,40 @@ export async function POST(
       draft: inboxMessage.draft_en,
       cached: true,
       generatedAt: inboxMessage.draft_generated_at,
+      detectedLanguage: inboxMessage.detected_language ?? null,
+      subjectTranslatedEn: inboxMessage.subject_translated_en ?? null,
+      bodyTranslatedEn: inboxMessage.body_translated_en ?? null,
     });
+  }
+
+  // Self-heal missing language detection. The mailbox-sync cron logs the bulk
+  // of inbox mail with NO language detection, so detected_language is null on
+  // most rows — which disables the translation panel and the auto-suggest
+  // trigger. When we're about to draft and the language is unknown, detect +
+  // translate now and persist, so the panel and future auto-suggest light up
+  // for this thread (and the row heals for good).
+  let detectedLanguage = inboxMessage.detected_language;
+  let subjectTranslatedEn = inboxMessage.subject_translated_en;
+  let bodyTranslatedEn = inboxMessage.body_translated_en;
+  if (!detectedLanguage) {
+    const t = await translateInboundMessage({
+      subject: inboxMessage.subject,
+      bodyHtml: inboxMessage.body_html,
+      bodyText: inboxMessage.body_text,
+    });
+    if (t.ok) {
+      detectedLanguage = t.language;
+      subjectTranslatedEn = t.subjectEn;
+      bodyTranslatedEn = t.bodyHtmlEn;
+      await supabase
+        .from("inbox_messages")
+        .update({
+          detected_language: t.language,
+          subject_translated_en: t.subjectEn,
+          body_translated_en: t.bodyHtmlEn,
+        })
+        .eq("id", id);
+    }
   }
 
   // Pull context for the model.
@@ -144,14 +178,14 @@ export async function POST(
 
   // The latest inbound (English version preferred).
   const isInboundTranslated =
-    !!inboxMessage.detected_language && inboxMessage.detected_language !== "en";
+    !!detectedLanguage && detectedLanguage !== "en";
   const inboundBodyEn = isInboundTranslated
-    ? htmlToText(inboxMessage.body_translated_en) ||
+    ? htmlToText(bodyTranslatedEn) ||
       (inboxMessage.body_text ?? "") // fallback if translation failed
     : htmlToText(inboxMessage.body_html ?? null) ||
       (inboxMessage.body_text ?? "");
   const inboundSubject = isInboundTranslated
-    ? inboxMessage.subject_translated_en ?? inboxMessage.subject
+    ? subjectTranslatedEn ?? inboxMessage.subject
     : inboxMessage.subject;
 
   // Drop the latest inbound from history (it's passed as ctx.inboundBodyEn) and
@@ -170,7 +204,7 @@ export async function POST(
     contactFirstName,
     contactLastName,
     companyName,
-    detectedLanguage: inboxMessage.detected_language ?? null,
+    detectedLanguage: detectedLanguage ?? null,
     outboundPriorBody,
     outboundPriorSubject,
     inboundBodyEn,
@@ -197,5 +231,8 @@ export async function POST(
     draft: result.draft,
     cached: false,
     generatedAt,
+    detectedLanguage: detectedLanguage ?? null,
+    subjectTranslatedEn: subjectTranslatedEn ?? null,
+    bodyTranslatedEn: bodyTranslatedEn ?? null,
   });
 }
