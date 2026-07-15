@@ -5,11 +5,8 @@ import { getGmailClient } from "@/lib/gmail/client";
 import { getValidAccessToken } from "@/lib/gmail/token-refresh";
 import { parseNdr, SUGGESTED_NDR_GMAIL_QUERY } from "@/lib/gmail/parse-ndr";
 import { translateInboundMessage } from "@/lib/inbox/translate-inbound";
-import {
-  insertActivities,
-  insertActivity,
-  type ActivityRow,
-} from "@/lib/activities/insert";
+import { insertActivity } from "@/lib/activities/insert";
+import { applyStopOnReply } from "@/lib/sequences/stop-on-reply";
 
 // Reply detection iterates Gmail threads sequentially — give it a real budget.
 // Hit the Pro plan's max so a slow pass can't take down newer items at the
@@ -230,129 +227,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Handle stop_on_reply for enrollment — only for real (non-OOO) replies
+        // Handle stop_on_reply for enrollment — only for real (non-OOO) replies.
+        // Shared with mailbox-sync so neither cron can drift on this logic.
         if (threadRealReplies > 0 && email.enrollment_id) {
-          const { data: enrollment } = await supabase
-            .from("sequence_enrollments")
-            .select("*, sequences(*), contacts(id, company_id, first_name, last_name)")
-            .eq("id", email.enrollment_id)
-            .eq("status", "active")
-            .maybeSingle();
-
-          if (enrollment) {
-            const sequence = enrollment.sequences as unknown as {
-              id: string;
-              settings: { stop_on_reply?: boolean; stop_on_company_reply?: boolean };
-            };
-
-            if (sequence?.settings?.stop_on_reply) {
-              // Mark this enrollment as replied
-              await supabase
-                .from("sequence_enrollments")
-                .update({ status: "replied", completed_at: new Date().toISOString() })
-                .eq("id", enrollment.id);
-
-              await supabase
-                .from("email_queue")
-                .update({ status: "cancelled" as const })
-                .eq("enrollment_id", enrollment.id)
-                .eq("status", "scheduled");
-
-              // Auto-create follow-up task for the replied enrollment
-              {
-                const enrollmentContact = enrollment.contacts as unknown as {
-                  id: string;
-                  first_name: string | null;
-                  last_name: string | null;
-                  company_id: string | null;
-                } | null;
-                const seqName = (enrollment.sequences as unknown as { name: string })?.name ?? "sequence";
-                const contactName = enrollmentContact
-                  ? [enrollmentContact.first_name, enrollmentContact.last_name].filter(Boolean).join(" ") || "contact"
-                  : "contact";
-                if (enrollmentContact?.id) {
-                  await supabase.from("tasks").insert({
-                    workspace_id: account.workspace_id,
-                    contact_id: enrollmentContact.id,
-                    enrollment_id: enrollment.id,
-                    type: "email",
-                    title: `Follow up with ${contactName || "contact"} — replied to "${seqName}"`,
-                    description: "They replied to your sequence. Review their reply in Inbox and respond.",
-                    due_date: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-                    priority: "high",
-                  });
-                  createdFollowUpTask = true;
-                }
-              }
-
-              // Company-level stop: pause other active enrollments at the same company
-              const stopOnCompanyReply = sequence?.settings?.stop_on_company_reply ?? true;
-              const contact = enrollment.contacts as unknown as { company_id: string | null } | null;
-              const companyId = contact?.company_id;
-
-              if (stopOnCompanyReply && companyId) {
-                // Find company name for activity description
-                const { data: company } = await supabase
-                  .from("companies")
-                  .select("name")
-                  .eq("id", companyId)
-                  .maybeSingle();
-
-                // Find all other active enrollments for contacts at this company
-                const { data: companyContacts } = await supabase
-                  .from("contacts")
-                  .select("id")
-                  .eq("workspace_id", account.workspace_id)
-                  .eq("company_id", companyId)
-                  .neq("id", enrollment.contact_id);
-
-                if (companyContacts && companyContacts.length > 0) {
-                  const companyContactIds = companyContacts.map((c) => c.id);
-
-                  const { data: otherEnrollments } = await supabase
-                    .from("sequence_enrollments")
-                    .select("id, contact_id")
-                    .in("contact_id", companyContactIds)
-                    .eq("status", "active");
-
-                  if (otherEnrollments && otherEnrollments.length > 0) {
-                    const otherIds = otherEnrollments.map((e) => e.id);
-
-                    await supabase
-                      .from("sequence_enrollments")
-                      .update({ status: "company_paused" })
-                      .in("id", otherIds);
-
-                    await supabase
-                      .from("email_queue")
-                      .update({ status: "cancelled" as const })
-                      .in("enrollment_id", otherIds)
-                      .eq("status", "scheduled");
-
-                    // Create activity records for each paused contact
-                    const companyName = company?.name ?? "their company";
-                    const activityInserts: ActivityRow[] = otherEnrollments.map(
-                      (e) => ({
-                        workspace_id: account.workspace_id,
-                        type: "sequence_paused",
-                        subject: "Sequence paused — company reply",
-                        body: `Sequence paused — reply received from another contact at ${companyName}`,
-                        contact_id: e.contact_id,
-                        metadata: {
-                          reason: "company_reply",
-                          company_id: companyId,
-                          replying_enrollment_id: enrollment.id,
-                        },
-                      }),
-                    );
-                    await insertActivities(supabase, activityInserts, {
-                      context: "check-replies/company-paused",
-                    });
-                  }
-                }
-              }
-            }
-          }
+          await applyStopOnReply(supabase, {
+            enrollmentId: email.enrollment_id,
+            workspaceId: account.workspace_id,
+          });
         }
       } catch (err) {
         console.error(`Reply check failed for thread ${email.gmail_thread_id}:`, err);
