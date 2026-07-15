@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   ArrowUpToLine,
   MessageSquare,
   Users,
@@ -8,7 +7,6 @@ import {
   Link2,
   FlaskConical,
 } from "lucide-react";
-import { ForumsTabs } from "./forums-tabs";
 import { WrenchlaneExposureList } from "./wrenchlane-exposure-list";
 import { OUTCOME_META, VERDICT_META, type FailureOutcome, type GapVerdict } from "@/lib/forums/gaps";
 import type { ForumStats, StatusCount } from "@/lib/forums/stats";
@@ -237,24 +235,11 @@ function GapRollup({ stats }: { stats: ForumStats }) {
   );
 }
 
-export function StatsView({ stats }: { stats: ForumStats }) {
+// The default "Overview" body. Header, Forums tab bar and the stats sub-nav are
+// provided by StatsShell; this renders just the overview sections.
+export function OverviewBody({ stats }: { stats: ForumStats }) {
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
-          <BarChart3 className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Stats</h1>
-          <p className="text-sm text-slate-500">
-            Everything the team has posted, and how it&apos;s doing — across posts, placements, answers and the gap log.
-          </p>
-        </div>
-      </div>
-
-      <ForumsTabs active="stats" />
-
+    <>
       {/* Headline KPIs */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiTile
@@ -314,7 +299,7 @@ export function StatsView({ stats }: { stats: ForumStats }) {
       {/* Wrenchlane exposure */}
       <h2 className="mb-2 mt-8 text-sm font-semibold text-slate-800">Wrenchlane exposure</h2>
       <WrenchlaneExposureCard stats={stats} />
-    </div>
+    </>
   );
 }
 
