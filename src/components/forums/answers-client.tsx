@@ -20,8 +20,12 @@ import {
   Info,
   User,
   Pencil,
+  Target,
+  X,
 } from "lucide-react";
+import Link from "next/link";
 import { REPLY_SUBREDDITS, type ForumReply, type ReplySource } from "@/lib/forums/replies";
+import type { GapCandidate } from "@/lib/forums/gaps";
 import type { RedditPost } from "@/lib/forums/reddit";
 import type { RedditAccount } from "@/lib/forums/accounts";
 import {
@@ -75,6 +79,14 @@ export function AnswersClient() {
   // Live progress while the async Reddit scrape runs (one run per subreddit).
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // Gap log auto-discovery: classify the SAME scraped posts for "AI diagnosis
+  // went wrong" cases (no second scrape) and stash the real ones for review.
+  const [scanGaps, setScanGaps] = useState(true);
+  const [scanningGaps, setScanningGaps] = useState(false);
+  const [gapCandidates, setGapCandidates] = useState<GapCandidate[]>([]);
+  const [gapNote, setGapNote] = useState<string | null>(null);
+  const [gapBusyId, setGapBusyId] = useState<string | null>(null);
+
   // Which source is currently being drafted (keyed by a stable id).
   const [draftingKey, setDraftingKey] = useState<string | null>(null);
   // Newest drafted reply — briefly highlighted so the user sees where it landed.
@@ -85,16 +97,19 @@ export function AnswersClient() {
     let cancelled = false;
     (async () => {
       try {
-        const [rRes, aRes] = await Promise.all([
+        const [rRes, aRes, gRes] = await Promise.all([
           fetch("/api/forums/replies"),
           fetch("/api/forums/accounts"),
+          fetch("/api/forums/gaps/candidates?status=new"),
         ]);
         const rData = await rRes.json();
         if (!rRes.ok) throw new Error(rData.error ?? "Failed to load");
         const aData = aRes.ok ? await aRes.json() : { accounts: [] };
+        const gData = gRes.ok ? await gRes.json() : { candidates: [] };
         if (!cancelled) {
           setReplies(rData.replies ?? []);
           setAccounts(aData.accounts ?? []);
+          setGapCandidates(gData.candidates ?? []);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
@@ -170,6 +185,7 @@ export function AnswersClient() {
             if ((poll.posts?.length ?? 0) === 0 && allFailed) {
               setDiscoverError("Reddit search failed or timed out. Try again in a moment.");
             }
+            if (scanGaps && (poll.posts?.length ?? 0) > 0) void scanForGaps(poll.posts ?? []);
             break;
           }
         }
@@ -179,11 +195,100 @@ export function AnswersClient() {
       // Inline "done" path (nothing configured, or a start error).
       if (data.error) setDiscoverError(data.error);
       setPosts(data.posts ?? []);
+      if (scanGaps && (data.posts?.length ?? 0) > 0) void scanForGaps(data.posts);
     } catch (e) {
       setDiscoverError(e instanceof Error ? e.message : "Failed to search");
     } finally {
       setDiscovering(false);
       setProgress(null);
+    }
+  }
+
+  // Classify the posts we just scraped for AI-failure cases. Runs on the SAME
+  // results (no second Reddit scrape) and merges any new candidates in, deduped
+  // by id so a re-scan of overlapping posts doesn't double-list.
+  async function scanForGaps(scraped: RedditPost[]) {
+    if (scraped.length === 0) return;
+    setScanningGaps(true);
+    setGapNote(null);
+    try {
+      const res = await fetch("/api/forums/gaps/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          posts: scraped.map((p) => ({
+            url: p.url,
+            subreddit: p.subreddit,
+            title: p.title,
+            body: p.body,
+            author: p.author,
+            score: p.score,
+            num_comments: p.num_comments,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGapNote(data.error ?? "AI-failure scan failed.");
+        return;
+      }
+      const found = (data.candidates ?? []) as GapCandidate[];
+      if (found.length > 0) {
+        setGapCandidates((prev) => {
+          const byId = new Map(prev.map((c) => [c.id, c]));
+          for (const c of found) byId.set(c.id, c);
+          return [...byId.values()];
+        });
+      }
+      const capped = data.skippedCapped ?? 0;
+      setGapNote(
+        found.length > 0
+          ? `Found ${found.length} AI-failure case${found.length === 1 ? "" : "s"} in these results.${capped > 0 ? ` ${capped} more post${capped === 1 ? "" : "s"} not screened this run (re-run to check them).` : ""}`
+          : `No AI-failure cases in these results.${capped > 0 ? ` ${capped} post${capped === 1 ? "" : "s"} not screened this run.` : ""}`,
+      );
+    } catch (e) {
+      setGapNote(e instanceof Error ? e.message : "AI-failure scan failed.");
+    } finally {
+      setScanningGaps(false);
+    }
+  }
+
+  // Confirm a candidate → writes an ai_failure_stories row and removes it from
+  // the review queue (the "new" list this page shows).
+  async function confirmCandidate(id: string) {
+    setGapBusyId(id);
+    const toastId = toast.loading("Adding to Gap log…");
+    try {
+      const res = await fetch(`/api/forums/gaps/candidates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to add", { id: toastId });
+        return;
+      }
+      setGapCandidates((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Added to Gap log", { id: toastId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add", { id: toastId });
+    } finally {
+      setGapBusyId(null);
+    }
+  }
+
+  async function dismissCandidate(id: string) {
+    setGapBusyId(id);
+    try {
+      const res = await fetch(`/api/forums/gaps/candidates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dismiss" }),
+      });
+      if (res.ok) setGapCandidates((prev) => prev.filter((c) => c.id !== id));
+    } finally {
+      setGapBusyId(null);
     }
   }
 
@@ -347,6 +452,24 @@ export function AnswersClient() {
           </button>
         </div>
 
+        {/* Free extra signal on the same scrape: flag AI-failure cases for the Gap log */}
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={scanGaps}
+            onChange={(e) => setScanGaps(e.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+          />
+          <span>
+            <span className="font-medium text-slate-700">Also scan for AI-failure cases</span> — flag
+            posts where an AI diagnosis went wrong and stage them for the{" "}
+            <Link href="/forums/gaps" className="text-orange-600 underline-offset-2 hover:underline">
+              Gap log
+            </Link>
+            . Runs on these same results, so it costs no extra search.
+          </span>
+        </label>
+
         {redditConfigured === false && (
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
@@ -460,6 +583,116 @@ export function AnswersClient() {
           <p className="mt-3 text-sm text-slate-400">No posts found. Try different keywords.</p>
         )}
       </section>
+
+      {/* AI-failure candidates staged for the Gap log */}
+      {(scanningGaps || gapCandidates.length > 0 || gapNote) && (
+        <section className="mt-6 rounded-xl border border-red-100 bg-red-50/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <Target className="h-4 w-4 text-red-600" /> AI-failure candidates
+              {gapCandidates.length > 0 && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                  {gapCandidates.length}
+                </span>
+              )}
+            </h2>
+            {scanningGaps && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Screening these results…
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Real cases where an AI diagnosis went wrong. Add the good ones to the{" "}
+            <Link href="/forums/gaps" className="text-red-600 underline-offset-2 hover:underline">
+              Gap log
+            </Link>{" "}
+            to build the eval set.
+          </p>
+          {gapNote && <p className="mt-2 text-xs text-slate-500">{gapNote}</p>}
+
+          {gapCandidates.length > 0 && (
+            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {gapCandidates.map((c) => (
+                <div key={c.id} className="rounded-lg border border-red-200 bg-white p-3">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    {c.source_subreddit && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                        r/{c.source_subreddit}
+                      </span>
+                    )}
+                    {typeof c.confidence === "number" && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700">
+                        {Math.round(c.confidence * 100)}% match
+                      </span>
+                    )}
+                    {c.source_url && (
+                      <a
+                        href={c.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 hover:text-slate-800"
+                      >
+                        <ExternalLink className="h-3 w-3" /> open
+                      </a>
+                    )}
+                  </div>
+                  {c.source_title && (
+                    <p className="mt-1.5 text-sm font-medium text-slate-800">{c.source_title}</p>
+                  )}
+                  <dl className="mt-2 space-y-1 text-xs text-slate-600">
+                    {c.symptom && (
+                      <div>
+                        <dt className="inline font-medium text-slate-500">Symptom: </dt>
+                        <dd className="inline">{c.symptom}</dd>
+                      </div>
+                    )}
+                    {c.ai_tool && (
+                      <div>
+                        <dt className="inline font-medium text-slate-500">AI used: </dt>
+                        <dd className="inline">{c.ai_tool}</dd>
+                      </div>
+                    )}
+                    {c.ai_claimed_cause && (
+                      <div>
+                        <dt className="inline font-medium text-slate-500">AI claimed: </dt>
+                        <dd className="inline">{c.ai_claimed_cause}</dd>
+                      </div>
+                    )}
+                    {c.actual_cause && (
+                      <div>
+                        <dt className="inline font-medium text-slate-500">Actually was: </dt>
+                        <dd className="inline">{c.actual_cause}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <button
+                      onClick={() => confirmCandidate(c.id)}
+                      disabled={gapBusyId === c.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      {gapBusyId === c.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Target className="h-3.5 w-3.5" />
+                      )}
+                      Add to Gap log
+                    </button>
+                    <button
+                      onClick={() => dismissCandidate(c.id)}
+                      disabled={gapBusyId === c.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <X className="h-3.5 w-3.5" /> Dismiss
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Paste a URL */}
       <PastePanel onDraft={draftReply} draftingKey={draftingKey} />

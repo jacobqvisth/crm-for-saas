@@ -29,6 +29,38 @@ export interface FailureStory {
   updated_at: string;
 }
 
+// A row in forum_gap_candidates — an AI-failure case the classifier surfaced
+// from the Answer-posts scrape, awaiting review. Confirming it writes a
+// FailureStory and links via story_id. See 20260710180000_forum_gap_candidates.
+export type GapCandidateStatus = "new" | "confirmed" | "dismissed";
+
+export interface GapCandidate {
+  id: string;
+  workspace_id: string;
+  source_url: string;
+  source_subreddit: string | null;
+  source_author: string | null;
+  source_title: string | null;
+  source_body: string | null;
+  source_score: number | null;
+  source_num_comments: number | null;
+  confidence: number | null;
+  symptom: string | null;
+  ai_tool: string | null;
+  ai_claimed_cause: string | null;
+  action_taken: string | null;
+  cost_amount: number | null;
+  cost_currency: string | null;
+  actual_cause: string | null;
+  outcome: FailureOutcome;
+  status: GapCandidateStatus;
+  story_id: string | null;
+  model: string | null;
+  first_seen_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const OUTCOME_META: Record<FailureOutcome, { label: string; badgeClass: string }> = {
   failure: { label: "Wrong / wasted money", badgeClass: "bg-red-50 text-red-700" },
   partial: { label: "Partly right", badgeClass: "bg-amber-50 text-amber-700" },
