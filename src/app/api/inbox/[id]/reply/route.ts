@@ -16,8 +16,9 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const requestBody = (await request.json()) as { body?: string };
+  const requestBody = (await request.json()) as { body?: string; fromAlias?: string | null };
   const replyBody = requestBody.body;
+  const fromAlias = requestBody.fromAlias?.trim().toLowerCase() || null;
 
   if (!replyBody?.trim()) {
     return NextResponse.json({ error: "Reply body is required" }, { status: 400 });
@@ -41,11 +42,37 @@ export async function POST(
     workspace_id: string;
   } | null;
 
-  if (!emailQueue) {
+  // Sender = the account that sent the original (sequence/compose thread), or —
+  // for cold inbound (mail that arrived at an alias like support@ with no prior
+  // outgoing email) — the mailbox that actually received the message.
+  const senderAccountId = emailQueue?.sender_account_id ?? inboxMessage.gmail_account_id;
+  if (!senderAccountId) {
     return NextResponse.json(
-      { error: "Cannot reply: original outgoing email not found" },
-      { status: 400 }
+      { error: "Cannot reply: no sending mailbox available for this message" },
+      { status: 400 },
     );
+  }
+
+  // Resolve the From header. When a send-as alias is requested, validate it is a
+  // registered, send-as-enabled alias on the sending mailbox before trusting it
+  // (Gmail rewrites/rejects an unregistered From, and we don't want spoofing).
+  let fromHeader: string | undefined;
+  if (fromAlias) {
+    const { data: alias } = await supabase
+      .from("mailbox_aliases")
+      .select("email_address, display_name, can_send_as")
+      .eq("gmail_account_id", senderAccountId)
+      .eq("email_address", fromAlias)
+      .maybeSingle();
+    if (!alias || !alias.can_send_as) {
+      return NextResponse.json(
+        { error: "Selected From address is not a valid send-as alias for this mailbox" },
+        { status: 400 },
+      );
+    }
+    fromHeader = alias.display_name
+      ? `${alias.display_name} <${alias.email_address}>`
+      : alias.email_address;
   }
 
   // Translate the (English) reply to the recipient's language if needed.
@@ -74,11 +101,19 @@ export async function POST(
     : `Re: ${inboxMessage.subject || ""}`;
 
   const result = await sendEmail({
-    accountId: emailQueue.sender_account_id,
+    accountId: senderAccountId,
     to: inboxMessage.from_email,
     subject: replySubject,
     htmlBody,
     replyToMessageId: inboxMessage.gmail_message_id,
+    // Gmail thread IDs are per-mailbox — only pass it when we're sending from
+    // the same mailbox the message was synced into (always true for cold
+    // inbound). Otherwise rely on In-Reply-To for threading, as before.
+    replyToThreadId:
+      senderAccountId === inboxMessage.gmail_account_id
+        ? inboxMessage.gmail_thread_id
+        : undefined,
+    from: fromHeader,
     // Manual replies are human-paced — exempt from the per-account
     // min_send_interval_seconds throttle that governs sequence sends.
     bypassSendInterval: true,
@@ -91,7 +126,7 @@ export async function POST(
   const { data: senderAccount } = await supabase
     .from("gmail_accounts")
     .select("email_address, display_name")
-    .eq("id", emailQueue.sender_account_id)
+    .eq("id", senderAccountId)
     .maybeSingle();
 
   // Create activity record — keep BOTH the approved English version and the
@@ -110,9 +145,11 @@ export async function POST(
       body_sent: sentBody,
       target_language: translation.targetLanguage,
       translation_model: translation.model,
-      sender_account_id: emailQueue.sender_account_id,
+      sender_account_id: senderAccountId,
       sender_email: senderAccount?.email_address ?? null,
       sender_name: senderAccount?.display_name ?? null,
+      // The alias we actually sent From, when replying as one (e.g. support@).
+      from_alias: fromAlias ?? null,
     },
   });
 

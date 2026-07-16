@@ -3473,6 +3473,7 @@ export type Database = {
           category: string
           contact_id: string | null
           created_at: string
+          delivered_to: string | null
           detected_language: string | null
           draft_en: string | null
           draft_generated_at: string | null
@@ -3492,6 +3493,7 @@ export type Database = {
           reply_draft_updated_at: string | null
           subject: string | null
           subject_translated_en: string | null
+          to_emails: string[]
           translation_model: string | null
           updated_at: string
           workspace_id: string
@@ -3503,6 +3505,7 @@ export type Database = {
           category?: string
           contact_id?: string | null
           created_at?: string
+          delivered_to?: string | null
           detected_language?: string | null
           draft_en?: string | null
           draft_generated_at?: string | null
@@ -3522,6 +3525,7 @@ export type Database = {
           reply_draft_updated_at?: string | null
           subject?: string | null
           subject_translated_en?: string | null
+          to_emails?: string[]
           translation_model?: string | null
           updated_at?: string
           workspace_id: string
@@ -3533,6 +3537,7 @@ export type Database = {
           category?: string
           contact_id?: string | null
           created_at?: string
+          delivered_to?: string | null
           detected_language?: string | null
           draft_en?: string | null
           draft_generated_at?: string | null
@@ -3552,6 +3557,7 @@ export type Database = {
           reply_draft_updated_at?: string | null
           subject?: string | null
           subject_translated_en?: string | null
+          to_emails?: string[]
           translation_model?: string | null
           updated_at?: string
           workspace_id?: string
@@ -3580,6 +3586,51 @@ export type Database = {
           },
           {
             foreignKeyName: "inbox_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mailbox_aliases: {
+        Row: {
+          can_send_as: boolean
+          created_at: string
+          display_name: string | null
+          email_address: string
+          gmail_account_id: string
+          id: string
+          workspace_id: string
+        }
+        Insert: {
+          can_send_as?: boolean
+          created_at?: string
+          display_name?: string | null
+          email_address: string
+          gmail_account_id: string
+          id?: string
+          workspace_id: string
+        }
+        Update: {
+          can_send_as?: boolean
+          created_at?: string
+          display_name?: string | null
+          email_address?: string
+          gmail_account_id?: string
+          id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mailbox_aliases_gmail_account_id_fkey"
+            columns: ["gmail_account_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mailbox_aliases_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
