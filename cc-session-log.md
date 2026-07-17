@@ -13,6 +13,28 @@ updated: 2026-05-26
 
 ---
 
+## Forums: Reddit accounts as its own tab — 2026-07-10 — PR #550 — worktree-forums-accounts-tab
+
+**Branch:** worktree-forums-accounts-tab → main (squash merge 2026-07-10T10:35:35Z, commit d8b0a90).
+**Deploy:** live on crm-for-saas.vercel.app (merge to main triggers prod deploy).
+
+Jacob (from a screenshot of `/forums`): move the **Reddit accounts** section to its own settings page, after the Gap Log page. The account roster was a collapsible `AccountsPanel` buried in the Posts board's "From diagnostics" view (`ForumsClient`); "Gap Log" is the Forums tab `/forums/gaps`, so this is a Forums-tab reorg, not a `/settings` page.
+
+**Files:**
+- `src/components/forums/forums-tabs.tsx` — added `accounts` tab ("Reddit accounts", `/forums/accounts`) to `ForumsTab` + `TABS`, positioned **after "Gap log"**. Tab order now Posts / Answer posts / Gap log / Reddit accounts.
+- `src/components/forums/accounts-panel.tsx` — new `standalone` prop: always-expanded, static heading instead of the collapse toggle (so it reads as a full page, not an accordion).
+- `src/components/forums/accounts-client.tsx` (new) — page-level client; fetches `/api/forums/accounts`, renders header + `ForumsTabs active="accounts"` + `AccountsPanel standalone`.
+- `src/app/(dashboard)/forums/accounts/page.tsx` (new) — the route (`title: "Forums · Reddit accounts"`).
+- `src/components/forums/forums-client.tsx` — dropped the embedded `<AccountsPanel>` + its import; still fetches accounts (PostCard's post-assignment dropdown needs them).
+
+**Behaviour / Why:** pure UI reorg — no schema, no API, no `/api/forums/accounts` change. The roster now lives on its own tab so the team's handles + personas aren't buried under a generator view.
+
+**Verification:** `npx tsc --noEmit` clean, `eslint` clean, `next build` exit 0 with `/forums/accounts` prerendered as a static route alongside `/forums/gaps` and `/forums/answers`. Re-ran the full build after each conflict resolution.
+
+**Merge notes (heavy parallel-session race):** main moved 3× mid-merge (#551 OpenAsButton refactor, #552 subreddit-access badge, #553 one-board Stage 1) — each touched `forums-client.tsx`, always a tiny import-block conflict (kept their new imports, dropped the now-unused `AccountsPanel` import). `git push --force`/`--force-with-lease` are **classifier-blocked in worktrees** → resolved with `git reset --hard <remote-sha>` + `git merge origin/main` (merge commit, pushes as fast-forward) instead of rebase+force. Squash-merged after `gh pr ready`; the `--delete-branch` "main is already used by worktree" error is the benign FF-fail (PR verified state=MERGED, remote branch already deleted).
+
+**Out of scope:** did not converge the topic/diagnostic cards (that's #553 Stage 2); no changes to account CRUD, personas, or the assignment flow.
+
 ## Forums "Find posts" stops timing out — 2026-07-09 — PR #529 + #537 — fix/forums-parallel-subreddit-scrape
 
 Jacob (from screenshots of `/forums/answers`): "Find posts to answer" spun ~90s then always showed "No posts found. Try different keywords." even with an empty keyword field — is the feature working? Diagnosed live, then fixed in two PRs.
