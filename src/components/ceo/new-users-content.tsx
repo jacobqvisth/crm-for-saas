@@ -1,6 +1,11 @@
 import type { CSSProperties } from "react";
 import { granularityColumnHeader, granularityNoun } from "@/lib/ceo/data/app-usage";
-import type { NewUsersData } from "@/lib/ceo/data/new-users";
+import {
+  ACTIVATION_WINDOW_DAYS,
+  RETENTION_MIN_DIAGNOSTICS,
+  RETENTION_WINDOW_DAYS,
+  type NewUsersData,
+} from "@/lib/ceo/data/new-users";
 import { formatNumber } from "@/lib/ceo/format";
 import { InfoHint, type SourceInfo } from "./source-info";
 
@@ -43,22 +48,72 @@ const COLUMN_INFO: Record<string, SourceInfo> = {
     ],
   },
   activated: {
-    title: "Activated",
-    body:
-      "Of the users who signed up in this bucket, how many have ever made a first diagnosis. Cohort metric — recent buckets will keep growing as users activate over time.",
+    title: `Activated (${ACTIVATION_WINDOW_DAYS}d)`,
+    body: `Of the users who signed up in this bucket, how many ran a diagnosis within ${ACTIVATION_WINDOW_DAYS} days of their OWN signup. The rate's denominator is only those whose ${ACTIVATION_WINDOW_DAYS}-day window has already elapsed, not every signup — otherwise a bucket looks worse simply for being recent. Buckets still inside their window are marked "partial" and will keep moving. This replaced an "ever made a first diagnosis" metric that made July 2026 read 25% (too low, young cohort) and, on the partial data left by the core_app outage, 44.4% (too high). The fully-observed figure was 21.2%.`,
     fields: [
-      "Users with signup date in bucket AND MIN(dashboard_diagnostics.created_at) is not null",
+      `Numerator: users with a diagnosis in [signed_up_at, signed_up_at + ${ACTIVATION_WINDOW_DAYS}d)`,
+      `Denominator: users where signed_up_at + ${ACTIVATION_WINDOW_DAYS}d <= now()`,
+      "Diagnoses predating signup are ignored, not counted as instant activation",
+    ],
+  },
+  retained: {
+    title: `Retained (${RETENTION_MIN_DIAGNOSTICS}+ in ${RETENTION_WINDOW_DAYS}d)`,
+    body: `The stickier signal. One diagnosis is curiosity; coming back for a ${RETENTION_MIN_DIAGNOSTICS === 2 ? "second" : `${RETENTION_MIN_DIAGNOSTICS}th`} is the first sign of adoption. Same eligibility rule as Activated, on a ${RETENTION_WINDOW_DAYS}-day window. These two diverge hard: July 2026 was 21.2% activated but only 4.8% retained, and across the product diagnostics runs at ~1.14 uses per user, so most people never return.`,
+    fields: [
+      `Numerator: users with >= ${RETENTION_MIN_DIAGNOSTICS} diagnoses in [signed_up_at, signed_up_at + ${RETENTION_WINDOW_DAYS}d)`,
+      `Denominator: users where signed_up_at + ${RETENTION_WINDOW_DAYS}d <= now()`,
     ],
   },
   avgDaysToActivate: {
     title: "Avg days to activate",
-    body:
-      "For activated users in this signup-month cohort, the average days between their signup and their first diagnosis. Recent cohorts skew low because slow activators haven't shown up yet.",
+    body: `For users who activated inside the ${ACTIVATION_WINDOW_DAYS}-day window, the average days from signup to first diagnosis. Bounded by the window by construction, so it can no longer drift upward as old cohorts accumulate late activators.`,
     fields: [
-      "(first_diagnosis.created_at - signup_at) / 86400, averaged across activated users in the cohort",
+      `(first diagnosis in window - signed_up_at) / 86400, averaged across activated users`,
     ],
   },
 };
+
+/**
+ * Renders a windowed cohort cell as "12 / 47 · 25.5%".
+ *
+ * Showing the count AND the denominator AND the rate together is deliberate.
+ * The absolute count is what exposed the real July 2026 story: activations held
+ * flat at 16-17 per week while signups tripled, so the rate slid while nothing
+ * about the product changed. A rate-only column hides that completely.
+ */
+function formatCohortCell(
+  count: number,
+  eligible: number,
+  rate: number | null,
+): string {
+  if (eligible === 0) return "—";
+  const pct = rate === null ? "—" : `${rate.toFixed(1)}%`;
+  return `${formatNumber(count)} / ${formatNumber(eligible)} · ${pct}`;
+}
+
+/**
+ * Flags a bucket whose cohort is still inside its window, so the rate above is
+ * computed on a partial cohort and will keep moving.
+ */
+function PartialWindowMark({
+  eligible,
+  signUps,
+  windowDays,
+}: {
+  eligible: number;
+  signUps: number;
+  windowDays: number;
+}) {
+  const waiting = Math.max(0, signUps - eligible);
+  return (
+    <span
+      className="cohort-partial"
+      title={`${waiting} of ${signUps} sign-ups in this bucket are still inside their ${windowDays}-day window, so this rate is provisional and will change.`}
+    >
+      partial
+    </span>
+  );
+}
 
 function formatAvgDays(value: number | null): string {
   if (value === null) return "—";
@@ -166,6 +221,9 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
           : acc.webFirstVisits,
       signUps: acc.signUps + row.signUps,
       activated: acc.activated + row.activated,
+      activationEligible: acc.activationEligible + row.activationEligible,
+      retained: acc.retained + row.retained,
+      retentionEligible: acc.retentionEligible + row.retentionEligible,
       daysSum:
         acc.daysSum +
         (row.avgDaysToActivate !== null
@@ -181,12 +239,28 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
       webFirstVisits: null as number | null,
       signUps: 0,
       activated: 0,
+      activationEligible: 0,
+      retained: 0,
+      retentionEligible: 0,
       daysSum: 0,
       daysCount: 0,
     },
   );
   const totalAvgDays =
     totals.daysCount > 0 ? totals.daysSum / totals.daysCount : null;
+  // Pooled rates, not an average of per-bucket rates, so buckets with more
+  // eligible users carry proportionally more weight.
+  const totalActivatedRate =
+    totals.activationEligible > 0
+      ? (totals.activated / totals.activationEligible) * 100
+      : null;
+  const totalRetainedRate =
+    totals.retentionEligible > 0
+      ? (totals.retained / totals.retentionEligible) * 100
+      : null;
+  const anyPartial = data.rows.some(
+    (row) => row.signUps > 0 && !row.activationWindowComplete,
+  );
 
   const coveragePct =
     data.signUpCoverage.totalUsers > 0
@@ -208,14 +282,14 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
                 <InfoHint
                   info={{
                     title: "New users overview",
-                    body:
-                      "Funnel from app discovery to first activation, bucketed by signup month (cohort view). Activated and avg days to activate are computed for the cohort that signed up in each row, not for diagnoses that happened in the row.",
+                    body: `Funnel from app discovery to activation, bucketed by signup date (cohort view). Activation and retention are FIXED-WINDOW metrics measured from each user's own signup, and their rates count only users whose window has fully elapsed. That is what stops a recent bucket from looking bad purely because it is recent.`,
                     fields: [
                       "iOS downloads (App Store Connect, Platform App Installs)",
                       "Android downloads (GA4 first_open events, Android stream)",
                       "Sign-ups (fallback chain — see column tooltip)",
-                      "Activated: cohort members with any first diagnosis",
-                      "Avg days to activate: signup to first diagnosis, averaged across activated cohort members",
+                      `Activated: >= 1 diagnosis within ${ACTIVATION_WINDOW_DAYS}d of signup`,
+                      `Retained: >= ${RETENTION_MIN_DIAGNOSTICS} diagnoses within ${RETENTION_WINDOW_DAYS}d of signup`,
+                      "Rate denominators exclude users still inside their window",
                     ],
                   }}
                 />
@@ -229,6 +303,20 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
               {data.signUpCoverage.fromStripe} from Stripe;{" "}
               {data.signUpCoverage.missing} users have no sign-up date and
               don&apos;t appear in the Sign-ups column).
+            </p>
+            <p className="panel-description" style={{ marginTop: 4 }}>
+              Activated and Retained read{" "}
+              <strong>count / eligible · rate</strong>. Eligible counts only
+              sign-ups whose window has fully elapsed, so a recent {noun}{" "}
+              isn&apos;t penalised for being recent.
+              {anyPartial ? (
+                <>
+                  {" "}
+                  Rows marked <span className="cohort-partial">partial</span>{" "}
+                  still have sign-ups inside their window, so those rates will
+                  keep moving.
+                </>
+              ) : null}
             </p>
           </div>
         </div>
@@ -266,8 +354,15 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
                 </th>
                 <th>
                   <span className="table-heading-info">
-                    Activated
+                    Activated ({ACTIVATION_WINDOW_DAYS}d)
                     <InfoHint info={COLUMN_INFO.activated} />
+                  </span>
+                </th>
+                <th>
+                  <span className="table-heading-info">
+                    Retained ({RETENTION_MIN_DIAGNOSTICS}+ in{" "}
+                    {RETENTION_WINDOW_DAYS}d)
+                    <InfoHint info={COLUMN_INFO.retained} />
                   </span>
                 </th>
                 <th>
@@ -311,7 +406,22 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
                   <strong>{formatNumber(totals.signUps)}</strong>
                 </td>
                 <td>
-                  <strong>{formatNumber(totals.activated)}</strong>
+                  <strong>
+                    {formatCohortCell(
+                      totals.activated,
+                      totals.activationEligible,
+                      totalActivatedRate,
+                    )}
+                  </strong>
+                </td>
+                <td>
+                  <strong>
+                    {formatCohortCell(
+                      totals.retained,
+                      totals.retentionEligible,
+                      totalRetainedRate,
+                    )}
+                  </strong>
                 </td>
                 <td>
                   <strong>{formatAvgDays(totalAvgDays)}</strong>
@@ -341,7 +451,34 @@ export function NewUsersContent({ data }: NewUsersContentProps) {
                       : formatNumber(row.webFirstVisits)}
                   </td>
                   <td>{formatNumber(row.signUps)}</td>
-                  <td>{formatNumber(row.activated)}</td>
+                  <td>
+                    {formatCohortCell(
+                      row.activated,
+                      row.activationEligible,
+                      row.activatedRate,
+                    )}
+                    {row.signUps > 0 && !row.activationWindowComplete ? (
+                      <PartialWindowMark
+                        eligible={row.activationEligible}
+                        signUps={row.signUps}
+                        windowDays={ACTIVATION_WINDOW_DAYS}
+                      />
+                    ) : null}
+                  </td>
+                  <td>
+                    {formatCohortCell(
+                      row.retained,
+                      row.retentionEligible,
+                      row.retainedRate,
+                    )}
+                    {row.signUps > 0 && !row.retentionWindowComplete ? (
+                      <PartialWindowMark
+                        eligible={row.retentionEligible}
+                        signUps={row.signUps}
+                        windowDays={RETENTION_WINDOW_DAYS}
+                      />
+                    ) : null}
+                  </td>
                   <td>{formatAvgDays(row.avgDaysToActivate)}</td>
                 </tr>
               ))}
