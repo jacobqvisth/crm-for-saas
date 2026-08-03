@@ -35,6 +35,7 @@ export type DashboardSectionKey =
   | "conversions"
   | "dashboard"
   | "pilot-stats"
+  | "monthly-review"
   | "new-users"
   | "acquisition"
   | "organic-search"
@@ -115,13 +116,22 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
       "Leaderboards for the selected range (default: last 30 days). Top users by activity (diagnoses, GA4 events, sessions, engaged time, with their most-fired event types) and top cars by diagnoses (distinct users/workshops, completion rate, avg AI causes, top fault codes). Click any numeric column to re-sort.",
   },
   {
+    key: "monthly-review",
+    label: "Monthly Review",
+    glyph: "MR",
+    href: "/dashboard/monthly-review",
+    title: "Monthly Review",
+    description:
+      "One completed month on one page, for the same read every month. Growth against the previous month, acquisition and spend, plan mix and where the cohort landed, fixed-window activation and retention, feature depth per user, and a coverage header stating exactly which days and sources backed the numbers. Activation is shown in absolute users as well as a rate, because a flat absolute count against rising sign-ups is the signal a rate alone hides.",
+  },
+  {
     key: "new-users",
     label: "New Users",
     glyph: "NU",
     href: "/dashboard/new-users",
     title: "New Users",
     description:
-      "Top of the funnel. iOS / Android downloads, sign-ups, first diagnoses, and average days from sign-up to first diagnosis.",
+      "Top of the funnel. iOS / Android downloads, sign-ups, and fixed-window activation and retention by sign-up cohort. Activation counts a diagnosis within 7 days of each user's own sign-up, and the rate excludes users still inside that window, so a recent bucket is not penalised for being recent.",
   },
   {
     key: "cta-clicks",

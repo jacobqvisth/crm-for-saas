@@ -10,6 +10,8 @@ export type DashboardRoutePageProps = {
     range?: string | string[];
     platform?: string | string[];
     country?: string | string[];
+    /** `YYYY-MM`, used by /dashboard/monthly-review's month picker. */
+    month?: string | string[];
   }>;
 };
 
