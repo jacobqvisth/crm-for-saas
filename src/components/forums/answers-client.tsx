@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
   MessagesSquare,
@@ -30,6 +30,12 @@ import {
   type ForumGenerationOptions,
 } from "@/lib/forums/generation-options";
 import { GenerationOptions } from "./generation-options";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  describeApiFailure,
+  failureFromResponse,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 import { OpenInProfile } from "./open-in-profile";
 import { ForumsTabs } from "./forums-tabs";
 
@@ -54,7 +60,7 @@ export function AnswersClient() {
   const [replies, setReplies] = useState<ForumReply[]>([]);
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [refreshingAll, setRefreshingAll] = useState(false);
 
@@ -81,31 +87,36 @@ export function AnswersClient() {
   const [newReplyId, setNewReplyId] = useState<string | null>(null);
   const draftedRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [rRes, aRes] = await Promise.all([
-          fetch("/api/forums/replies"),
-          fetch("/api/forums/accounts"),
-        ]);
-        const rData = await rRes.json();
-        if (!rRes.ok) throw new Error(rData.error ?? "Failed to load");
-        const aData = aRes.ok ? await aRes.json() : { accounts: [] };
-        if (!cancelled) {
-          setReplies(rData.replies ?? []);
-          setAccounts(aData.accounts ?? []);
-        }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        if (!cancelled) setLoading(false);
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [rRes, aRes] = await Promise.all([
+        fetch("/api/forums/replies"),
+        fetch("/api/forums/accounts"),
+      ]);
+      if (!rRes.ok) {
+        // A 401 here means the session lapsed, not that forums is broken —
+        // describeApiFailure turns it into copy with a way out.
+        setError(await failureFromResponse(rRes, "Couldn't load the answer board."));
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      const rData = await rRes.json();
+      const aData = aRes.ok ? await aRes.json() : { accounts: [] };
+      setReplies(rData.replies ?? []);
+      setAccounts(aData.accounts ?? []);
+      setError(null);
+    } catch {
+      setError(
+        describeApiFailure(0, null, "Couldn't reach the server. Check your connection and try again."),
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   function toggleSub(name: string) {
     setSubs((prev) => {
@@ -132,6 +143,14 @@ export function AnswersClient() {
           sort,
         }),
       });
+      if (!res.ok) {
+        const failure = await failureFromResponse(res, "Reddit search failed. Try again shortly.");
+        // Auth problems aren't a search problem — send them to the page-level
+        // banner, which is the one place that offers the way back in.
+        if (failure.kind === "other") setDiscoverError(failure.message);
+        else setError(failure);
+        return;
+      }
       const data = await res.json();
       setRedditConfigured(data.redditConfigured ?? null);
 
@@ -199,12 +218,13 @@ export function AnswersClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source, options }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Failed to draft reply");
-        toast.error(data.error ?? "Failed to draft reply", { id: toastId });
+        const failure = await failureFromResponse(res, "Failed to draft reply");
+        setError(failure);
+        toast.error(failure.message, { id: toastId });
         return;
       }
+      const data = await res.json();
       const reply = data.reply as ForumReply;
       setReplies((prev) => [reply, ...prev]);
       setStatusFilter("all");
@@ -215,9 +235,13 @@ export function AnswersClient() {
       setTimeout(() => draftedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
       setTimeout(() => setNewReplyId(null), 2500);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to draft reply";
-      setError(msg);
-      toast.error(msg, { id: toastId });
+      const failure = describeApiFailure(
+        0,
+        e instanceof Error ? e.message : null,
+        "Failed to draft reply",
+      );
+      setError(failure);
+      toast.error(failure.message, { id: toastId });
     } finally {
       setDraftingKey(null);
     }
@@ -280,11 +304,7 @@ export function AnswersClient() {
         <GenerationOptions value={options} onChange={setOptions} />
       </div>
 
-      {error && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          <AlertTriangle className="h-4 w-4" /> {error}
-        </div>
-      )}
+      <ApiErrorBanner failure={error} onRetry={reload} className="mt-4" />
 
       {/* Find posts */}
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
@@ -582,7 +602,7 @@ function PastePanel({
 }) {
   const [url, setUrl] = useState("");
   const [fetching, setFetching] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<ApiFailure | null>(null);
   const [manual, setManual] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -598,19 +618,24 @@ function PastePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setFetchError(data.error ?? "Could not load that post");
-        setManual(true);
+        const failure = await failureFromResponse(res, "Could not load that post");
+        setFetchError(failure);
+        // Typing the post in by hand only helps if the request failed for a
+        // post-specific reason — it won't get you past a lapsed session.
+        setManual(failure.kind === "other");
         return;
       }
+      const data = await res.json();
       const p = data.post as RedditPost;
       setTitle(p.title);
       setBody(p.body);
       setSubreddit(p.subreddit);
       setManual(true);
     } catch (e) {
-      setFetchError(e instanceof Error ? e.message : "Could not load that post");
+      setFetchError(
+        describeApiFailure(0, e instanceof Error ? e.message : null, "Could not load that post"),
+      );
       setManual(true);
     } finally {
       setFetching(false);
@@ -651,10 +676,14 @@ function PastePanel({
         )}
       </div>
 
-      {fetchError && (
+      {fetchError?.kind === "other" && (
         <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <AlertTriangle className="h-3.5 w-3.5" /> {fetchError} — paste the title and body below.
+          <AlertTriangle className="h-3.5 w-3.5" /> {fetchError.message} — paste the title and body
+          below.
         </div>
+      )}
+      {fetchError && fetchError.kind !== "other" && (
+        <ApiErrorBanner failure={fetchError} className="mt-2" />
       )}
 
       {manual && (

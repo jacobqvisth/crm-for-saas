@@ -34,6 +34,12 @@ import {
   MENTION_LABEL,
   type ForumGenerationOptions,
 } from "@/lib/forums/generation-options";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  throwIfFailed,
+  toApiFailure,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 
 const POST_TYPE_LABEL: Record<ForumPostType, string> = {
   help_question: "Help question",
@@ -51,7 +57,7 @@ export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) 
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [generateFor, setGenerateFor] = useState<ForumScenario | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [refreshingAll, setRefreshingAll] = useState(false);
@@ -65,8 +71,8 @@ export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) 
           fetch("/api/forums"),
           fetch("/api/forums/accounts"),
         ]);
-        if (!sRes.ok) throw new Error((await sRes.json()).error ?? "Failed to load scenarios");
-        if (!pRes.ok) throw new Error((await pRes.json()).error ?? "Failed to load posts");
+        await throwIfFailed(sRes, "Failed to load scenarios");
+        await throwIfFailed(pRes, "Failed to load posts");
         const sData = await sRes.json();
         const pData = await pRes.json();
         const aData = aRes.ok ? await aRes.json() : { accounts: [] };
@@ -76,7 +82,7 @@ export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) 
           setAccounts(aData.accounts ?? []);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(toApiFailure(e, "Failed to load"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -183,11 +189,7 @@ export function ForumsClient({ embedded = false }: { embedded?: boolean } = {}) 
         </div>
       </section>
 
-      {error && (
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ApiErrorBanner failure={error} className="mt-6" />
 
       {loading && (
         <div className="flex items-center gap-2 text-slate-500 text-sm py-16 justify-center">

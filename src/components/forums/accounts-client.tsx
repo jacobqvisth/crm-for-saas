@@ -5,24 +5,30 @@ import { Users, Loader2 } from "lucide-react";
 import { AccountsPanel } from "./accounts-panel";
 import { ForumsTabs } from "./forums-tabs";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  throwIfFailed,
+  toApiFailure,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 
 // The Reddit accounts roster, on its own Forums tab (after "Gap log"). Pulled
 // out of the Posts board so the team's handles + personas live in one place.
 export function AccountsClient() {
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch("/api/forums/accounts");
-        if (!res.ok) throw new Error((await res.json()).error ?? "Failed to load accounts");
+        await throwIfFailed(res, "Failed to load accounts");
         const data = await res.json();
         if (!cancelled) setAccounts(data.accounts ?? []);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(toApiFailure(e, "Failed to load"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -49,11 +55,7 @@ export function AccountsClient() {
 
       <ForumsTabs active="accounts" />
 
-      {error && (
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ApiErrorBanner failure={error} className="mt-6" />
 
       {loading ? (
         <div className="flex items-center gap-2 text-slate-500 text-sm py-16 justify-center">

@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/sidebar";
+import { SessionWatcher } from "@/components/auth/session-watcher";
 import { WorkspaceProvider } from "@/lib/hooks/use-workspace";
 import { WebrtcPresence } from "@/components/calls/webrtc-presence";
 import { CallProvider } from "@/components/calls/call-provider";
@@ -10,6 +11,9 @@ export default function DashboardLayout({
 }) {
   return (
     <WorkspaceProvider>
+      {/* Explains and recovers a session that dies while a tab is open —
+          otherwise every fetch on the page starts failing with a bare 401. */}
+      <SessionWatcher />
       {/* App-level call session: the live drawer + "call in progress" pill live
           here so they survive navigating between pages mid-call. */}
       <CallProvider>

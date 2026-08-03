@@ -1,31 +1,30 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { requiresAuth } from "./middleware";
 import { safeNextPath } from "@/lib/auth/next-path";
 
-// Every top-level section under src/app/(dashboard). The old allow-list named
-// only ten of these, so the rest rendered their shell to logged-out visitors
-// and then failed with a bare "Unauthorized" from the first API call.
-const DASHBOARD_SECTIONS = [
-  "activation",
-  "calls",
-  "companies",
-  "contacts",
-  "dashboard",
-  "discovery",
-  "domain-portfolio",
-  "forums",
-  "inbox",
-  "lists",
-  "roadmap",
-  "routes",
-  "sequences",
-  "settings",
-  "tasks",
-  "templates",
-  "videos",
-];
+/**
+ * Read the sections off disk rather than listing them here. A hard-coded list
+ * is what caused the bug this guards: both the middleware's allow-list and the
+ * e2e "protected routes" test named only the sections that existed when they
+ * were written, so /forums was never checked by either and shipped unguarded.
+ * Deriving the list means a new page under (dashboard) is covered the moment
+ * it exists, with nobody having to remember to add it.
+ */
+const DASHBOARD_SECTIONS = readdirSync(join(process.cwd(), "src/app/(dashboard)"), {
+  withFileTypes: true,
+})
+  .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
+  .map((e) => e.name);
 
 describe("requiresAuth", () => {
+  it("found the dashboard sections to check", () => {
+    // Guards the guard: an empty list would make every case below vacuous.
+    expect(DASHBOARD_SECTIONS.length).toBeGreaterThan(10);
+    expect(DASHBOARD_SECTIONS).toContain("forums");
+  });
+
   it.each(DASHBOARD_SECTIONS)("gates /%s", (section) => {
     expect(requiresAuth(`/${section}`)).toBe(true);
   });

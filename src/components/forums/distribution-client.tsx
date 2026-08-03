@@ -22,6 +22,12 @@ import {
 import { ContributorsPanel } from "./contributors-panel";
 import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { ForumsTabs } from "./forums-tabs";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  throwIfFailedParsed,
+  toApiFailure,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 
 const TIER_ORDER: DistributionTier[] = ["best_fit", "trade", "ai_angle"];
 
@@ -37,7 +43,7 @@ export function DistributionClient({ embedded = false }: { embedded?: boolean } 
   const topic = TOPICS[selectedTopic] ?? TOPICS[DEFAULT_TOPIC];
   const [recs, setRecs] = useState<DistributionRec[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [view, setView] = useState<BoardView>("todo");
 
@@ -53,10 +59,10 @@ export function DistributionClient({ embedded = false }: { embedded?: boolean } 
           `/api/forums/distribution?topic=${encodeURIComponent(selectedTopic)}`,
         );
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load");
+        throwIfFailedParsed(res, data, "Failed to load");
         if (!cancelled) setRecs(data.recs ?? []);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(toApiFailure(e, "Failed to load"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -190,11 +196,7 @@ export function DistributionClient({ embedded = false }: { embedded?: boolean } 
 
       <ContributorsPanel />
 
-      {error && (
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ApiErrorBanner failure={error} className="mt-6" />
 
       {loading ? (
         <div className="flex items-center gap-2 text-slate-500 text-sm py-16 justify-center">

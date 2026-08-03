@@ -36,6 +36,12 @@ import { SubredditAccessBadge } from "./subreddit-access-badge";
 import { ThreadRepliesPanel } from "./thread-replies-panel";
 import { GenerationOptions } from "./generation-options";
 import { TeamComments } from "./team-comments";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  throwIfFailedParsed,
+  toApiFailure,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 
 // The per-post thread workspace. One posted distribution rec gets its own page
 // with room to (a) manage the per-member top-level comments and (b) reply to
@@ -49,7 +55,7 @@ export function ThreadClient({ recId }: { recId: string }) {
   const [assignments, setAssignments] = useState<ForumCommentAssignment[]>([]);
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [busy, setBusy] = useState(false);
   // Feedback for an action (save/send/refresh) so failures aren't silent.
   const [actionNote, setActionNote] = useState<string | null>(null);
@@ -76,12 +82,12 @@ export function ThreadClient({ recId }: { recId: string }) {
     try {
       const res = await fetch(`/api/forums/thread?source=distribution&source_id=${recId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load");
+      throwIfFailedParsed(res, data, "Failed to load");
       setRec(data.rec as DistributionRec);
       setReplies((data.replies ?? []) as ForumThreadReply[]);
       setAssignments((data.assignments ?? []) as ForumCommentAssignment[]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(toApiFailure(e, "Failed to load"));
     } finally {
       setLoading(false);
     }
@@ -200,9 +206,13 @@ export function ThreadClient({ recId }: { recId: string }) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-8">
         <BackLink />
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error ?? "Not found"}
-        </div>
+        {error ? (
+          <ApiErrorBanner failure={error} onRetry={load} className="mt-6" />
+        ) : (
+          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Not found
+          </div>
+        )}
       </div>
     );
   }
