@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TABLES } from "@/lib/ceo/tables";
-import { writeMetricPoints, writeUsers } from "./writer";
-import type { MetricPoint, UserRow } from "./types";
+import { writeMetricPoints, writeRawRows, writeUsers } from "./writer";
+import type { MetricPoint, RawMetricRow, UserRow } from "./types";
 
 type ExistingUserRow = {
   internal_user_id: string;
@@ -286,5 +286,117 @@ describe("writeMetricPoints", () => {
     ]);
 
     expect(stub.getUpsertedRows()).toHaveLength(2);
+  });
+});
+
+// PostgREST runs as `authenticator` with a role-level statement_timeout=8s,
+// which `service_role` doesn't override. A single-statement upsert therefore
+// has a hard ceiling that grows with the export: core_app crossed it on
+// 2026-07-12 and then failed every run for 22 days with "canceling statement
+// due to statement timeout". These tests pin the batching that keeps each
+// statement's work proportional to a chunk instead of the whole payload.
+describe("upsert batching", () => {
+  function createBatchStub(expectedTable: string) {
+    const batches: unknown[][] = [];
+
+    return {
+      getBatches() {
+        return batches;
+      },
+      supabase: {
+        from(table: string) {
+          return {
+            select() {
+              return {
+                async in() {
+                  return { data: [], error: null };
+                },
+              };
+            },
+            async upsert(rows: unknown[]) {
+              expect(table).toBe(expectedTable);
+              batches.push(rows);
+              return { error: null };
+            },
+          };
+        },
+      },
+    };
+  }
+
+  it("splits a large metric-point payload into bounded statements", async () => {
+    const stub = createBatchStub(TABLES.metricSnapshots);
+    const points: MetricPoint[] = Array.from({ length: 1201 }, (_, index) => ({
+      sourceKey: "core_app",
+      metricKey: "core_users",
+      periodStart: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      periodEnd: new Date(Date.UTC(2026, 0, 1, 0, index + 1)),
+      value: index,
+    })) as MetricPoint[];
+
+    const written = await writeMetricPoints(stub.supabase, points);
+    const batches = stub.getBatches();
+
+    expect(written).toBe(1201);
+    // 1201 rows must not be attempted as one statement.
+    expect(batches.length).toBeGreaterThan(1);
+    for (const batch of batches) {
+      expect(batch.length).toBeLessThanOrEqual(500);
+    }
+    // Nothing dropped and nothing duplicated across the batches.
+    expect(batches.reduce((sum, batch) => sum + batch.length, 0)).toBe(1201);
+  });
+
+  it("uses a tighter batch for the JSONB-heavy raw-rows table", async () => {
+    const stub = createBatchStub(TABLES.rawMetricRows);
+    const rows: RawMetricRow[] = Array.from({ length: 600 }, (_, index) => ({
+      sourceKey: "core_app",
+      externalId: `user-${index}`,
+      periodStart: new Date(Date.UTC(2026, 0, 1)),
+      periodEnd: new Date(Date.UTC(2026, 0, 2)),
+      payload: { user_id: `user-${index}` },
+    })) as RawMetricRow[];
+
+    const written = await writeRawRows(stub.supabase, rows);
+    const batches = stub.getBatches();
+
+    expect(written).toBe(600);
+    for (const batch of batches) {
+      expect(batch.length).toBeLessThanOrEqual(250);
+    }
+    expect(batches.reduce((sum, batch) => sum + batch.length, 0)).toBe(600);
+  });
+
+  it("propagates a failing batch instead of reporting success", async () => {
+    const failing = {
+      from() {
+        return {
+          select() {
+            return {
+              async in() {
+                return { data: [], error: null };
+              },
+            };
+          },
+          async upsert() {
+            return {
+              error: new Error("canceling statement due to statement timeout"),
+            };
+          },
+        };
+      },
+    };
+
+    await expect(
+      writeRawRows(failing, [
+        {
+          sourceKey: "core_app",
+          externalId: "user-1",
+          periodStart: new Date(Date.UTC(2026, 0, 1)),
+          periodEnd: new Date(Date.UTC(2026, 0, 2)),
+          payload: {},
+        } as RawMetricRow,
+      ]),
+    ).rejects.toThrow("statement timeout");
   });
 });

@@ -4,6 +4,11 @@ import { isSyncRequestAuthorized } from "@/lib/ceo/sync/auth";
 import { runSourceSync } from "@/lib/ceo/sync/runner";
 
 export const runtime = "nodejs";
+// The writer batches each table's upsert into several statements to stay under
+// PostgREST's 8s statement_timeout, which trades one long statement for more
+// round-trips. Give the whole run explicit headroom rather than leaning on the
+// platform default.
+export const maxDuration = 300;
 
 async function handle(
   request: NextRequest,
