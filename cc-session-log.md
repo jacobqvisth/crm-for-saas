@@ -5700,3 +5700,80 @@ source-level guard asserting the `redirectTo:` line never mentions `next`.
 redirect mismatch degrades to the right host instead of a dead local server.
 
 Checks: 411 unit tests pass, tsc clean, eslint 0 errors, build OK.
+
+---
+
+## core_app sync outage: 22 days of missing product data (PRs #570, #571)
+
+**Date:** 2026-08-03
+**Branches:** `worktree-fix+core-app-sync-timeout` (#570), `fix/alert-webhook-fallback` (#571)
+**Build:** tsc clean, eslint 0 errors (1 pre-existing warning in `call-provider.tsx`), build OK, 425 unit tests pass (411 on base + 14 added)
+
+Started as a data question (July 2026 new users / plans / activation) and turned
+into an incident. The `core_app` sync last succeeded **2026-07-12** and had
+failed every run since, 24/day for 22 days, with `canceling statement due to
+statement timeout`.
+
+**Why it stayed invisible.** `writeMetricPoints` runs first and is small, so
+aggregate daily metrics kept landing and every dashboard looked populated. Only
+the row-level tables stopped: users, workshops, diagnostics, logins, feature
+usage. Anyone reading `/dashboard/*` saw fresh-looking charts backed by data
+frozen on Jul 12.
+
+**Root cause (#570).** PostgREST connects as `authenticator`, which carries a
+role-level `statement_timeout=8s`; `service_role` sets no override. Every
+`write*` in `src/lib/ceo/sync/writer.ts` issued ONE upsert for its entire
+payload, so per-statement cost grew with the export until it crossed 8s.
+`pg_stat_statements` pinned it exactly: `dashboard_raw_metric_rows` upsert
+peaked at **7,988ms against the 8,000ms ceiling** over 10,889 calls, with
+`dashboard_diagnostics` at 7,607ms. The table had reached 794k rows / 701 MB.
+
+Fix: `upsertChunked()`, all twelve write paths routed through it. 500 rows/
+statement default, 250 for `dashboard_raw_metric_rows` (whole payloads as JSONB,
+~1.25 KB/row). `maxDuration=300` added to both `ceo-sync` routes, which turned
+out to matter: the first successful run took **103s**, over the old default.
+
+**Root cause (#571).** `check-sync-health` existed precisely for this (written
+after the May 4-12 silent failure) and fired correctly every morning. But it
+posts to `SLACK_ALERT_WEBHOOK_URL`, and `vercel env ls production` shows that
+variable **has never existed in prod** (only `SLACK_BUG_REPORTS_WEBHOOK_URL` and
+`SLACK_FORUM_POSTS_WEBHOOK_URL`). It silently fell back to `console.error`.
+Domain-health alerts had the same bug via the same variable.
+
+Fix: `src/lib/alerting/webhook.ts` with resolution order
+`SLACK_ALERT_WEBHOOK_URL` -> `SLACK_BUG_REPORTS_WEBHOOK_URL`. Blank-but-present
+counts as unset; alert text always echoed to logs; "no webhook configured" logs
+explicitly. Deliberately excludes `SLACK_FORUM_POSTS_WEBHOOK_URL` (outbound
+content review channel). Both callers share the path.
+
+**Verified in prod.** 13:25 UTC run: `success`, 103s, 4,436 rows read, **15,300
+written**. Backfill was automatic (connector reads full `latest/*.json.gz`, not a
+delta): users 1,181 -> 1,456, workshops 1,133 -> 1,373, diagnostics 2,317 ->
+2,637, all current. All 8 sources green, zero failures since.
+
+**Analysis finding worth keeping.** Re-running July on complete data reversed an
+earlier read taken from the surviving Jul 1-12 slice. Fixed-window 7-day
+activation is **21.2%** for July (not the 44.4% the partial data implied), down
+from June's 29.2%, and it slid *within* the month: Jul 1-4 43.6%, 5-12 20.0%,
+13-19 18.4%, 20-27 16.0%. Absolute activations held flat at 16-17/window while
+signups went 39 -> 85 -> 87 -> 100. Same yield, more volume, which points at
+acquisition quality (82% paid-attributed, 256 of 274 from one broad-match Pmax
+campaign) rather than onboarding. July cohort: 374 users, 88.8% free, 5 on an
+active paid plan, 10 past_due.
+
+**Still open (not attempted this session):**
+- `dashboard_workshops.activated_at` NULL on all 1,373 rows; funnel steps
+  `onboarding_completed` / `first_diagnostic_started` / `diagnostic_completed` /
+  `activated_workshop` are zero across all 98 days Apr 17 - Jul 28. Activation
+  has no first-class definition, every view derives its own from diagnostics.
+- `dashboard_subscriptions` sums `mrr_amount_cents` across USD/EUR/SEK with
+  identical values and no FX; daily `mrr` metric flips currency label day to day.
+- `plan_key` is a friendly name on workshops but a Stripe price ID on
+  subscriptions; no mapping table, so plans and revenue can't be joined.
+- `current_period_start`/`_end` NULL on all 354 subscription rows.
+- Google Ads `ad_conversions` 56,643 vs 10,961 clicks (5.2x) - misconfigured.
+- Data Health section is still labelled "Data Health - test" in the sidebar.
+- `SLACK_ALERT_WEBHOOK_URL` not set: infra alarms currently land in the
+  bug-reports channel. Setting the var redirects them with no deploy.
+
+Full review with all tables: see the July 2026 artifact.
