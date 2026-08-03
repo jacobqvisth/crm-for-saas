@@ -4,6 +4,9 @@ import { isSyncRequestAuthorized } from "@/lib/ceo/sync/auth";
 import { runSourceSync } from "@/lib/ceo/sync/runner";
 
 export const runtime = "nodejs";
+// Runs every source in one request, so it needs at least as much headroom as
+// the single-source route. See the note there on batched upserts.
+export const maxDuration = 300;
 
 async function runAll(request: NextRequest) {
   if (!isSyncRequestAuthorized(request)) {
