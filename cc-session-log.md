@@ -13,6 +13,21 @@ updated: 2026-05-26
 
 ---
 
+## Mailbox-sync activity created_at fix — 2026-07-02 — PR #486 — worktree-fix+mailbox-sync-created-at
+
+Jacob spotted a contact (Jocke / info@svanhagensbil.se) whose timeline showed 5 "Inloggning WrenchLane" emails all as "about 14 hours ago", asking where they came from (Customer.io?) and whether they were old mail synced now.
+
+**Diagnosis:** the emails were a single real Gmail thread from **hans@wrenchlane.com** (Dec 2025 + Feb 2026) — NOT Customer.io — pulled in by the mailbox-sync backfill. Root cause: `insertSyncedActivity` in `src/app/api/cron/mailbox-sync/route.ts` inserted `email_sent`/`email_received` rows **without** `created_at`, so Postgres defaulted it to `now()`. The real email date only lived in `metadata.sent_at`/`received_at`. Since the contact timeline sorts by `created_at`, every backfilled email (often months old) bunched at sync time and read "just sent". Affected **all** synced activities, not just Jocke.
+
+**What shipped:**
+- `src/app/api/cron/mailbox-sync/route.ts` — pass `created_at: tsIso` (the parsed message date) on both the outbound (`email_sent`) and inbound (`email_received`) synced inserts, so future syncs land at the true email date.
+
+**Ops (data backfill):** `UPDATE activities SET created_at = coalesce((metadata->>'sent_at')::timestamptz,(metadata->>'received_at')::timestamptz) WHERE metadata->>'synced_from'='mailbox_sync'` — ran in two steps (single-contact first to unblock, then global after Jacob's OK). **6,859 rows** re-dated; post-run verify = **0 remaining mismatches**. All `mailbox_sync` activities now carry their true email date. (Auto-mode classifier blocks the mass UPDATE until a plain-chat "yes".)
+
+**Checks:** `npx tsc --noEmit` clean (`created_at?: string` is a valid optional Insert field on `activities`). Deploy live (307 → /login).
+
+**Out of scope:** no `direction` column / Inbox-UI change; `last_contacted_at` already used the real date (guarded against moving backwards), so untouched.
+
 ## Calls page — Call lists / Recent calls tabs — 2026-07-02 — PR #493 — worktree-calls-list-tabs
 
 Jacob asked (from a screenshot of `/calls`) to add tabs so he can switch between the **Call lists** and **Calls** panels, so the call list can be wider and fit more info per row.
@@ -57,6 +72,23 @@ Jacob asked to (1) let all users add a profile picture so it shows instead of th
 **Out of scope:** no avatar cropping/resizing (stored as-uploaded, ≤5 MB); the sidebar/team `full_name` vs `user_profiles.full_name` inconsistency was left as-is (only avatar was reconciled across both sources).
 
 ---
+
+## Calls: DTMF keypad for in-browser (computer) calls — 2026-07-01 — PR #477 — worktree-calls-dtmf-keypad
+
+Jacob (from a screenshot of an on-call computer call) needs to enter digits mid-call to navigate workshop phone menus ("tryck 1 för verkstad, 2 för reception"). The in-browser call panel only had Mute / Hang up — no way to send touch-tones. (Ring-my-phone bridge calls are unaffected: you dial digits on the phone itself there.)
+
+**Branch:** worktree-calls-dtmf-keypad → main (squash merge 2026-07-01T15:16:46Z, commit 6cb0aaf).
+**Deploy:** live on crm-for-saas.vercel.app (Build & Lint ✅ + Vercel production status = success on the merged commit).
+**Files:**
+- `src/lib/calls/webrtc-client.ts` — new `WebrtcPhone.sendDTMF(tone)` using JsSIP `RTCSession.sendDTMF` (RFC 2833 telephone-events inline in the RTP stream, falling back to SIP INFO); 46elks relays these to the PSTN far end. Guarded on a live session; mirrors the existing `setMuted`/`hangup` pattern.
+- `src/components/calls/call-drawer.tsx` — extracted the WebRTC controls into a `WebrtcCallCard` component with a collapsible 3×4 keypad (1-9, *, 0, #) + a "pressed digits" readout. New exported `WebrtcControls` type (adds `onSendDtmf`) shared by the drawer prop and the provider. Keypad enabled only once the call is connected (`in_call`).
+- `src/components/calls/call-provider.tsx` — wired `onSendDtmf` through to the drawer via the shared type.
+
+**Behaviour / Why:** DTMF is sent client-side over the established WebRTC audio leg (no server round-trip), so it works in real time against a live IVR. The keypad button sits next to Mute/Hang up and is disabled until the call connects.
+
+**Verification:** `npx tsc --noEmit` clean (full project, 16GB heap — smaller heaps OOM-kill, not a type error), `eslint` clean on changed files. Confirmed JsSIP `sendDTMF`/`DTMFOptions` signature and that the only constructor of the WebRTC control object now includes `onSendDtmf`.
+
+**Out of scope:** bridge/phone-mode DTMF (would need a 46elks server-side control call; public docs only document DTMF as a `play: sound/dtmf/...` call action, not a live inject-into-active-bridge endpoint — deferred pending confirmation). Physical-keyboard digit capture not added. **Pending Jacob:** live-IVR spot check — place a computer call to a real phone menu, press a digit, confirm it navigates (the one thing not verifiable from the build).
 
 ## Calls: inbound/outbound direction label on Recent calls rows — 2026-07-01 — PR #482 — feature/call-direction-label
 
