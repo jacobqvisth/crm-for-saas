@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  // `next` now comes from the login page (middleware captures the gated page
+  // the user was aiming for), so it is user-controllable — only same-site
+  // paths are honoured, anything else falls back to the dashboard.
+  const next = safeNextPath(searchParams.get("next")) ?? "/dashboard";
 
   if (code) {
     const supabase = await createClient();
