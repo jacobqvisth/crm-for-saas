@@ -5777,3 +5777,94 @@ active paid plan, 10 past_due.
   bug-reports channel. Setting the var redirects them with no deploy.
 
 Full review with all tables: see the July 2026 artifact.
+
+---
+
+## Fixed-window activation + Monthly Review page (PR #573)
+
+**Date:** 2026-08-03
+**Branch:** `feat/monthly-review-and-activation-window`
+**Build:** tsc clean, eslint 0 errors (1 pre-existing warning), build OK 140/140, 448 tests pass (425 -> 448, 24 added)
+**Deploy:** c111333, Vercel dpl_544wc6xTps7Rp5QGW7ghgrRApyp2 READY on crm-for-saas.vercel.app
+
+Follow-up to #570/#571. With the pipeline fixed, two presentation-layer problems
+were left: the activation metric was structurally wrong, and there was no
+monthly view.
+
+### Activation is now fixed-window
+
+`/dashboard/new-users` computed `activated` as "has this user EVER run a
+diagnostic", which understates every young cohort by construction. That one
+metric produced three answers for July 2026 in one afternoon: **25%** (naive,
+young cohort), **44.4%** (fixed window but measured on the partial data the
+core_app outage left, n=36 all from Jul 1-4), **21.2%** (fixed window, complete
+data, n=311). A metric that swings 20 points on when you ask is not measuring
+the product.
+
+Now: `>= 1 diagnosis within 7 days of each user's OWN signup`, with the rate's
+denominator counting only users whose window has fully elapsed. Buckets still
+inside their window render a `partial` badge. Cells read `count / eligible ·
+rate`.
+
+Added a retention companion: `>= 2 diagnoses within 14 days`. At 1.14
+diagnostics/user a first diagnosis is curiosity, not adoption. July: 21.2%
+activated, **6.8%** retained (15 of 219 eligible).
+
+`evaluateUserWindows()` extracted as a pure fn in `new-users.ts` so the logic
+that misled twice is testable without a DB. Window maturity is tracked **per
+user**, not per bucket — deriving it from bucket boundaries would mean
+reconstructing Stockholm civil period ends from bucket-key strings across four
+granularities, which breaks at DST edges.
+
+### New page: /dashboard/monthly-review
+
+Registered as section `monthly-review` (glyph MR) between Plan Stats and New
+Users. Month picker offers **completed months only** (defaulting to a month in
+progress invites the exact error the page prevents). Plain `<Link>`s, so each
+month is a shareable URL and the page stays a server component.
+
+Panels: coverage warning (fires when the month's data is incomplete or core_app
+failed during it), KPI row, activation through the month, cohort plan mix,
+feature depth. New files: `src/lib/ceo/data/monthly-review.ts`,
+`src/components/ceo/monthly-review-content.tsx`,
+`src/components/ceo/month-picker.tsx`, plus `month?` added to
+`DashboardRoutePageProps`.
+
+Diagnostics are fetched to `month_end + retention window` so a user signing up
+on the 31st gets a full window, not a truncated one.
+
+### The finding the validation produced
+
+Validated the loader against prod SQL rather than trusting it. July 2026 by
+day-block:
+
+| Block | Signups | Eligible | Activated | Rate |
+|---|---|---|---|---|
+| Days 1-7 | 72 | 72 | 22 | 30.6% |
+| Days 8-14 | 80 | 80 | 18 | 22.5% |
+| Days 15-21 | 87 | 87 | 14 | 16.1% |
+| Days 22-end | 135 | 72 | 12 | 16.7% (partial) |
+
+Totals reconcile exactly with the SQL-reported cohort: 374 signups, 311
+eligible, 66 activated, 21.2%.
+
+**Corrects an earlier claim in this log's #570 entry:** activations were
+described as holding flat at 16-17/window. On the month's own day-blocks they
+are *falling* (22 -> 18 -> 14 -> 12) while signups rise (72 -> 80 -> 87 -> 135).
+Stronger version of the same conclusion — acquisition quality, not onboarding.
+82% of July signups were paid-attributed, 256 of 274 from one broad-match Pmax
+campaign.
+
+That is why the table shows absolute counts beside the rate: a rate-only view
+reads as an onboarding regression and would have sent us to the wrong problem.
+
+### Still open
+- `activated_at` NULL on all workshops; the four funnel steps still zero. This
+  PR derives activation from diagnostics rows; it does not instrument the event.
+- MRR summed across USD/EUR/SEK with no FX. Do this before trusting any revenue
+  figure.
+- `plan_key` friendly-name vs Stripe price ID, no mapping table.
+- `plan-stats` free -> trial -> paid conversion by cohort.
+- Month picker is only on the review page, not the shared range control.
+- Next suggested step: break July's signups down by campaign x country x
+  activation to confirm or refute the Pmax hypothesis before changing spend.
