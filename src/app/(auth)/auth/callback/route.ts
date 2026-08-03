@@ -1,15 +1,33 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { safeNextPath } from "@/lib/auth/next-path";
+import {
+  POST_LOGIN_NEXT_COOKIE,
+  decodeNextCookie,
+  safeNextPath,
+} from "@/lib/auth/next-path";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // `next` now comes from the login page (middleware captures the gated page
-  // the user was aiming for), so it is user-controllable — only same-site
-  // paths are honoured, anything else falls back to the dashboard.
-  const next = safeNextPath(searchParams.get("next")) ?? "/dashboard";
+
+  // The destination the middleware captured. It travels in a cookie because
+  // putting it on `redirectTo` broke the allow-list match (see
+  // POST_LOGIN_NEXT_COOKIE). A `?next=` query param is still honoured for
+  // hand-made links, but it is user-controllable either way, so both go
+  // through safeNextPath and anything off-site falls back to the dashboard.
+  const cookieStore = await cookies();
+  const next =
+    safeNextPath(searchParams.get("next")) ??
+    decodeNextCookie(cookieStore.get(POST_LOGIN_NEXT_COOKIE)?.value) ??
+    "/dashboard";
+
+  /** Consume the stashed destination so it can't misdirect a later sign-in. */
+  const clearNextCookie = (res: NextResponse) => {
+    res.cookies.set(POST_LOGIN_NEXT_COOKIE, "", { path: "/", maxAge: 0 });
+    return res;
+  };
 
   if (code) {
     const supabase = await createClient();
@@ -85,8 +103,8 @@ export async function GET(request: Request) {
                 `[auth/callback] join workspace ${targetWorkspaceId} for user ${user.id}:`,
                 joinError,
               );
-              return NextResponse.redirect(
-                `${origin}/login?error=onboarding`,
+              return clearNextCookie(
+                NextResponse.redirect(`${origin}/login?error=onboarding`),
               );
             }
           } else {
@@ -110,8 +128,8 @@ export async function GET(request: Request) {
                 `[auth/callback] create workspace for user ${user.id}:`,
                 workspaceError ?? "no row returned",
               );
-              return NextResponse.redirect(
-                `${origin}/login?error=onboarding`,
+              return clearNextCookie(
+                NextResponse.redirect(`${origin}/login?error=onboarding`),
               );
             }
 
@@ -127,8 +145,8 @@ export async function GET(request: Request) {
                 `[auth/callback] add owner ${user.id} to workspace ${workspace.id}:`,
                 ownerError,
               );
-              return NextResponse.redirect(
-                `${origin}/login?error=onboarding`,
+              return clearNextCookie(
+                NextResponse.redirect(`${origin}/login?error=onboarding`),
               );
             }
           }
@@ -138,16 +156,11 @@ export async function GET(request: Request) {
       const forwardedHost = request.headers.get("x-forwarded-host");
       const isLocalEnv = process.env.NODE_ENV === "development";
 
-      if (isLocalEnv) {
-        return NextResponse.redirect(`${origin}${next}`);
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`);
-      } else {
-        return NextResponse.redirect(`${origin}${next}`);
-      }
+      const base = !isLocalEnv && forwardedHost ? `https://${forwardedHost}` : origin;
+      return clearNextCookie(NextResponse.redirect(`${base}${next}`));
     }
   }
 
   // Auth code exchange failed
-  return NextResponse.redirect(`${origin}/login?error=auth`);
+  return clearNextCookie(NextResponse.redirect(`${origin}/login?error=auth`));
 }

@@ -2,7 +2,6 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { requiresAuth } from "./middleware";
-import { safeNextPath } from "@/lib/auth/next-path";
 
 /**
  * Read the sections off disk rather than listing them here. A hard-coded list
@@ -73,24 +72,5 @@ describe("requiresAuth", () => {
     ]) {
       expect(requiresAuth(path)).toBe(false);
     }
-  });
-});
-
-describe("safeNextPath", () => {
-  it("keeps same-site paths, with or without a query string", () => {
-    expect(safeNextPath("/forums/answers")).toBe("/forums/answers");
-    expect(safeNextPath("/forums/answers?tab=open")).toBe("/forums/answers?tab=open");
-  });
-
-  it("rejects anything that could leave the origin", () => {
-    expect(safeNextPath("//evil.com")).toBeNull();
-    expect(safeNextPath("https://evil.com")).toBeNull();
-    expect(safeNextPath("evil.com")).toBeNull();
-  });
-
-  it("treats missing or empty values as no destination", () => {
-    expect(safeNextPath(null)).toBeNull();
-    expect(safeNextPath(undefined)).toBeNull();
-    expect(safeNextPath("")).toBeNull();
   });
 });

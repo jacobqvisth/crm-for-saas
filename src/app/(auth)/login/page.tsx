@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { safeNextPath } from "@/lib/auth/next-path";
+import {
+  POST_LOGIN_NEXT_COOKIE,
+  POST_LOGIN_NEXT_MAX_AGE,
+  encodeNextCookie,
+  safeNextPath,
+} from "@/lib/auth/next-path";
 import { Chrome } from "lucide-react";
 
 export default function LoginPage() {
@@ -13,17 +18,21 @@ export default function LoginPage() {
     setLoading(true);
 
     // Middleware sends gated pages here as /login?next=/forums/answers. Carry
-    // that through the OAuth round-trip so a shared deep link survives the
-    // sign-in instead of always dumping people on the dashboard. Read from
-    // window rather than useSearchParams to keep this page prerenderable.
-    const callback = new URL("/auth/callback", window.location.origin);
+    // that through the OAuth round-trip in a cookie, NOT on redirectTo: Supabase
+    // matches redirectTo against an exact allow-list entry, so a "?next=" query
+    // param made it fall back to the project Site URL (localhost) and stranded
+    // real users on "localhost refused to connect". Read from window rather than
+    // useSearchParams to keep this page prerenderable.
     const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
-    if (next) callback.searchParams.set("next", next);
+    if (next) {
+      document.cookie = `${POST_LOGIN_NEXT_COOKIE}=${encodeNextCookie(next)}; Path=/; Max-Age=${POST_LOGIN_NEXT_MAX_AGE}; SameSite=Lax`;
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: callback.toString(),
+        // Must stay byte-identical to the allow-listed Redirect URL.
+        redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
           access_type: "offline",
           prompt: "consent",
