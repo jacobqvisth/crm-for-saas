@@ -108,11 +108,17 @@ export type MonthlyReviewData = {
   costPerPaidUser: number | null;
 
   coverage: {
+    /**
+     * Global, NOT scoped to the month: the last time core_app synced at all.
+     * This is a pipeline-health fact, so bounding it to the month under review
+     * would make it meaningless when reading an older month.
+     */
     coreAppLastSuccessAt: string | null;
+    /** Scoped strictly to the month, since it describes THIS month's ingest. */
     coreAppFailuresInMonth: number;
-    latestUserSignupAt: string | null;
-    latestDiagnosticAt: string | null;
-    /** True when the month's window closed before the newest data we hold. */
+    /** Global newest row-level data we hold, used for the coverage test. */
+    newestDataAt: string | null;
+    /** True when the newest data we hold is at or past the month's end. */
     dataCoversMonth: boolean;
   };
 
@@ -240,8 +246,7 @@ function emptyData(month: MonthKey, error?: string): MonthlyReviewData {
     coverage: {
       coreAppLastSuccessAt: null,
       coreAppFailuresInMonth: 0,
-      latestUserSignupAt: null,
-      latestDiagnosticAt: null,
+      newestDataAt: null,
       dataCoversMonth: false,
     },
     error,
@@ -580,43 +585,60 @@ async function getMonthlyReviewDataUncached(
   }
 
   // --- coverage ---
-  const [coreRuns, latestDiag] = await Promise.all([
-    supabase
-      .from(TABLES.syncRuns)
-      .select("status, completed_at, started_at")
-      .eq("source_key", "core_app")
-      .gte("started_at", startIso)
-      .order("started_at", { ascending: false })
-      .limit(1000),
-    supabase
-      .from(TABLES.diagnostics)
-      .select("created_at")
-      .order("created_at", { ascending: false })
-      .limit(1),
-  ]);
+  const [failedRuns, sourceAccount, latestDiag, latestSignup] =
+    await Promise.all([
+      // Count-only, and bounded at BOTH ends. Without the upper bound this
+      // counted every failure from the month's start to now, so reading July
+      // 2026 reported 782 when July's own figure was 719 (the extra 63 were
+      // August's). Counting via head:true also removes the row cap that would
+      // have silently truncated a busier month.
+      supabase
+        .from(TABLES.syncRuns)
+        .select("*", { count: "exact", head: true })
+        .eq("source_key", "core_app")
+        .eq("status", "failed")
+        .gte("started_at", startIso)
+        .lt("started_at", endIso),
+      // Pipeline health is a global fact, so it is read unbounded.
+      supabase
+        .from(TABLES.sourceAccounts)
+        .select("last_success_at")
+        .eq("source_key", "core_app")
+        .maybeSingle(),
+      supabase
+        .from(TABLES.diagnostics)
+        .select("created_at")
+        .order("created_at", { ascending: false })
+        .limit(1),
+      // Deliberately unbounded. `latestUserSignupMs` from the loop above is
+      // capped at the month end by the query filter, so using it here would
+      // report a month-old "newest sign-up" and imply the feed was stale.
+      supabase
+        .from(TABLES.users)
+        .select("signed_up_at")
+        .not("signed_up_at", "is", null)
+        .order("signed_up_at", { ascending: false })
+        .limit(1),
+    ]);
 
-  let coreAppFailuresInMonth = 0;
-  let coreAppLastSuccessAt: string | null = null;
-  for (const run of coreRuns.data ?? []) {
-    const r = run as { status?: string | null; completed_at?: string | null };
-    if (r.status === "failed") coreAppFailuresInMonth += 1;
-    if (r.status === "success" && r.completed_at && !coreAppLastSuccessAt) {
-      coreAppLastSuccessAt = r.completed_at;
-    }
-  }
+  const coreAppFailuresInMonth = failedRuns.count ?? 0;
+  const coreAppLastSuccessAt =
+    (sourceAccount.data?.last_success_at as string | undefined) ?? null;
   const latestDiagnosticAt =
     (latestDiag.data?.[0] as { created_at?: string | null } | undefined)
       ?.created_at ?? null;
-
-  const latestUserSignupAt =
-    latestUserSignupMs > 0 ? new Date(latestUserSignupMs).toISOString() : null;
+  const latestSignupAt =
+    (latestSignup.data?.[0] as { signed_up_at?: string | null } | undefined)
+      ?.signed_up_at ?? null;
 
   // The month is only properly covered if the newest row-level data we hold is
   // at or past the month's end. Otherwise part of the month was never ingested.
   const newestDataMs = Math.max(
-    latestUserSignupMs,
+    latestSignupAt ? new Date(latestSignupAt).getTime() : 0,
     latestDiagnosticAt ? new Date(latestDiagnosticAt).getTime() : 0,
   );
+  const newestDataAt =
+    newestDataMs > 0 ? new Date(newestDataMs).toISOString() : null;
   const dataCoversMonth = newestDataMs >= endMs;
 
   const newUsers = cohort.length;
@@ -664,8 +686,7 @@ async function getMonthlyReviewDataUncached(
     coverage: {
       coreAppLastSuccessAt,
       coreAppFailuresInMonth,
-      latestUserSignupAt,
-      latestDiagnosticAt,
+      newestDataAt,
       dataCoversMonth,
     },
   };

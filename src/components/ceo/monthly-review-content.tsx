@@ -70,26 +70,39 @@ export function MonthlyReviewContent({ data }: Props) {
         <article className="panel panel-wide">
           <div className="panel-heading">
             <div>
-              <h2>Read this month with care</h2>
+              <h2>
+                {cov.dataCoversMonth
+                  ? "This month had ingest failures, since recovered"
+                  : "Read this month with care"}
+              </h2>
               <p className="panel-description" style={{ marginTop: 4 }}>
-                {!cov.dataCoversMonth && (
+                {!cov.dataCoversMonth ? (
                   <>
                     The newest row-level data we hold predates the end of{" "}
                     {data.monthLabel}, so part of the month was never ingested
                     and every per-user number below is computed on a partial
                     cohort.{" "}
                   </>
+                ) : (
+                  <>
+                    The numbers below are complete: the newest data we hold
+                    reaches past the end of {data.monthLabel}, so the backfill
+                    caught up.{" "}
+                  </>
                 )}
                 {cov.coreAppFailuresInMonth > 0 && (
                   <>
-                    The core_app sync recorded{" "}
+                    For the record, the core_app sync recorded{" "}
                     <strong>{formatNumber(cov.coreAppFailuresInMonth)}</strong>{" "}
-                    failed run(s) during this month.{" "}
+                    failed run(s) during {data.monthLabel}
+                    {cov.dataCoversMonth
+                      ? ", which is why this notice appears"
+                      : ""}
+                    .{" "}
                   </>
                 )}
                 Last core_app success: {stamp(cov.coreAppLastSuccessAt)}. Newest
-                sign-up: {stamp(cov.latestUserSignupAt)}. Newest diagnosis:{" "}
-                {stamp(cov.latestDiagnosticAt)}.
+                data held: {stamp(cov.newestDataAt)}.
               </p>
             </div>
           </div>
