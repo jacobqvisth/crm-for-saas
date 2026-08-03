@@ -5611,3 +5611,59 @@ Answer posts; look into merging Post generator + Distribution).
 
 Checks (both phases): tsc --noEmit clean, eslint clean (1 pre-existing unrelated
 warning), npm run build OK.
+
+## Forums "Unauthorized" — auth gate was a stale allow-list (2026-08-03, PR #565 + PR TBD)
+
+Reported as "some users can not use the forum features": `/forums/answers`
+rendered its full shell (sidebar, tabs, Draft options) and then showed a red
+**Unauthorized** banner where the post list belongs.
+
+**Diagnosis (not a forums bug, not a data bug):**
+- The banner is `answers-client` reporting a failed initial load — `GET
+  /api/forums/replies` returns 401 from `resolveWorkspace()`'s no-user branch.
+  So the affected browsers had no valid session, and nothing sent them to login.
+- `src/lib/supabase/middleware.ts` gated on a hard-coded `protectedRoutes`
+  allow-list naming only the ten sections that existed when it was written.
+  `/forums` was never added, nor `/calls`, `/inbox`, `/tasks`, `/discovery`,
+  `/videos`, `/routes`. Verified logged-out against prod: `/contacts` 307'd to
+  `/login` while `/forums/answers` returned 200.
+- Ruled out the 403 "No workspace" branch: all 15 real users in prod
+  `auth.users` have exactly one `workspace_members` row.
+- The existing e2e test `protected routes all redirect to /login` listed the
+  same five sections, so it passed happily while forums was unguarded — the
+  test mirrored the bug.
+
+**PR #565 (MERGED + deployed, 158afa89, deploy READY):**
+- Inverted to a deny-list: `requiresAuth()` gates anything not explicitly
+  public (`/`, `/login`, `/auth/*`), so new sections are protected on day one.
+- `/api/*` deliberately exempt — APIs must answer 401 JSON, not 307 to HTML.
+  Route handlers keep their own auth checks.
+- Post-login deep link: middleware sends `/login?next=/forums/answers`, login
+  page forwards it to the OAuth callback, callback lands there.
+  `safeNextPath()` (in `src/lib/auth/next-path.ts`, no `next/server` imports so
+  the client login page shares it) restricts it to same-site paths.
+
+**PR TBD — tell the user what happened and how to fix it:**
+- `src/lib/auth/api-error.ts`: `describeApiFailure()` maps 401 → "You've been
+  signed out… Sign in again" and 403 "No workspace" → "ask Jacob to add you",
+  keeping specific server messages for everything else. `ApiFailureError` +
+  `throwIfFailed`/`throwIfFailedParsed`/`toApiFailure` carry the HTTP status
+  through the existing throw-in-try/catch shape (throwing a plain Error
+  flattened it to a string, which is how "Unauthorized" reached the UI).
+- `src/components/api-error-banner.tsx`: one banner, with a "Sign in again"
+  button carrying `?next=` for auth failures and "Try again" for transient ones.
+- `src/components/auth/session-watcher.tsx` mounted in the dashboard layout:
+  middleware only runs on navigation, so a tab left open past its refresh-token
+  lifetime still died silently. Watches Supabase `SIGNED_OUT`, toasts, and
+  routes to `/login?next=<current>`. `markIntentionalSignOut()` keeps the
+  sidebar's own Sign out from claiming the session expired.
+- Wired all 7 forum clients (answers, forums, hub, gaps, accounts,
+  distribution, thread) onto it.
+- Guardrails, both filesystem-derived so they cover sections added later:
+  `middleware.test.ts` asserts every `(dashboard)` dir requires auth, and the
+  smoke spec asserts each one redirects with `next=` preserved plus that
+  `/api/forums/replies` still answers 401 JSON.
+
+Checks: 403 unit tests pass (60 new), tsc clean, eslint 0 errors (1 pre-existing
+warning), build OK, and smoke+api e2e 10/10 green against production. Note
+Playwright needs `--workers=1` in a sandboxed session; parallel workers time out.

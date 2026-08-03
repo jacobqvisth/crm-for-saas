@@ -22,6 +22,12 @@ import { TOPICS, type DistributionRec } from "@/lib/forums/distribution";
 import { getForumTarget } from "@/lib/forums/targets";
 import type { ForumPost } from "@/lib/forums/types";
 import type { RedditAccount } from "@/lib/forums/accounts";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  throwIfFailedParsed,
+  toApiFailure,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 
 // The three views of the unified Posts board. "topics" is the Distribution
 // campaign workflow, "diagnostics" is the AI post generator, "all" is a
@@ -160,7 +166,7 @@ function AllPanel({
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [accounts, setAccounts] = useState<RedditAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | UnifiedStatus>("all");
   const [q, setQ] = useState("");
   // Which diagnostic row is expanded to its full inline PostCard.
@@ -178,15 +184,15 @@ function AllPanel({
         const dData = await dRes.json();
         const pData = await pRes.json();
         const aData = aRes.ok ? await aRes.json() : { accounts: [] };
-        if (!dRes.ok) throw new Error(dData.error ?? "Failed to load campaigns");
-        if (!pRes.ok) throw new Error(pData.error ?? "Failed to load posts");
+        throwIfFailedParsed(dRes, dData, "Failed to load campaigns");
+        throwIfFailedParsed(pRes, pData, "Failed to load posts");
         if (!cancelled) {
           setRecs(dData.recs ?? []);
           setPosts(pData.posts ?? []);
           setAccounts(aData.accounts ?? []);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(toApiFailure(e, "Failed to load"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -268,11 +274,7 @@ function AllPanel({
     );
   }
   if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
-    );
+    return <ApiErrorBanner failure={error} />;
   }
 
   return (

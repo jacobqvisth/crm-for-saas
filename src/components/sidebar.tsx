@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { markIntentionalSignOut } from "@/lib/auth/sign-out";
 import { UserAvatar } from "@/components/user-avatar";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -117,6 +118,9 @@ export function Sidebar() {
   }, []);
 
   const handleSignOut = async () => {
+    // Tells SessionWatcher this SIGNED_OUT was deliberate, so it doesn't
+    // announce an expired session on the way out.
+    markIntentionalSignOut();
     await supabase.auth.signOut();
     router.push("/login");
   };

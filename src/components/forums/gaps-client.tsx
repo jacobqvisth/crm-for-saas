@@ -19,6 +19,12 @@ import {
   VERDICT_OPTIONS,
 } from "@/lib/forums/gaps";
 import { ForumsTabs } from "./forums-tabs";
+import { ApiErrorBanner } from "@/components/api-error-banner";
+import {
+  throwIfFailedParsed,
+  toApiFailure,
+  type ApiFailure,
+} from "@/lib/auth/api-error";
 
 // Blank draft for the "log a story" form.
 const EMPTY_DRAFT = {
@@ -35,7 +41,7 @@ const EMPTY_DRAFT = {
 export function GapsClient() {
   const [stories, setStories] = useState<FailureStory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT });
   const [saving, setSaving] = useState(false);
@@ -46,10 +52,10 @@ export function GapsClient() {
       try {
         const res = await fetch("/api/forums/gaps");
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load");
+        throwIfFailedParsed(res, data, "Failed to load");
         if (!cancelled) setStories(data.stories ?? []);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(toApiFailure(e, "Failed to load"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -88,12 +94,12 @@ export function GapsClient() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      throwIfFailedParsed(res, data, "Save failed");
       setStories((prev) => [data.story as FailureStory, ...prev]);
       setDraft({ ...EMPTY_DRAFT });
       setShowForm(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(toApiFailure(e, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -246,11 +252,7 @@ export function GapsClient() {
         </div>
       )}
 
-      {error && (
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ApiErrorBanner failure={error} className="mt-6" />
 
       {loading ? (
         <div className="flex items-center gap-2 text-slate-500 text-sm py-16 justify-center">
