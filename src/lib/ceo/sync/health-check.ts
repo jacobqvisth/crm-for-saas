@@ -16,6 +16,7 @@
 //      incorrectly.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { postAlert } from "@/lib/alerting/webhook";
 
 export type SourceFreshness = {
   source_key: string;
@@ -140,12 +141,13 @@ export async function checkSyncHealth(
   };
 }
 
-// Post a summary to Slack if SLACK_ALERT_WEBHOOK_URL is set. Falls back to
-// console.error so the alert at least surfaces in Vercel logs (which Jacob
-// already grep when investigating).
+// Post a summary to the resolved alert webhook (see lib/alerting/webhook.ts for
+// the resolution order and why a fallback exists). Always echoes to
+// console.error too.
 export async function notifySyncHealth(result: HealthCheckResult): Promise<{
   channel: "slack" | "console";
   sent: boolean;
+  webhookSource?: string | null;
 }> {
   if (result.ok) return { channel: "console", sent: false };
 
@@ -182,21 +184,5 @@ export async function notifySyncHealth(result: HealthCheckResult): Promise<{
   }
   const text = lines.join("\n");
 
-  const webhook = process.env.SLACK_ALERT_WEBHOOK_URL;
-  if (webhook) {
-    try {
-      const res = await fetch(webhook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok) return { channel: "slack", sent: true };
-      console.error(`[sync-health] Slack webhook failed status=${res.status}`);
-    } catch (err) {
-      console.error(`[sync-health] Slack webhook threw`, err);
-    }
-  }
-
-  console.error(`[sync-health]\n${text}`);
-  return { channel: "console", sent: true };
+  return postAlert("sync-health", text);
 }

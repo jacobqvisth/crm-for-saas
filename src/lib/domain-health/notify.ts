@@ -1,5 +1,6 @@
-// Slack notification for domain-health regressions. Mirrors the
-// SLACK_ALERT_WEBHOOK_URL pattern already used by /api/cron/check-sync-health.
+// Slack notification for domain-health regressions. Delivery (and the
+// SLACK_ALERT_WEBHOOK_URL → SLACK_BUG_REPORTS_WEBHOOK_URL resolution order) is
+// shared with /api/cron/check-sync-health via lib/alerting/webhook.ts.
 //
 // Notification policy (kept simple on purpose):
 //   * critical now           → always notify
@@ -8,6 +9,7 @@
 //     (otherwise we'd Slack-spam every morning during a slow recovery)
 //   * ok                     → never notify
 
+import { postAlert } from "@/lib/alerting/webhook";
 import type { DomainHealthCheck } from "./index";
 
 export type NotifyOutcome = {
@@ -27,23 +29,12 @@ export async function notifyDomainHealth(
 
   const text = formatSlackMessage(current, previous);
 
-  const webhook = process.env.SLACK_ALERT_WEBHOOK_URL;
-  if (webhook) {
-    try {
-      const res = await fetch(webhook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok) return { channel: "slack", sent: true, reason: shouldNotify.reason };
-      console.error(`[domain-health] Slack webhook failed status=${res.status}`);
-    } catch (err) {
-      console.error(`[domain-health] Slack webhook threw`, err);
-    }
-  }
-
-  console.error(`[domain-health]\n${text}`);
-  return { channel: "console", sent: true, reason: shouldNotify.reason };
+  const outcome = await postAlert("domain-health", text);
+  return {
+    channel: outcome.channel,
+    sent: outcome.sent,
+    reason: shouldNotify.reason,
+  };
 }
 
 function decideNotify(
