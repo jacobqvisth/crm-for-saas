@@ -5667,3 +5667,36 @@ rendered its full shell (sidebar, tabs, Draft options) and then showed a red
 Checks: 403 unit tests pass (60 new), tsc clean, eslint 0 errors (1 pre-existing
 warning), build OK, and smoke+api e2e 10/10 green against production. Note
 Playwright needs `--workers=1` in a sandboxed session; parallel workers time out.
+
+## Login broken for deep links: OAuth redirectTo vs Supabase allow-list (2026-08-03, PR TBD)
+
+Magnus tested the #565/#566 work and landed on
+`localhost:3000/?code=f9770fa5-...` with ERR_CONNECTION_REFUSED. **Regression
+introduced by PR #565.**
+
+**Mechanism:** #565 made the login page append the post-login destination to the
+OAuth `redirectTo` (`/auth/callback?next=/forums/answers`). Supabase matches
+`redirectTo` against its Redirect URL allow-list, and prod had exactly one
+entry, `https://crm-for-saas.vercel.app/auth/callback`, with no wildcard. The
+query string broke the match, so Supabase discarded `redirectTo` and fell back
+to the project **Site URL, which was `http://localhost:3000`** — hence a real
+user staring at "localhost refused to connect" with the auth code in the URL.
+Root path rather than `/auth/callback` is the tell for a Site URL fallback.
+
+Only affected users arriving via a gated deep link (i.e. anyone the middleware
+redirected). Plain `/login` still worked, which is why curl checks and the e2e
+suite missed it: neither completes a real OAuth round-trip.
+
+**Fix (this PR):** the destination travels in a short-lived cookie
+(`wl_post_login_next`, 600s, SameSite=Lax) set before `signInWithOAuth`, read
+and cleared in `/auth/callback`. `redirectTo` is back to byte-identical
+`${origin}/auth/callback`, so the allow-list match can't break again.
+`encodeNextCookie`/`decodeNextCookie` in `src/lib/auth/next-path.ts` tolerate a
+malformed cookie and still refuse off-site paths. `next-path.test.ts` adds a
+source-level guard asserting the `redirectTo:` line never mentions `next`.
+
+**Also (config, prod Supabase auth):** `site_url` localhost -> production URL and
+`uri_allow_list` widened to wildcards for both prod and localhost, so a future
+redirect mismatch degrades to the right host instead of a dead local server.
+
+Checks: 411 unit tests pass, tsc clean, eslint 0 errors, build OK.
