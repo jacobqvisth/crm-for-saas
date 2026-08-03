@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/auth/next-path";
 import { Chrome } from "lucide-react";
 
 export default function LoginPage() {
@@ -10,10 +11,19 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+
+    // Middleware sends gated pages here as /login?next=/forums/answers. Carry
+    // that through the OAuth round-trip so a shared deep link survives the
+    // sign-in instead of always dumping people on the dashboard. Read from
+    // window rather than useSearchParams to keep this page prerenderable.
+    const callback = new URL("/auth/callback", window.location.origin);
+    const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
+    if (next) callback.searchParams.set("next", next);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callback.toString(),
         queryParams: {
           access_type: "offline",
           prompt: "consent",
