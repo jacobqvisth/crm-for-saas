@@ -5612,7 +5612,7 @@ Answer posts; look into merging Post generator + Distribution).
 Checks (both phases): tsc --noEmit clean, eslint clean (1 pre-existing unrelated
 warning), npm run build OK.
 
-## Forums "Unauthorized" — auth gate was a stale allow-list (2026-08-03, PR #565 + PR TBD)
+## Forums "Unauthorized" — auth gate was a stale allow-list (2026-08-03, PR #565 + PR #566)
 
 Reported as "some users can not use the forum features": `/forums/answers`
 rendered its full shell (sidebar, tabs, Draft options) and then showed a red
@@ -5643,7 +5643,7 @@ rendered its full shell (sidebar, tabs, Draft options) and then showed a red
   `safeNextPath()` (in `src/lib/auth/next-path.ts`, no `next/server` imports so
   the client login page shares it) restricts it to same-site paths.
 
-**PR TBD — tell the user what happened and how to fix it:**
+**PR #566 (MERGED + deployed, 3b9ebc8, deploy READY) — tell the user what happened and how to fix it:**
 - `src/lib/auth/api-error.ts`: `describeApiFailure()` maps 401 → "You've been
   signed out… Sign in again" and 403 "No workspace" → "ask Jacob to add you",
   keeping specific server messages for everything else. `ApiFailureError` +

@@ -19,7 +19,7 @@ export interface ApiFailure {
 }
 
 export const SESSION_EXPIRED_MESSAGE =
-  "You've been signed out — your session expired. Sign in again and you'll come straight back to this page.";
+  "You've been signed out because your session expired. Sign in again and you'll come straight back to this page.";
 
 export const NOT_PROVISIONED_MESSAGE =
   "Your account isn't a member of a workspace yet, so this page has nothing to load. Ask Jacob to add you to the workspace, then reload.";
