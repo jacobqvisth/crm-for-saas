@@ -6110,3 +6110,71 @@ with 8 lanes on the real 161k-row read. The constraint is response volume
   It now returns *correct* numbers, but can still be slow.
 - Search Terms: ~32% of described entries still match no complaint category
   (506 with real content). The on-page gap panel is where the next batch comes from.
+
+## 2026-08-04 — Organic Analysis page: why organic is flat
+
+**Branch** `feature/organic-analysis-page` · new route `/dashboard/organic-analysis`
+
+Jacob asked why wrenchlane.com organic traffic is not increasing. The existing
+`/dashboard/organic-search` page reports Search Console numbers but cannot answer
+"why", so this adds a page that does the diagnosis.
+
+### What the investigation found
+
+Totals said organic nearly doubled in July (188 → 351 clicks) then collapsed.
+Splitting by hostname explained all of it:
+
+- **`guides.wrenchlane.com` launched Jul 8**, ramped to 2,045 impressions/day by
+  Jul 22, then dropped to ~25/day on Jul 23-24 and stayed there. 446 guide pages
+  earned impressions in July, 17 in August. Pages are still indexed and
+  technically clean (200 to Googlebot, no noindex, correct canonical + hreflang,
+  sitemap 200), so this is a demotion, not a deindex. The subdomain is 26 unique
+  guides machine-translated into 27 languages, and has zero internal links from
+  the main site in either direction.
+- **The main site never moved.** ~27-28k impressions/month since May, while
+  distinct pages earning impressions fell 119 → 107 → 93.
+- **Position, not reach, is the ceiling.** 55% of impressions rank below
+  position 10; the 11-20 and 21+ bands produce 8,221 and 12,702 impressions for
+  11 and 5 clicks.
+
+### What was built
+
+- `supabase/migrations/20260804140000_organic_analysis_rpc.sql` —
+  `get_organic_analysis(p_start, p_end)` returning one JSONB document.
+  **This is the SQL-side rollup the previous session left open.** Search Console
+  is ~140k of the ~161k rows in `dashboard_metric_snapshots`, so the page never
+  pages rows: it aggregates server-side and ships 27 KB. Warm latency ~850 ms.
+  Also added `(source_key, period_start DESC)`, which turns the pivot scan into
+  an index-only scan (190 ms → 56 ms).
+- `src/lib/ceo/data/organic-analysis.ts` — loader plus the analysis itself.
+  `detectCliff` compares trailing vs leading 7-day means to find sustained step
+  changes (a demotion holds a level, drops, and stays); `buildFindings` turns
+  the aggregates into ranked, plain-language findings.
+- `src/components/ceo/organic-analysis-content.tsx` + CSS — findings list,
+  per-host sparkline table, SERP-depth bars, branded split, content velocity,
+  page-2 upside, zero-click queries, geography, top pages.
+- Registered as its own section; `/dashboard/organic-search` is untouched.
+
+### Gotcha worth remembering
+
+Month-over-month findings compared a complete month against the 3-day-old
+current month and reported a 96% brand collapse that was not real. Fixed with a
+shared `completedMonths()` guard used by both the branded and content-velocity
+comparisons, and locked in by tests.
+
+### Checks
+
+`tsc --noEmit` clean · `npm run lint` clean (1 pre-existing warning in
+`call-provider.tsx`) · `npm run build` compiled · 9 new unit tests, 234 ceo unit
+tests pass · new `e2e/organic-analysis.spec.ts` passes against live data.
+`e2e/dashboard.spec.ts` has 2 failures (Supabase auth `Failed to fetch` in the
+browser) that reproduce identically on a stashed clean baseline — pre-existing,
+not from this change.
+
+### Still open
+- The guides demotion needs a decision, not a dashboard: check Manual Actions,
+  then cut the 27 languages down to the markets WrenchLane actually sells into
+  and `noindex` the rest. Link the subdomain in from the main site both ways.
+- The shared `getDashboardData` all-time read is still heavy. This RPC only
+  covers the new page; folding the same rollup into `calculateDashboardData`
+  would fix the rest.

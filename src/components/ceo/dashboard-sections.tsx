@@ -40,6 +40,7 @@ export type DashboardSectionKey =
   | "new-users"
   | "acquisition"
   | "organic-search"
+  | "organic-analysis"
   | "product"
   | "workshops"
   | "diagnostics"
@@ -189,6 +190,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Organic Search",
     description:
       "Search Console clicks, impressions, top queries, top pages, and how organic discovery is trending.",
+  },
+  {
+    key: "organic-analysis",
+    label: "Organic Analysis",
+    glyph: "OA",
+    href: "/dashboard/organic-analysis",
+    title: "Organic Analysis",
+    description:
+      "Why organic is moving: hostname splits, ranking cliffs, content velocity, brand pull, and the queries worth chasing.",
   },
   {
     key: "product",
