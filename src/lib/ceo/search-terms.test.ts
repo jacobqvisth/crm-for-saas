@@ -224,6 +224,56 @@ describe("analyseSearchTerms", () => {
     expect(july?.coverage).toBeCloseTo(0.5);
   });
 
+  it("categorises the Volvo turtle-mode entry that used to fall through", () => {
+    // Real prod entry (VOLVO XC60 2013, sv) that matched nothing at all. Each
+    // assertion below maps to one gap it exposed: Volvo says "sköldpaddsläge"
+    // rather than limp, P00BC00 is a 7-char extended code, "INTERMITENT" is
+    // spelled with one t, "BYT" is the bare imperative, and a code going
+    // permanent after an attempted repair means the fix did not hold.
+    const result = analyseSearchTerms([
+      item(
+        "BILEN GÅR I SKÖLDPADDELÄGE...MED FÖRSÄMRAD PRESTANDA- FELKOD P00BC00 MASSA ELLER LUFT FÖR LÅGT-INTERMITENT---- MEN NU NÄR JAG SKA RADERA SÅ BLIR FELKODEN PEMANET. BYT TRYCKGIVARE ÖVRE O NEDRA-KOLLAT SLANGAR.-MEN DE KVAR",
+      ),
+    ]);
+    expect(bucket(result.complaints, "power-loss")).toBe(1);
+    expect(bucket(result.phrasing, "quotes-code")).toBe(1);
+    expect(bucket(result.phrasing, "intermittent")).toBe(1);
+    expect(bucket(result.phrasing, "prior-work")).toBe(1);
+    expect(bucket(result.phrasing, "prior-work-no-change")).toBe(1);
+    expect(result.quotedCodes.map((row) => row.term)).toContain("P00BC00");
+    expect(result.uncategorised.count).toBe(0);
+  });
+
+  it("matches hex and extended fault-code formats, not just PXXXX", () => {
+    const result = analyseSearchTerms([
+      item("felkod P042F på insuget"),
+      item("Fehlercode B1802F1"),
+      item("kod p05a100 kvar efter byte"),
+      item("p0420 och p0171"),
+    ]);
+    expect(bucket(result.phrasing, "quotes-code")).toBe(4);
+    const codes = result.quotedCodes.map((row) => row.term);
+    expect(codes).toContain("P042F");
+    expect(codes).toContain("B1802F1");
+    expect(codes).toContain("P05A100");
+  });
+
+  it("does not mistake ordinary words for fault codes", () => {
+    const result = analyseSearchTerms([
+      item("bad cab noise from the back,ब12 not a code"),
+      item("customer paid 250 kr for the b12 service"),
+    ]);
+    expect(bucket(result.phrasing, "quotes-code")).toBe(0);
+    expect(result.quotedCodes).toHaveLength(0);
+  });
+
+  it("does not treat Polish 'zbyt' as a Swedish repair verb", () => {
+    const result = analyseSearchTerms([
+      item("silnik pracuje zbyt glosno", { language: "pl", country: "PL" }),
+    ]);
+    expect(bucket(result.phrasing, "prior-work")).toBe(0);
+  });
+
   it("collects text that matched no complaint category", () => {
     const result = analyseSearchTerms([
       item("motorlampa lyser"),

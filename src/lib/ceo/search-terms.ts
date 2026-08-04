@@ -113,6 +113,17 @@ type BucketDefinition = {
 };
 
 /**
+ * Diagnostic trouble code as technicians actually type it.
+ *
+ * Not just `[PBUC]\d{4}`: standard OBD-II codes are hex in the last positions
+ * (P042F) and manufacturer-extended codes carry a status/byte suffix, so this
+ * data contains P00BC00, B1802F1, p05a100 and P0193-17 alongside plain P0420.
+ * The letter must be followed by a digit, which is what keeps ordinary words
+ * out — "bad" and "cab" have no digit, and "b12" is too short to qualify.
+ */
+const DTC_PATTERN = "\\b[pbuc][0-9][0-9a-f]{2,5}\\b";
+
+/**
  * What the vehicle is doing wrong — the complaint, in the technician's words.
  */
 const COMPLAINT_BUCKETS: BucketDefinition[] = [
@@ -287,6 +298,14 @@ const COMPLAINT_BUCKETS: BucketDefinition[] = [
       "haltprogram",
       "orkeslös",
       "orkeslos",
+      // Volvo and most heavy vehicles call limp mode "sköldpaddsläge" (turtle
+      // mode) and show a turtle icon, so the word "limp" never appears.
+      "sköldpadd",
+      "skoldpadd",
+      "turtle mode",
+      "försämrad prestanda",
+      "försämrad effekt",
+      "forsamrad prestanda",
       "tappar kraft",
       "tappar effekt",
       "ingen kraft",
@@ -742,6 +761,9 @@ const COMPLAINT_BUCKETS: BucketDefinition[] = [
       "low input",
       "signal low",
       "signal high",
+      "för lågt",
+      "för högt",
+      "for lagt",
       "open circuit",
       "circuit open",
       "circuit range",
@@ -775,7 +797,7 @@ const COMPLAINT_BUCKETS: BucketDefinition[] = [
     hint: "The whole entry is one or more fault codes (\"p0420\", \"p0017,p0014,p0089\"). Nothing for the AI to reason from beyond what the scan already read.",
     patterns: [
       "^[pbuc][0-9][0-9a-f]{2,6}$",
-      "^[pbuc][0-9]{3,4}( [pbuc][0-9]{3,4})+$",
+      "^[pbuc][0-9][0-9a-f]{2,5}( [pbuc][0-9][0-9a-f]{2,5})+$",
       "^dtc code",
       "^felkod [pbuc][0-9]",
       "^fehlercode",
@@ -1359,6 +1381,9 @@ const PHRASING_BUCKETS: BucketDefinition[] = [
     label: "Lists repairs already tried",
     hint: "\"vi har bytt…\", \"we replaced…\" — the entry is a troubleshooting history, not just a symptom. These are the hardest cases and the ones where a wrong answer wastes real money.",
     patterns: [
+      // Leading space so this covers byt / byta / bytt / byte / byter without
+      // also firing on Polish "zbyt".
+      " byt",
       "bytt",
       "bytte",
       "byter",
@@ -1394,6 +1419,9 @@ const PHRASING_BUCKETS: BucketDefinition[] = [
       "samma fel",
       "felet kvarstår",
       "kvarstår",
+      " kvar",
+      "permanent",
+      "pemanet",
       "återkom",
       "aterkom",
       "kommer tillbaka",
@@ -1418,7 +1446,7 @@ const PHRASING_BUCKETS: BucketDefinition[] = [
     key: "quotes-code",
     label: "Quotes a fault code",
     hint: "A P/B/U/C code typed into the text, on top of whatever the scan already captured.",
-    patterns: ["\\b[pbuc][0-9]{4}\\b"],
+    patterns: [DTC_PATTERN],
   },
   {
     key: "no-codes",
@@ -1498,7 +1526,8 @@ const PHRASING_BUCKETS: BucketDefinition[] = [
     hint: "Comes and goes — the fault class hardest to reproduce on the lift.",
     patterns: [
       "ibland",
-      "intermittent",
+      // Prefix, so intermittent / intermitent / intermittant all match.
+      "intermit",
       "sporadisk",
       "kommer och går",
       "periodvis",
@@ -1934,7 +1963,7 @@ export function analyseSearchTerms(
 
   const codeMap = new Map<string, { entries: number; occurrences: number }>();
   for (const entry of prepared) {
-    const found = entry.matchable.match(/\b[pbuc]\d{4}\b/gu) ?? [];
+    const found = entry.matchable.match(/\b[pbuc][0-9][0-9a-f]{2,5}\b/gu) ?? [];
     const seen = new Set<string>();
     for (const code of found) {
       const upper = code.toUpperCase();
