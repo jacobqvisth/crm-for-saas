@@ -44,6 +44,7 @@ export type DashboardSectionKey =
   | "workshops"
   | "diagnostics"
   | "diagnostic-search-terms"
+  | "dtc-codes"
   | "operations"
   | "lifecycle"
   | "revenue"
@@ -224,6 +225,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Diagnostic Search Terms",
     description:
       "What technicians actually type into the diagnosis description field: top complaints, systems, vocabulary, repeated wordings, and how much detail they give the AI.",
+  },
+  {
+    key: "dtc-codes",
+    label: "DTC Codes",
+    glyph: "DT",
+    href: "/dashboard/dtc-codes",
+    title: "DTC Codes",
+    description:
+      "Which fault codes workshops bring to the AI: top codes, the combinations that arrive together, what is actually breaking, failure modes, per-make patterns, and how much detail the codes carry.",
   },
   {
     key: "operations",
