@@ -29,6 +29,16 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "workshops",
 ]);
 
+// Sections that deliberately ignore the time-range pills and always read all
+// synced history. Keyword/text analysis over a 30-day slice is not meaningful,
+// and asking getDashboardData() for "all_time" is prohibitively expensive: it
+// pages every row of dashboard_metric_snapshots (161k rows / 87 MB as of
+// 2026-08-04) and times the function out. These pages therefore take the cheap
+// default range for the shell chrome and scope their own reads themselves.
+const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
+  DashboardSectionKey
+>(["diagnostic-search-terms"]);
+
 type DashboardShellProps = {
   data: DashboardData;
   section: DashboardSectionKey;
@@ -88,6 +98,7 @@ export async function DashboardShell({
         }))}
         countryOptions={countryOptions}
         supportsCountry={COUNTRY_FILTER_SECTIONS.has(section)}
+        supportsTimeRange={!FIXED_ALL_HISTORY_SECTIONS.has(section)}
       />
 
       {data.setupMode ? (

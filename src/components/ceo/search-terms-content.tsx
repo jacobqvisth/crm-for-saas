@@ -26,12 +26,17 @@ function LabelInfo({ label, info }: { label: string; info: string }) {
   );
 }
 
-/** Deep-link into the diagnostics drilldown, pre-filtered to this text. */
-function diagnosticsSearchHref(term: string, rangeKey: string) {
+/**
+ * Deep-link into the diagnostics drilldown, pre-filtered to this text.
+ *
+ * Deliberately carries no ?range=: this page analyses all history, but the
+ * diagnostics page must not be handed range=all_time — that makes it ask
+ * getDashboardData for every metric snapshot ever synced and time out. Links
+ * therefore open the drilldown in its own default window, which can show fewer
+ * rows than the count next to the term.
+ */
+function diagnosticsSearchHref(term: string) {
   const params = new URLSearchParams({ q: term });
-  if (rangeKey && rangeKey !== "last_30_days") {
-    params.set("range", rangeKey);
-  }
   return `/dashboard/diagnostics?${params.toString()}`;
 }
 
@@ -132,11 +137,9 @@ function BucketBarList({
 
 function TermTable({
   rows,
-  rangeKey,
   termHeading,
 }: {
   rows: TermFrequency[];
-  rangeKey: string;
   termHeading: string;
 }) {
   if (rows.length === 0) {
@@ -164,7 +167,7 @@ function TermTable({
               <td>
                 <Link
                   className="button button-ghost"
-                  href={diagnosticsSearchHref(row.term, rangeKey)}
+                  href={diagnosticsSearchHref(row.term)}
                 >
                   Open
                 </Link>
@@ -179,11 +182,9 @@ function TermTable({
 
 export function SearchTermsContent({
   analysis,
-  rangeKey,
   showInternal,
 }: {
   analysis: SearchTermsAnalysis;
-  rangeKey: string;
   showInternal: boolean;
 }) {
   const { totals } = analysis;
@@ -212,6 +213,13 @@ export function SearchTermsContent({
               <code>symptoms</code> and <code>user_actions</code> arrays exist in
               the schema and in the app UI but arrive empty on every row, so
               there is no second source to cross-check against.
+            </p>
+            <p className="hero-text" style={{ marginTop: "0.5rem" }}>
+              This page has no time-range filter — it always reads all synced
+              history, because keyword analysis over a 30-day slice is not
+              meaningful. The country filter does apply. “Open” links jump to the
+              diagnostics drilldown, which uses its own default window, so it can
+              list fewer rows than the count shown here.
             </p>
             <p
               className="hero-text"
@@ -432,7 +440,6 @@ export function SearchTermsContent({
                         className="button button-ghost"
                         href={diagnosticsSearchHref(
                           truncate(row.text, 60).replace("…", ""),
-                          rangeKey,
                         )}
                       >
                         Open
@@ -459,7 +466,6 @@ export function SearchTermsContent({
           </div>
           <TermTable
             rows={analysis.unigrams}
-            rangeKey={rangeKey}
             termHeading="Word"
           />
         </section>
@@ -476,7 +482,6 @@ export function SearchTermsContent({
           </div>
           <TermTable
             rows={analysis.bigrams}
-            rangeKey={rangeKey}
             termHeading="Phrase"
           />
         </section>
@@ -495,7 +500,6 @@ export function SearchTermsContent({
           </div>
           <TermTable
             rows={analysis.quotedCodes}
-            rangeKey={rangeKey}
             termHeading="Code"
           />
         </section>
