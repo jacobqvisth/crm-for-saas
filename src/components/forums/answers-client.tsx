@@ -40,6 +40,9 @@ import {
 import { OpenInProfile } from "./open-in-profile";
 import { ForumsTabs } from "./forums-tabs";
 
+// Stable draft key for the paste-a-URL panel (post cards key off their post id).
+const PASTE_KEY = "paste";
+
 const STATUS_FILTERS = ["all", "draft", "posted", "archived"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
@@ -95,6 +98,8 @@ export function AnswersClient() {
 
   // Which source is currently being drafted (keyed by a stable id).
   const [draftingKey, setDraftingKey] = useState<string | null>(null);
+  // The source whose draft most recently landed, so it can show a done state.
+  const [draftedKey, setDraftedKey] = useState<string | null>(null);
   // Newest drafted reply — briefly highlighted so the user sees where it landed.
   const [newReplyId, setNewReplyId] = useState<string | null>(null);
   const draftedRef = useRef<HTMLElement>(null);
@@ -255,6 +260,9 @@ export function AnswersClient() {
       setReplies((prev) => [reply, ...prev]);
       setStatusFilter("all");
       setError(null);
+      // Lets the source that asked for this draft show a "done" state — the
+      // paste panel uses it to offer Clear instead of keeping a stale post.
+      setDraftedKey(key);
       toast.success("Reply drafted — added below", { id: toastId });
       setNewReplyId(reply.id);
       // Let the new card render, then bring it into view + fade the highlight.
@@ -503,7 +511,12 @@ export function AnswersClient() {
       </section>
 
       {/* Paste a URL */}
-      <PastePanel onRequestDraft={requestDraft} draftingKey={draftingKey} />
+      <PastePanel
+        onRequestDraft={requestDraft}
+        draftingKey={draftingKey}
+        drafted={draftedKey === PASTE_KEY}
+        onDismissDrafted={() => setDraftedKey(null)}
+      />
 
       {/* Drafted replies board */}
       <section className="mt-10 scroll-mt-4" ref={draftedRef}>
@@ -626,11 +639,17 @@ function StatChip({
 function PastePanel({
   onRequestDraft,
   draftingKey,
+  drafted,
+  onDismissDrafted,
 }: {
   // Opens the shared per-post draft-options modal; the generate call fires from
   // the parent once the style is confirmed.
   onRequestDraft: (source: ReplySource, key: string) => void;
   draftingKey: string | null;
+  // Whether this panel's last draft landed. Owned by the parent because the
+  // generate call happens there, after the options modal is confirmed.
+  drafted: boolean;
+  onDismissDrafted: () => void;
 }) {
   const [url, setUrl] = useState("");
   const [fetching, setFetching] = useState(false);
@@ -640,10 +659,23 @@ function PastePanel({
   const [body, setBody] = useState("");
   const [subreddit, setSubreddit] = useState("");
 
+  // Wipe the panel back to empty. Without this a pasted post sticks around
+  // after drafting, and the next paste looks like it edited the last one.
+  function clearAll() {
+    setUrl("");
+    setTitle("");
+    setBody("");
+    setSubreddit("");
+    setManual(false);
+    setFetchError(null);
+    onDismissDrafted();
+  }
+
   async function loadUrl() {
     if (!url.trim()) return;
     setFetching(true);
     setFetchError(null);
+    onDismissDrafted();
     try {
       const res = await fetch("/api/forums/replies/fetch", {
         method: "POST",
@@ -674,14 +706,29 @@ function PastePanel({
     }
   }
 
-  const key = "paste";
+  const key = PASTE_KEY;
   const canDraft = title.trim().length > 0;
+  const hasContent =
+    url.trim().length > 0 ||
+    title.trim().length > 0 ||
+    body.trim().length > 0 ||
+    subreddit.trim().length > 0;
 
   return (
     <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <Link2 className="h-4 w-4 text-orange-600" /> Or paste a Reddit post
-      </h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <Link2 className="h-4 w-4 text-orange-600" /> Or paste a Reddit post
+        </h2>
+        {hasContent && (
+          <button
+            onClick={clearAll}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Clear
+          </button>
+        )}
+      </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
           value={url}
@@ -722,13 +769,19 @@ function PastePanel({
         <div className="mt-3 space-y-2">
           <input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              onDismissDrafted();
+            }}
             placeholder="Post title / the question"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-orange-400"
           />
           <textarea
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => {
+              setBody(e.target.value);
+              onDismissDrafted();
+            }}
             placeholder="Post body (optional but helps a lot)"
             rows={4}
             className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-orange-400"
@@ -760,9 +813,28 @@ function PastePanel({
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              Draft reply
+              {drafted ? "Draft another reply" : "Draft reply"}
+            </button>
+            <button
+              onClick={clearAll}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <Trash2 className="h-4 w-4" /> Clear
             </button>
           </div>
+
+          {drafted && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+              <Check className="h-3.5 w-3.5" /> Reply drafted and added below.
+              <button
+                onClick={clearAll}
+                className="font-semibold underline underline-offset-2 hover:no-underline"
+              >
+                Clear this post
+              </button>
+              to paste another.
+            </div>
+          )}
         </div>
       )}
     </section>
