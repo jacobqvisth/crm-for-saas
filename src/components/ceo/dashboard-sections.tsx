@@ -43,6 +43,7 @@ export type DashboardSectionKey =
   | "product"
   | "workshops"
   | "diagnostics"
+  | "diagnostic-search-terms"
   | "operations"
   | "lifecycle"
   | "revenue"
@@ -214,6 +215,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Diagnostics",
     description:
       "Per-diagnostic drilldown. Username, workshop, car, DTCs, symptoms, description, and the full ranked list of AI causes for every session in the selected window.",
+  },
+  {
+    key: "diagnostic-search-terms",
+    label: "Search Terms",
+    glyph: "ST",
+    href: "/dashboard/diagnostic-search-terms",
+    title: "Diagnostic Search Terms",
+    description:
+      "What technicians actually type into the diagnosis description field: top complaints, systems, vocabulary, repeated wordings, and how much detail they give the AI.",
   },
   {
     key: "operations",
