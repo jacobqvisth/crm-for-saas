@@ -5,6 +5,9 @@ import type {
   DtcCodeRow,
   DtcGroupRow,
 } from "@/lib/ceo/dtc/analyse";
+// Read the domain list rather than hard-coding it in the copy: bitknife.se was
+// added in PR #585 and a hard-coded list would already have been out of date.
+import { INTERNAL_TEST_EMAIL_DOMAINS } from "@/lib/ceo/internal-test/auto-flag";
 import { InfoHint } from "./source-info";
 
 /**
@@ -233,10 +236,16 @@ export function DtcCodesContent({
               </code>
               , synced hourly from the core-app S3 export. Internal accounts are
               excluded: anyone on an internal email domain (
-              <code>@wrenchlane.com</code>, <code>@codeoc.ai</code>) is flagged on{" "}
-              <code>dashboard_users.is_internal_test</code> and dropped before any
-              number on this page is computed, along with workshops flagged the
-              same way.
+              {INTERNAL_TEST_EMAIL_DOMAINS.map((domain, index) => (
+                <span key={domain}>
+                  {index > 0 ? ", " : ""}
+                  <code>@{domain}</code>
+                </span>
+              ))}
+              ) is flagged on <code>dashboard_users.is_internal_test</code> and
+              dropped before any number on this page is computed, along with
+              workshops flagged the same way and any address matching a pattern
+              in dashboard settings.
               {showInternal ? (
                 <>
                   {" "}
