@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
           .select("created_at, lead_status")
           .eq("workspace_id", workspaceId)
           .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
           .range(from, to),
     ),
     // Active sequences
@@ -112,6 +113,7 @@ export async function GET(request: NextRequest) {
         .gte("sent_at", startISO)
         .lte("sent_at", endISO)
         .order("sent_at", { ascending: true })
+        .order("id", { ascending: true })
         .range(from, to),
     ),
     // Emails sent in prev period
@@ -132,6 +134,7 @@ export async function GET(request: NextRequest) {
         .gte("created_at", startISO)
         .lte("created_at", endISO)
         .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
         .range(from, to),
     ),
     // Email events in prev period — paginated.
@@ -142,6 +145,7 @@ export async function GET(request: NextRequest) {
         .gte("created_at", prevStartISO)
         .lt("created_at", startISO)
         .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
         .range(from, to),
     ),
     // Activities
@@ -167,6 +171,7 @@ export async function GET(request: NextRequest) {
         .select("id, sequence_id, status, enrolled_at, completed_at")
         .eq("workspace_id", workspaceId)
         .order("enrolled_at", { ascending: true })
+        .order("id", { ascending: true })
         .range(from, to),
     ),
     // Unsubscribes in period

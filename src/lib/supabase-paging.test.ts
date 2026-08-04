@@ -142,3 +142,27 @@ describe("chunkedIn", () => {
     expect(data).toEqual([{ id: "a" }]);
   });
 });
+
+describe("pageAll ceiling", () => {
+  it("warns on the way to the truncation ceiling instead of silently dropping rows", async () => {
+    // dashboard_metric_snapshots was 161k rows and growing ~1,300/day when the
+    // ceiling was 200 pages, so this guard was about a month from silently
+    // wronging every all-time dashboard number.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let served = 0;
+    const factory = async ({ from }: { from: number; to: number }) => {
+      served += 1;
+      return {
+        data: Array.from({ length: 1000 }, (_, i) => ({ i: from + i })),
+        error: null,
+      };
+    };
+    const result = await pageAll(factory, 1000);
+    // Reads to the raised ceiling rather than stopping at the old 200.
+    expect(served).toBe(600);
+    expect(result.data).toHaveLength(600_000);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("silently dropped");
+    warn.mockRestore();
+  });
+});

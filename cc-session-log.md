@@ -6028,3 +6028,85 @@ API version (`v21`), whether `login-customer-id` is required, GAQL field names o
 - No dashboard surface yet for the new metrics. `/dashboard/organic-search` shows
   organic only; keyword volume beside our visibility is the obvious next page.
 - Search Console 16-month backfill still not run, still expiring monthly.
+
+---
+
+## 2026-08-04 — Diagnostic Search Terms page, and a paging bug it uncovered
+
+Branches: `worktree-diagnostic-search-terms`, `worktree-dashboard-nav-groups`,
+`worktree-internal-domain-bitknife`, `worktree-parallel-paging`.
+PRs #583, #584, #585, #586. All merged and deployed.
+
+### PR #583 — new page `/dashboard/diagnostic-search-terms` (nav "Search Terms")
+Analyses the free-text `description` field technicians fill in when starting a
+diagnosis: top complaints, vehicle systems, phrasing signals (lists repairs
+already tried, quotes a code, gives operating conditions, asks a question),
+length bands, repeated verbatims, top words/phrases, quoted fault codes,
+language mix, monthly coverage, and an explicit "no category recognised" panel.
+
+`metadata->>'description'` is the ONLY free-text field the core_app export
+fills — `symptoms` and `user_actions` are empty on every row (`user_actions`
+used to be 12%, now 0%). Analysis lives in `src/lib/ceo/search-terms.ts` (pure,
+no I/O) over the existing diagnostics drilldown loader: no new queries, tables
+or migrations.
+
+### PR #584 — the page timed out on first deploy
+`Vercel Runtime Timeout Error: Task timed out after 60 seconds`, surfaced as
+"The dashboard could not load this view. A live data read failed." The message
+says data read; the cause was duration. Defaulting the page to `all_time` made
+`getDashboardData("all_time")` drop the lower bound on its snapshot reads and
+page every row of `dashboard_metric_snapshots`. Fixed by giving that call the
+cheap default range (it only feeds shell chrome) and hiding the range pills for
+this section via `FIXED_ALL_HISTORY_SECTIONS` + `supportsTimeRange`.
+
+Lesson: a `force-dynamic` page is never executed by `next build`, and an
+unauthenticated probe only proves the login redirect. Verify by rendering the
+component to HTML against live prod rows.
+
+### PR #585 — internal-user exclusion + 5 matcher gaps
+The page already filtered internal users. Audit against `metadata->>'email_domain'`
+confirmed all 16 `@wrenchlane.com` and all 5 `@codeoc.ai` users flagged; the gap
+was `bitknife.se`, covered only by the exact-email pattern, so a second account
+leaked. Added `bitknife.se` to `INTERNAL_TEST_EMAIL_DOMAINS` (also excludes it
+from call lists) and flagged two accounts in prod. Three accounts whose workshop
+is literally named "test" were deliberately KEPT — gmail/aivinn.eu addresses
+writing genuine multilingual complaints are prospects, not staff.
+
+Filter on vs off: 1,856 vs 1,987 described entries, misfire 181 vs 244 —
+internal testing had inflated the biggest driveability category by 35%.
+
+Five matcher gaps from one entry that matched nothing: Volvo says
+"sköldpaddsläge" (turtle mode), not limp; the DTC regex `[PBUC]\d{4}` could not
+match `P00BC00`/`P042F`/`B1802F1` (fixing it took quoted-code detection 109 →
+182, i.e. it had been missing ~40%); `INTERMITENT` with one t; bare `BYT`
+(prior-work 177 → 204); `permanent`/`kvar` for a code that will not clear.
+
+### PR #586 — paging returned duplicated and missing rows
+Investigating the timeout found something worse. `dashboard_metric_snapshots` is
+161,042 rows (87% of it four per-keyword `organic_search_*` metrics). Paging it
+ordered only by the NON-UNIQUE `period_start` returned 161,042 rows but just
+**132,579 distinct ids — 28,463 duplicated and 28,463 silently missed.** Postgres
+reshuffles ties per request, so page boundaries overlap and skip. Every all-time
+dashboard total was wrong by ~18% in both directions.
+
+Fixed by appending a unique tiebreaker at all 14 `pageAll` sites that paged on a
+timestamp (audited programmatically; 0 remain). Verified on prod: 161,042 rows =
+161,042 distinct ids, 0 duplicates, 0 missing, identical across two runs.
+
+Also raised `MAX_PAGES` 200 → 600 with a warning at 200. At 161k rows growing
+~1,300/day the old ceiling was ~1 month from silently truncating.
+
+**Parallel paging was tried and rejected on measurement:** 39s sequential vs 44s
+with 8 lanes on the real 161k-row read. The constraint is response volume
+(~87 MB), not round-trip latency, so it bought nothing and was not shipped.
+
+### Still open
+- **Pre-aggregate the `organic_search_*` metrics.** They are 87% of
+  `dashboard_metric_snapshots` and the reason an all-time read costs 22-39s.
+  Excluding them drops the read to 21,026 rows in 3.5s. The shared
+  `calculateDashboardData` uses them for both date-series sums and top-N
+  dimension breakdowns, so this needs a SQL-side rollup, not a filter.
+- The "All time" pill on the other dashboard pages still runs that heavy read.
+  It now returns *correct* numbers, but can still be slow.
+- Search Terms: ~32% of described entries still match no complaint category
+  (506 with real content). The on-page gap panel is where the next batch comes from.

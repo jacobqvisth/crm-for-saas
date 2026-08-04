@@ -257,6 +257,7 @@ async function getNewUsersDataUncached(
       .eq("metric_key", "app_store_installations")
       .lt("period_start", endIso)
       .order("period_start", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, to);
     if (startIso) q = q.gte("period_start", startIso);
     return q;
@@ -270,6 +271,7 @@ async function getNewUsersDataUncached(
       .eq("metric_key", "android_first_opens")
       .lt("period_start", endIso)
       .order("period_start", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, to);
     if (startIso) q = q.gte("period_start", startIso);
     return q;
@@ -283,6 +285,7 @@ async function getNewUsersDataUncached(
       .eq("metric_key", "app_first_visits")
       .lt("period_start", endIso)
       .order("period_start", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, to);
     if (startIso) q = q.gte("period_start", startIso);
     return q;

@@ -226,6 +226,7 @@ async function buildTopCars(
       )
       .lt("created_at", endIso)
       .order("created_at", { ascending: false })
+      .order("diagnostic_id", { ascending: true })
       .range(from, to);
     if (startIso) q = q.gte("created_at", startIso);
     return q;
