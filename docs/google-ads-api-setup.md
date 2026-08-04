@@ -23,13 +23,72 @@ Verified in Vercel production on 2026-08-04:
 No OAuth re-consent is needed. The refresh token's granted scopes are
 `adwords`, `analytics.readonly`, `firebase.readonly`, `webmasters.readonly`.
 
-## Getting the token
+## Two auth paths, both already supported
 
-The API Center only exists on a Google Ads **manager account (MCC)**. A plain
-advertising account has no API Center, so if `GOOGLE_ADS_CUSTOMER_ID` points at a
-standalone account, create a manager account first and link the existing account
-to it. The manager account must be created with an email not already tied to a
-Google Ads account.
+`createGoogleAuth()` in `src/lib/ceo/sync/google-auth.ts` accepts either
+credential, so this is a configuration choice and needs no code change:
+
+| Path | Env var | Notes |
+|---|---|---|
+| **OAuth** (current, recommended) | `GOOGLE_OAUTH_CLIENT_ID` + `_SECRET` + `_REFRESH_TOKEN` | Already set, already carries `adwords`. Zero extra setup. |
+| **Service account** | `GOOGLE_SERVICE_ACCOUNT_JSON` | Survives an employee leaving. Needs a downloaded key, and the SA email added as a user inside the Google Ads account. |
+
+The [Quick start](https://developers.google.com/google-ads/api/docs/get-started/make-first-call)
+walks the service-account path, which makes it look mandatory. It is not: the
+[service accounts page](https://developers.google.com/google-ads/api/docs/oauth/service-accounts)
+states they are one of several approaches. We use OAuth because it already works
+and avoids storing a second long-lived secret. Note also that GCP org policies can
+block service-account key creation outright.
+
+Current Google docs describe the service-account setup as "add the SA email as a
+user in your Google Ads account", with no Workspace domain-wide delegation or
+impersonation subject. Older material and forum threads describe a DWD
+requirement; if a service account ever errors with `NOT_ADS_USER`, the cause is
+the SA not being added as an Ads user.
+
+## Getting the token: the manager-account gate
+
+**A developer token needs no credential at all.** Neither a service account, an
+OAuth client, a JSON key, nor a linked Cloud project is required to obtain one.
+The order is token first, credentials after. Both the developer-token page and the
+Google Ads Help article confirm this.
+
+The one hard prerequisite is a Google Ads **manager account (MCC)**. Per Google
+Ads Help: "The API Center, where you can generate a developer token, is only
+available within Google Ads Manager Accounts. If you have an individual admin
+account, you must link it to an MCC account to obtain a developer token."
+
+**Verified 2026-08-04:** account `766-795-4223` (WrenchLane), which is what
+`GOOGLE_ADS_CUSTOMER_ID` points at, is a **standalone account**. Visiting
+`ads.google.com/aw/apicenter` while signed in as `jacob@wrenchlane.com` returns:
+
+> The API Centre is only available to manager accounts.
+
+So an MCC has to be created before any token exists. Quick test for whether one
+exists: open `ads.google.com/aw/apicenter`. If it loads, there is a manager
+account. If it shows the message above, there is not.
+
+### Creating the MCC
+
+1. `ads.google.com/home/tools/manager-accounts` → Create a manager account.
+2. Sign up with an email **not already associated with any Google Ads account**.
+   `jacob@wrenchlane.com` is already on 766-795-4223, so it cannot be used. Create
+   a **new Workspace user** such as `ads-api@wrenchlane.com`. An *alias* of an
+   existing account will not do: it resolves to the same Google account.
+3. In the manager account: Accounts → `+` → Link existing account → enter
+   `766-795-4223` → approve the request from the WrenchLane account.
+4. Linking is non-destructive. Campaigns, budgets and billing stay exactly as they
+   are; the manager account only gains access.
+5. API Center then appears **in the manager account**. Apply there.
+
+Once linked, the two customer IDs are different things:
+
+```
+GOOGLE_ADS_CUSTOMER_ID       = 7667954223   # the ads account being queried
+GOOGLE_ADS_LOGIN_CUSTOMER_ID = <MCC id>     # the manager account holding the token
+```
+
+### Applying, once the MCC exists
 
 1. Go to `ads.google.com/aw/apicenter`, signed into the **manager** account.
 2. Set the API contact email to a real, monitored address. The application cannot
