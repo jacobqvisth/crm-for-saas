@@ -58,6 +58,44 @@ test.describe('DTC Codes dashboard page', () => {
     ).toBeVisible();
   });
 
+  test('pair Open opens the drilldown filtered to both codes', async ({ page }) => {
+    await page.goto('/dashboard/dtc-codes');
+    await page.waitForLoadState('networkidle');
+
+    const pairs = page
+      .locator('section.panel')
+      .filter({
+        has: page.getByRole('heading', { name: /Codes that arrive together/ }),
+      });
+    const open = pairs.getByRole('link', { name: 'Open' }).first();
+    if (!(await open.isVisible({ timeout: 5000 }).catch(() => false))) {
+      return;
+    }
+
+    await open.click();
+    await page.waitForURL('**/dashboard/diagnostics**', { timeout: 20_000 });
+
+    // A pair must arrive as the AND-ing `codes=` filter, not as free-text `q`,
+    // which can only substring-match one of the two codes.
+    expect(page.url()).toContain('codes=');
+    expect(page.url()).not.toContain('q=');
+    expect(page.url()).not.toContain('range=all_time');
+
+    // The drilldown reads every diagnostics row before it renders, so wait for
+    // its own content rather than reading the body while the shell is still
+    // streaming.
+    await expect(
+      page.getByRole('heading', { name: /had .* together/ }),
+    ).toBeVisible({ timeout: 60_000 });
+
+    const body = await page.textContent('body');
+    expect(body).not.toContain('Application error');
+    expect(body).not.toContain('could not load this view');
+    // A pair counted over all history has to resolve to at least one session.
+    expect(body).toContain('every one of');
+    await expect(page.getByText('No diagnostics in this window')).toHaveCount(0);
+  });
+
   test('top code links into the diagnostics drilldown', async ({ page }) => {
     await page.goto('/dashboard/dtc-codes');
     await page.waitForLoadState('networkidle');

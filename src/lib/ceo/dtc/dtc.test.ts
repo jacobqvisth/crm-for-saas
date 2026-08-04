@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DiagnosticListItem } from "@/lib/ceo/data/diagnostics";
 import { analyseDtcCodes } from "./analyse";
 import { codeName } from "./dictionary";
+import { dtcsMatchAllCodes, parseDtcCodeFilter } from "./match";
 import { baseCodeScope, baseCodeValue, parseDtc, parseDtcList } from "./parse";
 import { classifyFamily, ftbFamily, ftbName, powertrainSubsystem } from "./taxonomy";
 
@@ -245,6 +246,53 @@ describe("dictionary", () => {
   it("has no entry for manufacturer-specific codes", () => {
     expect(codeName("P1525")).toBeNull();
     expect(codeName("B1267")).toBeNull();
+  });
+});
+
+describe("code combination filter", () => {
+  it("parses both the link form and a pasted human form", () => {
+    expect(parseDtcCodeFilter("P0562,U0416")).toEqual(["P0562", "U0416"]);
+    expect(parseDtcCodeFilter("p0562 + u0416")).toEqual(["P0562", "U0416"]);
+  });
+
+  it("collapses the failure type byte and deduplicates", () => {
+    expect(parseDtcCodeFilter("P029900,P0299,P0420")).toEqual([
+      "P0299",
+      "P0420",
+    ]);
+  });
+
+  it("drops unparseable fragments instead of failing the filter", () => {
+    expect(parseDtcCodeFilter("P0562,,   ,U0416")).toEqual(["P0562", "U0416"]);
+    expect(parseDtcCodeFilter("")).toEqual([]);
+  });
+
+  it("caps how many codes one filter can require", () => {
+    const many = ["P0100", "P0101", "P0102", "P0103", "P0104", "P0105", "P0106", "P0107", "P0108", "P0109"];
+    expect(parseDtcCodeFilter(many.join(",")).length).toBe(8);
+  });
+
+  it("requires every code, not any of them", () => {
+    const required = ["P0562", "U0416"];
+    expect(dtcsMatchAllCodes(["P0562", "U0416"], required)).toBe(true);
+    expect(dtcsMatchAllCodes(["U0416", "P0420", "P0562"], required)).toBe(true);
+    expect(dtcsMatchAllCodes(["P0562"], required)).toBe(false);
+    expect(dtcsMatchAllCodes(["U0416"], required)).toBe(false);
+    expect(dtcsMatchAllCodes([], required)).toBe(false);
+  });
+
+  it("matches sessions that stored the code with a failure type byte", () => {
+    expect(dtcsMatchAllCodes(["P029900", "u0416"], ["P0299", "U0416"])).toBe(
+      true,
+    );
+    expect(dtcsMatchAllCodes(["P0299-00", "U0416"], ["P0299", "U0416"])).toBe(
+      true,
+    );
+  });
+
+  it("matches everything when no codes are required", () => {
+    expect(dtcsMatchAllCodes([], [])).toBe(true);
+    expect(dtcsMatchAllCodes(["P0562"], [])).toBe(true);
   });
 });
 

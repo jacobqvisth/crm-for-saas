@@ -112,6 +112,7 @@ export function DiagnosticsContent({
   items,
   selectedDiagnosticId,
   query,
+  codes = [],
   status,
   showInternal,
   rangeKey,
@@ -119,12 +120,19 @@ export function DiagnosticsContent({
   items: DiagnosticListItem[];
   selectedDiagnosticId: string | null;
   query: string;
+  /**
+   * Active `codes=` combination filter, already normalized to base codes. Every
+   * one of them is present in each listed session — this is what the DTC Codes
+   * page's pair and code-set links open.
+   */
+  codes?: string[];
   status: string;
   showInternal: boolean;
   rangeKey: string;
 }) {
   const currentParams: Record<string, string> = {};
   if (query) currentParams.q = query;
+  if (codes.length > 0) currentParams.codes = codes.join(",");
   if (status && status !== "all") currentParams.status = status;
   if (showInternal) currentParams.showInternal = "1";
   if (rangeKey && rangeKey !== "last_30_days") currentParams.range = rangeKey;
@@ -142,7 +150,11 @@ export function DiagnosticsContent({
         <div className="hero-grid">
           <div className="hero-copy">
             <p className="eyebrow">Diagnostics Drilldown</p>
-            <h2>Every diagnostic session that ran in the selected window.</h2>
+            <h2>
+              {codes.length > 0
+                ? `Every diagnostic session that had ${codes.join(" + ")} together.`
+                : "Every diagnostic session that ran in the selected window."}
+            </h2>
             <p className="hero-text">
               Per-diagnostic view: who ran it, which workshop, the vehicle, the
               DTC fault codes, the description, and the full ranked list of AI
@@ -161,8 +173,14 @@ export function DiagnosticsContent({
           <div className="summary-grid columns-2">
             <div className="summary-card">
               <strong>{formatNumber(items.length)}</strong>
-              <LabelInfo label="Diagnostics in range" />
-              <small>Based on current filters</small>
+              <LabelInfo
+                label={codes.length > 0 ? "Matching diagnostics" : "Diagnostics in range"}
+              />
+              <small>
+                {codes.length > 0
+                  ? "All synced history, current filters"
+                  : "Based on current filters"}
+              </small>
             </div>
             <div className="summary-card">
               <strong>{formatNumber(completed)}</strong>
@@ -189,13 +207,36 @@ export function DiagnosticsContent({
             <p className="eyebrow">Filters</p>
             <HeadingInfo
               label="Search and slice the list"
-              info="Search runs across username, workshop, country, car make/model, DTC code, and description. Status uses the canonical core-app diagnostic status."
+              info="Search runs across username, workshop, country, car make/model, DTC code, and description, and matches any session containing that text. A fault-code combination (the ‘codes’ filter, set by the Open links on the DTC Codes page) is stricter: only sessions that contain every listed code are shown. Status uses the canonical core-app diagnostic status."
             />
           </div>
+          {codes.length > 0 ? (
+            <span className="badge" style={{ fontFamily: "var(--font-mono)" }}>
+              all of {codes.join(" + ")}
+            </span>
+          ) : null}
         </div>
+        {codes.length > 0 ? (
+          <p className="panel-description">
+            Showing only sessions that contain{" "}
+            <strong>every one of {codes.join(" + ")}</strong>, searched across all
+            synced history rather than the selected time range — combinations are
+            rare enough that a 30-day slice usually holds none of them, and this
+            way the row count matches the DTC Codes page. Codes are matched on
+            their base code, so <code>P0299</code> also matches{" "}
+            <code>P029900</code>.{" "}
+            <Link href={buildHref({ codes: null }, currentParams)}>
+              Drop the code combination
+            </Link>{" "}
+            to go back to the selected window.
+          </p>
+        ) : null}
         <form className="filter-form" method="get">
           {rangeKey && rangeKey !== "last_30_days" ? (
             <input type="hidden" name="range" value={rangeKey} />
+          ) : null}
+          {codes.length > 0 ? (
+            <input type="hidden" name="codes" value={codes.join(",")} />
           ) : null}
           <input
             aria-label="Search diagnostics"
@@ -223,7 +264,7 @@ export function DiagnosticsContent({
           <button className="button button-primary" type="submit">
             Apply
           </button>
-          {(query || status !== "all" || showInternal) && (
+          {(query || codes.length > 0 || status !== "all" || showInternal) && (
             <Link
               className="button"
               href={
@@ -273,10 +314,23 @@ export function DiagnosticsContent({
                   <td colSpan={11}>
                     <div className="empty-state">
                       <strong>No diagnostics in this window</strong>
-                      <p>
-                        Try a wider time range, clear filters, or toggle “Show
-                        internal” to include test workshops.
-                      </p>
+                      {codes.length > 0 ? (
+                        <p>
+                          No session in any synced history contained all of{" "}
+                          <code>{codes.join(" + ")}</code> together. Check the
+                          codes, toggle “Show internal” if the sessions belong to
+                          a test workshop, or{" "}
+                          <Link href={buildHref({ codes: null }, currentParams)}>
+                            drop the code combination
+                          </Link>
+                          .
+                        </p>
+                      ) : (
+                        <p>
+                          Try a wider time range, clear filters, or toggle “Show
+                          internal” to include test workshops.
+                        </p>
+                      )}
                     </div>
                   </td>
                 </tr>

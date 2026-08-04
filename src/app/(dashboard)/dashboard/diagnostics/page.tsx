@@ -4,6 +4,7 @@ import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-excl
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getDiagnosticsDrilldownList } from "@/lib/ceo/data/diagnostics";
+import { dtcsMatchAllCodes, parseDtcCodeFilter } from "@/lib/ceo/dtc/match";
 import {
   listInternalTestUsers,
   listInternalTestWorkshops,
@@ -31,6 +32,7 @@ type DiagnosticsPageProps = {
     range?: string | string[];
     country?: string | string[];
     q?: string | string[];
+    codes?: string | string[];
     status?: string | string[];
     showInternal?: string | string[];
     d?: string | string[];
@@ -55,15 +57,30 @@ export default async function DiagnosticsPage({
   const country = normalizeDashboardCountry(params.country);
   const rawQuery = asString(params.q).trim();
   const query = rawQuery.toLowerCase();
+  // `codes=` is the combination filter the DTC Codes page links to: every listed
+  // code must be in the session, which free-text `q` cannot express because the
+  // codes sit in separate entries of the same array.
+  const codeFilter = parseDtcCodeFilter(asString(params.codes));
   const status = asString(params.status) || "all";
   const showInternal = asBool(params.showInternal);
   const selectedDiagnosticId = asString(params.d).trim() || null;
+
+  // A code combination is counted on the DTC Codes page over all synced history,
+  // so the drilldown has to search the same span or a pair listed there opens on
+  // an empty table — only 7 of the 30 currently listed pairs have a session
+  // inside the default 30-day window, and 27 inside 90 days. Widening costs
+  // nothing: getDiagnosticsDrilldownList already reads every row and applies the
+  // range in memory. Deliberately only the *list* widens — getDashboardData keeps
+  // the requested range, because handing it all_time makes it read every metric
+  // snapshot ever synced and time out.
+  const listRange =
+    codeFilter.length > 0 ? resolveDashboardTimeRange("all_time") : resolvedRange;
 
   const [data, diagnostics, internalTestUsers, internalTestWorkshops] =
     await Promise.all([
       getDashboardData(params.range),
       getDiagnosticsDrilldownList({
-        range: resolvedRange,
+        range: listRange,
         includeInternal: showInternal,
       }),
       listInternalTestUsers(),
@@ -77,6 +94,9 @@ export default async function DiagnosticsPage({
     // Each item carries its workshop's country (ISO-2) — rows with no
     // resolvable country are hidden while a country filter is active.
     if (country && (item.country ?? "").trim().toUpperCase() !== country) {
+      return false;
+    }
+    if (!dtcsMatchAllCodes(item.dtcs, codeFilter)) {
       return false;
     }
     if (!query) {
@@ -108,6 +128,7 @@ export default async function DiagnosticsPage({
           items={filtered}
           selectedDiagnosticId={selectedDiagnosticId}
           query={rawQuery}
+          codes={codeFilter}
           status={status}
           showInternal={showInternal}
           rangeKey={rangeKey}

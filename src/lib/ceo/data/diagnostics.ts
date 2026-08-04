@@ -166,7 +166,13 @@ async function fetchDiagnosticTables() {
         .select(
           "diagnostic_id, workshop_id, internal_user_id, status, created_at, completed_at, ai_model, diag_cost, num_causes, has_chat, has_invoice, metadata",
         )
+        // `created_at` is not declared unique, so it needs a primary-key
+        // tiebreaker: paging with .range() over a non-unique sort lets Postgres
+        // order ties differently per request, which makes consecutive pages
+        // overlap and skip rows. No two rows share a timestamp today, so this
+        // changes nothing now and stops a silently-dropped session later.
         .order("created_at", { ascending: false, nullsFirst: false })
+        .order("diagnostic_id", { ascending: true })
         .range(from, to),
     ),
     pageAll<UserRow>(({ from, to }) =>

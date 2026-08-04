@@ -54,6 +54,26 @@ function diagnosticsHref(term: string) {
   return `/dashboard/diagnostics?${new URLSearchParams({ q: term }).toString()}`;
 }
 
+/**
+ * Deep-link into the diagnostics drilldown filtered to sessions that contain
+ * *every* one of these codes.
+ *
+ * Free-text `q` cannot express this: the codes live in separate entries of the
+ * session's `dtcs` array, so no single substring matches both. The drilldown's
+ * `codes=` filter ANDs them instead, comparing on base codes exactly as this
+ * page aggregates.
+ *
+ * Carries no `?range=` for the same reason as the single-code links, and does not
+ * need one: a `codes=` filter makes the drilldown search all synced history, the
+ * same span this page counts over, so the rows it lists match the count here
+ * rather than falling into whatever window the drilldown defaults to.
+ */
+function combinationHref(codes: readonly string[]) {
+  return `/dashboard/diagnostics?${new URLSearchParams({
+    codes: codes.join(","),
+  }).toString()}`;
+}
+
 function CodeLink({ code }: { code: string }) {
   return (
     <Link
@@ -272,9 +292,13 @@ export function DtcCodesContent({
             >
               No time-range filter: the page always reads all synced history,
               because code-frequency analysis over a 30-day slice is too thin to
-              be useful. The country filter does apply. “Open” links jump to the
-              diagnostics drilldown, which uses its own default window and so
-              lists fewer rows than the counts here.{" "}
+              be useful. The country filter does apply. Single-code “Open” links
+              jump to the diagnostics drilldown, which uses its own default window
+              and so lists fewer rows than the counts here. The combination links
+              in the pair and code-set tables are matched over all history like
+              this page, so their row counts line up: they open the drilldown
+              filtered to sessions that contain <em>every</em> code in the
+              combination.{" "}
               {pct(totals.namedShare, 0)} of code instances have a
               description from the {formatNumber(totals.dictionarySize)}-entry
               generic dictionary; the rest are manufacturer-specific codes whose
@@ -466,7 +490,8 @@ export function DtcCodesContent({
                     <td>
                       <Link
                         className="button button-ghost"
-                        href={diagnosticsHref(pair.a)}
+                        href={combinationHref([pair.a, pair.b])}
+                        title={`Sessions containing both ${pair.a} and ${pair.b}`}
                       >
                         Open
                       </Link>
@@ -502,6 +527,7 @@ export function DtcCodesContent({
                   <th>Code set</th>
                   <th>Systems involved</th>
                   <th>Most common make</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -522,6 +548,15 @@ export function DtcCodesContent({
                       {set.familyLabels.join(" · ")}
                     </td>
                     <td>{set.topMake ?? "—"}</td>
+                    <td>
+                      <Link
+                        className="button button-ghost"
+                        href={combinationHref(set.codes)}
+                        title={`Sessions containing all of ${set.codes.join(" + ")}`}
+                      >
+                        Open
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
