@@ -69,6 +69,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      articles: {
+        Row: {
+          body: string | null
+          claims: Json
+          created_at: string
+          created_by: string | null
+          format: string
+          hashtags: string[]
+          hooks: Json
+          id: string
+          impact: Json
+          language: string
+          model: string | null
+          options: Json
+          published_at: string | null
+          published_url: string | null
+          seo: Json
+          source_kind: string
+          source_ref: string | null
+          source_snapshot: Json
+          status: string
+          title: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body?: string | null
+          claims?: Json
+          created_at?: string
+          created_by?: string | null
+          format: string
+          hashtags?: string[]
+          hooks?: Json
+          id?: string
+          impact?: Json
+          language?: string
+          model?: string | null
+          options?: Json
+          published_at?: string | null
+          published_url?: string | null
+          seo?: Json
+          source_kind?: string
+          source_ref?: string | null
+          source_snapshot?: Json
+          status?: string
+          title?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string | null
+          claims?: Json
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          hashtags?: string[]
+          hooks?: Json
+          id?: string
+          impact?: Json
+          language?: string
+          model?: string | null
+          options?: Json
+          published_at?: string | null
+          published_url?: string | null
+          seo?: Json
+          source_kind?: string
+          source_ref?: string | null
+          source_snapshot?: Json
+          status?: string
+          title?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "articles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diagnostic_videos: {
         Row: {
           category: string | null

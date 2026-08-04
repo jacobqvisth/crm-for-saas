@@ -6178,3 +6178,79 @@ not from this change.
 - The shared `getDashboardData` all-time read is still heavy. This RPC only
   covers the new page; folding the same rollup into `calculateDashboardData`
   would fix the rest.
+
+## Articles content studio (`/articles`)
+
+**2026-08-04** · branch `feat/articles-page` · PR TBD
+
+New left-sidebar section that turns real Wrenchlane data into copy-paste-ready
+posts and articles. Prompted by a competitor LinkedIn post (AutoTechs AI) that
+works because it is specific: a named vehicle, a real fault code, real
+diagnostic steps. The bet is that the format is 80% data and 20% writing, and
+the data is the part nobody else has.
+
+Plan first, in `docs/plans/articles-page.md`.
+
+### What was built
+- **Three grounding modes.** `diagnostic` (one real case our engine ran),
+  `stats` (an aggregate story over our own numbers), `free_topic` (no data, so
+  no figures allowed).
+- **Stat-story catalogue** (`src/lib/articles/stat-stories.ts`), the answer to
+  "use the diagnostics and DTC stats we now have". 13 curated angles over
+  `analyseDtcCodes()` / `analyseSearchTerms()`, each one slice of the analysis
+  with its metric definitions and sample size attached, rather than dumping ~45
+  collections into a prompt and getting table-narration back. Stories below
+  their `minSample` are shown disabled instead of producing an article off four
+  data points.
+- **Five formats:** LinkedIn post, blog article (Markdown + meta title,
+  description, slug, internal-link ideas), X thread, Facebook post, newsletter.
+  Reddit deliberately stays in `/forums`, which owns per-subreddit tone and
+  account personas.
+- **Nine style axes** in one module shared by the UI labels and the prompt
+  guidance, same arrangement as `src/lib/forums/generation-options.ts`.
+- **Honesty machinery.** Impact figures (hours saved, ticket value, and so on)
+  are a human-filled form, never model-generated, because we hold no per-ticket
+  financial data at all. The model then self-declares provenance for every
+  assertion (`data` / `user` / `knowledge` / `unsourced`) and the draft panel
+  colour-codes them, unsourced first.
+- `articles` table, shared-team RLS like the `forum_*` tables, `source_snapshot`
+  frozen at generation time against S3 export churn.
+- Generator uses `claude-opus-5` with `messages.parse()` + a zod schema, so the
+  hand-rolled fence-stripping JSON parser the forums generator needs is gone.
+
+### Two bugs caught by testing against prod data, both fixed
+1. **Invented odometer reading.** A Ford Kuga case with `mileage = null`
+   produced a post asserting "at 110,000 miles", and the claims list did not
+   flag it. Cause: `describeDiagnostic` silently omitted absent fields, so the
+   case-study shape had a gap and the model filled it plausibly. Fix: absent
+   fields are now named explicitly ("NOT RECORDED for this job: ...; do not
+   supply a plausible substitute"), plus a general no-gap-filling rule in the
+   system prompt. Re-tested twice, no odometer claim survives. The stored
+   mileage also has no recorded unit, so the prompt now forbids writing "miles"
+   or "km" against it.
+2. **Lift on thin support.** `code_pairs` surfaced pairs at 224x lift seen in
+   only 6 diagnostics. Added a caution telling the model to lead with
+   well-supported pairs and quote N alongside any high multiple. It now declines
+   to call the 6-diagnostic pairs a pattern on its own.
+   Also clipped verbatim technician complaints to 160 chars: some run past 900
+   and quoting one whole republishes a shop's case note.
+
+### Checks
+`npx tsc --noEmit` clean · `npm run lint` clean (1 pre-existing warning in
+`call-provider.tsx`) · `npm run build` compiled, 144/144 static pages, all four
+new routes registered · migration applied to prod via psql and verified (22
+columns, RLS on, policy + trigger present) · stat pipeline verified against prod
+(2,423 diagnostics, 1,347 coded, 977 distinct base codes, all 13 stories above
+minSample) · two end-to-end generations reviewed by hand, zero long dashes.
+
+### Still open
+- Jacob has not yet answered the four scope questions in the plan. Built on the
+  recommended defaults: user-supplied impact figures, founder-first-person voice
+  with no hardcoded name, English default with the other seven market languages
+  selectable, blog output portable rather than wired to a destination.
+- **Ideas tab not built.** Auto-surfacing topics from DTC volume, search terms,
+  and Search Console rank 8-20 gaps is the Phase 3 flywheel.
+- No image generation. The competitor post's "P150C: RESOLVED" hero image is
+  doing real work and is a separate build.
+- Stats loading recomputes both analysers per request (~2.3s over 2.4k rows).
+  Fine at this volume; cache it if the page gets used heavily.

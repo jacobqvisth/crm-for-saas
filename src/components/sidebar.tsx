@@ -28,6 +28,7 @@ import {
   Phone,
   Youtube,
   MessagesSquare,
+  Newspaper,
   Globe,
 } from "lucide-react";
 
@@ -51,6 +52,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/roadmap", label: "Roadmap", icon: GanttChart },
   { href: "/videos", label: "Videos", icon: Youtube },
+  { href: "/articles", label: "Articles", icon: Newspaper },
   { href: "/forums", label: "Forums", icon: MessagesSquare },
   { href: "/activation", label: "Activation Plan", icon: Rocket },
   { href: "/templates", label: "Templates", icon: FileText },
