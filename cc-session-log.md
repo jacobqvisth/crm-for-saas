@@ -5868,3 +5868,73 @@ reads as an onboarding regression and would have sent us to the wrong problem.
 - Month picker is only on the review page, not the shared range control.
 - Next suggested step: break July's signups down by campaign x country x
   activation to confirm or refute the Pmax hypothesis before changing spend.
+
+## PR #576 — Organic Search: real counts, "- test" dropped (2026-08-04)
+
+Branch `worktree-fix-organic-search-cards`. Merged, prod deploy `498b18d` READY.
+Triggered by Jacob asking whether `/dashboard/organic-search` was correct before
+renaming the tab.
+
+### The bug
+The **Queries / Pages / Countries** KPI cards rendered
+`data.organic.topQueries.length`, but `buildOrganicBreakdown` ends in
+`.slice(0, 12)`. All three read **12** for any range with 12+ labels, while their
+hints claimed to be counts ("Tracked query rows in range", "Organic footprint").
+
+Verified against prod for the last 30 days (`dimension_key`-aware SQL):
+
+| Card | Showed | Actual |
+|---|---|---|
+| Queries | 12 | 2,485 |
+| Landing pages | 12 | 545 |
+| Countries | 12 | 196 |
+
+3,314 distinct queries exist across the full synced range, so the cards were off
+by two orders of magnitude.
+
+### Changes
+- `countOrganicDimension()` counts distinct labels over the whole range;
+  `queryCount` / `pageCount` / `countryCount` added to the organic summary type.
+- Cards point at those, hints reworded to state what they measure.
+- Display cap extracted to exported `ORGANIC_LIST_LIMIT` (types.ts) so the lists
+  and the copy describing them cannot drift.
+- Top Queries / Top Pages panels now state "top 12 by clicks out of N". This
+  matters: non-brand CTR is 0.19%, so a clicks sort puts brand terms on top and
+  pushes real demand (`tsb`, 2,158 impressions) below the cut.
+- `- test` removed from the Organic Search nav label only. Ten other tabs still
+  carry the suffix (Overview, Pilot Stats, Acquisition, Product, Workshops,
+  Lifecycle, Revenue, Data Health, Playbook, Operations).
+
+### Checked and found correct
+clicks / impressions / CTR / avg-position all compute from `dimension_key='total'`
+with impression-weighted position. Their values do move between renders because
+Search Console revises the most recent days and the connector re-upserts with
+`dataState: "all"`. Expected, not a bug. The screenshot's 304 clicks / 43.2K / 0.7%
+/ 12.7 could not be reproduced from any trailing 30-day window at read time
+(closest: 334 / 43,039 / 0.78% / 13.09), which is consistent with that revision
+behaviour rather than a math error.
+
+### Search-terms findings (no code, from prod Search Console data)
+Property `sc-domain:wrenchlane.com`, 2026-04-18 to 2026-08-03, 103 days:
+104,097 impressions -> 770 clicks (0.74%). Non-brand: 41,048 -> 77 (**0.19%**).
+Brand is 71% of attributed clicks. 72% of impressions are definitional
+terminology (DTC / OBD2 / TSB / components) that Google answers in the SERP.
+Commercial intent (mechanic / workshop / verkstad / garage) totals **89
+impressions, 0 clicks**. Sweden converts at 1.87% vs US 0.22% on a fifth of the
+volume. 61 non-brand queries sit at avg position <=10.5 with 15,654 impressions
+and 19 clicks — a titles/snippets problem, not a rankings one.
+
+### Still open
+- **`google_ads` source is not the Google Ads API** — it reads GA4
+  `advertiserAdCost` dimensions. $11,609 spend / 35,573 clicks / 899,559
+  impressions since 2026-04-17 with zero visibility into the search terms paid
+  for. Needs a developer token for the search-terms report + Keyword Planner.
+  This is the only route to absolute search volumes.
+- **Search Console backfill is time-critical.** 16-month retention, hard delete.
+  Sync starts 2026-04-18, so ~Apr 2025 onward is still retrievable and expiring
+  monthly. The connector already paginates; needs a loop over past windows.
+- `ad_conversions` counts every GA4 key event (171,828 vs 35,573 clicks). Use
+  `ad_signups` (799). Worth deleting from the source.
+- Organic breakdown lists sort by clicks only; an impressions sort (or a toggle)
+  would surface demand rather than brand.
+- No "data through <date>" stamp on the page, so revision drift is invisible.
