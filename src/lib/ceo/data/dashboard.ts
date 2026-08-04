@@ -91,26 +91,36 @@ async function getDashboardDataUncached(
       workshopsResult,
       subscriptionsResult,
     ] = await Promise.all([
-      pageAll<unknown>(({ from, to }) => {
-        let q = supabase
-          .from(TABLES.metricSnapshots)
-          .select("*")
-          .lt("period_start", endIso)
-          .order("period_start", { ascending: false })
-          .range(from, to);
-        if (startIso) q = q.gte("period_start", startIso);
-        return q;
-      }),
-      pageAll<unknown>(({ from, to }) => {
-        let q = supabase
-          .from(TABLES.funnelSnapshots)
-          .select("*")
-          .lt("period_start", endIso)
-          .order("period_start", { ascending: false })
-          .range(from, to);
-        if (startIso) q = q.gte("period_start", startIso);
-        return q;
-      }),
+      // Heaviest read on the dashboard: 161k rows on 2026-08-04, 87% of it the
+      // four per-keyword organic_search_* metrics. The `id` tiebreaker is load
+      // bearing — period_start has thousands of ties, and paging on it alone
+      // returned 28,463 duplicated and 28,463 MISSING rows out of 161,042.
+      pageAll<unknown>(
+        ({ from, to }) => {
+          let q = supabase
+            .from(TABLES.metricSnapshots)
+            .select("*")
+            .lt("period_start", endIso)
+            .order("period_start", { ascending: false })
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (startIso) q = q.gte("period_start", startIso);
+          return q;
+        },
+      ),
+      pageAll<unknown>(
+        ({ from, to }) => {
+          let q = supabase
+            .from(TABLES.funnelSnapshots)
+            .select("*")
+            .lt("period_start", endIso)
+            .order("period_start", { ascending: false })
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (startIso) q = q.gte("period_start", startIso);
+          return q;
+        },
+      ),
       supabase
         .from(TABLES.syncRuns)
         .select("*")

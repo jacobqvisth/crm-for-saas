@@ -38,6 +38,26 @@ type RangeFactory<T> = (slice: {
   to: number;
 }) => PromiseLike<{ data: T[] | null; error: PagedError | null }>;
 
+// Runaway-loop guard, and the ceiling on how much one read can pull.
+//
+// This used to be 200 pages (200k rows), which dashboard_metric_snapshots was
+// about to cross: 161k rows on 2026-08-04, growing ~1,300/day from the four
+// per-keyword organic_search_* metrics. Crossing it would have TRUNCATED
+// silently and quietly wronged every all-time dashboard number, which is the
+// exact failure mode this module exists to prevent. Raised well clear of that,
+// with a warning at the old ceiling so the growth stays visible.
+const MAX_PAGES = 600;
+const WARN_AFTER_PAGES = 200;
+
+/**
+ * Read an entire result set in `.range()` pages.
+ *
+ * Paging is sequential. Fetching pages in parallel was tried and measured on the
+ * real 161k-row dashboard_metric_snapshots read: 39s sequential vs 44s with 8
+ * lanes. The constraint is response volume (~87 MB), not round-trip latency, so
+ * concurrency bought nothing and was dropped rather than shipped as complexity.
+ * Reducing rows or columns is the only thing that makes a read like that faster.
+ */
 export async function pageAll<T>(
   factory: RangeFactory<T>,
   pageSize: number = DEFAULT_PAGE_SIZE,
@@ -45,10 +65,6 @@ export async function pageAll<T>(
   const out: T[] = [];
   let offset = 0;
 
-  // Guard against runaway loops if a caller forgets an order clause and pages
-  // never get shorter. 200 pages × 1000 rows = 200k rows — well past anything
-  // the dashboard layer should be pulling in a single request.
-  const MAX_PAGES = 200;
   for (let i = 0; i < MAX_PAGES; i += 1) {
     const { data, error } = await factory({
       from: offset,
@@ -63,6 +79,13 @@ export async function pageAll<T>(
       return { data: out, error: null };
     }
     offset += pageSize;
+    if (i + 1 === WARN_AFTER_PAGES) {
+      console.warn(
+        `[pageAll] read passed ${WARN_AFTER_PAGES} pages (${offset} rows) — ` +
+          `heading for the ${MAX_PAGES}-page ceiling, past which rows are ` +
+          `silently dropped. Narrow the query or pre-aggregate it.`,
+      );
+    }
   }
   return { data: out, error: null };
 }

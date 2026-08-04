@@ -408,6 +408,7 @@ async function getDiagnosisCountsByBucket(
       .not("created_at", "is", null)
       .lt("created_at", range.end.toISOString())
       .order("created_at", { ascending: true })
+      .order("diagnostic_id", { ascending: true })
       .range(from, to);
 
     if (range.start) {

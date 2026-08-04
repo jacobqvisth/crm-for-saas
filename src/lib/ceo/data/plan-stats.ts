@@ -217,6 +217,7 @@ async function getPlanStatsDataUncached(
         .select("internal_user_id, created_at")
         .lt("created_at", endIso)
         .order("created_at", { ascending: true })
+        .order("diagnostic_id", { ascending: true })
         .range(from, to);
       if (startIso) query = query.gte("created_at", startIso);
       return query;
