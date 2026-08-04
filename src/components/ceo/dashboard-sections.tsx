@@ -11,6 +11,7 @@ import type {
   RecentSyncRun,
   RevenueTrendPoint,
 } from "@/lib/ceo/metrics/types";
+import { ORGANIC_LIST_LIMIT } from "@/lib/ceo/metrics/types";
 import {
   compactNumber,
   formatCurrency,
@@ -180,7 +181,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
   },
   {
     key: "organic-search",
-    label: "Organic Search - test",
+    label: "Organic Search",
     glyph: "OS",
     href: "/dashboard/organic-search",
     title: "Organic Search",
@@ -1432,23 +1433,23 @@ function OrganicSearchSection({ data }: { data: DashboardData }) {
       tone: "neutral",
     },
     {
-      label: "Top queries",
-      value: formatNumber(data.organic.topQueries.length),
-      rawValue: data.organic.topQueries.length,
-      hint: "Tracked query rows in range",
+      label: "Queries",
+      value: formatNumber(data.organic.queryCount),
+      rawValue: data.organic.queryCount,
+      hint: "Distinct queries Google named in range",
       tone: "growth",
     },
     {
-      label: "Top pages",
-      value: formatNumber(data.organic.topPages.length),
-      rawValue: data.organic.topPages.length,
-      hint: "Tracked landing rows in range",
+      label: "Landing pages",
+      value: formatNumber(data.organic.pageCount),
+      rawValue: data.organic.pageCount,
+      hint: "Distinct pages that earned impressions",
       tone: "growth",
     },
     {
       label: "Countries",
-      value: formatNumber(data.organic.countries.length),
-      rawValue: data.organic.countries.length,
+      value: formatNumber(data.organic.countryCount),
+      rawValue: data.organic.countryCount,
       hint: "Organic footprint",
       tone: "neutral",
     },
@@ -1534,6 +1535,7 @@ function OrganicSearchSection({ data }: { data: DashboardData }) {
           <PanelHeader
             eyebrow="Top Queries"
             title="What people search for"
+            description={`Top ${ORGANIC_LIST_LIMIT} by clicks, out of ${formatNumber(data.organic.queryCount)} queries in range. Brand terms dominate clicks, so high-impression terms can sit below the cut.`}
           />
           <BarList
             items={data.organic.topQueries.map((row) => ({
@@ -1553,6 +1555,7 @@ function OrganicSearchSection({ data }: { data: DashboardData }) {
           <PanelHeader
             eyebrow="Top Pages"
             title="Which pages capture organic demand"
+            description={`Top ${ORGANIC_LIST_LIMIT} by clicks, out of ${formatNumber(data.organic.pageCount)} pages in range.`}
           />
           <BarList
             items={data.organic.topPages.map((row) => ({
