@@ -25,6 +25,7 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "toplists",
   "new-users",
   "diagnostics",
+  "diagnostic-search-terms",
   "workshops",
 ]);
 
