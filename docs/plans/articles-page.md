@@ -1,6 +1,18 @@
 # Plan: `/articles`, a Content Studio for Wrenchlane
 
-Status: **proposal, awaiting Jacob's go-ahead**
+Status: **Phase 1 plus the stats source shipped 2026-08-04 in PR #591.** Built on
+the recommended defaults for the section 11 questions, which were never answered:
+user-supplied impact figures, founder-first-person voice with no hardcoded name,
+English default with the other seven market languages selectable, blog output
+portable rather than wired to a destination. The Phase 2 formats (X thread,
+Facebook, newsletter) shipped early since they were cheap once the format-spec
+module existed. The Ideas tab, image generation, and direct posting are still open.
+
+Two things this plan got wrong, both caught by testing against prod data and
+fixed in the same PR: absent facts must be stated explicitly in the prompt or the
+model invents them (a null mileage became "at 110,000 miles", unflagged), and pair
+lift on thin support needs a caution or the model treats a 6-diagnostic
+coincidence as an established pattern. See the `cc-session-log.md` entry.
 Written: 2026-08-04
 Branch: `feat/articles-page` (based on `origin/main` @ `37e59a8`)
 Author: Claude Code session (background job `7a6abbdd`)
