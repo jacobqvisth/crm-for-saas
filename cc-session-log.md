@@ -5938,3 +5938,93 @@ and 19 clicks — a titles/snippets problem, not a rankings one.
 - Organic breakdown lists sort by clicks only; an impressions sort (or a toggle)
   would surface demand rather than brand.
 - No "data through <date>" stamp on the page, so revision drift is invisible.
+
+## PR #578 — Google Ads API connector, pre-built ahead of the token (2026-08-04)
+
+Branch `worktree-google-ads-api-connector`, merged as `b4a8e3e`. Jacob asked for
+this to be pre-built so the token is a one-variable deploy.
+
+### Why a new source key
+`google_ads` reads GA4's `advertiserAdCost` / `advertiserAdClicks` /
+`advertiserAdImpressions` dimensions. It knows spend but carries **no search
+terms and no market keyword volume**. `google_ads_api` talks to the Ads API
+itself. The old source is relabelled "Google Ads (via GA4)".
+
+### Files
+- `src/lib/ceo/sync/google-ads-client.ts` — thin REST client. OAuth via the
+  existing `createGoogleAuth`, plus the `developer-token` and
+  `login-customer-id` headers. `googleAdsSearch()` pages GAQL to completion.
+  `GoogleAdsApiError.isAccessLevelProblem` classifies token refusals.
+- `src/config/ceo/keyword-seeds.ts` — 168 terms in 9 clusters across EN, SV, DE,
+  FR, ES, IT, PL, NL, plus 15 EU geo target IDs (`2000 + ISO 3166-1 numeric`).
+- `src/lib/ceo/sync/sources/google-ads-api.ts` — the connector, three reports.
+- `supabase/migrations/20260804110000_add_google_ads_api_source.sql` — **applied
+  to prod**, seeds the source-account row as `pending`.
+- `supabase/ceo-cron-google-ads-api.sql` — **deliberately not scheduled** yet.
+- `docs/google-ads-api-setup.md` — token steps, access levels, what to watch.
+
+### Access levels (verified against Google's docs, 2026-08-04)
+| Level | Production | Ops/day | Application | Keyword Planner |
+|---|---|---|---|---|
+| Test | no | 15,000 | none | no |
+| Explorer | yes | 2,880 | none, automatic | **no** |
+| Basic | yes | 15,000 | ~5 business days | yes |
+| Standard | yes | unlimited | ~10 business days | yes |
+
+**Explorer reaches production but is refused `KeywordPlanIdeaService` and
+`KeywordPlanService`.** So each report degrades independently: a fresh Explorer
+token makes the search-term reports work while keyword volumes log a warning in
+run metadata. A run where *every* report is refused still throws, so it is not
+mistaken for a clean empty sync.
+
+### Credential state (checked in Vercel prod)
+`GOOGLE_OAUTH_REFRESH_TOKEN` already carries the **`adwords`** scope (granted
+scopes: adwords, analytics.readonly, firebase.readonly, webmasters.readonly), and
+`GOOGLE_ADS_CUSTOMER_ID` is set. Only `GOOGLE_ADS_DEVELOPER_TOKEN` is missing. No
+OAuth re-consent needed. The token requires a **manager account (MCC)**: API
+Center does not exist on a plain advertising account.
+
+### The Performance Max finding
+Campaign mix from `dashboard_metric_snapshots`:
+
+| Campaign | Spend | Clicks | Signups |
+|---|---|---|---|
+| Pmax eng may 2026 | $8,295 | 27,856 | 778 |
+| Demand Gen 2026-06-16 | $1,496 | 6,957 | 21 |
+| us-generic | $1,304 | 273 | 0 |
+| uk-generic | $514 | 492 | 0 |
+| **us-codes+make** | **$0** | 0 | 0 |
+
+71% of spend and 97% of ad-attributed signups are Performance Max, and **Pmax
+does not appear in `search_term_view` at all**. Only
+`campaign_search_term_insight` covers it, at search-*category* granularity, one
+campaign per query. The connector does that, but the consequence is that
+**Keyword Planner is the more valuable unlock for this account** — the terms
+report is structurally dark for most of the budget. An earlier claim in this
+session that the terms report was the highest-value export was corrected on
+finding this.
+
+**Open question for Jacob:** `us-codes+make` exists at $0 spend. Fault codes plus
+makes is exactly where the organic corpus shows demand (`nissan p17f0-00`,
+`dtc p0420 opel`, `p0300 opel`, `p17f0 nissan rogue`). Why is it dark?
+
+### Verification
+28 new unit tests (`google-ads-client.test.ts`, `sources/google-ads-api.test.ts`)
+over micros conversion, month bucketing incl. December rollover and
+same-month stability, dimension-key separation per country, zero-volume
+retention, and error classification. Full unit suite 476 passing / 0 failing (16
+files fail to collect: 14 Playwright specs vitest should not pick up plus 2
+pre-existing, none touched here). tsc clean, lint clean (1 pre-existing warning),
+build compiled.
+
+**The request paths have never run against a live account.** Watch on first run:
+API version (`v21`), whether `login-customer-id` is required, GAQL field names on
+`campaign_search_term_insight`, and whether a 500-keyword batch is accepted.
+
+### Still open
+- Get the developer token, then set `GOOGLE_ADS_DEVELOPER_TOKEN` (+
+  `GOOGLE_ADS_LOGIN_CUSTOMER_ID` if the token sits on an MCC above the account),
+  run the route by hand, read `metadata.warnings`, then schedule the cron.
+- No dashboard surface yet for the new metrics. `/dashboard/organic-search` shows
+  organic only; keyword volume beside our visibility is the obvious next page.
+- Search Console 16-month backfill still not run, still expiring monthly.
