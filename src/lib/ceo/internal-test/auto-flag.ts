@@ -13,6 +13,11 @@ import type { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 export const INTERNAL_TEST_EMAIL_DOMAINS = [
   "wrenchlane.com",
   "codeoc.ai",
+  // Hans's own domain — hans@wrenchlane.com, hans@codeoc.ai and hans@bitknife.se
+  // are the same person. It was previously covered only by the exact-email
+  // pattern hans@bitknife.se, so a second bitknife.se account (hans-hasseeklun)
+  // slipped into the diagnostics data. Domain-level keeps future signups out.
+  "bitknife.se",
 ] as const;
 
 type ServiceClient = NonNullable<ReturnType<typeof createSupabaseServiceClient>>;
