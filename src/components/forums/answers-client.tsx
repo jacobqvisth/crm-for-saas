@@ -27,9 +27,10 @@ import type { RedditAccount } from "@/lib/forums/accounts";
 import {
   DEFAULT_GENERATION_OPTIONS,
   MENTION_LABEL,
+  normalizeOptions,
   type ForumGenerationOptions,
 } from "@/lib/forums/generation-options";
-import { GenerationOptions } from "./generation-options";
+import { DraftOptionsModal } from "./draft-options-modal";
 import { ApiErrorBanner } from "@/components/api-error-banner";
 import {
   describeApiFailure,
@@ -64,8 +65,19 @@ export function AnswersClient() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [refreshingAll, setRefreshingAll] = useState(false);
 
-  // Shared generation options (mention level + style) for all drafting actions.
-  const [options, setOptions] = useState<ForumGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
+  // Draft options are picked per post, in a modal, each time Draft reply is
+  // clicked. This holds the last-used set so the modal opens pre-filled instead
+  // of resetting to the defaults on every post.
+  const [lastOptions, setLastOptions] = useState<ForumGenerationOptions>(
+    DEFAULT_GENERATION_OPTIONS,
+  );
+  // The post waiting on a style choice — set by Draft reply, cleared on
+  // confirm/cancel.
+  const [pending, setPending] = useState<{
+    source: ReplySource;
+    key: string;
+    title: string | null;
+  } | null>(null);
 
   // Discovery state.
   const [subs, setSubs] = useState<Set<string>>(
@@ -206,10 +218,24 @@ export function AnswersClient() {
     }
   }
 
+  // Draft reply asks for the style first: open the modal for this post, and
+  // only fire the generate call once the user confirms.
+  function requestDraft(source: ReplySource, key: string) {
+    setPending({ source, key, title: source.title || null });
+  }
+
+  function confirmDraft(options: ForumGenerationOptions) {
+    if (!pending) return;
+    const { source, key } = pending;
+    setLastOptions(options);
+    setPending(null);
+    void draftReply(source, key, options);
+  }
+
   // Draft a reply from any source; prepend the new reply to the board. The
   // board sits well below the post list, so on success we toast + scroll to it
   // and briefly highlight the new card — otherwise the click looks like a no-op.
-  async function draftReply(source: ReplySource, key: string) {
+  async function draftReply(source: ReplySource, key: string, options: ForumGenerationOptions) {
     setDraftingKey(key);
     const toastId = toast.loading("Drafting a reply…");
     try {
@@ -295,13 +321,8 @@ export function AnswersClient() {
         post it as a comment from one of your team&apos;s Reddit accounts, then mark it posted — pick{" "}
         <span className="font-medium">who posted it</span> and paste the link so we can{" "}
         <span className="font-medium">pull its upvotes and replies</span> later. Keep replies
-        genuinely useful — the mention level controls whether Wrenchlane comes up at all.
-      </div>
-
-      {/* Shared generation options applied to every Draft reply on this page */}
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Draft options</h2>
-        <GenerationOptions value={options} onChange={setOptions} />
+        genuinely useful — every <span className="font-medium">Draft reply</span> asks you for the
+        style first, and the mention level controls whether Wrenchlane comes up at all.
       </div>
 
       <ApiErrorBanner failure={error} onRetry={reload} className="mt-4" />
@@ -447,7 +468,7 @@ export function AnswersClient() {
                   <div className="mt-2">
                     <button
                       onClick={() =>
-                        draftReply(
+                        requestDraft(
                           {
                             url: p.url,
                             subreddit: p.subreddit,
@@ -482,7 +503,7 @@ export function AnswersClient() {
       </section>
 
       {/* Paste a URL */}
-      <PastePanel onDraft={draftReply} draftingKey={draftingKey} />
+      <PastePanel onRequestDraft={requestDraft} draftingKey={draftingKey} />
 
       {/* Drafted replies board */}
       <section className="mt-10 scroll-mt-4" ref={draftedRef}>
@@ -569,6 +590,15 @@ export function AnswersClient() {
           </div>
         )}
       </section>
+
+      {/* Per-post draft options — one modal, opened by whichever Draft reply was clicked */}
+      <DraftOptionsModal
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        onConfirm={confirmDraft}
+        initial={lastOptions}
+        postTitle={pending?.title}
+      />
     </div>
   );
 }
@@ -594,10 +624,12 @@ function StatChip({
 // --- Paste-a-URL panel (always-works path) ---------------------------------
 
 function PastePanel({
-  onDraft,
+  onRequestDraft,
   draftingKey,
 }: {
-  onDraft: (source: ReplySource, key: string) => Promise<void>;
+  // Opens the shared per-post draft-options modal; the generate call fires from
+  // the parent once the style is confirmed.
+  onRequestDraft: (source: ReplySource, key: string) => void;
   draftingKey: string | null;
 }) {
   const [url, setUrl] = useState("");
@@ -710,7 +742,7 @@ function PastePanel({
             />
             <button
               onClick={() =>
-                onDraft(
+                onRequestDraft(
                   {
                     url: url.trim() || null,
                     subreddit: subreddit.trim() || null,
@@ -770,6 +802,9 @@ function ReplyCard({
   const [showPosted, setShowPosted] = useState(false);
   const [postedUrl, setPostedUrl] = useState(reply.posted_url ?? "");
   const [postedByAccountId, setPostedByAccountId] = useState(reply.posted_by_account_id ?? "");
+  // Regenerate re-asks for the style too (the page no longer has a standing
+  // options panel), seeded from what this reply was drafted with.
+  const [showRegen, setShowRegen] = useState(false);
   const [editingTraction, setEditingTraction] = useState(false);
   const [manualScore, setManualScore] = useState(reply.score?.toString() ?? "");
   const [manualComments, setManualComments] = useState(reply.num_comments?.toString() ?? "");
@@ -1045,7 +1080,7 @@ function ReplyCard({
               Edit
             </button>
             <button
-              onClick={() => patch({ regenerate: true })}
+              onClick={() => setShowRegen(true)}
               disabled={busy}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               title="Draft a fresh version from the same post"
@@ -1139,6 +1174,22 @@ function ReplyCard({
           </div>
         </div>
       )}
+
+      {/* Regenerate with a fresh style choice for this one reply */}
+      <DraftOptionsModal
+        open={showRegen}
+        onClose={() => setShowRegen(false)}
+        onConfirm={(options) => {
+          setShowRegen(false);
+          void patch({ regenerate: true, options });
+        }}
+        initial={normalizeOptions({
+          mentionLevel: reply.mention_level,
+          ...(reply.generation_options ?? {}),
+        })}
+        postTitle={reply.source_title}
+        confirmLabel="Regenerate"
+      />
     </div>
   );
 }
