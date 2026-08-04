@@ -8,6 +8,16 @@ import type {
 } from "@/lib/ceo/search-terms";
 import { InfoHint } from "./source-info";
 
+/**
+ * Every `share`/`coverage` value in the analysis module is a 0-1 fraction, but
+ * `formatPercent` expects an already-scaled 0-100 number. Passing the fraction
+ * straight through rendered every percentage on this page as "0%" or "1%", so
+ * the scaling happens here at the render boundary.
+ */
+function pct(fraction: number, digits = 1) {
+  return formatPercent(fraction * 100, digits);
+}
+
 function HeadingInfo({ label, info }: { label: string; info: string }) {
   return (
     <h2 className="heading-with-info">
@@ -95,7 +105,7 @@ function BucketBarList({
           <div className="bar-row-copy">
             <strong>{bucket.label}</strong>
             <span>
-              {formatPercent(bucket.count / (described || 1), 1)} of entries
+              {pct(bucket.count / (described || 1), 1)} of entries
             </span>
           </div>
           <div className="bar-row-main">
@@ -249,7 +259,7 @@ export function SearchTermsContent({
                 info="Diagnostics in the selected range whose description field is non-empty after trimming whitespace."
               />
               <small>
-                {formatPercent(totals.coverage, 0)} of{" "}
+                {pct(totals.coverage, 0)} of{" "}
                 {formatNumber(totals.diagnostics)} diagnostics
               </small>
             </div>
@@ -276,8 +286,8 @@ export function SearchTermsContent({
             <div className="summary-card">
               <strong>
                 {priorWork
-                  ? formatPercent(priorWork.share, 0)
-                  : formatPercent(0, 0)}
+                  ? pct(priorWork.share, 0)
+                  : pct(0, 0)}
               </strong>
               <LabelInfo
                 label="Already tried a repair"
@@ -363,7 +373,7 @@ export function SearchTermsContent({
             <div className="bar-row" key={band.key}>
               <div className="bar-row-copy">
                 <strong>{band.label}</strong>
-                <span>{formatPercent(band.share, 1)}</span>
+                <span>{pct(band.share, 1)}</span>
               </div>
               <div className="bar-row-main">
                 <div className="bar-track">
@@ -531,7 +541,7 @@ export function SearchTermsContent({
                       <code>{row.language}</code>
                     </td>
                     <td>{formatNumber(row.entries)}</td>
-                    <td>{formatPercent(row.share, 1)}</td>
+                    <td>{pct(row.share, 1)}</td>
                     <td>{formatNumber(row.medianChars)}</td>
                   </tr>
                 ))}
@@ -567,7 +577,7 @@ export function SearchTermsContent({
                   <td>{row.month}</td>
                   <td>{formatNumber(row.total)}</td>
                   <td>{formatNumber(row.described)}</td>
-                  <td>{formatPercent(row.coverage, 0)}</td>
+                  <td>{pct(row.coverage, 0)}</td>
                 </tr>
               ))}
             </tbody>
@@ -586,7 +596,7 @@ export function SearchTermsContent({
           </div>
           <span className="badge">
             {formatNumber(analysis.uncategorised.count)} entries ·{" "}
-            {formatPercent(analysis.uncategorised.share, 1)}
+            {pct(analysis.uncategorised.share, 1)}
           </span>
         </div>
         <p className="panel-description">
