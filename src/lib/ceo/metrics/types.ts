@@ -4,6 +4,13 @@ import type {
   DashboardTimeRangeOption,
 } from "@/lib/ceo/time-ranges";
 
+/**
+ * How many rows each organic breakdown list renders. This is a display cap, so
+ * never treat the length of a `top*` array as a count of anything — use the
+ * `queryCount` / `pageCount` / `countryCount` fields instead.
+ */
+export const ORGANIC_LIST_LIMIT = 12;
+
 export type MetricUnit = "count" | "currency" | "percent" | "seconds";
 
 export type MetricSnapshot = {
@@ -329,6 +336,13 @@ export type DashboardData = {
     topPages: OrganicBreakdownRow[];
     devices: OrganicBreakdownRow[];
     countries: OrganicBreakdownRow[];
+    /**
+     * Distinct totals across the whole range. The `top*` arrays above are
+     * capped for display, so their `.length` is not a count of anything.
+     */
+    queryCount: number;
+    pageCount: number;
+    countryCount: number;
   };
   product: {
     activeUsers: number;

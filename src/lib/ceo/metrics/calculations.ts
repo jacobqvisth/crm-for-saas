@@ -43,6 +43,7 @@ import type {
   WarehouseWorkshop,
   WorkshopSnapshot,
 } from "./types";
+import { ORGANIC_LIST_LIMIT } from "./types";
 
 function metricRows(
   snapshots: MetricSnapshot[],
@@ -519,7 +520,35 @@ function buildOrganicBreakdown(
         right.impressions - left.impressions ||
         left.label.localeCompare(right.label),
     )
-    .slice(0, 12);
+    .slice(0, ORGANIC_LIST_LIMIT);
+}
+
+/**
+ * Distinct label count for an organic dimension across the whole range.
+ * `buildOrganicBreakdown` caps its result for display, so counting it would
+ * always return the cap once the range holds more than that many labels.
+ */
+function countOrganicDimension(
+  snapshots: MetricSnapshot[],
+  dimensionName: string,
+) {
+  const labels = new Set<string>();
+
+  for (const row of snapshots) {
+    if (
+      row.source_key !== "search_console" ||
+      !isDimensionOnlyRow(row, dimensionName)
+    ) {
+      continue;
+    }
+
+    const label = asString(row.dimensions[dimensionName]);
+    if (label) {
+      labels.add(label);
+    }
+  }
+
+  return labels.size;
 }
 
 function buildOrganicSummary(snapshots: MetricSnapshot[]) {
@@ -557,6 +586,9 @@ function buildOrganicSummary(snapshots: MetricSnapshot[]) {
     topPages: buildOrganicBreakdown(snapshots, "page"),
     devices: buildOrganicBreakdown(snapshots, "device"),
     countries: buildOrganicBreakdown(snapshots, "country"),
+    queryCount: countOrganicDimension(snapshots, "query"),
+    pageCount: countOrganicDimension(snapshots, "page"),
+    countryCount: countOrganicDimension(snapshots, "country"),
   };
 }
 
