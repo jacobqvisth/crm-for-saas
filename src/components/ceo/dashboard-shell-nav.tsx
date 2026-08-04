@@ -34,6 +34,10 @@ type DashboardShellNavProps = {
   countryOptions: DashboardCountryOption[];
   // Whether the active page's data actually honors the country filter.
   supportsCountry: boolean;
+  // Whether the active page's data honors the time-range pills. Pages that
+  // always read all synced history (text analysis needs every row) show a
+  // static label instead of pills that would imply a filter they ignore.
+  supportsTimeRange?: boolean;
 };
 
 function normalizeCountryParam(value: string | null): string | null {
@@ -51,6 +55,7 @@ export function DashboardShellNav({
   rangePills,
   countryOptions,
   supportsCountry,
+  supportsTimeRange = true,
 }: DashboardShellNavProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -119,23 +124,32 @@ export function DashboardShellNav({
       </nav>
 
       <div className="mb-6 flex flex-wrap items-center gap-1">
-        <div role="tablist" aria-label="Choose time frame" className="flex flex-wrap gap-1">
-          {rangePills.map((option) => (
-            <Link
-              key={option.key}
-              href={pillHref(option.key)}
-              aria-current={option.active ? "page" : undefined}
-              title={option.description}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                option.active
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {option.label}
-            </Link>
-          ))}
-        </div>
+        {supportsTimeRange ? (
+          <div role="tablist" aria-label="Choose time frame" className="flex flex-wrap gap-1">
+            {rangePills.map((option) => (
+              <Link
+                key={option.key}
+                href={pillHref(option.key)}
+                aria-current={option.active ? "page" : undefined}
+                title={option.description}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  option.active
+                    ? "bg-indigo-600 text-white"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {option.label}
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <span
+            className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600"
+            title="This page always reads every synced diagnostic — the text analysis needs the full history to be meaningful, so there is no time-range filter."
+          >
+            All synced history
+          </span>
+        )}
 
         {countryOptions.length > 0 ? (
           <div className="ml-auto flex items-center gap-2">

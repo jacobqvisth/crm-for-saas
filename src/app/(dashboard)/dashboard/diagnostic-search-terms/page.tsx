@@ -4,17 +4,13 @@ import { normalizeDashboardCountry } from "@/lib/ceo/countries";
 import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getDiagnosticsDrilldownList } from "@/lib/ceo/data/diagnostics";
 import { analyseSearchTerms } from "@/lib/ceo/search-terms";
-import {
-  normalizeDashboardTimeRangeKey,
-  resolveDashboardTimeRange,
-} from "@/lib/ceo/time-ranges";
+import { resolveDashboardTimeRange } from "@/lib/ceo/time-ranges";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 type SearchTermsPageProps = {
   searchParams: Promise<{
-    range?: string | string[];
     country?: string | string[];
     showInternal?: string | string[];
   }>;
@@ -33,17 +29,24 @@ export default async function DiagnosticSearchTermsPage({
   searchParams,
 }: SearchTermsPageProps) {
   const params = await searchParams;
-  // Text analysis is only meaningful with volume, so this page defaults to
-  // all-time rather than the dashboard-wide last-30-days.
-  const rangeKey = normalizeDashboardTimeRangeKey(params.range ?? "all_time");
-  const resolvedRange = resolveDashboardTimeRange(rangeKey);
   const country = normalizeDashboardCountry(params.country);
   const showInternal = asBool(params.showInternal);
 
+  // This page has no time-range filter: keyword analysis over a 30-day slice is
+  // not meaningful, so the diagnostics read is always all-history. That read is
+  // cheap — ~2.4k rows, ~2s.
+  //
+  // getDashboardData is a different story and must NOT be asked for "all_time".
+  // It pages every row of dashboard_metric_snapshots — 161k rows / 87 MB as of
+  // 2026-08-04, going back to 2025-06-27 — needing ~160 sequential round trips
+  // to eu-north-1 from a us-east function, which blew the 60s limit and is what
+  // made this page fail on first deploy. It is used here only for shell chrome
+  // (title, banners, country list), so it takes the cheap default range while
+  // the pills are hidden via FIXED_ALL_HISTORY_SECTIONS.
   const [data, diagnostics] = await Promise.all([
-    getDashboardData(params.range ?? "all_time"),
+    getDashboardData(),
     getDiagnosticsDrilldownList({
-      range: resolvedRange,
+      range: resolveDashboardTimeRange("all_time"),
       includeInternal: showInternal,
     }),
   ]);
@@ -57,16 +60,8 @@ export default async function DiagnosticSearchTermsPage({
   const analysis = analyseSearchTerms(scoped);
 
   return (
-    <DashboardShell
-      data={data}
-      section="diagnostic-search-terms"
-      defaultRangeKey="all_time"
-    >
-      <SearchTermsContent
-        analysis={analysis}
-        rangeKey={rangeKey}
-        showInternal={showInternal}
-      />
+    <DashboardShell data={data} section="diagnostic-search-terms">
+      <SearchTermsContent analysis={analysis} showInternal={showInternal} />
     </DashboardShell>
   );
 }
