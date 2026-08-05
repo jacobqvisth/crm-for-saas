@@ -10,7 +10,7 @@
 // simply absent from the draft, and the model is told in the prompt that it may
 // not estimate them.
 
-import { Info } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import type { ArticleImpact } from "@/lib/articles/types";
 
 type Props = {
@@ -54,6 +54,10 @@ function Field(props: {
 
 export function ImpactForm({ value, onChange }: Props) {
   const set = (patch: Partial<ArticleImpact>) => onChange({ ...value, ...patch });
+  // A money amount with no currency chosen cannot be rendered with a unit, so
+  // warn at the point of the decision rather than letting it surface in the draft.
+  const needsCurrency =
+    (value.ticketValue != null || value.additionalProfit != null) && !value.currency?.trim();
 
   return (
     <div>
@@ -79,18 +83,20 @@ export function ImpactForm({ value, onChange }: Props) {
           onChange={(daysAvoided) => set({ daysAvoided })}
           placeholder="e.g. 6"
         />
+        {/* No fallback "$" here. Showing a currency the user has not chosen
+            implies the draft will say dollars, which it will not. */}
         <Field
           label="Ticket value"
           value={value.ticketValue}
           onChange={(ticketValue) => set({ ticketValue })}
-          prefix={value.currency || "$"}
+          prefix={value.currency?.trim() || null}
           placeholder="e.g. 750"
         />
         <Field
           label="Additional profit"
           value={value.additionalProfit}
           onChange={(additionalProfit) => set({ additionalProfit })}
-          prefix={value.currency || "$"}
+          prefix={value.currency?.trim() || null}
           placeholder="e.g. 315"
         />
       </div>
@@ -109,6 +115,12 @@ export function ImpactForm({ value, onChange }: Props) {
             <option value="SEK ">SEK</option>
             <option value="£">GBP (£)</option>
           </select>
+          {needsCurrency && (
+            <span className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-amber-700">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              Pick one, or the draft has to write the amount without any currency at all.
+            </span>
+          )}
         </label>
 
         <label className="block">
