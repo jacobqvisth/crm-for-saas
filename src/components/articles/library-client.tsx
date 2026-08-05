@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { BarChart3, Car, Copy, ExternalLink, Loader2, PenLine, Trash2 } from "lucide-react";
+import { BarChart3, Car, ChevronDown, ChevronUp, Copy, Loader2, PenLine, ShieldAlert, Trash2 } from "lucide-react";
 import { FORMAT_ORDER, FORMAT_SPECS } from "@/lib/articles/formats";
 import { PublishToSite } from "./publish-to-site";
 import type { ArticleClaim, ArticleFormat, ArticleSourceKind } from "@/lib/articles/types";
@@ -29,6 +29,7 @@ type Row = {
   published_url: string | null;
   published_at: string | null;
   created_at: string;
+  webflow_item_id?: string | null;
 };
 
 const SOURCE_ICON: Record<ArticleSourceKind, typeof Car> = {
@@ -47,6 +48,9 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [formatFilter, setFormatFilter] = useState<ArticleFormat | "">("");
+  const [sourceFilter, setSourceFilter] = useState<ArticleSourceKind | "">("");
+  // Which rows are expanded to full text, so a piece can be read before publishing.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -120,6 +124,8 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
     await load();
   }
 
+  const visible = sourceFilter ? rows.filter((r) => r.source_kind === sourceFilter) : rows;
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -150,12 +156,48 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
         ))}
       </div>
 
+      {/* Second axis: what the piece was built from. */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+          Built from
+        </span>
+        <button
+          type="button"
+          onClick={() => setSourceFilter("")}
+          className={`rounded-full border px-3 py-1 text-xs font-medium ${
+            sourceFilter === ""
+              ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+              : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+          }`}
+        >
+          Any
+        </button>
+        {(["diagnostic", "stats", "free_topic"] as ArticleSourceKind[]).map((k) => {
+          const Icon = SOURCE_ICON[k];
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setSourceFilter(k)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                sourceFilter === k
+                  ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+              }`}
+            >
+              <Icon className="h-3 w-3" />
+              {SOURCE_LABEL[k]}
+            </button>
+          );
+        })}
+      </div>
+
       {loading ? (
         <p className="mt-6 flex items-center gap-2 text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading…
         </p>
-      ) : rows.length === 0 ? (
+      ) : visible.length === 0 ? (
         <p className="mt-8 text-center text-sm text-slate-400">
           {published
             ? "Nothing published yet. Publish a blog article from the Library, or mark a post as published once you have put it out."
@@ -163,7 +205,7 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
         </p>
       ) : (
         <ul className="mt-4 space-y-2">
-          {rows.map((row) => {
+          {visible.map((row) => {
             const Icon = SOURCE_ICON[row.source_kind] ?? PenLine;
             const claims = Array.isArray(row.claims) ? (row.claims as ArticleClaim[]) : [];
             const unsourced = claims.filter((c) => c.source === "unsourced").length;
@@ -190,8 +232,28 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
                     </span>
                   )}
                   {unsourced > 0 && (
-                    <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                      {unsourced} unsourced
+                    // Hover card rather than a title attribute: this is the one
+                    // badge whose meaning actually changes whether you publish.
+                    <span className="group relative inline-flex">
+                      <span className="inline-flex cursor-help items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                        <ShieldAlert className="h-3 w-3" />
+                        {unsourced} unsourced
+                      </span>
+                      <span className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-80 rounded-lg border border-slate-200 bg-white p-3 text-left text-[11px] leading-relaxed text-slate-600 shadow-lg group-hover:block">
+                        <span className="mb-1 block font-semibold text-slate-900">
+                          {unsourced} {unsourced === 1 ? "claim is" : "claims are"} not traceable to data
+                        </span>
+                        Every factual statement in a draft is labelled with where it came
+                        from: our platform data, a figure you typed in, or a product fact.
+                        These {unsourced} are the model&apos;s own words, so nothing backs
+                        them up. That is allowed, but read them before this goes public.
+                        {claims.length > 0 && (
+                          <span className="mt-1.5 block text-slate-400">
+                            {claims.length - unsourced} of {claims.length} claims in this
+                            piece are sourced.
+                          </span>
+                        )}
+                      </span>
                     </span>
                   )}
                   <span className="ml-auto text-[11px] text-slate-400">
@@ -202,9 +264,34 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
                 {row.title && (
                   <p className="mt-2 text-sm font-semibold text-slate-900">{row.title}</p>
                 )}
-                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-slate-600">
+                <p
+                  className={`mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-600 ${
+                    expanded[row.id] ? "" : "line-clamp-3"
+                  }`}
+                >
                   {row.body}
                 </p>
+                {(row.body?.length ?? 0) > 240 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpanded((prev) => ({ ...prev, [row.id]: !prev[row.id] }))
+                    }
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline"
+                  >
+                    {expanded[row.id] ? (
+                      <>
+                        <ChevronUp className="h-3 w-3" />
+                        Show less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3 w-3" />
+                        Read the whole thing
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   <button
@@ -252,6 +339,7 @@ export function LibraryClient({ published = false }: { published?: boolean }) {
                     format={row.format}
                     language={row.language}
                     publishedUrl={row.published_url}
+                    status={row.status}
                     onPublished={() => void load()}
                     compact
                   />

@@ -20,6 +20,8 @@ type Props = {
   format: ArticleFormat;
   language: string;
   publishedUrl: string | null;
+  /** draft | approved | published. "approved" with a url means staged, not live. */
+  status?: string;
   onPublished?: (url: string, live: boolean) => void;
   compact?: boolean;
 };
@@ -29,6 +31,7 @@ export function PublishToSite({
   format,
   language,
   publishedUrl,
+  status,
   onPublished,
   compact,
 }: Props) {
@@ -88,7 +91,10 @@ export function PublishToSite({
     }
   }
 
-  if (url) {
+  const isLive = status === "published";
+
+  // Live: just a link to it.
+  if (url && isLive) {
     return (
       <a
         href={url}
@@ -102,13 +108,43 @@ export function PublishToSite({
     );
   }
 
-  if (!eligible) {
-    if (compact) return null;
+  // Staged in Webflow but NOT public. Saying "On the website" here was wrong, and
+  // there was no way to finish the job from this state.
+  if (url && !isLive) {
     return (
-      <span className="text-xs text-slate-400">
-        {format === "blog_article"
-          ? "Only English articles can go to the website for now."
-          : "Only blog articles can go to the website."}
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span
+          title="The item exists in Webflow but is not on the public site yet"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900"
+        >
+          <CloudUpload className="h-3.5 w-3.5" />
+          In Webflow, not public
+        </span>
+        <button
+          type="button"
+          onClick={() => send("live")}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:bg-slate-300"
+        >
+          {busy === "live" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Globe className="h-3.5 w-3.5" />
+          )}
+          Publish it live
+        </button>
+      </span>
+    );
+  }
+
+  if (!eligible) {
+    const why =
+      format === "blog_article"
+        ? "Only English articles can go to the website for now."
+        : "Only blog articles go to the website. This is a social post, so copy it and post it yourself.";
+    return (
+      <span className="text-xs text-slate-400" title={why}>
+        {compact ? "Not for the website" : why}
       </span>
     );
   }

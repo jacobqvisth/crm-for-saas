@@ -71,6 +71,7 @@ export type Database = {
     Tables: {
       articles: {
         Row: {
+          webflow_item_id: string | null
           body: string | null
           claims: Json
           created_at: string
@@ -95,6 +96,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          webflow_item_id?: string | null
           body?: string | null
           claims?: Json
           created_at?: string
@@ -119,6 +121,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          webflow_item_id?: string | null
           body?: string | null
           claims?: Json
           created_at?: string

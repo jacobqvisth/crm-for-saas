@@ -88,11 +88,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "This article has no body" }, { status: 422 });
   }
 
-  if (row.published_url) {
+  // Already on the site and live: nothing to do.
+  if (row.status === "published" && row.published_url) {
     return NextResponse.json(
-      { error: "This article was already sent to the website.", url: row.published_url },
+      { error: "This article is already live on the website.", url: row.published_url },
       { status: 409 },
     );
+  }
+
+  // Already staged in Webflow. Going live must publish THAT item, not create a
+  // second one, which would collide on the slug. This is why webflow_item_id
+  // exists.
+  if (row.webflow_item_id && row.published_url) {
+    if (mode === "stage") {
+      return NextResponse.json(
+        { error: "This article is already staged in Webflow.", url: row.published_url },
+        { status: 409 },
+      );
+    }
+    const published = await publishArticleItems([row.webflow_item_id]);
+    if (!published.ok) {
+      return NextResponse.json({ error: published.reason }, { status: 502 });
+    }
+    const { data: nowLive, error: liveErr } = await supabase
+      .from("articles")
+      .update({ status: "published", published_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (liveErr) {
+      return NextResponse.json(
+        { error: `Published on the site but the CRM row did not update: ${liveErr.message}` },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      url: row.published_url,
+      itemId: row.webflow_item_id,
+      live: true,
+      article: nowLive,
+      applied: { promotedExisting: true },
+    });
   }
 
   const seo = (row.seo ?? {}) as Partial<ArticleSeo>;
@@ -179,6 +216,7 @@ export async function POST(request: NextRequest) {
     .update({
       status: live ? "published" : "approved",
       published_url: url,
+      webflow_item_id: created.data.id,
       ...(live ? { published_at: new Date().toISOString() } : {}),
     })
     .eq("id", id)
