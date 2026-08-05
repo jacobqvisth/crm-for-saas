@@ -143,6 +143,11 @@ export interface WebflowArticleInput {
   summary: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  /** Category and tag item ids, chosen at publish time. */
+  categoryIds?: string[];
+  tagIds?: string[];
+  /** An already-uploaded asset, used for both the hero and the grid thumbnail. */
+  image?: { fileId: string; url: string } | null;
 }
 
 export interface CreatedItem {
@@ -177,6 +182,16 @@ export async function createArticleItem(
           ...(input.metaDescription
             ? { "meta-description": stripLongDashes(decodeStrayUnicodeEscapes(input.metaDescription)) }
             : {}),
+          ...(input.categoryIds?.length ? { category: input.categoryIds } : {}),
+          ...(input.tagIds?.length ? { tags: input.tagIds } : {}),
+          // One asset serves both fields, which is what the hand-authored
+          // articles on the site already do.
+          ...(input.image
+            ? {
+                "main-image": { fileId: input.image.fileId, url: input.image.url },
+                "thumbnail-image": { fileId: input.image.fileId, url: input.image.url },
+              }
+            : {}),
         },
       },
     },
@@ -184,6 +199,106 @@ export async function createArticleItem(
 
   if (!res.ok) return res;
   return { ok: true, data: { id: res.data.id, slug: res.data.fieldData?.slug ?? slug } };
+}
+
+/* ------------------------------------------------- taxonomy (read-only) */
+
+const CATEGORIES_COLLECTION_ID = "695f7988a6bf5c9a8afb9e03";
+const TAGS_COLLECTION_ID = "695fd07354229bcbcb3ea650";
+
+export interface TaxonomyTerm {
+  id: string;
+  name: string;
+  /** Categories carry a description, which sharpens the model's choice a lot. */
+  description?: string | null;
+}
+
+interface ItemsResponse {
+  items: { id: string; fieldData?: { name?: string; description?: string | null } }[];
+}
+
+async function listTerms(collectionId: string, limit: number): Promise<TaxonomyTerm[]> {
+  const res = await call<ItemsResponse>(`/collections/${collectionId}/items?limit=${limit}`, {
+    method: "GET",
+  });
+  if (!res.ok) return [];
+  return res.data.items
+    .map((i) => ({
+      id: i.id,
+      name: i.fieldData?.name ?? "",
+      description: i.fieldData?.description ?? null,
+    }))
+    .filter((t) => t.name);
+}
+
+/** The site's article categories, with descriptions. */
+export function listCategories(): Promise<TaxonomyTerm[]> {
+  return listTerms(CATEGORIES_COLLECTION_ID, 100);
+}
+
+/**
+ * The site's tag vocabulary. Existing tags only, deliberately: inventing a tag
+ * creates a thin taxonomy page with one article on it that nobody maintains.
+ */
+export function listTags(): Promise<TaxonomyTerm[]> {
+  return listTerms(TAGS_COLLECTION_ID, 100);
+}
+
+/* --------------------------------------------------------- asset upload */
+
+/**
+ * Upload a generated image and return the reference an Image field expects.
+ *
+ * Webflow's asset flow is two hops: register the file, which returns a presigned
+ * S3 POST, then send the bytes to S3 with the returned form fields. Only after
+ * that does the asset exist, and the CMS field then takes { fileId, url }.
+ */
+export async function uploadAsset(
+  fileName: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<WebflowResult<{ fileId: string; url: string }>> {
+  const siteId = process.env.WEBFLOW_SITE_ID;
+  if (!siteId) return { ok: false, reason: "WEBFLOW_SITE_ID is not set" };
+
+  // Webflow wants an md5 of the payload up front, for dedupe and verification.
+  const { createHash } = await import("node:crypto");
+  const fileHash = createHash("md5").update(bytes).digest("hex");
+
+  const reg = await call<{
+    id: string;
+    hostedUrl?: string;
+    assetUrl?: string;
+    uploadUrl: string;
+    uploadDetails: Record<string, string>;
+  }>(`/sites/${siteId}/assets`, { method: "POST", body: { fileName, fileHash } });
+  if (!reg.ok) return reg;
+
+  const form = new FormData();
+  for (const [k, v] of Object.entries(reg.data.uploadDetails ?? {})) form.append(k, v);
+  // The file part must be named "file" and must come last in a presigned S3 POST.
+  // Copy into a plain ArrayBuffer: a Uint8Array can be backed by a
+  // SharedArrayBuffer, which BlobPart does not accept.
+  form.append("file", new Blob([bytes.slice().buffer as ArrayBuffer], { type: contentType }), fileName);
+
+  let s3: Response;
+  try {
+    s3 = await fetch(reg.data.uploadUrl, { method: "POST", body: form });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `Asset upload failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  if (!s3.ok) {
+    const detail = (await s3.text()).slice(0, 200);
+    return { ok: false, reason: `Asset upload rejected (${s3.status}): ${detail}` };
+  }
+
+  return {
+    ok: true,
+    data: { fileId: reg.data.id, url: reg.data.hostedUrl ?? reg.data.assetUrl ?? "" },
+  };
 }
 
 /**

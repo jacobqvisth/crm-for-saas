@@ -4,7 +4,7 @@ export const metadata = {
   title: "Articles",
 };
 
-const ALLOWED: ArticlesView[] = ["studio", "library"];
+const ALLOWED: ArticlesView[] = ["studio", "library", "published"];
 
 // Thin shell on purpose. All data is fetched client-side through /api/articles/*
 // so this page never prerenders a data read, which is what breaks preview builds
