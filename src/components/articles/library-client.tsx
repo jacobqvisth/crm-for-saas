@@ -1,7 +1,12 @@
 "use client";
 
-// Everything written so far. Copy buttons on each row, plus marking something
-// published with the URL it went out on, mirroring forum_posts.posted_url.
+// The article list, in two modes.
+//
+//   published=false  the working list: drafts and anything not yet live
+//   published=true   the Published tab: only what actually went out
+//
+// A row's action set depends on where it can still go, which is why not every row
+// shows the same buttons. See BUTTON RULES below.
 
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -38,7 +43,7 @@ const SOURCE_LABEL: Record<ArticleSourceKind, string> = {
   free_topic: "Topic only",
 };
 
-export function LibraryClient() {
+export function LibraryClient({ published = false }: { published?: boolean }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [formatFilter, setFormatFilter] = useState<ArticleFormat | "">("");
@@ -46,17 +51,23 @@ export function LibraryClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const qs = formatFilter ? `?format=${formatFilter}` : "";
+      const params = new URLSearchParams();
+      if (formatFilter) params.set("format", formatFilter);
+      if (published) params.set("status", "published");
+      const qs = params.toString() ? `?${params}` : "";
       const res = await fetch(`/api/articles${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setRows(data.articles ?? []);
+      const all: Row[] = data.articles ?? [];
+      // The Published tab shows only live rows; the working list hides them, so a
+      // row moves from one tab to the other rather than appearing in both.
+      setRows(published ? all : all.filter((r) => r.status !== "published"));
     } catch {
       toast.error("Could not load the library");
     } finally {
       setLoading(false);
     }
-  }, [formatFilter]);
+  }, [formatFilter, published]);
 
   useEffect(() => {
     void load();
@@ -146,7 +157,9 @@ export function LibraryClient() {
         </p>
       ) : rows.length === 0 ? (
         <p className="mt-8 text-center text-sm text-slate-400">
-          Nothing here yet. Write something in the Studio.
+          {published
+            ? "Nothing published yet. Publish a blog article from the Library, or mark a post as published once you have put it out."
+            : "Nothing here yet. Write something in the Studio."}
         </p>
       ) : (
         <ul className="mt-4 space-y-2">
@@ -202,27 +215,23 @@ export function LibraryClient() {
                     <Copy className="h-3 w-3" />
                     Copy
                   </button>
-                  {row.status !== "published" && (
+                  {/* BUTTON RULES
+                      "Mark published" is the manual record for channels we cannot
+                      post to (LinkedIn, X, Facebook). It is pointless once a URL
+                      is already recorded, so it hides then.
+                      The link to the piece is rendered by PublishToSite below, so
+                      there is deliberately no second "View" button here. */}
+                  {!row.published_url && (
                     <button
                       type="button"
                       onClick={() => markPublished(row)}
+                      title="Record that you posted this yourself, on LinkedIn or anywhere else"
                       className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
                     >
                       Mark published
                     </button>
                   )}
-                  {row.published_url && (
-                    <a
-                      href={row.published_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      View
-                    </a>
-                  )}
-                  {row.status !== "archived" && (
+                  {row.status !== "archived" && !published && (
                     <button
                       type="button"
                       onClick={() => patch(row.id, { status: "archived" })}

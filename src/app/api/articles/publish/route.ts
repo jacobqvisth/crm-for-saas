@@ -5,11 +5,18 @@ import {
   articleUrl,
   createArticleItem,
   isWebflowConfigured,
+  listCategories,
+  listTags,
   publishArticleItems,
+  uploadAsset,
 } from "@/lib/articles/webflow";
+import { classifyArticle } from "@/lib/articles/classify";
+import { pickBadge, renderArticleImage } from "@/lib/articles/og-image";
 import type { ArticleSeo } from "@/lib/articles/types";
 
-export const maxDuration = 60;
+// Publishing now also classifies the article and renders plus uploads a hero
+// image, so it needs more headroom than a bare CMS write.
+export const maxDuration = 120;
 
 const bodySchema = z.object({
   id: z.string().uuid(),
@@ -90,14 +97,55 @@ export async function POST(request: NextRequest) {
 
   const seo = (row.seo ?? {}) as Partial<ArticleSeo>;
   const title = row.title?.trim() || seo.metaTitle?.trim() || "Untitled";
+  const summary = seo.metaDescription ?? null;
+
+  // Everything below is done at publish time, on purpose: it is wasted work for
+  // the many drafts that never get published, and the taxonomy is read live from
+  // Webflow so it cannot go stale in a prompt.
+  const [categories, tags] = await Promise.all([listCategories(), listTags()]);
+  const classified = await classifyArticle({
+    title,
+    summary,
+    body: row.body,
+    categories,
+    tags,
+  });
+
+  // The hero image. A drawn card rather than a generated photo, because there is
+  // no image-model credential on this project; see src/lib/articles/og-image.tsx.
+  const snapshot = (row.source_snapshot ?? {}) as { dtcs?: string[]; carMake?: string | null; carModel?: string | null; carYear?: number | null };
+  const kicker = categories.find((c) => c.id === classified.categoryIds[0])?.name ?? null;
+  const vehicle = [snapshot.carYear, snapshot.carMake, snapshot.carModel].filter(Boolean).join(" ");
+  const { badge } = pickBadge({ dtcs: snapshot.dtcs ?? null, title, summary });
+
+  let image: { fileId: string; url: string } | null = null;
+  let imageNote: string | null = null;
+  try {
+    const png = await renderArticleImage({
+      title,
+      badge,
+      context: vehicle || null,
+      kicker,
+    });
+    const upload = await uploadAsset(`${seo.slug?.trim() || "article"}-hero.png`, png, "image/png");
+    if (upload.ok) image = upload.data;
+    else imageNote = upload.reason;
+  } catch (err) {
+    // A missing image is cosmetic. Failing the publish over it would be worse,
+    // so record why and carry on.
+    imageNote = err instanceof Error ? err.message : String(err);
+  }
 
   const created = await createArticleItem({
     title,
     slug: seo.slug?.trim() || title,
     body: row.body,
-    summary: seo.metaDescription ?? null,
+    summary,
     metaTitle: seo.metaTitle ?? null,
     metaDescription: seo.metaDescription ?? null,
+    categoryIds: classified.categoryIds,
+    tagIds: classified.tagIds,
+    image,
   });
   if (!created.ok) {
     return NextResponse.json({ error: created.reason }, { status: 502 });
@@ -145,5 +193,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ url, itemId: created.data.id, live, article: updated });
+  return NextResponse.json({
+    url,
+    itemId: created.data.id,
+    live,
+    article: updated,
+    // Surfaced so the toast can say what actually got attached, rather than
+    // implying an image and category that silently failed.
+    applied: {
+      categories: classified.categoryIds
+        .map((id) => categories.find((c) => c.id === id)?.name)
+        .filter(Boolean),
+      tags: classified.tagIds.map((id) => tags.find((t) => t.id === id)?.name).filter(Boolean),
+      image: Boolean(image),
+      imageNote,
+    },
+  });
 }
