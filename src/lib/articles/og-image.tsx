@@ -46,13 +46,27 @@ export function pickBadge(opts: {
   if (code) return { badge: code.toUpperCase() };
 
   // Otherwise the leading figure, which for a data story is the whole point.
-  // Percentages first, then any number of two digits or more; a single digit is
-  // rarely the headline and reads oddly at 84px.
-  const PERCENT = /\b\d[\d.,]*\s?%/;
-  const BIG_NUMBER = /\b\d{2,}[\d.,]*\b/;
+  //
+  // Order matters, and so does the thousands case. A naive /\b\d{2,}\b/ against
+  // "1,865 fault write-ups" matches "865", because the comma is a word boundary,
+  // and a wrong number on a published hero image is worse than no number. So
+  // grouped thousands are matched as one token before the plain case.
+  const PERCENT = /\d[\d.,]*\s?%/;
+  const THOUSANDS = /\b\d{1,3}(?:[.,  ]\d{3})+\b/;
+  const PLAIN = /\b\d{2,}\b/g;
+  // A bare year is almost never the point of the piece, and "2026" as a 84px
+  // headline figure reads as a mistake.
+  const isYear = (s: string) => /^(?:19|20)\d{2}$/.test(s);
+
   for (const text of [opts.title, opts.summary ?? ""]) {
-    const hit = text.match(PERCENT) ?? text.match(BIG_NUMBER);
-    if (hit) return { badge: hit[0].trim() };
+    const percent = text.match(PERCENT);
+    if (percent) return { badge: percent[0].trim() };
+
+    const thousands = text.match(THOUSANDS);
+    if (thousands) return { badge: thousands[0].trim() };
+
+    const plain = [...text.matchAll(PLAIN)].map((m) => m[0]).find((n) => !isYear(n));
+    if (plain) return { badge: plain };
   }
   return { badge: null };
 }
