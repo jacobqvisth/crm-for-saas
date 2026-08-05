@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { generateForumReply } from "@/lib/forums/reply-generate";
 import { generationOptionsSchema, normalizeOptions } from "@/lib/forums/generation-options";
+import { markCandidateAnswered } from "@/lib/forums/candidates";
 import type { ForumReply, ReplySource } from "@/lib/forums/replies";
 import type { Json } from "@/lib/database.types";
 
@@ -68,5 +70,18 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ reply: data as unknown as ForumReply });
+
+  const reply = data as unknown as ForumReply;
+
+  // Take the question out of the open queue and point it at this draft, so the
+  // card shows "answered" instead of inviting a second reply to the same post.
+  // Best-effort bookkeeping: a pasted URL we never discovered has no row.
+  await markCandidateAnswered({
+    supabase: supabase as unknown as SupabaseClient,
+    workspaceId,
+    sourceUrl: source.url,
+    replyId: reply.id,
+  });
+
+  return NextResponse.json({ reply });
 }
