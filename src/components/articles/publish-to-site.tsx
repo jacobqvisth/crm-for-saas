@@ -1,0 +1,158 @@
+"use client";
+
+// "Put this on wrenchlane.com" for a blog article.
+//
+// Two actions rather than one, because the two have very different consequences:
+//   Send to Webflow  creates the CMS item, staged, invisible to the public
+//   Publish live     the same, then pushes that item onto wrenchlane.com
+//
+// Live publishing is behind a confirm, since it is a public, outward-facing
+// change. Only blog articles in English are eligible; the API enforces the same
+// rules, this just explains why the button is disabled.
+
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { CloudUpload, ExternalLink, Globe, Loader2 } from "lucide-react";
+import type { ArticleFormat } from "@/lib/articles/types";
+
+type Props = {
+  articleId: string;
+  format: ArticleFormat;
+  language: string;
+  publishedUrl: string | null;
+  onPublished?: (url: string, live: boolean) => void;
+  compact?: boolean;
+};
+
+export function PublishToSite({
+  articleId,
+  format,
+  language,
+  publishedUrl,
+  onPublished,
+  compact,
+}: Props) {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState<"stage" | "live" | null>(null);
+  const [url, setUrl] = useState<string | null>(publishedUrl);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/articles/publish")
+      .then((r) => (r.ok ? r.json() : { configured: false }))
+      .then((d) => {
+        if (!cancelled) setConfigured(Boolean(d.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setConfigured(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const eligible = format === "blog_article" && language === "en";
+
+  async function send(mode: "stage" | "live") {
+    if (mode === "live") {
+      const ok = window.confirm(
+        "This publishes the article live on wrenchlane.com, where anyone can read it.\n\nHave you read it through? Check the claims list first if you have not.",
+      );
+      if (!ok) return;
+    }
+    setBusy(mode);
+    try {
+      const res = await fetch("/api/articles/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: articleId, mode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? `Publishing failed (${res.status})`, { duration: 8000 });
+        return;
+      }
+      setUrl(data.url);
+      onPublished?.(data.url, Boolean(data.live));
+      toast.success(
+        data.live
+          ? "Live on wrenchlane.com"
+          : "Created in Webflow as a staged item, not public yet",
+        { duration: 7000 },
+      );
+    } catch {
+      toast.error("Publishing failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        On the website
+      </a>
+    );
+  }
+
+  if (!eligible) {
+    if (compact) return null;
+    return (
+      <span className="text-xs text-slate-400">
+        {format === "blog_article"
+          ? "Only English articles can go to the website for now."
+          : "Only blog articles can go to the website."}
+      </span>
+    );
+  }
+
+  if (configured === false) {
+    return (
+      <span
+        title="WEBFLOW_API_TOKEN and WEBFLOW_SITE_ID are not set on this deployment"
+        className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-400"
+      >
+        <Globe className="h-3.5 w-3.5" />
+        Website not connected
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex gap-1.5">
+      <button
+        type="button"
+        onClick={() => send("live")}
+        disabled={busy !== null || configured === null}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:bg-slate-300"
+      >
+        {busy === "live" ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Globe className="h-3.5 w-3.5" />
+        )}
+        Publish to wrenchlane.com
+      </button>
+      <button
+        type="button"
+        onClick={() => send("stage")}
+        disabled={busy !== null || configured === null}
+        title="Create it in Webflow without making it public, so you can review it there first"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 disabled:opacity-50"
+      >
+        {busy === "stage" ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <CloudUpload className="h-3.5 w-3.5" />
+        )}
+        Send as draft
+      </button>
+    </span>
+  );
+}

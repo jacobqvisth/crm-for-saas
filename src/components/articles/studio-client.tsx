@@ -22,6 +22,8 @@ import {
 type ArticleRow = {
   id: string;
   format: ArticleFormat;
+  language: string;
+  published_url: string | null;
   title: string | null;
   body: string | null;
   hooks: unknown;
@@ -34,6 +36,8 @@ function toDraft(row: ArticleRow): DraftView {
   return {
     id: row.id,
     format: row.format,
+    language: row.language,
+    publishedUrl: row.published_url ?? null,
     title: row.title,
     body: row.body ?? "",
     hooks: Array.isArray(row.hooks) ? (row.hooks as string[]) : [],

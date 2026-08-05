@@ -12,11 +12,14 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Check, Copy, Database, PenLine, RefreshCw, ShieldAlert, User } from "lucide-react";
 import { getFormatSpec } from "@/lib/articles/formats";
+import { PublishToSite } from "./publish-to-site";
 import type { ArticleClaim, ArticleClaimSource, ArticleFormat, ArticleSeo } from "@/lib/articles/types";
 
 export interface DraftView {
   id: string;
   format: ArticleFormat;
+  language: string;
+  publishedUrl: string | null;
   title: string | null;
   body: string;
   hooks: string[];
@@ -144,6 +147,16 @@ export function DraftPanel({ draft, onRegenerate, regenerating, onSave }: Props)
             Regenerate
           </button>
         </div>
+      </div>
+
+      {/* Straight to the website, for blog articles. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+        <PublishToSite
+          articleId={draft.id}
+          format={draft.format}
+          language={draft.language}
+          publishedUrl={draft.publishedUrl}
+        />
       </div>
 
       {draft.title && (
