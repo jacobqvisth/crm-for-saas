@@ -23,6 +23,7 @@
 
 import { marked } from "marked";
 import { stripLongDashes } from "@/lib/ai/no-long-dash";
+import { decodeStrayUnicodeEscapes } from "./sanitize";
 
 const API = "https://api.webflow.com/v2";
 const ARTICLES_COLLECTION_ID = "695df5781f6fd2cc0d58cc14";
@@ -105,7 +106,9 @@ async function call<T>(
  * stored body canonical. `gfm` covers the tables the data-insight articles use.
  */
 export function markdownToWebflowHtml(markdown: string): string {
-  const html = marked.parse(stripLongDashes(markdown), {
+  // decode first: rows generated before the generator-side fix still carry
+  // literal \uXXXX sequences, and they must not reach the published page.
+  const html = marked.parse(stripLongDashes(decodeStrayUnicodeEscapes(markdown)), {
     gfm: true,
     breaks: false,
     async: false,
@@ -166,13 +169,13 @@ export async function createArticleItem(
         // Staged-but-publishable is what we want.
         isDraft: false,
         fieldData: {
-          name: stripLongDashes(input.title).slice(0, 256),
+          name: stripLongDashes(decodeStrayUnicodeEscapes(input.title)).slice(0, 256),
           slug,
           "post-body": markdownToWebflowHtml(input.body),
-          ...(input.summary ? { "post-summary": stripLongDashes(input.summary) } : {}),
-          ...(input.metaTitle ? { "meta-title": stripLongDashes(input.metaTitle) } : {}),
+          ...(input.summary ? { "post-summary": stripLongDashes(decodeStrayUnicodeEscapes(input.summary)) } : {}),
+          ...(input.metaTitle ? { "meta-title": stripLongDashes(decodeStrayUnicodeEscapes(input.metaTitle)) } : {}),
           ...(input.metaDescription
-            ? { "meta-description": stripLongDashes(input.metaDescription) }
+            ? { "meta-description": stripLongDashes(decodeStrayUnicodeEscapes(input.metaDescription)) }
             : {}),
         },
       },

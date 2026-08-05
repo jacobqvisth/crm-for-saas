@@ -22,6 +22,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
+import { decodeStrayUnicodeEscapes } from "./sanitize";
 import {
   brandKnowledgeBlock,
   buildStyleGuidance,
@@ -375,27 +376,31 @@ export async function generateArticle(
     return { ok: false, kind: "bad_output", reason: "The model returned an empty draft. Try again." };
   }
 
-  const hooks = draft.hooks.map((h) => stripLongDashes(h.trim())).filter(Boolean);
+  // Every model-authored string goes through both repairs: long dashes are banned
+  // in Wrenchlane copy, and stray \uXXXX escapes otherwise reach a published page.
+  const clean = (s: string) => stripLongDashes(decodeStrayUnicodeEscapes(s));
+
+  const hooks = draft.hooks.map((h) => clean(h.trim())).filter(Boolean);
 
   return {
     ok: true,
     article: {
       hooks,
-      title: draft.title ? stripLongDashes(draft.title.trim()) : null,
-      body: stripLongDashes(draft.body.trim()),
+      title: draft.title ? clean(draft.title.trim()) : null,
+      body: clean(draft.body.trim()),
       // Defend against the model including the hash despite being told not to.
       hashtags: draft.hashtags.map((h) => h.replace(/^#/, "").trim()).filter(Boolean),
       claims: draft.claims
         .filter((c) => c.text.trim())
-        .map((c) => ({ text: stripLongDashes(c.text.trim()), source: c.source })),
+        .map((c) => ({ text: clean(c.text.trim()), source: c.source })),
       seo: {
-        metaTitle: draft.seo.metaTitle ? stripLongDashes(draft.seo.metaTitle.trim()) : null,
+        metaTitle: draft.seo.metaTitle ? clean(draft.seo.metaTitle.trim()) : null,
         metaDescription: draft.seo.metaDescription
-          ? stripLongDashes(draft.seo.metaDescription.trim())
+          ? clean(draft.seo.metaDescription.trim())
           : null,
         slug: draft.seo.slug?.trim() || null,
         internalLinkIdeas: draft.seo.internalLinkIdeas
-          .map((s) => stripLongDashes(s.trim()))
+          .map((s) => clean(s.trim()))
           .filter(Boolean),
       },
       model: usedModel,
