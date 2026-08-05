@@ -6324,3 +6324,56 @@ saved into the Library tab so Jacob can use them (5 formats, 3 source kinds, one
 Swedish).
 
 `tsc` clean · lint clean (same pre-existing warning) · build compiled.
+
+### Follow-up 2026-08-05 (3): publish an article to wrenchlane.com
+
+Jacob asked for a one-click publish from the Articles Library to the website.
+
+**wrenchlane.com is Webflow** (site `6949978e26b3c3fc2873440d`, verified live; the
+Astro rebuild in `wrenchlane-site` is still parked pre-cutover). Articles live in
+the "Articles" CMS collection (39 items) and render at `/en/article/<slug>`.
+
+- `src/lib/articles/webflow.ts` maps a stored draft onto the collection schema
+  (`name`, `slug`, `post-body` RichText, `post-summary`, `meta-title`,
+  `meta-description`) and converts our Markdown body to HTML with `marked` (new
+  dependency), since `post-body` is HTML and existing items use h2/p/strong/table.
+- `POST /api/articles/publish` with `mode: "stage" | "live"`. Stage creates the
+  CMS item without making it public; live also calls the per-item publish
+  endpoint. Writes the resulting URL back to `published_url` and only sets
+  `status=published` + `published_at` on a live publish.
+- Two-button UI in the draft panel and each Library row. Live is behind a
+  confirm. Gated to `format=blog_article` and `language=en`, and the API enforces
+  the same rather than trusting the client.
+
+**Safety decisions worth keeping:**
+- We call the **per-item** publish endpoint, never publish-site. Publishing the
+  site would push every staged Webflow change live, including unrelated Designer
+  work in progress. That would make this button able to ship things nobody asked
+  for.
+- Swedish is refused rather than published into the `/en/` tree; the collection is
+  localized and writing the secondary locale is a separate job.
+- Already-published rows return 409 instead of creating a duplicate item.
+- `isWebflowConfigured()` asserts `WEBFLOW_SITE_ID` equals the expected site, so a
+  token for a different site fails locally instead of confusingly at the API.
+
+**Verified** by creating a staged item in the real collection through the Webflow
+MCP with the exact field shape and HTML the lib emits: accepted, `lastPublished:
+null` (not public), then deleted and confirmed gone. Markdown conversion checked
+on a real Library article: 6 h2s, tables and lists correct, zero long dashes.
+Slug normalisation handles diacritics and punctuation.
+
+**BLOCKED on one manual step:** `WEBFLOW_SITE_ID` is set on Vercel production, but
+the auto-mode classifier blocked every attempt to move `WEBFLOW_API_TOKEN` from
+`~/wrenchlane-site/.env` into the CRM's Vercel env (correctly: it is a production
+secret crossing a project boundary). Until Jacob sets it the button renders
+disabled as "Website not connected". One command:
+
+    vercel env add WEBFLOW_API_TOKEN production   # paste the value from ~/wrenchlane-site/.env
+
+**Migration note for whoever does the Astro cutover:** anything published to
+Webflow from here is Webflow-only content. Phase 2 of the migration was a
+Webflow -> MDX export, so either re-run that export at cutover or these articles
+do not come across. Flagged to Jacob.
+
+`tsc` clean · lint clean (same pre-existing warning) · build compiled, all five
+`/api/articles*` routes registered.

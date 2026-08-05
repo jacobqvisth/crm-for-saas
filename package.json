@@ -45,6 +45,7 @@
     "jose": "^6.2.3",
     "jssip": "^3.13.8",
     "lucide-react": "^1.0.0",
+    "marked": "^18.0.9",
     "next": "^16.2.1",
     "papaparse": "^5.5.3",
     "postcss": "^8.5.8",

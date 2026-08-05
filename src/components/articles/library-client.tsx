@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { BarChart3, Car, Copy, ExternalLink, Loader2, PenLine, Trash2 } from "lucide-react";
 import { FORMAT_ORDER, FORMAT_SPECS } from "@/lib/articles/formats";
+import { PublishToSite } from "./publish-to-site";
 import type { ArticleClaim, ArticleFormat, ArticleSourceKind } from "@/lib/articles/types";
 
 type Row = {
@@ -237,6 +238,14 @@ export function LibraryClient() {
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
+                  <PublishToSite
+                    articleId={row.id}
+                    format={row.format}
+                    language={row.language}
+                    publishedUrl={row.published_url}
+                    onPublished={() => void load()}
+                    compact
+                  />
                 </div>
               </li>
             );
