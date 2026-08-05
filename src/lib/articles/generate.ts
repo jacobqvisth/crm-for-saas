@@ -41,9 +41,36 @@ import {
 
 const MODEL = "claude-opus-5";
 
+/**
+ * Where to go when the primary model's capacity pool is exhausted.
+ *
+ * A 529 overloaded_error is a capacity signal for that specific model, so
+ * retrying the same model can keep failing through a broad overload. Sonnet 5 is
+ * a separate pool and is a legitimate fallback for public-facing copy (the
+ * forums generator has run on Sonnet since June 2026 for exactly this kind of
+ * writing). Which model actually produced a draft is recorded on the row and
+ * surfaced in the UI, so a fallback is never a silent quality downgrade.
+ */
+const FALLBACK_MODEL = "claude-sonnet-5";
+
 // Room for a 2000-word article plus adaptive thinking. Comfortably inside the
 // SDK's non-streaming HTTP timeout.
 const MAX_TOKENS = 16000;
+
+/**
+ * The SDK retries 408/409/429/5xx with exponential backoff and honours
+ * retry-after. The default of 2 is too few for a sustained overload, and this is
+ * a low-volume interactive tool where waiting beats failing.
+ */
+const MAX_RETRIES = 4;
+
+/** Why a generation failed, so the UI can say something useful. */
+export type GenerateFailureKind =
+  | "overloaded" // 529 / 429: capacity, worth retrying
+  | "refusal" // the model declined
+  | "not_configured" // missing API key
+  | "bad_output" // parsed but unusable
+  | "unknown";
 
 /* ------------------------------------------------------------ output shape */
 
@@ -257,11 +284,13 @@ export interface GeneratedArticle {
   claims: ArticleClaim[];
   seo: ArticleSeo;
   model: string;
+  /** True when the primary model was unavailable and the fallback wrote this. */
+  usedFallbackModel: boolean;
 }
 
 export type GenerateArticleResult =
   | { ok: true; article: GeneratedArticle }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; kind: GenerateFailureKind };
 
 export interface GenerateArticleInput {
   format: ArticleFormat;
@@ -277,47 +306,74 @@ export async function generateArticle(
   input: GenerateArticleInput,
 ): Promise<GenerateArticleResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
+  if (!apiKey) return { ok: false, kind: "not_configured", reason: "ANTHROPIC_API_KEY is not set" };
 
   const spec = getFormatSpec(input.format);
-  if (!spec) return { ok: false, reason: `Unknown format: ${input.format}` };
+  if (!spec) return { ok: false, kind: "unknown", reason: `Unknown format: ${input.format}` };
 
   const grounding = buildGrounding(input);
-  if (!grounding) return { ok: false, reason: "No grounding supplied" };
+  if (!grounding) return { ok: false, kind: "unknown", reason: "No grounding supplied" };
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, maxRetries: MAX_RETRIES });
 
+  const request = {
+    max_tokens: MAX_TOKENS,
+    system: [
+      {
+        type: "text" as const,
+        text: buildStablePrompt(input.format, input.options),
+        // Stable across drafts of the same format, so this is the cached
+        // prefix. Volatile per-request content all lives after it.
+        cache_control: { type: "ephemeral" as const },
+      },
+      { type: "text" as const, text: buildStylePrompt(input.options, input.format) },
+    ],
+    messages: [{ role: "user" as const, content: grounding }],
+    output_config: { format: zodOutputFormat(draftSchema) },
+  };
+
+  // Try the primary model, then the fallback pool if the primary is overloaded.
+  // The SDK already retried MAX_RETRIES times with backoff before we get here, so
+  // reaching the fallback means the pool is genuinely saturated, not flaky.
   let draft: Draft | null = null;
-  try {
-    const response = await client.messages.parse({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: [
-        {
-          type: "text",
-          text: buildStablePrompt(input.format, input.options),
-          // Stable across drafts of the same format, so this is the cached
-          // prefix. Volatile per-request content all lives after it.
-          cache_control: { type: "ephemeral" },
-        },
-        { type: "text", text: buildStylePrompt(input.options, input.format) },
-      ],
-      messages: [{ role: "user", content: grounding }],
-      output_config: { format: zodOutputFormat(draftSchema) },
-    });
-    draft = response.parsed_output ?? null;
-    if (response.stop_reason === "refusal") {
-      return { ok: false, reason: "The model declined this request" };
+  let usedModel = MODEL;
+  let lastFailure: { reason: string; kind: GenerateFailureKind } | null = null;
+
+  for (const model of [MODEL, FALLBACK_MODEL]) {
+    try {
+      const response = await client.messages.parse({ ...request, model });
+      if (response.stop_reason === "refusal") {
+        // A refusal is about the content, not capacity, so the fallback would
+        // almost certainly refuse too. Stop here.
+        return {
+          ok: false,
+          kind: "refusal",
+          reason: "The model declined to write this. Try a different angle or source.",
+        };
+      }
+      draft = response.parsed_output ?? null;
+      usedModel = model;
+      break;
+    } catch (err) {
+      lastFailure = classifyError(err);
+      // Only capacity problems are worth trying another model for.
+      if (lastFailure.kind !== "overloaded") return { ok: false, ...lastFailure };
+      if (model === FALLBACK_MODEL) return { ok: false, ...lastFailure };
     }
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
   }
 
-  if (!draft) return { ok: false, reason: "Model returned no parseable draft" };
-  if (!draft.body.trim()) return { ok: false, reason: "Model returned an empty body" };
+  if (!draft) {
+    return (
+      (lastFailure && { ok: false as const, ...lastFailure }) ?? {
+        ok: false as const,
+        kind: "bad_output" as const,
+        reason: "The model returned nothing usable. Try again.",
+      }
+    );
+  }
+  if (!draft.body.trim()) {
+    return { ok: false, kind: "bad_output", reason: "The model returned an empty draft. Try again." };
+  }
 
   const hooks = draft.hooks.map((h) => stripLongDashes(h.trim())).filter(Boolean);
 
@@ -342,8 +398,44 @@ export async function generateArticle(
           .map((s) => stripLongDashes(s.trim()))
           .filter(Boolean),
       },
-      model: MODEL,
+      model: usedModel,
+      usedFallbackModel: usedModel !== MODEL,
     },
+  };
+}
+
+/**
+ * Turn an SDK error into something a human can act on. The raw shape is a JSON
+ * blob ("anthropic error: 529 {\"type\":\"error\"...") which was being
+ * surfaced straight into a toast.
+ */
+function classifyError(err: unknown): { reason: string; kind: GenerateFailureKind } {
+  const status =
+    err instanceof Anthropic.APIError ? err.status : undefined;
+  const type = err instanceof Anthropic.APIError ? err.type : undefined;
+
+  if (status === 529 || type === "overloaded_error") {
+    return {
+      kind: "overloaded",
+      reason:
+        "Claude is overloaded right now. Nothing is wrong with your setup, give it a minute and press Write it again.",
+    };
+  }
+  if (status === 429 || type === "rate_limit_error") {
+    return {
+      kind: "overloaded",
+      reason: "Rate limited by the Claude API. Wait a moment and try again.",
+    };
+  }
+  if (status === 401 || status === 403) {
+    return { kind: "not_configured", reason: "The Claude API key was rejected. Check ANTHROPIC_API_KEY." };
+  }
+  if (status && status >= 500) {
+    return { kind: "overloaded", reason: "The Claude API had a server error. Try again in a moment." };
+  }
+  return {
+    kind: "unknown",
+    reason: err instanceof Error ? err.message : String(err),
   };
 }
 

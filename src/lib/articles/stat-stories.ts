@@ -19,6 +19,7 @@
 // carries topWorkshopName and it is deliberately dropped; only the shape of the
 // concentration (share, distinct workshop count) survives.
 
+import { stripLongDashes } from "@/lib/ai/no-long-dash";
 import type { DtcAnalysis } from "@/lib/ceo/dtc/analyse";
 import type { SearchTermsAnalysis } from "@/lib/ceo/search-terms";
 
@@ -300,10 +301,20 @@ export function buildStatFactPack(
   if ((def.needs === "dtc" || def.needs === "both") && !dtc) return null;
   if ((def.needs === "terms" || def.needs === "both") && !terms) return null;
 
-  const lines = BUILDERS[key]({ dtc, terms });
+  // The hint strings come from the existing DTC / Search Terms dashboards, which
+  // are full of em dashes ("Barely a prompt - motorlampa, airbag"). Those are
+  // internal-only there, but here they land in a prompt and the model mirrors the
+  // punctuation it is shown, so strip them on the way in as well as on the way out.
+  const lines = BUILDERS[key]({ dtc, terms }).map(stripLongDashes);
   if (!lines.length) return null;
 
-  return { key, label: def.label, thesis: def.thesis, lines, sampleNote: sampleNote(def, sources) };
+  return {
+    key,
+    label: def.label,
+    thesis: stripLongDashes(def.thesis),
+    lines,
+    sampleNote: stripLongDashes(sampleNote(def, sources)),
+  };
 }
 
 function sampleNote(def: StatStoryDefinition, sources: StatSources): string {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { SourcePicker, type SourceTotals } from "./source-picker";
 import { ArticleOptions } from "./article-options";
 import { ImpactForm } from "./impact-form";
@@ -61,6 +61,7 @@ export function StudioClient({ onSaved }: { onSaved?: () => void }) {
 
   const [generating, setGenerating] = useState(false);
   const [draft, setDraft] = useState<DraftView | null>(null);
+  const [failure, setFailure] = useState<{ message: string; retryable: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,13 +129,27 @@ export function StudioClient({ onSaved }: { onSaved?: () => void }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error ?? `Generation failed (${res.status})`);
+        // Capacity failures are worth retrying and are nobody's fault, so they
+        // get a longer-lived toast and their own note rather than a raw blob.
+        setFailure({
+          message: data.error ?? `Generation failed (${res.status})`,
+          retryable: Boolean(data.retryable),
+        });
+        toast.error(data.error ?? `Generation failed (${res.status})`, {
+          duration: data.retryable ? 8000 : 6000,
+        });
         return;
       }
+      setFailure(null);
       setDraft(toDraft(data.article as ArticleRow));
-      toast.success("Draft ready");
+      if (data.usedFallbackModel) {
+        toast.success("Draft ready, written by Sonnet 5 because Opus was busy", { duration: 7000 });
+      } else {
+        toast.success("Draft ready");
+      }
       onSaved?.();
     } catch {
+      setFailure({ message: "Could not reach the server. Check your connection and try again.", retryable: true });
       toast.error("Generation failed");
     } finally {
       setGenerating(false);
@@ -246,6 +261,25 @@ export function StudioClient({ onSaved }: { onSaved?: () => void }) {
           </span>
         )}
       </div>
+
+      {failure && !generating && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="min-w-0">
+            <p className="text-sm text-amber-900">{failure.message}</p>
+            {failure.retryable && (
+              <button
+                type="button"
+                onClick={generate}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Try again
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {draft && (
         <DraftPanel
