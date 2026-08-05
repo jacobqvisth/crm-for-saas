@@ -35,6 +35,7 @@ export function PublishToSite({
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<"stage" | "live" | null>(null);
   const [url, setUrl] = useState<string | null>(publishedUrl);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,14 +113,38 @@ export function PublishToSite({
     );
   }
 
+  // A greyed-out button with no explanation is a dead end. Say what is missing
+  // and exactly how to fix it, since the fix is one command and the person
+  // looking at this is the person who can run it.
   if (configured === false) {
     return (
-      <span
-        title="WEBFLOW_API_TOKEN and WEBFLOW_SITE_ID are not set on this deployment"
-        className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-400"
-      >
-        <Globe className="h-3.5 w-3.5" />
-        Website not connected
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span
+          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-400"
+          title="The server has no Webflow credentials, so it cannot reach the site"
+        >
+          <Globe className="h-3.5 w-3.5" />
+          Website not connected
+        </span>
+        {!compact && (
+          <button
+            type="button"
+            onClick={() => setShowHelp((v) => !v)}
+            className="text-xs font-medium text-indigo-600 hover:underline"
+          >
+            {showHelp ? "Hide" : "How to connect"}
+          </button>
+        )}
+        {showHelp && (
+          <span className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            The server needs a Webflow API token before it can write to the site.
+            <code className="mt-1.5 block rounded bg-white px-2 py-1 font-mono text-[11px] text-slate-800">
+              vercel env add WEBFLOW_API_TOKEN production
+            </code>
+            Paste the value from <code className="font-mono">~/wrenchlane-site/.env</code>, then
+            redeploy. <code className="font-mono">WEBFLOW_SITE_ID</code> is already set.
+          </span>
+        )}
       </span>
     );
   }
