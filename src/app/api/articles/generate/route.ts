@@ -10,9 +10,10 @@ import { EMPTY_IMPACT, type ArticleImpact } from "@/lib/articles/types";
 import type { Json } from "@/lib/database.types";
 
 // Generation calls Opus 5 with adaptive thinking and can legitimately take a
-// while on a long blog article, and the stats path also runs both analysers over
-// the full diagnostics history first.
-export const maxDuration = 120;
+// while on a long blog article; the stats path also runs both analysers over the
+// full diagnostics history first, and the SDK may spend time retrying through an
+// overload before the Sonnet fallback is tried.
+export const maxDuration = 300;
 
 const impactSchema = z
   .object({
@@ -93,7 +94,12 @@ export async function POST(request: NextRequest) {
 
   const result = await generateArticle({ format, options, impact, diagnostic, statPack, freeTopic });
   if (!result.ok) {
-    return NextResponse.json({ error: result.reason }, { status: 502 });
+    // 503 for capacity so the client can offer a retry, 502 for everything else.
+    const status = result.kind === "overloaded" ? 503 : 502;
+    return NextResponse.json(
+      { error: result.reason, kind: result.kind, retryable: result.kind === "overloaded" },
+      { status },
+    );
   }
   const a = result.article;
 
@@ -122,5 +128,5 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ article: data });
+  return NextResponse.json({ article: data, usedFallbackModel: a.usedFallbackModel });
 }

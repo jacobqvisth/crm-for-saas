@@ -184,7 +184,11 @@ export const CTA_GUIDANCE: Record<ArticleCta, string> = {
 
 export const STRICTNESS_GUIDANCE: Record<ArticleDataStrictness, string> = {
   strict:
-    "CRITICAL: you may only state numbers that appear explicitly in the facts given to you. Do not calculate derived figures, do not estimate, do not round into a stronger claim, and do not add plausible-sounding industry statistics. If the piece would be better with a number you were not given, write it without the number.",
+    `You may only state numbers that appear explicitly in the facts given to you. Do not calculate derived figures, do not estimate, and do not round into a stronger claim.
+
+This covers general and typical figures too, not just measurements about the specific case. Component lifespans, service intervals, failure rates, market sizes, adoption percentages and "typically lasts N" style durability claims are all numbers, and if they were not given to you then you do not have them. A sentence like "these are typically reliable well past 100,000 miles" is exactly the kind of invented statistic that must not appear: it sounds like trade knowledge, it is unverifiable, and it is the sort of thing a reader will quote back. Say "these are generally reliable" and move on.
+
+If the piece would read better with a number you were not given, write it without the number.`,
   illustrative:
     "You may use clearly-hedged illustrative ranges where they help, but each one must be visibly marked as an estimate, for example 'typically somewhere in the region of one to three hours'. Never present an estimate as a measurement, and never attach an estimate to a specific named case.",
 };

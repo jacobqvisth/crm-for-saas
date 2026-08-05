@@ -6273,3 +6273,54 @@ it would not actually produce.
   still stated.
 
 `tsc` clean · lint clean (same pre-existing warning) · build compiled.
+
+### Follow-up 2026-08-05 (2): Anthropic overload handling + full scenario matrix
+
+Jacob hit `anthropic error: 529 {"type":"overloaded_error"...}` in the UI. The
+generator had no retry beyond the SDK default of 2 and surfaced the raw JSON blob
+into a toast, then gave up.
+
+- Anthropic client now uses `maxRetries: 4` (SDK backoff honours `retry-after`).
+- On a persistent 529 the generator falls back to `claude-sonnet-5`, a separate
+  capacity pool. Which model wrote a draft is stored on the row and shown in the
+  success toast, so a fallback is never a silent quality downgrade. A refusal does
+  NOT fall back, since that is about content, not capacity.
+- Errors are classified (`overloaded` / `refusal` / `not_configured` /
+  `bad_output` / `unknown`) into human messages. Capacity failures return 503
+  with `retryable: true` and the UI shows an amber banner with a Try again button.
+- `maxDuration` on the generate route raised 120 -> 300, since retries plus the
+  Sonnet attempt plus a long blog article can exceed 120s.
+
+**Scenario matrix run against prod** (14 real generations plus deterministic
+checks) covering all 5 formats, all 3 source kinds, 6 stat stories, Swedish,
+`brandLevel=none`, strict vs illustrative, and money-without-currency. Assertions
+per format: X thread posts under 280 chars and numbered, newsletter subject under
+65, LinkedIn hooks under 210, blog SEO fields plus markdown headings, no hashtags
+where the channel does not take them, no brand mention at `brandLevel=none`, no
+invented currency, no `data`-labelled claims on a free topic, zero long dashes.
+
+Two more real bugs found and fixed by that run:
+1. **Fact packs inherited em dashes** from the existing DTC / Search Terms
+   dashboard hint strings ("Barely a prompt - motorlampa, airbag"). Harmless
+   internally, but here they land in a prompt and the model mirrors punctuation it
+   is shown. Fact pack lines, thesis and sample note now go through
+   `stripLongDashes` on the way in as well as on the way out.
+2. **Strict mode leaked an invented statistic.** A blog draft asserted "typically
+   reliable well past 100,000 miles", which is not in the facts. The strict rule
+   only really covered measurements about the specific case; the model classified
+   a general durability figure as trade knowledge. Rule now explicitly covers
+   component lifespans, service intervals, failure rates and "typically lasts N"
+   constructions, with that exact sentence as the worked example.
+
+Also corrected a bad assertion of my own: the first run flagged "possible
+invented odometer" on any mention of mile/km, which false-positives on legitimate
+speed units (km/h) and on the word "milestone". Replaced with a
+distance-travelled detector.
+
+Final: 13/14 passed on the first pass; the 1 failure was a genuine Anthropic
+overload on both pools for the largest prompt, which then succeeded on retry via
+the Sonnet fallback (1079 words, 33 claims, 6 H2s, SEO filled). All 14 drafts
+saved into the Library tab so Jacob can use them (5 formats, 3 source kinds, one
+Swedish).
+
+`tsc` clean · lint clean (same pre-existing warning) · build compiled.
