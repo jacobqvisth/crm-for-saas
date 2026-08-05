@@ -6254,3 +6254,22 @@ minSample) · two end-to-end generations reviewed by hand, zero long dashes.
   doing real work and is a separate build.
 - Stats loading recomputes both analysers per request (~2.3s over 2.4k rows).
   Fine at this volume; cache it if the page gets used heavily.
+
+### Follow-up 2026-08-05: currency unit on impact figures
+
+Jacob's screenshot of the live page showed Ticket value and Additional profit
+rendering a `$` prefix while Currency sat on "Not set". Same class of bug as the
+invented mileage: with `currency: null` the prompt got a bare `Ticket value: 750`
+and the model was free to attach a plausible unit, while the form implied dollars
+it would not actually produce.
+
+- `describeImpact` now states "CURRENCY NOT RECORDED for the amounts above" and
+  forbids naming or implying one, mirroring the absent-fact treatment for mileage.
+- The form no longer falls back to `$`. The prefix shows only a currency that was
+  actually chosen, and an amber hint appears beside the Currency select once an
+  amount is entered without one.
+- Verified by generating with `ticketValue: 750, currency: null` under the same
+  options as the screenshot: zero currency symbols or names in the body, and 750
+  still stated.
+
+`tsc` clean · lint clean (same pre-existing warning) · build compiled.

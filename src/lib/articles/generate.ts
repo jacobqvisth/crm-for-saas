@@ -212,15 +212,28 @@ function describeImpact(impact: ArticleImpact): string {
     return `IMPACT FIGURES: none supplied.
 This means you may NOT state any time saved, money earned, delay avoided, or efficiency gained. Do not estimate them, do not hedge them into existence, and do not include a result block. Write the piece on the strength of the diagnostic facts alone.`;
   }
-  const cur = impact.currency ?? "";
+  const cur = impact.currency?.trim() ?? "";
+  const hasMoney = impact.ticketValue != null || impact.additionalProfit != null;
   const lines: string[] = [
     "IMPACT FIGURES, supplied by a human and verified. You may state these as fact, and you may not add any others:",
   ];
   if (impact.hoursSaved != null) lines.push(`  - Hours saved on the job: ${impact.hoursSaved}`);
   if (impact.daysAvoided != null) lines.push(`  - Days of delay avoided: ${impact.daysAvoided}`);
-  if (impact.ticketValue != null) lines.push(`  - Ticket value: ${cur}${impact.ticketValue}`);
+  // Money figures with no currency selected are the same unlabelled-number trap
+  // as the null mileage: the model will attach a plausible unit. State the
+  // amount bare and forbid naming one.
+  if (impact.ticketValue != null) {
+    lines.push(`  - Ticket value: ${cur ? `${cur}${impact.ticketValue}` : String(impact.ticketValue)}`);
+  }
   if (impact.additionalProfit != null) {
-    lines.push(`  - Additional profit on the ticket: ${cur}${impact.additionalProfit}`);
+    lines.push(
+      `  - Additional profit on the ticket: ${cur ? `${cur}${impact.additionalProfit}` : String(impact.additionalProfit)}`,
+    );
+  }
+  if (hasMoney && !cur) {
+    lines.push(
+      "  - CURRENCY NOT RECORDED for the amounts above. Do not name, symbol, or imply a currency: no dollars, euros, kronor, pounds, no $ or € sign. Write the bare number with a neutral noun, for example \"a 750 ticket\" or \"750 on the ticket\", or leave the amount out entirely if that reads badly in this language.",
+    );
   }
   if (impact.resolvedWithoutEscalation != null) {
     lines.push(
