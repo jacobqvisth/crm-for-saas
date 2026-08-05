@@ -6377,3 +6377,64 @@ do not come across. Flagged to Jacob.
 
 `tsc` clean · lint clean (same pre-existing warning) · build compiled, all five
 `/api/articles*` routes registered.
+
+### Follow-up 2026-08-05 (4): publish-time assets, Published tab, button cleanup
+
+Jacob asked what the different row buttons meant, why rows differ, for a
+Published tab, and for an image plus tags and categories to be generated when he
+clicks publish (not before).
+
+**Publish-time enrichment** (PR #599). All of it runs after the click, so drafts
+that never ship cost nothing:
+- reads the live category (10) and tag (55) vocabulary from Webflow
+- Sonnet picks 1-2 categories and 3-6 tags from ONLY those ids; anything not in
+  the list is dropped rather than created, so no thin one-article tag appears
+- draws a branded 1200x630 hero with `next/og` and uploads it as a Webflow asset,
+  set on both `main-image` and `thumbnail-image`
+
+**Why the image is drawn, not generated.** There is no image-model credential on
+this project (checked `~/.secrets/keys.env` and `.env.local`: no OpenAI, Gemini,
+Imagen, Replicate or similar). `next/og` ships inside Next 16, so the server can
+draw a card with no new dependency and no external call. It is also better here:
+the card puts the real fault code on the image every time rather than hoping a
+model spells C1144A0 correctly. Swapping in a generative image later only means
+replacing `renderArticleImage`.
+
+Classification and image failures are non-fatal and reported in an `applied`
+block on the response, because a missing category is cosmetic and a failed
+publish is not.
+
+**Published tab** (PR #599). Third tab. Live rows move there and out of the
+working list, so a row is in one place, not both.
+
+**Button cleanup** (PR #599), answering the actual question:
+- a published row rendered BOTH a "View" button and an "On the website" chip
+  pointing at the same URL. Duplicate removed, chip kept.
+- "Mark published" now hides once a URL is recorded. It is the manual record for
+  channels we cannot post to (LinkedIn, X, Facebook), so it is meaningless after.
+- Archive hidden on the Published tab.
+- Rows still legitimately differ: publish controls only render for English blog
+  articles, because a LinkedIn post is not a web article.
+
+**Bug found by publishing for real** (PR #601): the first hero image rendered a
+badge reading **865** when the figure was **1,865**. A plain `\b\d{2,}\b` match
+treats the thousands comma as a word boundary and matched the tail. Grouped
+thousands are now one token, and a bare year is skipped. 9 cases covered.
+
+**Two process notes worth keeping:**
+1. Branched from a stale `origin/main` and nearly reverted PRs #597 and #598.
+   Caught before committing; always `git fetch` immediately before `checkout -b`.
+2. `WEBFLOW_API_TOKEN` is marked Sensitive on Vercel, so `vercel env pull`
+   returns `[REDACTED]` (11 chars) and the Webflow write path cannot be exercised
+   locally. Verified through the deployed API instead, logging in via
+   `/api/e2e-login?secret=$CRON_SECRET` the way the e2e suite does.
+
+**Verified end to end** against the real collection: staged article came back with
+categories Diagnostics + Shop Operations, five tags, and a hero PNG that fetches
+200 / image/png / 47,933 bytes from the Webflow CDN.
+
+`tsc` clean · lint clean (same pre-existing warning) · build compiled.
+
+**Still open:** the Ford Kuga article Jacob published earlier went live before this
+feature existed, so it has no image, category or tags. Swedish still cannot be
+published (secondary CMS locale not wired). No Ideas tab.
