@@ -20,9 +20,21 @@ import {
   Info,
   User,
   Pencil,
+  EyeOff,
+  RotateCcw,
+  CheckCircle2,
+  Inbox,
 } from "lucide-react";
 import { REPLY_SUBREDDITS, type ForumReply, type ReplySource } from "@/lib/forums/replies";
 import type { RedditPost } from "@/lib/forums/reddit";
+import {
+  CANDIDATE_SORTS,
+  DEFAULT_CANDIDATE_DAYS,
+  type CandidateSort,
+  type ForumCandidate,
+  type ForumCandidateCounts,
+  type ForumCandidateStatus,
+} from "@/lib/forums/candidates";
 import type { RedditAccount } from "@/lib/forums/accounts";
 import {
   DEFAULT_GENERATION_OPTIONS,
@@ -46,18 +58,104 @@ const PASTE_KEY = "paste";
 const STATUS_FILTERS = ["all", "draft", "posted", "archived"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
+// The queue's own filter chips (forum_candidates.status, plus "all").
+const QUEUE_FILTERS = ["new", "answered", "skipped", "all"] as const;
+type QueueFilter = (typeof QUEUE_FILTERS)[number];
+
+const QUEUE_FILTER_LABEL: Record<QueueFilter, string> = {
+  new: "Open",
+  answered: "Answered",
+  skipped: "Skipped",
+  all: "All",
+};
+
+const QUEUE_SORT_LABEL: Record<CandidateSort, string> = {
+  newest: "Newest question",
+  comments: "Most comments",
+  found: "Recently found",
+};
+
+// Age windows for the queue. 0 = no window (see DEFAULT_CANDIDATE_DAYS).
+const QUEUE_WINDOWS: Array<{ days: number; label: string }> = [
+  { days: 7, label: "7 days" },
+  { days: DEFAULT_CANDIDATE_DAYS, label: "14 days" },
+  { days: 30, label: "30 days" },
+  { days: 0, label: "All time" },
+];
+
 // "Owner · u/handle" (or just the owner when the handle isn't filled in yet).
 function accountLabel(a: RedditAccount): string {
   return a.username ? `${a.owner_label} · u/${a.username}` : `${a.owner_label} (handle pending)`;
 }
 
-function timeAgo(unixSeconds: number | null): string {
-  if (!unixSeconds) return "";
-  const secs = Math.max(0, Date.now() / 1000 - unixSeconds);
+function timeAgoMs(ms: number | null): string {
+  if (!ms) return "";
+  const secs = Math.max(0, (Date.now() - ms) / 1000);
   const h = secs / 3600;
   if (h < 1) return `${Math.round(secs / 60)}m ago`;
   if (h < 24) return `${Math.round(h)}h ago`;
   return `${Math.round(h / 24)}d ago`;
+}
+
+function timeAgoIso(iso: string | null): string {
+  if (!iso) return "";
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? "" : timeAgoMs(ms);
+}
+
+/**
+ * One card in the queue. Normally this is a persisted forum_candidates row, but
+ * if the queue write failed we still render what the scrape returned so the
+ * search isn't wasted — those carry `id: null` and can't be skipped, because
+ * there's no row to skip.
+ */
+interface QueueCard {
+  key: string;
+  id: string | null;
+  subreddit: string | null;
+  title: string;
+  body: string | null;
+  author: string | null;
+  url: string | null;
+  score: number | null;
+  num_comments: number | null;
+  postedAtMs: number | null;
+  status: ForumCandidateStatus;
+  replyId: string | null;
+}
+
+function cardFromCandidate(c: ForumCandidate): QueueCard {
+  return {
+    key: c.id,
+    id: c.id,
+    subreddit: c.subreddit,
+    title: c.title,
+    body: c.body,
+    author: c.author,
+    url: c.url,
+    score: c.score,
+    num_comments: c.num_comments,
+    postedAtMs: c.posted_at ? Date.parse(c.posted_at) || null : null,
+    status: c.status,
+    replyId: c.reply_id,
+  };
+}
+
+function cardFromPost(p: RedditPost): QueueCard {
+  return {
+    key: `unsaved:${p.id}`,
+    id: null,
+    subreddit: p.subreddit,
+    title: p.title,
+    body: p.body,
+    author: p.author,
+    url: p.url,
+    score: p.score,
+    num_comments: p.num_comments,
+    postedAtMs: p.created_utc ? p.created_utc * 1000 : null,
+    status: "new",
+    replyId: null,
+  };
 }
 
 export function AnswersClient() {
@@ -91,10 +189,29 @@ export function AnswersClient() {
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
   const [redditConfigured, setRedditConfigured] = useState<boolean | null>(null);
-  const [posts, setPosts] = useState<RedditPost[]>([]);
   const [searched, setSearched] = useState(false);
   // Live progress while the async Reddit scrape runs (one run per subreddit).
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [foundSoFar, setFoundSoFar] = useState(0);
+
+  // The persistent queue. Found posts are upserted into forum_candidates as the
+  // scrape streams them in, so this survives a reload and a re-search no longer
+  // costs an Apify run just to see what we already had.
+  const [candidates, setCandidates] = useState<ForumCandidate[]>([]);
+  const [counts, setCounts] = useState<ForumCandidateCounts | null>(null);
+  const [lastFoundAt, setLastFoundAt] = useState<string | null>(null);
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>("new");
+  const [queueSort, setQueueSort] = useState<CandidateSort>("newest");
+  const [queueDays, setQueueDays] = useState<number>(DEFAULT_CANDIDATE_DAYS);
+  // Free-text filter over the questions we already hold. Deliberately local:
+  // filtering persisted rows costs nothing, whereas the keyword box above fires
+  // a fresh (paid, ~2 min) Reddit search.
+  const [queueQuery, setQueueQuery] = useState("");
+  const [savingIds, setSavingIds] = useState<Set<string>>(() => new Set());
+  // Set only when persisting the scrape failed: render the raw results anyway,
+  // flagged as unsaved, rather than pretending the search found nothing.
+  const [unsavedPosts, setUnsavedPosts] = useState<RedditPost[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Which source is currently being drafted (keyed by a stable id).
   const [draftingKey, setDraftingKey] = useState<string | null>(null);
@@ -103,6 +220,38 @@ export function AnswersClient() {
   // Newest drafted reply — briefly highlighted so the user sees where it landed.
   const [newReplyId, setNewReplyId] = useState<string | null>(null);
   const draftedRef = useRef<HTMLElement>(null);
+
+  // Read the queue. Runs on mount and whenever a queue control changes, so the
+  // page opens with questions instead of an empty search box.
+  const loadCandidates = useCallback(async () => {
+    const params = new URLSearchParams({
+      status: queueFilter,
+      sort: queueSort,
+      days: String(queueDays),
+    });
+    try {
+      const res = await fetch(`/api/forums/candidates?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setCandidates(data.candidates ?? []);
+      setCounts(data.counts ?? null);
+      setLastFoundAt(data.lastFoundAt ?? null);
+    } catch {
+      // A failed queue read leaves the last-known list on screen; the page-level
+      // banner already covers a lapsed session via reload().
+    }
+  }, [queueFilter, queueSort, queueDays]);
+
+  useEffect(() => {
+    void loadCandidates();
+  }, [loadCandidates]);
+
+  // The discovery poll loop spans many renders, so it reaches the queue read
+  // through a ref rather than the version captured when the search began.
+  const loadCandidatesRef = useRef(loadCandidates);
+  useEffect(() => {
+    loadCandidatesRef.current = loadCandidates;
+  }, [loadCandidates]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -148,8 +297,13 @@ export function AnswersClient() {
     setDiscovering(true);
     setDiscoverError(null);
     setSearched(true);
-    setPosts([]);
     setProgress(null);
+    setFoundSoFar(0);
+    setUnsavedPosts([]);
+    setSaveError(null);
+    // A search adds to the queue rather than replacing it, so surface the open
+    // questions while the scrape runs instead of whatever tab was showing.
+    setQueueFilter("new");
     try {
       const res = await fetch("/api/forums/replies/discover", {
         method: "POST",
@@ -183,18 +337,33 @@ export function AnswersClient() {
             done?: boolean;
             posts?: RedditPost[];
             perSub?: { sub: string; status: string }[];
+            savedError?: string | null;
           };
           try {
             const pres = await fetch("/api/forums/replies/discover/status", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ runs }),
+              // Recorded as provenance on the saved rows.
+              body: JSON.stringify({ runs, query: query.trim() || undefined, sort }),
             });
             poll = await pres.json();
           } catch {
             continue; // transient — try again on the next tick
           }
-          if (Array.isArray(poll.posts)) setPosts(poll.posts);
+          // The status route banks each tick's posts in forum_candidates, so the
+          // queue read is what shows them — no separate ephemeral list to
+          // reconcile, and the statuses (already answered? skipped?) come along.
+          const batch = Array.isArray(poll.posts) ? poll.posts : [];
+          setFoundSoFar((n) => Math.max(n, batch.length));
+          if (poll.savedError) {
+            setSaveError(poll.savedError);
+            setUnsavedPosts(batch);
+          } else if (batch.length > 0) {
+            // Through the ref: this loop runs across many renders, and the
+            // captured loadCandidates would still be querying the filter that
+            // was active when the search started.
+            await loadCandidatesRef.current();
+          }
           const finished = (poll.perSub ?? []).filter(
             (s) => s.status === "succeeded" || s.status === "failed",
           ).length;
@@ -212,14 +381,18 @@ export function AnswersClient() {
         return;
       }
 
-      // Inline "done" path (nothing configured, or a start error).
+      // Inline "done" path (nothing configured, or a start error). Nothing to
+      // persist here — this path never carries posts — so show them as-is.
       if (data.error) setDiscoverError(data.error);
-      setPosts(data.posts ?? []);
+      setUnsavedPosts(data.posts ?? []);
     } catch (e) {
       setDiscoverError(e instanceof Error ? e.message : "Failed to search");
     } finally {
       setDiscovering(false);
       setProgress(null);
+      // Final read, so the queue reflects the last tick even if the loop broke
+      // out on `done` or hit its deadline mid-poll.
+      void loadCandidatesRef.current();
     }
   }
 
@@ -265,6 +438,9 @@ export function AnswersClient() {
       setDraftedKey(key);
       toast.success("Reply drafted — added below", { id: toastId });
       setNewReplyId(reply.id);
+      // The question is answered now: refresh the queue so its card flips out of
+      // the open list instead of inviting a second reply to the same post.
+      void loadCandidatesRef.current();
       // Let the new card render, then bring it into view + fade the highlight.
       setTimeout(() => draftedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
       setTimeout(() => setNewReplyId(null), 2500);
@@ -281,6 +457,38 @@ export function AnswersClient() {
     }
   }
 
+  // Skip a question, or restore one skipped by mistake. Skipping is what keeps a
+  // rejected post from reappearing at the top of every future search.
+  async function setCandidateStatus(id: string, status: "new" | "skipped") {
+    setSavingIds((prev) => new Set(prev).add(id));
+    // Optimistic: the card either greys out or comes back immediately, then the
+    // reload settles the chip counts.
+    setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+    try {
+      const res = await fetch(`/api/forums/candidates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const failure = await failureFromResponse(res, "Couldn't update that post");
+        toast.error(failure.message);
+        if (failure.kind !== "other") setError(failure);
+      } else if (status === "skipped") {
+        toast.success("Skipped — it won't come back in future searches");
+      }
+    } catch {
+      toast.error("Couldn't reach the server");
+    } finally {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      await loadCandidatesRef.current();
+    }
+  }
+
   async function refreshAllTraction() {
     setRefreshingAll(true);
     try {
@@ -293,6 +501,21 @@ export function AnswersClient() {
   }
 
   const filtered = replies.filter((r) => statusFilter === "all" || r.status === statusFilter);
+
+  // What the queue renders: the persisted rows normally, or the raw scrape
+  // results when persisting them failed. The keyword filter runs locally, over
+  // questions we already hold, so narrowing down costs nothing.
+  const queueCards = useMemo<QueueCard[]>(() => {
+    const base =
+      saveError && unsavedPosts.length > 0
+        ? unsavedPosts.map(cardFromPost)
+        : candidates.map(cardFromCandidate);
+    const q = queueQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((c) =>
+      `${c.title} ${c.body ?? ""} ${c.subreddit ?? ""}`.toLowerCase().includes(q),
+    );
+  }, [candidates, unsavedPosts, saveError, queueQuery]);
 
   const stats = useMemo(() => {
     const posted = replies.filter((r) => r.status === "posted");
@@ -418,7 +641,7 @@ export function AnswersClient() {
             <div className="flex items-center gap-2 text-xs font-medium text-orange-800">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Searching Reddit… {progress.done}/{progress.total} subreddits done
-              {posts.length > 0 && ` · ${posts.length} found so far`}
+              {foundSoFar > 0 && ` · ${foundSoFar} found so far`}
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100">
               <div
@@ -429,84 +652,115 @@ export function AnswersClient() {
               />
             </div>
             <p className="text-[11px] text-orange-700/80">
-              The first search can take a couple of minutes while the scraper warms up — results
-              appear here as each subreddit finishes.
+              The first search can take a couple of minutes while the scraper warms up — results are
+              saved to the queue below as each subreddit finishes.
             </p>
           </div>
         )}
+      </section>
 
-        {/* Results */}
-        {posts.length > 0 && (
-          <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
-            {posts.map((p) => {
-              const key = `post:${p.id}`;
-              return (
-                <div
-                  key={p.id}
-                  className="rounded-lg border border-slate-200 p-3 hover:border-orange-200"
-                >
-                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
-                      r/{p.subreddit}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <ArrowUpToLine className="h-3 w-3" />
-                      {p.score ?? 0}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <MessageSquare className="h-3 w-3" />
-                      {p.num_comments ?? 0}
-                    </span>
-                    <span>{timeAgo(p.created_utc)}</span>
-                    <a
-                      href={p.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 hover:text-slate-800"
-                    >
-                      <ExternalLink className="h-3 w-3" /> open
-                    </a>
-                  </div>
-                  <p className="mt-1.5 text-sm font-medium text-slate-800">{p.title}</p>
-                  {p.body && (
-                    <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-slate-500">
-                      {p.body}
-                    </p>
-                  )}
-                  <div className="mt-2">
-                    <button
-                      onClick={() =>
-                        requestDraft(
-                          {
-                            url: p.url,
-                            subreddit: p.subreddit,
-                            title: p.title,
-                            body: p.body,
-                            author: p.author,
-                            score: p.score,
-                            num_comments: p.num_comments,
-                          },
-                          key,
-                        )
-                      }
-                      disabled={draftingKey === key}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50"
-                    >
-                      {draftingKey === key ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-3.5 w-3.5" />
-                      )}
-                      Draft reply
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+      {/* The queue — every question we've found, kept across reloads */}
+      <section className="mt-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <Inbox className="h-4 w-4 text-orange-600" /> Questions to answer
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {counts ? `${counts.new} open` : "Loading…"}
+              {lastFoundAt ? ` · last found ${timeAgoIso(lastFoundAt)}` : ""} · kept between visits,
+              so you don&apos;t have to search again
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {QUEUE_FILTERS.map((f) => (
+              <button
+                key={f}
+                onClick={() => setQueueFilter(f)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                  queueFilter === f
+                    ? "bg-slate-800 text-white"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+              >
+                {QUEUE_FILTER_LABEL[f]}
+                {counts && <span className="ml-1 opacity-60">{counts[f]}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Narrowing the queue is free — no Reddit call, no Apify credits. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 min-w-[200px]">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input
+              value={queueQuery}
+              onChange={(e) => setQueueQuery(e.target.value)}
+              placeholder="Filter what we've already found (no new search)…"
+              className="w-full text-sm outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <select
+            value={queueSort}
+            onChange={(e) => setQueueSort(e.target.value as CandidateSort)}
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-600 outline-none"
+          >
+            {CANDIDATE_SORTS.map((s) => (
+              <option key={s} value={s}>
+                {QUEUE_SORT_LABEL[s]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={queueDays}
+            onChange={(e) => setQueueDays(Number(e.target.value))}
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-600 outline-none"
+            title="How old a question can be and still show"
+          >
+            {QUEUE_WINDOWS.map((w) => (
+              <option key={w.days} value={w.days}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {saveError && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            <span>
+              These results couldn&apos;t be saved to the queue ({saveError}), so they&apos;ll be
+              gone on reload. Draft anything you need now.
+            </span>
           </div>
         )}
-        {searched && !discovering && posts.length === 0 && !discoverError && redditConfigured && (
-          <p className="mt-3 text-sm text-slate-400">No posts found. Try different keywords.</p>
+
+        {queueCards.length > 0 ? (
+          <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
+            {queueCards.map((card) => (
+              <QueueCardView
+                key={card.key}
+                card={card}
+                busy={card.id ? savingIds.has(card.id) : false}
+                drafting={draftingKey === card.key}
+                onRequestDraft={requestDraft}
+                onSetStatus={setCandidateStatus}
+              />
+            ))}
+          </div>
+        ) : (
+          !discovering && (
+            <p className="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
+              {queueQuery.trim()
+                ? "No saved questions match that filter."
+                : searched && !discoverError
+                  ? "That search came back empty. Try different keywords."
+                  : counts && counts.all > 0
+                    ? "Nothing here in this window. Try a longer window, or another tab."
+                    : "Nothing found yet. Hit Find posts above, and everything we find stays here."}
+            </p>
+          )
         )}
       </section>
 
@@ -630,6 +884,141 @@ function StatChip({
       {icon && <span className="text-slate-400">{icon}</span>}
       <span className="text-sm font-semibold text-slate-900">{value}</span>
       <span className="text-xs text-slate-500">{label}</span>
+    </div>
+  );
+}
+
+// --- One question in the queue ---------------------------------------------
+//
+// Answered and skipped questions stay on screen rather than vanishing: seeing
+// what's already been dealt with is the point of persisting the queue, and a
+// skip you didn't mean has to be undoable.
+function QueueCardView({
+  card,
+  busy,
+  drafting,
+  onRequestDraft,
+  onSetStatus,
+}: {
+  card: QueueCard;
+  busy: boolean;
+  drafting: boolean;
+  onRequestDraft: (source: ReplySource, key: string) => void;
+  onSetStatus: (id: string, status: "new" | "skipped") => void;
+}) {
+  const skipped = card.status === "skipped";
+  const answered = card.status === "answered";
+
+  return (
+    <div
+      className={`rounded-lg border p-3 transition-all ${
+        skipped
+          ? "border-slate-200 bg-slate-50/70 opacity-60 hover:opacity-100"
+          : "border-slate-200 hover:border-orange-200"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+          r/{card.subreddit ?? "unknown"}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <ArrowUpToLine className="h-3 w-3" />
+          {card.score ?? 0}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <MessageSquare className="h-3 w-3" />
+          {card.num_comments ?? 0}
+        </span>
+        <span>{timeAgoMs(card.postedAtMs)}</span>
+        {card.url && (
+          <a
+            href={card.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 hover:text-slate-800"
+          >
+            <ExternalLink className="h-3 w-3" /> open
+          </a>
+        )}
+        {answered && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 font-medium text-green-700">
+            <CheckCircle2 className="h-3 w-3" /> answered
+          </span>
+        )}
+        {skipped && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">
+            <EyeOff className="h-3 w-3" /> skipped
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1.5 text-sm font-medium text-slate-800">{card.title}</p>
+      {card.body && (
+        <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-slate-500">{card.body}</p>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {answered ? (
+          <span className="text-xs text-slate-400">Reply drafted — see the board below.</span>
+        ) : skipped ? (
+          <button
+            onClick={() => card.id && onSetStatus(card.id, "new")}
+            disabled={busy || !card.id}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3.5 w-3.5" />
+            )}
+            Put back
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() =>
+                onRequestDraft(
+                  {
+                    url: card.url,
+                    subreddit: card.subreddit,
+                    title: card.title,
+                    body: card.body,
+                    author: card.author,
+                    score: card.score,
+                    num_comments: card.num_comments,
+                  },
+                  card.key,
+                )
+              }
+              disabled={drafting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+            >
+              {drafting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Draft reply
+            </button>
+            {/* No row to update for an unsaved result, so there's nothing to skip. */}
+            {card.id && (
+              <button
+                onClick={() => onSetStatus(card.id!, "skipped")}
+                disabled={busy}
+                title="Hide this one and keep it out of future searches"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {busy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <EyeOff className="h-3.5 w-3.5" />
+                )}
+                Skip
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

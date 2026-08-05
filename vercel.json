@@ -51,6 +51,10 @@
     {
       "path": "/api/forums/mentions/scan",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/forums/candidates/scan",
+      "schedule": "0 6 * * *"
     }
   ]
 }
