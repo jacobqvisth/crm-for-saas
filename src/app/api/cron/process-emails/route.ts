@@ -530,6 +530,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Optional per-sequence Bcc (Trustpilot AFS — see
+      // SequenceSettings.bcc_email). Read off the enrollment's sequence row
+      // that's already loaded, same as allow_customers above; sendEmail()
+      // validates the address and drops it if unusable.
+      const sequenceBcc =
+        (enrollment.sequences as unknown as { settings?: SequenceSettings | null })
+          ?.settings?.bcc_email ?? undefined;
+
       // Send the email
       const result = await sendEmail({
         accountId: senderAccountId,
@@ -540,6 +548,7 @@ export async function POST(request: NextRequest) {
         replyToMessageId,
         replyToThreadId,
         includeSignature,
+        bcc: sequenceBcc,
       });
 
       if (result.success) {
