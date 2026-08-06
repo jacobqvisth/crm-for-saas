@@ -148,17 +148,32 @@ export async function POST(request: NextRequest) {
   const title = row.title?.trim() || seo.metaTitle?.trim() || "Untitled";
   const summary = seo.metaDescription ?? null;
 
+  /**
+   * Release articles are imported by /api/articles/releases, which already
+   * assembled the body as Webflow rich-text HTML, filed it under Product
+   * Updates and built a hero from a real screenshot. Re-running the generic
+   * pipeline over one would run its HTML through the Markdown converter and
+   * replace the screenshot hero with a drawn card, so this path leaves all
+   * three alone. Reachable via the Re-sync button once a release is live.
+   */
+  const isRelease = row.source_kind === "release_mail";
+
   // Everything below is done at publish time, on purpose: it is wasted work for
   // the many drafts that never get published, and the taxonomy is read live from
   // Webflow so it cannot go stale in a prompt.
   const [categories, tags] = await Promise.all([listCategories(), listTags()]);
-  const classified = await classifyArticle({
-    title,
-    summary,
-    body: row.body,
-    categories,
-    tags,
-  });
+  const classified = isRelease
+    ? {
+        categoryIds: categories.filter((c) => /product updates/i.test(c.name)).map((c) => c.id),
+        tagIds: tags.filter((t) => /^release[-\s]?notes$/i.test(t.name)).map((t) => t.id),
+      }
+    : await classifyArticle({
+        title,
+        summary,
+        body: row.body,
+        categories,
+        tags,
+      });
 
   // The hero image. A drawn card rather than a generated photo, because there is
   // no image-model credential on this project; see src/lib/articles/og-image.tsx.
@@ -169,7 +184,9 @@ export async function POST(request: NextRequest) {
 
   let image: { fileId: string; url: string } | null = null;
   let imageNote: string | null = null;
-  try {
+  // A release already has a screenshot hero. Leaving image null means
+  // updateArticleItem omits the field, so the existing one survives.
+  if (!isRelease) try {
     const png = await renderArticleImage({
       title,
       badge,
@@ -188,6 +205,7 @@ export async function POST(request: NextRequest) {
   const fields = {
     title,
     body: row.body,
+    bodyFormat: (isRelease ? "html" : "markdown") as "html" | "markdown",
     summary,
     metaTitle: seo.metaTitle ?? null,
     metaDescription: seo.metaDescription ?? null,

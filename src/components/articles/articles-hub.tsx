@@ -1,14 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Newspaper, PenLine, Library, Globe } from "lucide-react";
+import { Newspaper, PenLine, Library, Globe, Rocket } from "lucide-react";
 import { StudioClient } from "./studio-client";
 import { LibraryClient } from "./library-client";
+import { ReleasesClient } from "./releases-client";
 
-export type ArticlesView = "studio" | "library" | "published";
+export type ArticlesView = "studio" | "releases" | "library" | "published";
 
 const VIEWS: Array<{ key: ArticlesView; label: string; icon: typeof PenLine; hint: string }> = [
   { key: "studio", label: "Studio", icon: PenLine, hint: "Write something new" },
+  {
+    key: "releases",
+    label: "Releases",
+    icon: Rocket,
+    hint: "Turn a release announcement email into an article",
+  },
   { key: "library", label: "Library", icon: Library, hint: "Drafts and everything not yet live" },
   { key: "published", label: "Published", icon: Globe, hint: "Live on wrenchlane.com or posted elsewhere" },
 ];
@@ -59,6 +66,8 @@ export function ArticlesHub({ initialView = "studio" }: { initialView?: Articles
       <div className="mt-6">
         {view === "studio" ? (
           <StudioClient onSaved={() => setLibraryKey((k) => k + 1)} />
+        ) : view === "releases" ? (
+          <ReleasesClient />
         ) : (
           <LibraryClient key={`${view}-${libraryKey}`} published={view === "published"} />
         )}
