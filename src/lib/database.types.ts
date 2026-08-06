@@ -59,6 +59,22 @@ export type SequenceSettings = {
    * demotes/promotes the already-queued first emails. Default false.
    */
   pause_new_contacts?: boolean;
+  /**
+   * Optional address to Bcc on every email this sequence sends.
+   *
+   * Exists for Trustpilot's Automatic Feedback Service: you Bcc their unique
+   * address (e.g. email@trustpilot.co.uk) on an ordinary customer email and
+   * Trustpilot reads the To: header and sends its own review invitation a few
+   * days later. Reviews collected that way are labelled verified/invited,
+   * whereas a review from a link we paste ourselves counts as "redirected".
+   * The Plus plan has no API, so this Bcc is the only way to drive verified
+   * invitations from the CRM.
+   *
+   * Deliberately a plain single address, not a list: the only use case is one
+   * automated collector, and a comma-joined header would need per-address
+   * validation and quietly multiplies who receives customer mail.
+   */
+  bcc_email?: string;
 };
 
 export type Database = {

@@ -14,6 +14,14 @@ interface SendEmailParams {
   replyToMessageId?: string;
   replyToThreadId?: string;
   /**
+   * Optional single address to Bcc. Set per sequence via
+   * SequenceSettings.bcc_email; see that field for why (Trustpilot AFS).
+   * Invalid or blank values are dropped rather than sent, because a malformed
+   * Bcc header risks the whole message being rejected, and losing the Bcc copy
+   * is far cheaper than losing the customer email.
+   */
+  bcc?: string;
+  /**
    * When true (default), append the sender's signature_html (from user_profiles)
    * to the body. Applies to first touches AND thread replies/follow-ups — set
    * to false (e.g. via a sequence step's include_signature column) to skip it.
@@ -73,6 +81,29 @@ function applyTracking(htmlBody: string, trackingId: string): string {
   return tracked;
 }
 
+/**
+ * Validates a Bcc address before it reaches a MIME header.
+ *
+ * Returns null for anything unusable so the send proceeds without a Bcc.
+ * Rejects CR/LF outright: the value comes from sequence settings, and a
+ * newline in a header value is header injection (an attacker-controlled
+ * settings row could otherwise append Bcc/To lines and fan the customer's
+ * email out to arbitrary recipients). Also rejects commas so this stays the
+ * single address the caller promised, since a list would silently widen who
+ * receives customer mail.
+ */
+export function sanitizeBccAddress(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/[\r\n]/.test(trimmed)) return null;
+  if (trimmed.includes(",")) return null;
+  // Deliberately loose: one @, no whitespace, a dot in the domain. Enough to
+  // catch typos and junk without re-litigating RFC 5322 in a regex.
+  if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 function appendSignature(htmlBody: string, signatureHtml: string): string {
   // Glue the signature onto the body with no extra <br> spacers. The body
   // typically ends with a closing </p> (TipTap output) whose bottom margin
@@ -90,6 +121,7 @@ function buildMimeMessage(params: {
   textBody?: string;
   trackingId?: string;
   replyToMessageId?: string;
+  bcc?: string;
 }): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -109,6 +141,13 @@ function buildMimeMessage(params: {
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
+
+  // Gmail delivers to a Bcc recipient and strips the header from the copy the
+  // To: recipient receives, so the customer never sees it.
+  const bcc = sanitizeBccAddress(params.bcc);
+  if (bcc) {
+    headers.push(`Bcc: ${bcc}`);
+  }
 
   if (params.replyToMessageId) {
     headers.push(`In-Reply-To: ${params.replyToMessageId}`);
@@ -227,6 +266,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     textBody: finalTextBody,
     trackingId: params.trackingId,
     replyToMessageId: params.replyToMessageId,
+    bcc: params.bcc,
   });
 
   // Base64url encode the MIME message
