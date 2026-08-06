@@ -14,8 +14,22 @@
 
 import { ImageResponse } from "next/og";
 
+// 3:2, because that is the aspect-ratio every blog image container on
+// wrenchlane.com uses with object-fit: cover:
+//   .article_blog-post-header_image      3/2  (the article hero)
+//   .resources_blog-list_image           3/2  (the index cards)
+//   .article-category-page_blog-list_image / ..._tags-page_...  3/2
+// A 1200x630 canvas (1.905) was being cropped 21% horizontally on the hero,
+// which clipped the kicker and the first character of the title.
+//
+// Two featured variants use 4/3 and 16/9, so content is inset far enough to
+// survive those too: 4/3 trims ~5.5% off each side, 16/9 ~7.8% off top and
+// bottom. The padding below clears both with room to spare.
 const WIDTH = 1200;
-const HEIGHT = 630;
+const HEIGHT = 800;
+/** Keeps text clear of the 4:3 and 16:9 crops. Decoration may fall outside. */
+const SAFE_X = 92;
+const SAFE_Y = 80;
 
 // Pulled from the CRM's own palette so the cards look like Wrenchlane.
 const INK = "#0B1220";
@@ -84,12 +98,13 @@ export async function renderArticleImage(input: ArticleImageInput): Promise<Uint
           flexDirection: "column",
           justifyContent: "space-between",
           background: INK,
-          padding: "64px 72px",
+          padding: `${SAFE_Y}px ${SAFE_X}px`,
           fontFamily: "sans-serif",
           position: "relative",
         }}
       >
-        {/* Accent rule down the left edge. */}
+        {/* Accent rule down the left edge. Purely decorative: a 4:3 crop
+            trims it, which is fine because nothing depends on it. */}
         <div
           style={{
             position: "absolute",
