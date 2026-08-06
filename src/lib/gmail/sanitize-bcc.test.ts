@@ -8,6 +8,16 @@ describe("sanitizeBccAddress", () => {
     );
   });
 
+  // The real address Trustpilot issues, pinned as a regression test: it has a
+  // dot AND a + tag in the local part and a subdomained host, so a naive
+  // "one word @ one word" pattern would reject it and silently drop the Bcc,
+  // which fails as a no-op rather than an error and would be easy to miss.
+  it("accepts the live Wrenchlane AFS address", () => {
+    expect(
+      sanitizeBccAddress("wrenchlane.com+7b544f0317@invite.trustpilot.com"),
+    ).toBe("wrenchlane.com+7b544f0317@invite.trustpilot.com");
+  });
+
   it("trims surrounding whitespace", () => {
     expect(sanitizeBccAddress("  email@trustpilot.co.uk \t")).toBe(
       "email@trustpilot.co.uk",
