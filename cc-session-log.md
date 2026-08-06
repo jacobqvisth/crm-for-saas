@@ -6438,3 +6438,72 @@ categories Diagnostics + Shop Operations, five tags, and a hero PNG that fetches
 **Still open:** the Ford Kuga article Jacob published earlier went live before this
 feature existed, so it has no image, category or tags. Swedish still cannot be
 published (secondary CMS locale not wired). No Ideas tab.
+
+---
+
+## Articles: Releases tab, republish a release email as an article (PR #610)
+
+**2026-08-06** · branch `worktree-release-article-scan` · squash `d9ea367`
+
+Jacob asked for "a function and a button to scan for release articles and publish
+them" on /articles, after we did the 3.7 write-up by hand in the same session.
+
+Every WrenchLane release goes out as a Customer.io broadcast and is then written
+up under Product Updates, screenshots and all. 18 already exist. New **Releases**
+tab scans a mailbox, lists what it found, and imports one in a click.
+
+**Why Gmail and not Customer.io.** Reading broadcasts needs an App API key this
+deployment does not have (only the CDP *write* key is in `keys.env`). The CRM
+already holds `gmail.readonly` OAuth for the team mailboxes for mailbox-sync, and
+every release is seeded to a wrenchlane.com address, so the mail is the cheaper,
+more reliable source. Mailbox defaults to `jacob@wrenchlane.com`,
+`RELEASE_MAIL_MAILBOX` overrides.
+
+**Why the parse is tractable.** The broadcast comes from one Customer.io template,
+so the markup is regular: `h1` is the headline, a `<p>` with `font-weight:700` is
+a section heading, `<p>` with `line-height:1.6` is body copy, and images carry
+`max-width:540px` for screenshots vs 200 for the logo and 32 for social icons.
+Detection keys on the release campaign tag, not the subject, because subjects
+vary a lot ("Introducing Ask WrenchLane" vs "WrenchLane 3.2 fast search").
+
+**THE GOTCHA WORTH REMEMBERING.** Customer.io rewrites every `href` into a click
+tracker, `links.wrenchlane.com/e/c/<base64url of {"email_id":..,"href":".."}>`, so
+**nothing in the sent HTML is a real URL**. Both `utm_campaign=release_3_7` and
+the demo video URL live inside those payloads. Before `decodeTrackedLinks()` the
+video silently degraded into a poster screenshot and version detection only
+worked by luck, off a `/wrenchlane \d+\.\d+/` fallback in the copy. Any future
+work that reads links out of these emails has to decode first.
+
+**Article, not a forwarded email** (Jacob's explicit ask): the salutation, the
+"Questions or feedback? Just reply to this email", the "Best regards / Team
+WrenchLane" and the footer are all dropped, as is the trailing thank-you. No em
+dashes, per the standing rule, even though the older live release articles use
+them freely.
+
+**Images.** Screenshots are re-hosted on the Webflow CDN rather than hot-linked
+from an email asset host. The hero is the first screenshot letterboxed onto the
+same 1200x800 canvas the drawn cards use (`renderReleaseHero`), because every
+blog image container on the site is 3:2 with `object-fit: cover` and the release
+screenshots run 1.30 to 2.57, so a raw one gets cropped or pillarboxed.
+
+**Staged, never auto-published.** Import creates the item and stops; going live
+reuses the existing `PublishToSite` control, which promotes the created item
+rather than writing a second one that would collide on the slug. Import is
+idempotent per Gmail message id for the same reason: a published Webflow slug is
+not recoverable.
+
+**Two guards added to the existing publish route**, both reachable via Re-sync
+once a release is live:
+- `webflow.ts` gained `bodyFormat`. A release body is already rich-text HTML and
+  `markdownToWebflowHtml` mangles its `w-richtext-figure-type-*` figures.
+- classify and the drawn hero are skipped for `source_kind='release_mail'`, so a
+  Re-sync does not replace the screenshot hero with a generated card or refile
+  the article.
+
+18 unit tests over the parser, fixture copied from the real 3.7 mail including a
+genuine tracked link. Also run against the actual email: 3 screenshots, video
+`X5mHLQFd-CE`, correct h3/h4 structure. Build · lint · tsc all green.
+
+**Still open:** only the first screenshot can become the hero (no way to pick).
+Swedish releases would need the secondary CMS locale, still unwired. The scan
+opens up to 40 messages one at a time, so it takes a few seconds.
