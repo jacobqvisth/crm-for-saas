@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { CloudUpload, ExternalLink, Globe, Loader2 } from "lucide-react";
+import { CloudUpload, ExternalLink, Globe, Loader2, RefreshCw } from "lucide-react";
 import type { ArticleFormat } from "@/lib/articles/types";
 
 type Props = {
@@ -36,7 +36,7 @@ export function PublishToSite({
   compact,
 }: Props) {
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState<"stage" | "live" | null>(null);
+  const [busy, setBusy] = useState<"stage" | "live" | "resync" | null>(null);
   const [url, setUrl] = useState<string | null>(publishedUrl);
   const [showHelp, setShowHelp] = useState(false);
 
@@ -57,7 +57,7 @@ export function PublishToSite({
 
   const eligible = format === "blog_article" && language === "en";
 
-  async function send(mode: "stage" | "live") {
+  async function send(mode: "stage" | "live" | "resync") {
     if (mode === "live") {
       const ok = window.confirm(
         "This publishes the article live on wrenchlane.com, where anyone can read it.\n\nHave you read it through? Check the claims list first if you have not.",
@@ -79,9 +79,11 @@ export function PublishToSite({
       setUrl(data.url);
       onPublished?.(data.url, Boolean(data.live));
       toast.success(
-        data.live
-          ? "Live on wrenchlane.com"
-          : "Created in Webflow as a staged item, not public yet",
+        mode === "resync"
+          ? "Re-synced to the site, including a fresh image"
+          : data.live
+            ? "Live on wrenchlane.com"
+            : "Created in Webflow as a staged item, not public yet",
         { duration: 7000 },
       );
     } catch {
@@ -93,18 +95,32 @@ export function PublishToSite({
 
   const isLive = status === "published";
 
-  // Live: just a link to it.
+  // Live: a link to it, plus a way to push changes to the existing item. Updating
+  // in place is the only safe way to change a published article, because deleting
+  // one keeps its slug reserved and orphans the live page.
   if (url && isLive) {
     return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
-      >
-        <ExternalLink className="h-3.5 w-3.5" />
-        On the website
-      </a>
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          On the website
+        </a>
+        <button
+          type="button"
+          onClick={() => send("resync")}
+          disabled={busy !== null}
+          title="Update the live article in place: text, category, tags and a freshly drawn image. The URL does not change."
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${busy === "resync" ? "animate-spin" : ""}`} />
+          Re-sync
+        </button>
+      </span>
     );
   }
 

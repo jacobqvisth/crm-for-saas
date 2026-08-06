@@ -237,6 +237,31 @@ export function listCategories(): Promise<TaxonomyTerm[]> {
 }
 
 /**
+ * Which article items are actually live, keyed by item id.
+ *
+ * The CRM is not the only thing that can publish. A full site publish in the
+ * Webflow Designer flushes every staged CMS item, and someone can publish a
+ * single item by hand. When that happens the CRM's stored status silently goes
+ * stale, which is how a live article ended up showing "In Webflow, not public".
+ * So the Library reconciles against this rather than trusting what it wrote.
+ *
+ * Returns null on failure, so callers can tell "not published" apart from
+ * "could not check".
+ */
+export async function getPublishedItemDates(): Promise<Map<string, string> | null> {
+  const res = await call<{ items: { id: string; lastPublished?: string | null }[] }>(
+    `/collections/${ARTICLES_COLLECTION_ID}/items?limit=100`,
+    { method: "GET" },
+  );
+  if (!res.ok) return null;
+  const map = new Map<string, string>();
+  for (const item of res.data.items) {
+    if (item.lastPublished) map.set(item.id, item.lastPublished);
+  }
+  return map;
+}
+
+/**
  * The site's tag vocabulary. Existing tags only, deliberately: inventing a tag
  * creates a thin taxonomy page with one article on it that nobody maintains.
  */
@@ -299,6 +324,57 @@ export async function uploadAsset(
     ok: true,
     data: { fileId: reg.data.id, url: reg.data.hostedUrl ?? reg.data.assetUrl ?? "" },
   };
+}
+
+/**
+ * Update an existing item in place.
+ *
+ * This is the ONLY safe way to change something already published. Deleting a
+ * published item removes it from the CMS but keeps its slug reserved and its page
+ * live, so delete-and-recreate fails on the slug and orphans the live page. The
+ * slug is deliberately not updatable here, because changing it breaks the URL.
+ */
+export async function updateArticleItem(
+  itemId: string,
+  input: Omit<WebflowArticleInput, "slug">,
+): Promise<WebflowResult<{ id: string }>> {
+  const res = await call<{ id: string }>(
+    `/collections/${ARTICLES_COLLECTION_ID}/items/${itemId}`,
+    {
+      method: "PATCH",
+      body: {
+        isArchived: false,
+        isDraft: false,
+        fieldData: {
+          name: stripLongDashes(decodeStrayUnicodeEscapes(input.title)).slice(0, 256),
+          "post-body": markdownToWebflowHtml(input.body),
+          ...(input.summary
+            ? { "post-summary": stripLongDashes(decodeStrayUnicodeEscapes(input.summary)) }
+            : {}),
+          ...(input.metaTitle
+            ? { "meta-title": stripLongDashes(decodeStrayUnicodeEscapes(input.metaTitle)) }
+            : {}),
+          ...(input.metaDescription
+            ? {
+                "meta-description": stripLongDashes(
+                  decodeStrayUnicodeEscapes(input.metaDescription),
+                ),
+              }
+            : {}),
+          ...(input.categoryIds?.length ? { category: input.categoryIds } : {}),
+          ...(input.tagIds?.length ? { tags: input.tagIds } : {}),
+          ...(input.image
+            ? {
+                "main-image": { fileId: input.image.fileId, url: input.image.url },
+                "thumbnail-image": { fileId: input.image.fileId, url: input.image.url },
+              }
+            : {}),
+        },
+      },
+    },
+  );
+  if (!res.ok) return res;
+  return { ok: true, data: { id: res.data.id ?? itemId } };
 }
 
 /**
