@@ -9,7 +9,7 @@ import type {
 } from "@/lib/ceo/data/reviews";
 import { REVIEW_PLATFORMS, REVIEW_SOURCE_LABEL } from "@/lib/ceo/reviews/platforms";
 import { formatNumber } from "@/lib/ceo/format";
-import { InfoHint } from "./source-info";
+import { InfoHint } from "@/components/ceo/source-info";
 import { ReviewsManualEntry } from "./reviews-manual-entry";
 
 function formatRating(value: number | null): string {
@@ -245,22 +245,16 @@ function TrendStrip({ trend }: { trend: ReviewTrendPoint[] }) {
 function ReviewFeed({
   reviews,
   platformFilter,
-  selectedRange,
 }: {
   reviews: ReviewFeedItem[];
   platformFilter: string;
-  selectedRange: string;
 }) {
   const platformsWithReviews = REVIEW_PLATFORMS.filter(
     (p) => p.supportsIndividualReviews,
   );
 
   function tabHref(slug: string) {
-    const params = new URLSearchParams();
-    if (selectedRange) params.set("range", selectedRange);
-    if (slug !== "all") params.set("platform", slug);
-    const qs = params.toString();
-    return qs ? `/dashboard/reviews?${qs}` : "/dashboard/reviews";
+    return slug === "all" ? "/reviews" : `/reviews?platform=${slug}`;
   }
 
   return (
@@ -370,11 +364,9 @@ function ReviewFeed({
 
 export function ReviewsContent({
   data,
-  selectedRange,
   todayIso,
 }: {
   data: ReviewsData;
-  selectedRange: string;
   todayIso: string;
 }) {
   const grouped = CATEGORY_ORDER.map((category) => ({
@@ -478,7 +470,6 @@ export function ReviewsContent({
         <ReviewFeed
           reviews={data.recentReviews}
           platformFilter={data.platformFilter}
-          selectedRange={selectedRange}
         />
       </section>
     </div>

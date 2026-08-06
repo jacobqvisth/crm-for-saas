@@ -7,7 +7,7 @@ import {
   addIndividualReviewAction,
   addReviewSnapshotAction,
   type ReviewActionResult,
-} from "@/app/(dashboard)/dashboard/reviews/actions";
+} from "@/app/(dashboard)/reviews/actions";
 
 type PlatformOption = {
   slug: string;
