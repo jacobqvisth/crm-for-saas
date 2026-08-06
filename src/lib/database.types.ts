@@ -85,775 +85,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      articles: {
-        Row: {
-          webflow_item_id: string | null
-          body: string | null
-          claims: Json
-          created_at: string
-          created_by: string | null
-          format: string
-          hashtags: string[]
-          hooks: Json
-          id: string
-          impact: Json
-          language: string
-          model: string | null
-          options: Json
-          published_at: string | null
-          published_url: string | null
-          seo: Json
-          source_kind: string
-          source_ref: string | null
-          source_snapshot: Json
-          status: string
-          title: string | null
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          webflow_item_id?: string | null
-          body?: string | null
-          claims?: Json
-          created_at?: string
-          created_by?: string | null
-          format: string
-          hashtags?: string[]
-          hooks?: Json
-          id?: string
-          impact?: Json
-          language?: string
-          model?: string | null
-          options?: Json
-          published_at?: string | null
-          published_url?: string | null
-          seo?: Json
-          source_kind?: string
-          source_ref?: string | null
-          source_snapshot?: Json
-          status?: string
-          title?: string | null
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          webflow_item_id?: string | null
-          body?: string | null
-          claims?: Json
-          created_at?: string
-          created_by?: string | null
-          format?: string
-          hashtags?: string[]
-          hooks?: Json
-          id?: string
-          impact?: Json
-          language?: string
-          model?: string | null
-          options?: Json
-          published_at?: string | null
-          published_url?: string | null
-          seo?: Json
-          source_kind?: string
-          source_ref?: string | null
-          source_snapshot?: Json
-          status?: string
-          title?: string | null
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "articles_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      diagnostic_videos: {
-        Row: {
-          category: string | null
-          channel: string
-          created_at: string
-          description: string | null
-          dtc_codes: string[]
-          id: string
-          marked: boolean
-          sort_order: number
-          source: string
-          summary: string | null
-          title: string
-          updated_at: string
-          url: string
-          veo3_prompt: string | null
-          workspace_id: string
-          youtube_id: string
-        }
-        Insert: {
-          category?: string | null
-          channel: string
-          created_at?: string
-          description?: string | null
-          dtc_codes?: string[]
-          id?: string
-          marked?: boolean
-          sort_order?: number
-          source?: string
-          summary?: string | null
-          title: string
-          updated_at?: string
-          url: string
-          veo3_prompt?: string | null
-          workspace_id: string
-          youtube_id: string
-        }
-        Update: {
-          category?: string | null
-          channel?: string
-          created_at?: string
-          description?: string | null
-          dtc_codes?: string[]
-          id?: string
-          marked?: boolean
-          sort_order?: number
-          source?: string
-          summary?: string | null
-          title?: string
-          updated_at?: string
-          url?: string
-          veo3_prompt?: string | null
-          workspace_id?: string
-          youtube_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "diagnostic_videos_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      forum_comment_assignments: {
-        Row: {
-          account_id: string | null
-          comment: string | null
-          confirmed_via: string | null
-          created_at: string
-          detected_author: string | null
-          id: string
-          owner_label: string
-          reddit_comment_url: string | null
-          posted_at: string | null
-          posted_url: string | null
-          slack_channel_id: string | null
-          slack_message_ts: string | null
-          source: string
-          source_id: string
-          status: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          account_id?: string | null
-          comment?: string | null
-          confirmed_via?: string | null
-          created_at?: string
-          detected_author?: string | null
-          id?: string
-          owner_label: string
-          posted_at?: string | null
-          reddit_comment_url?: string | null
-          posted_url?: string | null
-          slack_channel_id?: string | null
-          slack_message_ts?: string | null
-          source: string
-          source_id: string
-          status?: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          account_id?: string | null
-          comment?: string | null
-          confirmed_via?: string | null
-          created_at?: string
-          detected_author?: string | null
-          id?: string
-          owner_label?: string
-          reddit_comment_url?: string | null
-          posted_at?: string | null
-          posted_url?: string | null
-          slack_channel_id?: string | null
-          slack_message_ts?: string | null
-          source?: string
-          source_id?: string
-          status?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forum_comment_assignments_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "reddit_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forum_comment_assignments_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      forum_thread_replies: {
-        Row: {
-          account_id: string | null
-          assigned_owner_label: string | null
-          generation_options: Json
-          comment_author: string | null
-          comment_excerpt: string | null
-          comment_score: number | null
-          confirmed_via: string | null
-          created_at: string
-          id: string
-          mention_level: string
-          model: string | null
-          posted_at: string | null
-          posted_url: string | null
-          priority: number
-          reddit_comment_id: string
-          reddit_comment_url: string | null
-          reply_text: string | null
-          source: string
-          source_id: string
-          status: string
-          updated_at: string
-          why: string | null
-          workspace_id: string
-        }
-        Insert: {
-          account_id?: string | null
-          assigned_owner_label?: string | null
-          generation_options?: Json
-          comment_author?: string | null
-          comment_excerpt?: string | null
-          comment_score?: number | null
-          confirmed_via?: string | null
-          created_at?: string
-          id?: string
-          mention_level?: string
-          model?: string | null
-          posted_at?: string | null
-          posted_url?: string | null
-          priority?: number
-          reddit_comment_id: string
-          reddit_comment_url?: string | null
-          reply_text?: string | null
-          source: string
-          source_id: string
-          status?: string
-          updated_at?: string
-          why?: string | null
-          workspace_id: string
-        }
-        Update: {
-          account_id?: string | null
-          assigned_owner_label?: string | null
-          generation_options?: Json
-          comment_author?: string | null
-          comment_excerpt?: string | null
-          comment_score?: number | null
-          confirmed_via?: string | null
-          created_at?: string
-          id?: string
-          mention_level?: string
-          model?: string | null
-          posted_at?: string | null
-          posted_url?: string | null
-          priority?: number
-          reddit_comment_id?: string
-          reddit_comment_url?: string | null
-          reply_text?: string | null
-          source?: string
-          source_id?: string
-          status?: string
-          updated_at?: string
-          why?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forum_thread_replies_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "reddit_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forum_thread_replies_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ai_failure_stories: {
-        Row: {
-          action_taken: string | null
-          actual_cause: string | null
-          ai_claimed_cause: string | null
-          ai_tool: string | null
-          cost_amount: number | null
-          cost_currency: string | null
-          created_at: string
-          id: string
-          our_notes: string | null
-          our_verdict: string
-          outcome: string
-          source_author: string | null
-          source_subreddit: string | null
-          source_url: string | null
-          symptom: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          action_taken?: string | null
-          actual_cause?: string | null
-          ai_claimed_cause?: string | null
-          ai_tool?: string | null
-          cost_amount?: number | null
-          cost_currency?: string | null
-          created_at?: string
-          id?: string
-          our_notes?: string | null
-          our_verdict?: string
-          outcome?: string
-          source_author?: string | null
-          source_subreddit?: string | null
-          source_url?: string | null
-          symptom: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          action_taken?: string | null
-          actual_cause?: string | null
-          ai_claimed_cause?: string | null
-          ai_tool?: string | null
-          cost_amount?: number | null
-          cost_currency?: string | null
-          created_at?: string
-          id?: string
-          our_notes?: string | null
-          our_verdict?: string
-          outcome?: string
-          source_author?: string | null
-          source_subreddit?: string | null
-          source_url?: string | null
-          symptom?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ai_failure_stories_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      forum_distribution: {
-        Row: {
-          created_at: string
-          fit_reason: string | null
-          id: string
-          last_checked_at: string | null
-          num_comments: number | null
-          posted_at: string | null
-          posted_by_account_id: string | null
-          posted_by_username: string | null
-          posted_url: string | null
-          recommended_angle: string | null
-          rules_note: string | null
-          score: number | null
-          slack_channel_id: string | null
-          slack_notified_at: string | null
-          slack_summary_channel: string | null
-          slack_summary_ts: string | null
-          slack_thread_ts: string | null
-          sort_order: number
-          status: string
-          subreddit: string
-          subreddit_url: string
-          suggested_body: string | null
-          suggested_comment: string | null
-          suggested_title: string | null
-          tier: string
-          topic: string
-          traction_note: string | null
-          updated_at: string
-          upvote_ratio: number | null
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          fit_reason?: string | null
-          id?: string
-          last_checked_at?: string | null
-          num_comments?: number | null
-          posted_at?: string | null
-          posted_by_account_id?: string | null
-          posted_by_username?: string | null
-          posted_url?: string | null
-          recommended_angle?: string | null
-          rules_note?: string | null
-          score?: number | null
-          slack_channel_id?: string | null
-          slack_notified_at?: string | null
-          slack_summary_channel?: string | null
-          slack_summary_ts?: string | null
-          slack_thread_ts?: string | null
-          sort_order?: number
-          status?: string
-          subreddit: string
-          subreddit_url: string
-          suggested_body?: string | null
-          suggested_comment?: string | null
-          suggested_title?: string | null
-          tier?: string
-          topic?: string
-          traction_note?: string | null
-          updated_at?: string
-          upvote_ratio?: number | null
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          fit_reason?: string | null
-          id?: string
-          last_checked_at?: string | null
-          num_comments?: number | null
-          posted_at?: string | null
-          posted_by_account_id?: string | null
-          posted_by_username?: string | null
-          posted_url?: string | null
-          recommended_angle?: string | null
-          rules_note?: string | null
-          score?: number | null
-          slack_channel_id?: string | null
-          slack_notified_at?: string | null
-          slack_summary_channel?: string | null
-          slack_summary_ts?: string | null
-          slack_thread_ts?: string | null
-          sort_order?: number
-          status?: string
-          subreddit?: string
-          subreddit_url?: string
-          suggested_body?: string | null
-          suggested_comment?: string | null
-          suggested_title?: string | null
-          tier?: string
-          topic?: string
-          traction_note?: string | null
-          updated_at?: string
-          upvote_ratio?: number | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forum_distribution_posted_by_account_id_fkey"
-            columns: ["posted_by_account_id"]
-            isOneToOne: false
-            referencedRelation: "reddit_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forum_distribution_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      forum_posts: {
-        Row: {
-          assigned_account_id: string | null
-          created_at: string
-          generation_options: Json
-          diagnostic_id: string | null
-          forum_target: string
-          generated_body: string | null
-          generated_title: string | null
-          id: string
-          language: string
-          last_checked_at: string | null
-          mention_level: string
-          model: string | null
-          num_comments: number | null
-          post_type: string
-          posted_at: string | null
-          posted_by_account_id: string | null
-          posted_by_username: string | null
-          posted_url: string | null
-          scenario_snapshot: Json
-          score: number | null
-          slack_channel_id: string | null
-          slack_notified_at: string | null
-          slack_summary_channel: string | null
-          slack_summary_ts: string | null
-          slack_thread_ts: string | null
-          status: string
-          suggested_comment: string | null
-          traction_note: string | null
-          updated_at: string
-          upvote_ratio: number | null
-          workspace_id: string
-        }
-        Insert: {
-          assigned_account_id?: string | null
-          created_at?: string
-          generation_options?: Json
-          diagnostic_id?: string | null
-          forum_target: string
-          generated_body?: string | null
-          generated_title?: string | null
-          id?: string
-          language?: string
-          last_checked_at?: string | null
-          mention_level?: string
-          model?: string | null
-          num_comments?: number | null
-          post_type?: string
-          posted_at?: string | null
-          posted_by_account_id?: string | null
-          posted_by_username?: string | null
-          posted_url?: string | null
-          scenario_snapshot?: Json
-          score?: number | null
-          slack_channel_id?: string | null
-          slack_notified_at?: string | null
-          slack_summary_channel?: string | null
-          slack_summary_ts?: string | null
-          slack_thread_ts?: string | null
-          status?: string
-          suggested_comment?: string | null
-          traction_note?: string | null
-          updated_at?: string
-          upvote_ratio?: number | null
-          workspace_id: string
-        }
-        Update: {
-          assigned_account_id?: string | null
-          created_at?: string
-          generation_options?: Json
-          diagnostic_id?: string | null
-          forum_target?: string
-          generated_body?: string | null
-          generated_title?: string | null
-          id?: string
-          language?: string
-          last_checked_at?: string | null
-          mention_level?: string
-          model?: string | null
-          num_comments?: number | null
-          post_type?: string
-          posted_at?: string | null
-          posted_by_account_id?: string | null
-          posted_by_username?: string | null
-          posted_url?: string | null
-          scenario_snapshot?: Json
-          score?: number | null
-          slack_channel_id?: string | null
-          slack_notified_at?: string | null
-          slack_summary_channel?: string | null
-          slack_summary_ts?: string | null
-          slack_thread_ts?: string | null
-          status?: string
-          suggested_comment?: string | null
-          traction_note?: string | null
-          updated_at?: string
-          upvote_ratio?: number | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forum_posts_assigned_account_id_fkey"
-            columns: ["assigned_account_id"]
-            isOneToOne: false
-            referencedRelation: "reddit_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "forum_posts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reddit_accounts: {
-        Row: {
-          active: boolean
-          can_mention_wrenchlane: boolean
-          created_at: string
-          id: string
-          notes: string | null
-          owner_label: string
-          persona_note: string | null
-          slack_user_id: string | null
-          subreddits: string[]
-          turns_wrenches: boolean
-          updated_at: string
-          username: string | null
-          uses_ai_tools: boolean
-          workspace_id: string
-        }
-        Insert: {
-          active?: boolean
-          can_mention_wrenchlane?: boolean
-          created_at?: string
-          id?: string
-          notes?: string | null
-          owner_label: string
-          persona_note?: string | null
-          slack_user_id?: string | null
-          subreddits?: string[]
-          turns_wrenches?: boolean
-          updated_at?: string
-          username?: string | null
-          uses_ai_tools?: boolean
-          workspace_id: string
-        }
-        Update: {
-          active?: boolean
-          can_mention_wrenchlane?: boolean
-          created_at?: string
-          id?: string
-          notes?: string | null
-          owner_label?: string
-          persona_note?: string | null
-          slack_user_id?: string | null
-          subreddits?: string[]
-          turns_wrenches?: boolean
-          updated_at?: string
-          username?: string | null
-          uses_ai_tools?: boolean
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reddit_accounts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      subreddit_access: {
-        Row: {
-          access: string
-          checked_at: string
-          subreddit: string
-          title: string | null
-        }
-        Insert: {
-          access?: string
-          checked_at?: string
-          subreddit: string
-          title?: string | null
-        }
-        Update: {
-          access?: string
-          checked_at?: string
-          subreddit?: string
-          title?: string | null
-        }
-        Relationships: []
-      }
-      forum_replies: {
-        Row: {
-          created_at: string
-          generated_body: string | null
-          generation_options: Json
-          id: string
-          mention_level: string
-          model: string | null
-          posted_at: string | null
-          posted_url: string | null
-          source_author: string | null
-          source_body: string | null
-          source_num_comments: number | null
-          source_score: number | null
-          source_subreddit: string | null
-          source_title: string | null
-          source_url: string | null
-          status: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          generated_body?: string | null
-          generation_options?: Json
-          id?: string
-          mention_level?: string
-          model?: string | null
-          posted_at?: string | null
-          posted_url?: string | null
-          source_author?: string | null
-          source_body?: string | null
-          source_num_comments?: number | null
-          source_score?: number | null
-          source_subreddit?: string | null
-          source_title?: string | null
-          source_url?: string | null
-          status?: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          generated_body?: string | null
-          generation_options?: Json
-          id?: string
-          mention_level?: string
-          model?: string | null
-          posted_at?: string | null
-          posted_url?: string | null
-          source_author?: string | null
-          source_body?: string | null
-          source_num_comments?: number | null
-          source_score?: number | null
-          source_subreddit?: string | null
-          source_title?: string | null
-          source_url?: string | null
-          status?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forum_replies_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       _ops_queue_pause_2026_04_28: {
         Row: {
           captured_at: string | null
@@ -1180,6 +411,195 @@ export type Database = {
           },
         ]
       }
+      ai_failure_stories: {
+        Row: {
+          action_taken: string | null
+          actual_cause: string | null
+          ai_claimed_cause: string | null
+          ai_tool: string | null
+          cost_amount: number | null
+          cost_currency: string | null
+          created_at: string
+          id: string
+          our_notes: string | null
+          our_verdict: string
+          outcome: string
+          source_author: string | null
+          source_subreddit: string | null
+          source_url: string | null
+          symptom: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          action_taken?: string | null
+          actual_cause?: string | null
+          ai_claimed_cause?: string | null
+          ai_tool?: string | null
+          cost_amount?: number | null
+          cost_currency?: string | null
+          created_at?: string
+          id?: string
+          our_notes?: string | null
+          our_verdict?: string
+          outcome?: string
+          source_author?: string | null
+          source_subreddit?: string | null
+          source_url?: string | null
+          symptom: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          action_taken?: string | null
+          actual_cause?: string | null
+          ai_claimed_cause?: string | null
+          ai_tool?: string | null
+          cost_amount?: number | null
+          cost_currency?: string | null
+          created_at?: string
+          id?: string
+          our_notes?: string | null
+          our_verdict?: string
+          outcome?: string
+          source_author?: string | null
+          source_subreddit?: string | null
+          source_url?: string | null
+          symptom?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_failure_stories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      articles: {
+        Row: {
+          body: string | null
+          claims: Json
+          created_at: string
+          created_by: string | null
+          format: string
+          hashtags: string[]
+          hooks: Json
+          id: string
+          impact: Json
+          language: string
+          model: string | null
+          options: Json
+          published_at: string | null
+          published_url: string | null
+          seo: Json
+          source_kind: string
+          source_ref: string | null
+          source_snapshot: Json
+          status: string
+          title: string | null
+          updated_at: string
+          webflow_item_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          body?: string | null
+          claims?: Json
+          created_at?: string
+          created_by?: string | null
+          format: string
+          hashtags?: string[]
+          hooks?: Json
+          id?: string
+          impact?: Json
+          language?: string
+          model?: string | null
+          options?: Json
+          published_at?: string | null
+          published_url?: string | null
+          seo?: Json
+          source_kind?: string
+          source_ref?: string | null
+          source_snapshot?: Json
+          status?: string
+          title?: string | null
+          updated_at?: string
+          webflow_item_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          body?: string | null
+          claims?: Json
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          hashtags?: string[]
+          hooks?: Json
+          id?: string
+          impact?: Json
+          language?: string
+          model?: string | null
+          options?: Json
+          published_at?: string | null
+          published_url?: string | null
+          seo?: Json
+          source_kind?: string
+          source_ref?: string | null
+          source_snapshot?: Json
+          status?: string
+          title?: string | null
+          updated_at?: string
+          webflow_item_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "articles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_exclusions: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          label: string | null
+          value: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          label?: string | null
+          value: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          label?: string | null
+          value?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_exclusions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_feedback: {
         Row: {
           activity_id: string | null
@@ -1233,6 +653,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "activities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_feedback_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "rep_touches"
+            referencedColumns: ["activity_id"]
           },
           {
             foreignKeyName: "call_feedback_company_id_fkey"
@@ -1360,6 +787,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "call_sessions_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "rep_touches"
+            referencedColumns: ["activity_id"]
+          },
+          {
             foreignKeyName: "call_sessions_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
@@ -1375,136 +809,6 @@ export type Database = {
           },
           {
             foreignKeyName: "call_sessions_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      phone_enrichment_jobs: {
-        Row: {
-          attempts: number
-          contact_id: string
-          enqueued_at: string
-          error: string | null
-          finished_at: string | null
-          id: string
-          outcome: string | null
-          requested_by: string | null
-          saved_count: number
-          started_at: string | null
-          status: string
-          updated_at: string
-          website_added: string | null
-          workspace_id: string
-        }
-        Insert: {
-          attempts?: number
-          contact_id: string
-          enqueued_at?: string
-          error?: string | null
-          finished_at?: string | null
-          id?: string
-          outcome?: string | null
-          requested_by?: string | null
-          saved_count?: number
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-          website_added?: string | null
-          workspace_id: string
-        }
-        Update: {
-          attempts?: number
-          contact_id?: string
-          enqueued_at?: string
-          error?: string | null
-          finished_at?: string | null
-          id?: string
-          outcome?: string | null
-          requested_by?: string | null
-          saved_count?: number
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-          website_added?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "phone_enrichment_jobs_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "phone_enrichment_jobs_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      phone_numbers: {
-        Row: {
-          company_id: string | null
-          contact_id: string | null
-          country_code: string | null
-          created_at: string
-          id: string
-          is_primary: boolean
-          label: string | null
-          number: string
-          source: string | null
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          company_id?: string | null
-          contact_id?: string | null
-          country_code?: string | null
-          created_at?: string
-          id?: string
-          is_primary?: boolean
-          label?: string | null
-          number: string
-          source?: string | null
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          company_id?: string | null
-          contact_id?: string | null
-          country_code?: string | null
-          created_at?: string
-          id?: string
-          is_primary?: boolean
-          label?: string | null
-          number?: string
-          source?: string | null
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "phone_numbers_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "phone_numbers_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "phone_numbers_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1570,18 +874,18 @@ export type Database = {
           org_number: string | null
           owner_auto: boolean
           owner_updated_at: string | null
-          primary_owner_id: string | null
-          primary_owner_source: string | null
-          secondary_owner_id: string | null
           parent_company_id: string | null
           payment_status: string | null
           phone: string | null
           plan: string | null
           plan_billing_cycle: string | null
           postal_code: string | null
+          primary_owner_id: string | null
+          primary_owner_source: string | null
           rating: number | null
           revenue_range: string | null
           review_count: number | null
+          secondary_owner_id: string | null
           skip_auto_followup: boolean
           source: string | null
           stripe_customer_id: string | null
@@ -1652,18 +956,18 @@ export type Database = {
           org_number?: string | null
           owner_auto?: boolean
           owner_updated_at?: string | null
-          primary_owner_id?: string | null
-          primary_owner_source?: string | null
-          secondary_owner_id?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
           plan?: string | null
           plan_billing_cycle?: string | null
           postal_code?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
           rating?: number | null
           revenue_range?: string | null
           review_count?: number | null
+          secondary_owner_id?: string | null
           skip_auto_followup?: boolean
           source?: string | null
           stripe_customer_id?: string | null
@@ -1734,18 +1038,18 @@ export type Database = {
           org_number?: string | null
           owner_auto?: boolean
           owner_updated_at?: string | null
-          primary_owner_id?: string | null
-          primary_owner_source?: string | null
-          secondary_owner_id?: string | null
           parent_company_id?: string | null
           payment_status?: string | null
           phone?: string | null
           plan?: string | null
           plan_billing_cycle?: string | null
           postal_code?: string | null
+          primary_owner_id?: string | null
+          primary_owner_source?: string | null
           rating?: number | null
           revenue_range?: string | null
           review_count?: number | null
+          secondary_owner_id?: string | null
           skip_auto_followup?: boolean
           source?: string | null
           stripe_customer_id?: string | null
@@ -1833,41 +1137,6 @@ export type Database = {
           },
           {
             foreignKeyName: "company_merge_candidates_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      call_exclusions: {
-        Row: {
-          created_at: string
-          id: string
-          kind: string
-          label: string | null
-          value: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          kind: string
-          label?: string | null
-          value: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          kind?: string
-          label?: string | null
-          value?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "call_exclusions_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2001,10 +1270,10 @@ export type Database = {
           phone: string | null
           phone_search_outcome: string | null
           phone_searched_at: string | null
+          postal_code: string | null
           primary_owner_id: string | null
           primary_owner_source: string | null
           secondary_owner_id: string | null
-          postal_code: string | null
           seniority: string | null
           signed_up_at: string | null
           source: string | null
@@ -2065,10 +1334,10 @@ export type Database = {
           phone?: string | null
           phone_search_outcome?: string | null
           phone_searched_at?: string | null
+          postal_code?: string | null
           primary_owner_id?: string | null
           primary_owner_source?: string | null
           secondary_owner_id?: string | null
-          postal_code?: string | null
           seniority?: string | null
           signed_up_at?: string | null
           source?: string | null
@@ -2129,10 +1398,10 @@ export type Database = {
           phone?: string | null
           phone_search_outcome?: string | null
           phone_searched_at?: string | null
+          postal_code?: string | null
           primary_owner_id?: string | null
           primary_owner_source?: string | null
           secondary_owner_id?: string | null
-          postal_code?: string | null
           seniority?: string | null
           signed_up_at?: string | null
           source?: string | null
@@ -2469,6 +1738,81 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_domain_portfolio: {
+        Row: {
+          annual_cost_eur: number | null
+          country_code: string
+          country_flag: string | null
+          country_name: string
+          created_at: string
+          domain_name: string | null
+          id: string
+          installed_at: string | null
+          is_global_hack: boolean
+          market_share: string | null
+          notes: string | null
+          purchased_at: string | null
+          rank: number
+          rationale: string
+          region: string
+          registrar: string | null
+          registry: string | null
+          restrictions: string | null
+          status: string
+          tld: string
+          tld_type: string
+          updated_at: string
+        }
+        Insert: {
+          annual_cost_eur?: number | null
+          country_code: string
+          country_flag?: string | null
+          country_name: string
+          created_at?: string
+          domain_name?: string | null
+          id?: string
+          installed_at?: string | null
+          is_global_hack?: boolean
+          market_share?: string | null
+          notes?: string | null
+          purchased_at?: string | null
+          rank: number
+          rationale: string
+          region: string
+          registrar?: string | null
+          registry?: string | null
+          restrictions?: string | null
+          status?: string
+          tld: string
+          tld_type: string
+          updated_at?: string
+        }
+        Update: {
+          annual_cost_eur?: number | null
+          country_code?: string
+          country_flag?: string | null
+          country_name?: string
+          created_at?: string
+          domain_name?: string | null
+          id?: string
+          installed_at?: string | null
+          is_global_hack?: boolean
+          market_share?: string | null
+          notes?: string | null
+          purchased_at?: string | null
+          rank?: number
+          rationale?: string
+          region?: string
+          registrar?: string | null
+          registry?: string | null
+          restrictions?: string | null
+          status?: string
+          tld?: string
+          tld_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dashboard_feature_usage: {
         Row: {
           collected_at: string
@@ -2661,6 +2005,90 @@ export type Database = {
           period_end?: string
           period_start?: string
           source_key?: string
+        }
+        Relationships: []
+      }
+      dashboard_review_snapshots: {
+        Row: {
+          captured_at: string
+          created_at: string
+          entered_by: string | null
+          id: number
+          note: string | null
+          platform_slug: string
+          rating: number | null
+          review_count: number
+          source: string
+        }
+        Insert: {
+          captured_at: string
+          created_at?: string
+          entered_by?: string | null
+          id?: number
+          note?: string | null
+          platform_slug: string
+          rating?: number | null
+          review_count?: number
+          source?: string
+        }
+        Update: {
+          captured_at?: string
+          created_at?: string
+          entered_by?: string | null
+          id?: number
+          note?: string | null
+          platform_slug?: string
+          rating?: number | null
+          review_count?: number
+          source?: string
+        }
+        Relationships: []
+      }
+      dashboard_reviews: {
+        Row: {
+          author_company: string | null
+          author_name: string | null
+          body: string | null
+          created_at: string
+          external_id: string
+          id: number
+          platform_slug: string
+          rating: number | null
+          response_text: string | null
+          review_url: string | null
+          reviewed_at: string | null
+          source: string
+          title: string | null
+        }
+        Insert: {
+          author_company?: string | null
+          author_name?: string | null
+          body?: string | null
+          created_at?: string
+          external_id: string
+          id?: number
+          platform_slug: string
+          rating?: number | null
+          response_text?: string | null
+          review_url?: string | null
+          reviewed_at?: string | null
+          source?: string
+          title?: string | null
+        }
+        Update: {
+          author_company?: string | null
+          author_name?: string | null
+          body?: string | null
+          created_at?: string
+          external_id?: string
+          id?: number
+          platform_slug?: string
+          rating?: number | null
+          response_text?: string | null
+          review_url?: string | null
+          reviewed_at?: string | null
+          source?: string
+          title?: string | null
         }
         Relationships: []
       }
@@ -3056,6 +2484,71 @@ export type Database = {
           },
         ]
       }
+      diagnostic_videos: {
+        Row: {
+          category: string | null
+          channel: string
+          created_at: string
+          description: string | null
+          dtc_codes: string[]
+          id: string
+          marked: boolean
+          sort_order: number
+          source: string
+          summary: string | null
+          title: string
+          updated_at: string
+          url: string
+          veo3_prompt: string | null
+          workspace_id: string
+          youtube_id: string
+        }
+        Insert: {
+          category?: string | null
+          channel: string
+          created_at?: string
+          description?: string | null
+          dtc_codes?: string[]
+          id?: string
+          marked?: boolean
+          sort_order?: number
+          source?: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+          url: string
+          veo3_prompt?: string | null
+          workspace_id: string
+          youtube_id: string
+        }
+        Update: {
+          category?: string | null
+          channel?: string
+          created_at?: string
+          description?: string | null
+          dtc_codes?: string[]
+          id?: string
+          marked?: boolean
+          sort_order?: number
+          source?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          url?: string
+          veo3_prompt?: string | null
+          workspace_id?: string
+          youtube_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diagnostic_videos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discovered_shops: {
         Row: {
           additional_info: Json | null
@@ -3218,6 +2711,127 @@ export type Database = {
           updated_at?: string | null
           website?: string | null
           youtube_url?: string | null
+        }
+        Relationships: []
+      }
+      dtc_manual_codes: {
+        Row: {
+          body: string | null
+          chart: string | null
+          code: string
+          created_at: string | null
+          id: string
+          page_id: number | null
+          part: string | null
+          sections: Json | null
+          source_url: string | null
+          summary: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          chart?: string | null
+          code: string
+          created_at?: string | null
+          id?: string
+          page_id?: number | null
+          part?: string | null
+          sections?: Json | null
+          source_url?: string | null
+          summary?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          chart?: string | null
+          code?: string
+          created_at?: string | null
+          id?: string
+          page_id?: number | null
+          part?: string | null
+          sections?: Json | null
+          source_url?: string | null
+          summary?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dtc_manual_codes_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_manual_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dtc_manual_figures: {
+        Row: {
+          caption: string | null
+          code_id: string | null
+          filename: string | null
+          id: string
+          ord: number | null
+        }
+        Insert: {
+          caption?: string | null
+          code_id?: string | null
+          filename?: string | null
+          id?: string
+          ord?: number | null
+        }
+        Update: {
+          caption?: string | null
+          code_id?: string | null
+          filename?: string | null
+          id?: string
+          ord?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dtc_manual_figures_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_manual_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dtc_manual_vehicles: {
+        Row: {
+          code_count: number | null
+          created_at: string | null
+          engine: string | null
+          id: string
+          make: string
+          model: string
+          page_count: number | null
+          slug: string
+          source: string | null
+          year: number
+        }
+        Insert: {
+          code_count?: number | null
+          created_at?: string | null
+          engine?: string | null
+          id?: string
+          make: string
+          model: string
+          page_count?: number | null
+          slug: string
+          source?: string | null
+          year: number
+        }
+        Update: {
+          code_count?: number | null
+          created_at?: string | null
+          engine?: string | null
+          id?: string
+          make?: string
+          model?: string
+          page_count?: number | null
+          slug?: string
+          source?: string | null
+          year?: number
         }
         Relationships: []
       }
@@ -3414,6 +3028,697 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "email_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_candidates: {
+        Row: {
+          author: string | null
+          body: string | null
+          created_at: string
+          discovered_via: string
+          first_seen_at: string
+          fullname: string | null
+          id: string
+          last_seen_at: string
+          num_comments: number | null
+          posted_at: string | null
+          reddit_id: string
+          reply_id: string | null
+          score: number | null
+          search_query: string | null
+          search_sort: string | null
+          skipped_reason: string | null
+          status: string
+          subreddit: string | null
+          title: string
+          updated_at: string
+          url: string | null
+          workspace_id: string
+        }
+        Insert: {
+          author?: string | null
+          body?: string | null
+          created_at?: string
+          discovered_via?: string
+          first_seen_at?: string
+          fullname?: string | null
+          id?: string
+          last_seen_at?: string
+          num_comments?: number | null
+          posted_at?: string | null
+          reddit_id: string
+          reply_id?: string | null
+          score?: number | null
+          search_query?: string | null
+          search_sort?: string | null
+          skipped_reason?: string | null
+          status?: string
+          subreddit?: string | null
+          title: string
+          updated_at?: string
+          url?: string | null
+          workspace_id: string
+        }
+        Update: {
+          author?: string | null
+          body?: string | null
+          created_at?: string
+          discovered_via?: string
+          first_seen_at?: string
+          fullname?: string | null
+          id?: string
+          last_seen_at?: string
+          num_comments?: number | null
+          posted_at?: string | null
+          reddit_id?: string
+          reply_id?: string | null
+          score?: number | null
+          search_query?: string | null
+          search_sort?: string | null
+          skipped_reason?: string | null
+          status?: string
+          subreddit?: string | null
+          title?: string
+          updated_at?: string
+          url?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_candidates_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "forum_replies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_candidates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_comment_assignments: {
+        Row: {
+          account_id: string | null
+          comment: string | null
+          confirmed_via: string | null
+          created_at: string
+          detected_author: string | null
+          id: string
+          owner_label: string
+          posted_at: string | null
+          posted_url: string | null
+          reddit_comment_url: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
+          source: string
+          source_id: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          comment?: string | null
+          confirmed_via?: string | null
+          created_at?: string
+          detected_author?: string | null
+          id?: string
+          owner_label: string
+          posted_at?: string | null
+          posted_url?: string | null
+          reddit_comment_url?: string | null
+          slack_channel_id?: string | null
+          slack_message_ts?: string | null
+          source: string
+          source_id: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string | null
+          comment?: string | null
+          confirmed_via?: string | null
+          created_at?: string
+          detected_author?: string | null
+          id?: string
+          owner_label?: string
+          posted_at?: string | null
+          posted_url?: string | null
+          reddit_comment_url?: string | null
+          slack_channel_id?: string | null
+          slack_message_ts?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_comment_assignments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_comment_assignments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_distribution: {
+        Row: {
+          created_at: string
+          fit_reason: string | null
+          id: string
+          last_checked_at: string | null
+          num_comments: number | null
+          posted_at: string | null
+          posted_by_account_id: string | null
+          posted_by_username: string | null
+          posted_url: string | null
+          recommended_angle: string | null
+          rules_note: string | null
+          score: number | null
+          slack_channel_id: string | null
+          slack_notified_at: string | null
+          slack_summary_channel: string | null
+          slack_summary_ts: string | null
+          slack_thread_ts: string | null
+          sort_order: number
+          status: string
+          subreddit: string
+          subreddit_url: string
+          suggested_body: string | null
+          suggested_comment: string | null
+          suggested_title: string | null
+          tier: string
+          topic: string
+          traction_note: string | null
+          updated_at: string
+          upvote_ratio: number | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          fit_reason?: string | null
+          id?: string
+          last_checked_at?: string | null
+          num_comments?: number | null
+          posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
+          posted_url?: string | null
+          recommended_angle?: string | null
+          rules_note?: string | null
+          score?: number | null
+          slack_channel_id?: string | null
+          slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
+          slack_thread_ts?: string | null
+          sort_order?: number
+          status?: string
+          subreddit: string
+          subreddit_url: string
+          suggested_body?: string | null
+          suggested_comment?: string | null
+          suggested_title?: string | null
+          tier?: string
+          topic?: string
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          fit_reason?: string | null
+          id?: string
+          last_checked_at?: string | null
+          num_comments?: number | null
+          posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
+          posted_url?: string | null
+          recommended_angle?: string | null
+          rules_note?: string | null
+          score?: number | null
+          slack_channel_id?: string | null
+          slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
+          slack_thread_ts?: string | null
+          sort_order?: number
+          status?: string
+          subreddit?: string
+          subreddit_url?: string
+          suggested_body?: string | null
+          suggested_comment?: string | null
+          suggested_title?: string | null
+          tier?: string
+          topic?: string
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_distribution_posted_by_account_id_fkey"
+            columns: ["posted_by_account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_distribution_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_gap_candidates: {
+        Row: {
+          action_taken: string | null
+          actual_cause: string | null
+          ai_claimed_cause: string | null
+          ai_tool: string | null
+          confidence: number | null
+          cost_amount: number | null
+          cost_currency: string | null
+          created_at: string
+          first_seen_at: string
+          id: string
+          model: string | null
+          outcome: string | null
+          source_author: string | null
+          source_body: string | null
+          source_num_comments: number | null
+          source_score: number | null
+          source_subreddit: string | null
+          source_title: string | null
+          source_url: string
+          status: string
+          story_id: string | null
+          symptom: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          action_taken?: string | null
+          actual_cause?: string | null
+          ai_claimed_cause?: string | null
+          ai_tool?: string | null
+          confidence?: number | null
+          cost_amount?: number | null
+          cost_currency?: string | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          model?: string | null
+          outcome?: string | null
+          source_author?: string | null
+          source_body?: string | null
+          source_num_comments?: number | null
+          source_score?: number | null
+          source_subreddit?: string | null
+          source_title?: string | null
+          source_url: string
+          status?: string
+          story_id?: string | null
+          symptom?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          action_taken?: string | null
+          actual_cause?: string | null
+          ai_claimed_cause?: string | null
+          ai_tool?: string | null
+          confidence?: number | null
+          cost_amount?: number | null
+          cost_currency?: string | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          model?: string | null
+          outcome?: string | null
+          source_author?: string | null
+          source_body?: string | null
+          source_num_comments?: number | null
+          source_score?: number | null
+          source_subreddit?: string | null
+          source_title?: string | null
+          source_url?: string
+          status?: string
+          story_id?: string | null
+          symptom?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_gap_candidates_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "ai_failure_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_gap_candidates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_posts: {
+        Row: {
+          assigned_account_id: string | null
+          created_at: string
+          diagnostic_id: string | null
+          forum_target: string
+          generated_body: string | null
+          generated_title: string | null
+          generation_options: Json
+          id: string
+          language: string
+          last_checked_at: string | null
+          mention_level: string
+          model: string | null
+          num_comments: number | null
+          post_type: string
+          posted_at: string | null
+          posted_by_account_id: string | null
+          posted_by_username: string | null
+          posted_url: string | null
+          scenario_snapshot: Json
+          score: number | null
+          slack_channel_id: string | null
+          slack_notified_at: string | null
+          slack_summary_channel: string | null
+          slack_summary_ts: string | null
+          slack_thread_ts: string | null
+          status: string
+          suggested_comment: string | null
+          traction_note: string | null
+          updated_at: string
+          upvote_ratio: number | null
+          workspace_id: string
+        }
+        Insert: {
+          assigned_account_id?: string | null
+          created_at?: string
+          diagnostic_id?: string | null
+          forum_target: string
+          generated_body?: string | null
+          generated_title?: string | null
+          generation_options?: Json
+          id?: string
+          language?: string
+          last_checked_at?: string | null
+          mention_level?: string
+          model?: string | null
+          num_comments?: number | null
+          post_type?: string
+          posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
+          posted_url?: string | null
+          scenario_snapshot?: Json
+          score?: number | null
+          slack_channel_id?: string | null
+          slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
+          slack_thread_ts?: string | null
+          status?: string
+          suggested_comment?: string | null
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id: string
+        }
+        Update: {
+          assigned_account_id?: string | null
+          created_at?: string
+          diagnostic_id?: string | null
+          forum_target?: string
+          generated_body?: string | null
+          generated_title?: string | null
+          generation_options?: Json
+          id?: string
+          language?: string
+          last_checked_at?: string | null
+          mention_level?: string
+          model?: string | null
+          num_comments?: number | null
+          post_type?: string
+          posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
+          posted_url?: string | null
+          scenario_snapshot?: Json
+          score?: number | null
+          slack_channel_id?: string | null
+          slack_notified_at?: string | null
+          slack_summary_channel?: string | null
+          slack_summary_ts?: string | null
+          slack_thread_ts?: string | null
+          status?: string
+          suggested_comment?: string | null
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_posts_assigned_account_id_fkey"
+            columns: ["assigned_account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_posts_posted_by_account_id_fkey"
+            columns: ["posted_by_account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_posts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_replies: {
+        Row: {
+          created_at: string
+          generated_body: string | null
+          generation_options: Json
+          id: string
+          last_checked_at: string | null
+          mention_level: string
+          model: string | null
+          num_comments: number | null
+          posted_at: string | null
+          posted_by_account_id: string | null
+          posted_by_username: string | null
+          posted_url: string | null
+          score: number | null
+          source_author: string | null
+          source_body: string | null
+          source_num_comments: number | null
+          source_score: number | null
+          source_subreddit: string | null
+          source_title: string | null
+          source_url: string | null
+          status: string
+          traction_note: string | null
+          updated_at: string
+          upvote_ratio: number | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          generated_body?: string | null
+          generation_options?: Json
+          id?: string
+          last_checked_at?: string | null
+          mention_level?: string
+          model?: string | null
+          num_comments?: number | null
+          posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
+          posted_url?: string | null
+          score?: number | null
+          source_author?: string | null
+          source_body?: string | null
+          source_num_comments?: number | null
+          source_score?: number | null
+          source_subreddit?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          status?: string
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          generated_body?: string | null
+          generation_options?: Json
+          id?: string
+          last_checked_at?: string | null
+          mention_level?: string
+          model?: string | null
+          num_comments?: number | null
+          posted_at?: string | null
+          posted_by_account_id?: string | null
+          posted_by_username?: string | null
+          posted_url?: string | null
+          score?: number | null
+          source_author?: string | null
+          source_body?: string | null
+          source_num_comments?: number | null
+          source_score?: number | null
+          source_subreddit?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          status?: string
+          traction_note?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_replies_posted_by_account_id_fkey"
+            columns: ["posted_by_account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_replies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_thread_replies: {
+        Row: {
+          account_id: string | null
+          assigned_owner_label: string | null
+          comment_author: string | null
+          comment_excerpt: string | null
+          comment_score: number | null
+          confirmed_via: string | null
+          created_at: string
+          generation_options: Json
+          id: string
+          mention_level: string
+          model: string | null
+          posted_at: string | null
+          posted_url: string | null
+          priority: number
+          reddit_comment_id: string
+          reddit_comment_url: string | null
+          reply_text: string | null
+          source: string
+          source_id: string
+          status: string
+          updated_at: string
+          why: string | null
+          workspace_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          assigned_owner_label?: string | null
+          comment_author?: string | null
+          comment_excerpt?: string | null
+          comment_score?: number | null
+          confirmed_via?: string | null
+          created_at?: string
+          generation_options?: Json
+          id?: string
+          mention_level?: string
+          model?: string | null
+          posted_at?: string | null
+          posted_url?: string | null
+          priority?: number
+          reddit_comment_id: string
+          reddit_comment_url?: string | null
+          reply_text?: string | null
+          source: string
+          source_id: string
+          status?: string
+          updated_at?: string
+          why?: string | null
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string | null
+          assigned_owner_label?: string | null
+          comment_author?: string | null
+          comment_excerpt?: string | null
+          comment_score?: number | null
+          confirmed_via?: string | null
+          created_at?: string
+          generation_options?: Json
+          id?: string
+          mention_level?: string
+          model?: string | null
+          posted_at?: string | null
+          posted_url?: string | null
+          priority?: number
+          reddit_comment_id?: string
+          reddit_comment_url?: string | null
+          reply_text?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          updated_at?: string
+          why?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_thread_replies_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_thread_replies_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3689,6 +3994,136 @@ export type Database = {
           },
         ]
       }
+      phone_enrichment_jobs: {
+        Row: {
+          attempts: number
+          contact_id: string
+          enqueued_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          outcome: string | null
+          requested_by: string | null
+          saved_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          website_added: string | null
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          contact_id: string
+          enqueued_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          outcome?: string | null
+          requested_by?: string | null
+          saved_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          website_added?: string | null
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          contact_id?: string
+          enqueued_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          outcome?: string | null
+          requested_by?: string | null
+          saved_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          website_added?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_enrichment_jobs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_enrichment_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phone_numbers: {
+        Row: {
+          company_id: string | null
+          contact_id: string | null
+          country_code: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          label: string | null
+          number: string
+          source: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          label?: string | null
+          number: string
+          source?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          label?: string | null
+          number?: string
+          source?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_numbers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipelines: {
         Row: {
           created_at: string | null
@@ -3796,6 +4231,161 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "prospector_search_cache_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reddit_accounts: {
+        Row: {
+          active: boolean
+          can_mention_wrenchlane: boolean
+          created_at: string
+          id: string
+          notes: string | null
+          owner_label: string
+          persona_note: string | null
+          slack_user_id: string | null
+          subreddits: string[]
+          turns_wrenches: boolean
+          updated_at: string
+          username: string | null
+          uses_ai_tools: boolean
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          can_mention_wrenchlane?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_label: string
+          persona_note?: string | null
+          slack_user_id?: string | null
+          subreddits?: string[]
+          turns_wrenches?: boolean
+          updated_at?: string
+          username?: string | null
+          uses_ai_tools?: boolean
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          can_mention_wrenchlane?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_label?: string
+          persona_note?: string | null
+          slack_user_id?: string | null
+          subreddits?: string[]
+          turns_wrenches?: boolean
+          updated_at?: string
+          username?: string | null
+          uses_ai_tools?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reddit_accounts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reddit_mentions: {
+        Row: {
+          account_id: string | null
+          ai_summary: string | null
+          audience: string
+          author: string | null
+          context_tag: string | null
+          created_at: string
+          excerpt: string | null
+          first_seen_at: string
+          id: string
+          is_about_us: boolean | null
+          is_comment: boolean
+          kind: string
+          last_checked_at: string | null
+          matched_domain: string | null
+          num_comments: number | null
+          score: number | null
+          sentiment: string | null
+          slack_notified_at: string | null
+          source_url: string
+          status: string
+          subreddit: string | null
+          updated_at: string
+          upvote_ratio: number | null
+          workspace_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          ai_summary?: string | null
+          audience?: string
+          author?: string | null
+          context_tag?: string | null
+          created_at?: string
+          excerpt?: string | null
+          first_seen_at?: string
+          id?: string
+          is_about_us?: boolean | null
+          is_comment?: boolean
+          kind?: string
+          last_checked_at?: string | null
+          matched_domain?: string | null
+          num_comments?: number | null
+          score?: number | null
+          sentiment?: string | null
+          slack_notified_at?: string | null
+          source_url: string
+          status?: string
+          subreddit?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string | null
+          ai_summary?: string | null
+          audience?: string
+          author?: string | null
+          context_tag?: string | null
+          created_at?: string
+          excerpt?: string | null
+          first_seen_at?: string
+          id?: string
+          is_about_us?: boolean | null
+          is_comment?: boolean
+          kind?: string
+          last_checked_at?: string | null
+          matched_domain?: string | null
+          num_comments?: number | null
+          score?: number | null
+          sentiment?: string | null
+          slack_notified_at?: string | null
+          source_url?: string
+          status?: string
+          subreddit?: string | null
+          updated_at?: string
+          upvote_ratio?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reddit_mentions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reddit_mentions_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -4338,6 +4928,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subreddit_access: {
+        Row: {
+          access: string
+          checked_at: string
+          subreddit: string
+          title: string | null
+        }
+        Insert: {
+          access?: string
+          checked_at?: string
+          subreddit: string
+          title?: string | null
+        }
+        Update: {
+          access?: string
+          checked_at?: string
+          subreddit?: string
+          title?: string | null
+        }
+        Relationships: []
       }
       subscriptions: {
         Row: {
@@ -4935,6 +5546,31 @@ export type Database = {
       }
     }
     Views: {
+      google_ads_customer_match: {
+        Row: {
+          country_code: string | null
+          email: string | null
+          first_name: string | null
+          is_app_user: boolean | null
+          last_name: string | null
+          phone_number: string | null
+          postal_code: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      google_ads_prospects: {
+        Row: {
+          country_code: string | null
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+          phone_number: string | null
+          postal_code: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       google_ads_wl_users: {
         Row: {
           country_code: string | null
@@ -4947,20 +5583,49 @@ export type Database = {
         }
         Relationships: []
       }
+      rep_identity: {
+        Row: {
+          canonical_user_id: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      rep_touches: {
+        Row: {
+          activity_id: string | null
+          company_id: string | null
+          contact_id: string | null
+          rep_user_id: string | null
+          touched_at: string | null
+          type: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      recompute_contact_owner: {
-        Args: {
-          p_contact_id: string
-        }
-        Returns: undefined
-      }
-      recompute_company_owner: {
-        Args: {
-          p_company_id: string
-        }
-        Returns: undefined
-      }
       find_fuzzy_company_matches: {
         Args: {
           p_country_code: string
@@ -5003,6 +5668,25 @@ export type Database = {
         }
         Returns: string
       }
+      get_organic_analysis: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: Json
+      }
+      get_sequence_conversions: {
+        Args: { p_since?: string; p_workspace_id: string }
+        Returns: {
+          attributed_signups: number
+          clicked_recipients: number
+          conversion_rate: number
+          median_lag_days: number
+          opened_recipients: number
+          sequence_id: string
+          sequence_name: string
+          sequence_status: string
+          total_sends: number
+          unique_recipients: number
+        }[]
+      }
       get_sequence_stats: { Args: { p_sequence_id: string }; Returns: Json }
       get_user_workspace_ids: { Args: never; Returns: string[] }
       immutable_unaccent: { Args: { "": string }; Returns: string }
@@ -5028,10 +5712,15 @@ export type Database = {
           tags_after: string[]
         }[]
       }
-      refresh_diagnostics_aggregates: {
-        Args: never
-        Returns: Json
+      recompute_company_owner: {
+        Args: { p_company_id: string }
+        Returns: undefined
       }
+      recompute_contact_owner: {
+        Args: { p_contact_id: string }
+        Returns: undefined
+      }
+      refresh_diagnostics_aggregates: { Args: never; Returns: Json }
       reorder_route_stops: {
         Args: {
           p_estimated_day_seconds: number
@@ -5046,6 +5735,7 @@ export type Database = {
         Returns: undefined
       }
       reset_daily_send_counts: { Args: never; Returns: undefined }
+      safe_uuid: { Args: { t: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
