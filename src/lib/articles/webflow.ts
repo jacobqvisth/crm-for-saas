@@ -134,12 +134,27 @@ export function normalizeSlug(raw: string, fallback: string): string {
   return base || "article";
 }
 
+/**
+ * Sanitised rich-text HTML, straight through.
+ *
+ * Release articles are assembled as Webflow rich-text HTML already, because
+ * their figure markup (w-richtext-figure-type-image / -video) has no Markdown
+ * equivalent. Running that through the Markdown converter mangles it, so those
+ * callers pass bodyFormat "html". The two sanitisers still apply: they are what
+ * keep stray \uXXXX escapes and long dashes off the site.
+ */
+export function sanitizeWebflowHtml(html: string): string {
+  return stripLongDashes(decodeStrayUnicodeEscapes(html)).trim();
+}
+
 export interface WebflowArticleInput {
   /** Headline. Webflow's required `name`. */
   title: string;
   slug: string;
-  /** Markdown body; converted to HTML here. */
+  /** Markdown by default; already-built rich-text HTML when bodyFormat is "html". */
   body: string;
+  /** Defaults to "markdown", which is what the generated drafts are. */
+  bodyFormat?: "markdown" | "html";
   summary: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
@@ -176,7 +191,10 @@ export async function createArticleItem(
         fieldData: {
           name: stripLongDashes(decodeStrayUnicodeEscapes(input.title)).slice(0, 256),
           slug,
-          "post-body": markdownToWebflowHtml(input.body),
+          "post-body":
+            input.bodyFormat === "html"
+              ? sanitizeWebflowHtml(input.body)
+              : markdownToWebflowHtml(input.body),
           ...(input.summary ? { "post-summary": stripLongDashes(decodeStrayUnicodeEscapes(input.summary)) } : {}),
           ...(input.metaTitle ? { "meta-title": stripLongDashes(decodeStrayUnicodeEscapes(input.metaTitle)) } : {}),
           ...(input.metaDescription
@@ -347,7 +365,10 @@ export async function updateArticleItem(
         isDraft: false,
         fieldData: {
           name: stripLongDashes(decodeStrayUnicodeEscapes(input.title)).slice(0, 256),
-          "post-body": markdownToWebflowHtml(input.body),
+          "post-body":
+            input.bodyFormat === "html"
+              ? sanitizeWebflowHtml(input.body)
+              : markdownToWebflowHtml(input.body),
           ...(input.summary
             ? { "post-summary": stripLongDashes(decodeStrayUnicodeEscapes(input.summary)) }
             : {}),

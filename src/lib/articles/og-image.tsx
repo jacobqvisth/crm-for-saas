@@ -189,3 +189,101 @@ export async function renderArticleImage(input: ArticleImageInput): Promise<Uint
 
   return new Uint8Array(await response.arrayBuffer());
 }
+
+/**
+ * The hero for a release article, built around a real product screenshot.
+ *
+ * A release announcement already ships its own screenshots, so drawing an
+ * abstract card would throw away the best image available. The screenshot cannot
+ * be used raw, though: every blog image container on the site is 3:2 with
+ * object-fit: cover, and the release screenshots run from 1.30 to 2.57, so one
+ * would be cropped top-and-bottom and another pillarboxed. Letterboxing it onto
+ * the same 1200x800 canvas the drawn cards use keeps the whole frame visible and
+ * makes the release posts sit consistently next to everything else.
+ */
+export async function renderReleaseHero(input: {
+  title: string;
+  /** Publicly reachable screenshot URL; ImageResponse fetches it. */
+  imageUrl: string;
+  /** "3.7". Becomes the kicker. */
+  version: string | null;
+}): Promise<Uint8Array> {
+  const title = input.title.length > 96 ? `${input.title.slice(0, 93)}...` : input.title;
+
+  const response = new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          background: INK,
+          padding: `${SAFE_Y - 24}px ${SAFE_X}px ${SAFE_Y - 32}px`,
+          fontFamily: "sans-serif",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 12,
+            background: ACCENT,
+            display: "flex",
+          }}
+        />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 20,
+              letterSpacing: 4,
+              color: ACCENT,
+              textTransform: "uppercase",
+              fontWeight: 700,
+            }}
+          >
+            {input.version ? `Release ${input.version}` : "Product update"}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: title.length > 60 ? 40 : 48,
+              lineHeight: 1.14,
+              color: "#FFFFFF",
+              fontWeight: 700,
+              maxWidth: 1000,
+            }}
+          >
+            {title}
+          </div>
+        </div>
+
+        {/* contain, not cover: the point is to show the whole screenshot. */}
+        <div
+          style={{
+            display: "flex",
+            flex: 1,
+            marginTop: 26,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={input.imageUrl}
+            alt=""
+            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 10 }}
+          />
+        </div>
+      </div>
+    ),
+    { width: WIDTH, height: HEIGHT },
+  );
+
+  return new Uint8Array(await response.arrayBuffer());
+}
