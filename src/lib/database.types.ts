@@ -2714,6 +2714,67 @@ export type Database = {
         }
         Relationships: []
       }
+      dtc_comparisons: {
+        Row: {
+          agreement: string | null
+          code: string
+          created_at: string | null
+          id: string
+          lemon_code_id: string | null
+          model: string | null
+          score: number | null
+          vehicle_id: string | null
+          verdict: Json | null
+          wrenchlane_result_id: string | null
+        }
+        Insert: {
+          agreement?: string | null
+          code: string
+          created_at?: string | null
+          id?: string
+          lemon_code_id?: string | null
+          model?: string | null
+          score?: number | null
+          vehicle_id?: string | null
+          verdict?: Json | null
+          wrenchlane_result_id?: string | null
+        }
+        Update: {
+          agreement?: string | null
+          code?: string
+          created_at?: string | null
+          id?: string
+          lemon_code_id?: string | null
+          model?: string | null
+          score?: number | null
+          vehicle_id?: string | null
+          verdict?: Json | null
+          wrenchlane_result_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dtc_comparisons_lemon_code_id_fkey"
+            columns: ["lemon_code_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_manual_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dtc_comparisons_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_manual_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dtc_comparisons_wrenchlane_result_id_fkey"
+            columns: ["wrenchlane_result_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_wrenchlane_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dtc_manual_codes: {
         Row: {
           body: string | null
@@ -2834,6 +2895,97 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      dtc_search_history: {
+        Row: {
+          code: string | null
+          created_at: string | null
+          id: string
+          kind: string
+          query: string
+          result_count: number | null
+          user_id: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string | null
+          id?: string
+          kind?: string
+          query: string
+          result_count?: number | null
+          user_id?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          code?: string | null
+          created_at?: string | null
+          id?: string
+          kind?: string
+          query?: string
+          result_count?: number | null
+          user_id?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dtc_search_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_manual_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dtc_wrenchlane_results: {
+        Row: {
+          app_engine_code: string | null
+          app_vehicle_id: string | null
+          capture_method: string | null
+          captured_at: string | null
+          causes: Json | null
+          code: string
+          id: string
+          raw: Json | null
+          source_url: string | null
+          summary: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          app_engine_code?: string | null
+          app_vehicle_id?: string | null
+          capture_method?: string | null
+          captured_at?: string | null
+          causes?: Json | null
+          code: string
+          id?: string
+          raw?: Json | null
+          source_url?: string | null
+          summary?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          app_engine_code?: string | null
+          app_vehicle_id?: string | null
+          capture_method?: string | null
+          captured_at?: string | null
+          causes?: Json | null
+          code?: string
+          id?: string
+          raw?: Json | null
+          source_url?: string | null
+          summary?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dtc_wrenchlane_results_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "dtc_manual_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_events: {
         Row: {

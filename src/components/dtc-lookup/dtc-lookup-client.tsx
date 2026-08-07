@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ComparePanel } from "./compare-panel";
+import { HistoryPanel, type HistoryHandle } from "./history-panel";
 import {
   Search,
   Loader2,
@@ -162,6 +164,8 @@ export function DtcLookupClient() {
     return () => clearTimeout(t);
   }, [query, filtered]);
 
+  const historyRef = useRef<HistoryHandle>(null);
+
   const open = useCallback(async (code: string) => {
     setSelected(code);
     setDetail(null);
@@ -170,6 +174,14 @@ export function DtcLookupClient() {
       const res = await fetch(`/api/dtc-lookup?code=${encodeURIComponent(code)}`);
       const data = await res.json();
       setDetail(data.detail ?? null);
+      // record the lookup, then refresh the panel. Never block the read on it.
+      fetch("/api/dtc-lookup/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: code, code, kind: "lemon", result_count: 1 }),
+      })
+        .then(() => historyRef.current?.refresh())
+        .catch(() => {});
     } finally {
       setDetailLoading(false);
     }
@@ -295,6 +307,7 @@ export function DtcLookupClient() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         {/* results -------------------------------------------------------- */}
         <div className="max-h-[calc(100vh-260px)] space-y-1.5 overflow-y-auto pr-1">
+          <HistoryPanel ref={historyRef} onPick={(c) => open(c)} />
           {filtered.length === 0 && (!deepHits || deepHits.length === 0) && (
             <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
               No code matches “{query}”.
@@ -401,6 +414,8 @@ export function DtcLookupClient() {
               </header>
 
               <div className="space-y-3 p-5">
+                <ComparePanel code={detail.code} />
+
                 {detail.sections
                   .filter((s: DtcSection) => s.text || s.heading)
                   .map((s, i) => {
