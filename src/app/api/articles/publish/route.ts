@@ -8,6 +8,7 @@ import {
   listCategories,
   listTags,
   publishArticleItems,
+  updateArticleItem,
   uploadAsset,
 } from "@/lib/articles/webflow";
 import { classifyArticle } from "@/lib/articles/classify";
@@ -21,10 +22,13 @@ export const maxDuration = 120;
 const bodySchema = z.object({
   id: z.string().uuid(),
   /**
-   * stage = create the CMS item but leave it off the public site
-   * live  = create it and publish it to wrenchlane.com
+   * stage  = create the CMS item but leave it off the public site
+   * live   = create it and publish it to wrenchlane.com
+   * resync = the item already exists: refresh its fields, image and taxonomy in
+   *          place and republish. The only safe way to change something already
+   *          published, since deleting a published item reserves its slug.
    */
-  mode: z.enum(["stage", "live"]).default("stage"),
+  mode: z.enum(["stage", "live", "resync"]).default("stage"),
 });
 
 // GET /api/articles/publish -> { configured: boolean }
@@ -88,8 +92,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "This article has no body" }, { status: 422 });
   }
 
-  // Already on the site and live: nothing to do.
-  if (row.status === "published" && row.published_url) {
+  if (mode === "resync" && !row.webflow_item_id) {
+    return NextResponse.json(
+      { error: "This article is not on the site yet, so there is nothing to resync." },
+      { status: 422 },
+    );
+  }
+
+  // Already on the site and live: nothing to do, unless the caller explicitly
+  // asked to resync it.
+  if (mode !== "resync" && row.status === "published" && row.published_url) {
     return NextResponse.json(
       { error: "This article is already live on the website.", url: row.published_url },
       { status: 409 },
@@ -99,7 +111,7 @@ export async function POST(request: NextRequest) {
   // Already staged in Webflow. Going live must publish THAT item, not create a
   // second one, which would collide on the slug. This is why webflow_item_id
   // exists.
-  if (row.webflow_item_id && row.published_url) {
+  if (mode !== "resync" && row.webflow_item_id && row.published_url) {
     if (mode === "stage") {
       return NextResponse.json(
         { error: "This article is already staged in Webflow.", url: row.published_url },
@@ -136,17 +148,32 @@ export async function POST(request: NextRequest) {
   const title = row.title?.trim() || seo.metaTitle?.trim() || "Untitled";
   const summary = seo.metaDescription ?? null;
 
+  /**
+   * Release articles are imported by /api/articles/releases, which already
+   * assembled the body as Webflow rich-text HTML, filed it under Product
+   * Updates and built a hero from a real screenshot. Re-running the generic
+   * pipeline over one would run its HTML through the Markdown converter and
+   * replace the screenshot hero with a drawn card, so this path leaves all
+   * three alone. Reachable via the Re-sync button once a release is live.
+   */
+  const isRelease = row.source_kind === "release_mail";
+
   // Everything below is done at publish time, on purpose: it is wasted work for
   // the many drafts that never get published, and the taxonomy is read live from
   // Webflow so it cannot go stale in a prompt.
   const [categories, tags] = await Promise.all([listCategories(), listTags()]);
-  const classified = await classifyArticle({
-    title,
-    summary,
-    body: row.body,
-    categories,
-    tags,
-  });
+  const classified = isRelease
+    ? {
+        categoryIds: categories.filter((c) => /product updates/i.test(c.name)).map((c) => c.id),
+        tagIds: tags.filter((t) => /^release[-\s]?notes$/i.test(t.name)).map((t) => t.id),
+      }
+    : await classifyArticle({
+        title,
+        summary,
+        body: row.body,
+        categories,
+        tags,
+      });
 
   // The hero image. A drawn card rather than a generated photo, because there is
   // no image-model credential on this project; see src/lib/articles/og-image.tsx.
@@ -157,7 +184,9 @@ export async function POST(request: NextRequest) {
 
   let image: { fileId: string; url: string } | null = null;
   let imageNote: string | null = null;
-  try {
+  // A release already has a screenshot hero. Leaving image null means
+  // updateArticleItem omits the field, so the existing one survives.
+  if (!isRelease) try {
     const png = await renderArticleImage({
       title,
       badge,
@@ -173,31 +202,39 @@ export async function POST(request: NextRequest) {
     imageNote = err instanceof Error ? err.message : String(err);
   }
 
-  const created = await createArticleItem({
+  const fields = {
     title,
-    slug: seo.slug?.trim() || title,
     body: row.body,
+    bodyFormat: (isRelease ? "html" : "markdown") as "html" | "markdown",
     summary,
     metaTitle: seo.metaTitle ?? null,
     metaDescription: seo.metaDescription ?? null,
     categoryIds: classified.categoryIds,
     tagIds: classified.tagIds,
     image,
-  });
-  if (!created.ok) {
-    return NextResponse.json({ error: created.reason }, { status: 502 });
-  }
+  };
 
-  let live = false;
-  if (mode === "live") {
-    const published = await publishArticleItems([created.data.id]);
+  // resync updates the existing item, everything else creates a new one. The
+  // slug is never changed on a resync: it is the live URL.
+  const written =
+    mode === "resync"
+      ? await updateArticleItem(row.webflow_item_id!, fields)
+      : await createArticleItem({ ...fields, slug: seo.slug?.trim() || title });
+  if (!written.ok) {
+    return NextResponse.json({ error: written.reason }, { status: 502 });
+  }
+  const itemId = mode === "resync" ? row.webflow_item_id! : (written.data as { id: string }).id;
+
+  let live = mode === "resync" && row.status === "published";
+  if (mode === "live" || mode === "resync") {
+    const published = await publishArticleItems([itemId]);
     if (!published.ok) {
       // The item exists in the CMS at this point, so say so rather than implying
       // nothing happened. Jacob can publish it from Webflow.
       return NextResponse.json(
         {
-          error: `Created in Webflow but publishing failed: ${published.reason}`,
-          itemId: created.data.id,
+          error: `Written to Webflow but publishing failed: ${published.reason}`,
+          itemId,
           staged: true,
         },
         { status: 502 },
@@ -206,7 +243,10 @@ export async function POST(request: NextRequest) {
     live = true;
   }
 
-  const url = articleUrl(created.data.slug);
+  const url =
+    mode === "resync"
+      ? row.published_url!
+      : articleUrl((written.data as { slug?: string }).slug ?? seo.slug ?? "");
 
   // Reuse the existing Library fields. Only a live publish counts as published;
   // a staged item is recorded as approved so the Library shows it moved on
@@ -216,7 +256,7 @@ export async function POST(request: NextRequest) {
     .update({
       status: live ? "published" : "approved",
       published_url: url,
-      webflow_item_id: created.data.id,
+      webflow_item_id: itemId,
       ...(live ? { published_at: new Date().toISOString() } : {}),
     })
     .eq("id", id)
@@ -233,7 +273,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     url,
-    itemId: created.data.id,
+    itemId,
     live,
     article: updated,
     // Surfaced so the toast can say what actually got attached, rather than
