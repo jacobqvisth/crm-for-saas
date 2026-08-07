@@ -31,12 +31,16 @@ import {
 import {
   articleUrl,
   createArticleItem,
+  createLocalizedArticleItem,
+  getSiteLocales,
   isWebflowConfigured,
   listCategories,
   listTags,
+  updateArticleItemLocale,
   uploadAsset,
 } from "@/lib/articles/webflow";
 import { renderReleaseHero } from "@/lib/articles/og-image";
+import { translateReleaseToSwedish } from "@/lib/articles/translate";
 
 // Importing fetches and re-uploads several screenshots and renders a hero.
 export const maxDuration = 120;
@@ -323,21 +327,72 @@ export async function POST(request: NextRequest) {
     : parsed.title.slice(0, 60);
   const metaDescription = (parsed.lead ?? parsed.title).replace(/<[^>]+>/g, "").slice(0, 200);
 
-  const created = await createArticleItem({
+  const english = {
     title: parsed.title,
     slug,
     body,
-    bodyFormat: "html",
+    bodyFormat: "html" as const,
     summary: metaDescription,
     metaTitle,
     metaDescription,
     categoryIds,
     tagIds,
     image,
-  });
+  };
+
+  /**
+   * Create across every enabled locale in one call.
+   *
+   * This has to happen at creation time. Webflow's docs are explicit that a
+   * locale cannot be added to an existing item through the API, and the only
+   * remedy is a manual step in the Designer, which is exactly the hole the
+   * first hand-made 3.7 article fell into. Every locale starts as a copy of the
+   * English; the Swedish one is translated over immediately below.
+   */
+  const locales = await getSiteLocales();
+  const secondaryIds = Object.values(locales?.secondary ?? {});
+  const created =
+    locales && secondaryIds.length
+      ? await createLocalizedArticleItem(english, [locales.primary, ...secondaryIds])
+      : await createArticleItem(english);
   if (!created.ok) return NextResponse.json({ error: created.reason }, { status: 502 });
 
   const url = articleUrl(created.data.slug);
+
+  // Translate the secondary locales. A failure here is not fatal: the article
+  // is already correct in English, and the Swedish variant exists and can be
+  // written by hand or by re-running. Silently publishing English text on a
+  // Swedish URL would be worse than saying it did not translate.
+  const translations: Record<string, string> = {};
+  const translationErrors: string[] = [];
+  const swedishLocaleId = locales?.secondary?.sv;
+  if (swedishLocaleId) {
+    const sv = await translateReleaseToSwedish({
+      title: parsed.title,
+      summary: metaDescription,
+      bodyHtml: body,
+    });
+    if (!sv) {
+      translationErrors.push("sv");
+    } else {
+      const written = await updateArticleItemLocale(created.data.id, swedishLocaleId, {
+        title: sv.title,
+        slug: sv.slug,
+        body: sv.bodyHtml,
+        bodyFormat: "html",
+        summary: sv.summary,
+        // Swedish articles on this site deliberately carry no meta fields; the
+        // template falls back to name and post-summary.
+        metaTitle: null,
+        metaDescription: null,
+        categoryIds,
+        tagIds,
+        image,
+      });
+      if (written.ok) translations.sv = sv.slug;
+      else translationErrors.push(`sv: ${written.reason}`);
+    }
+  }
 
   // "approved" not "published": the item is in Webflow but not on the public
   // site. PublishToSite reads exactly this state and offers "Publish it live".
@@ -354,6 +409,8 @@ export async function POST(request: NextRequest) {
         receivedAt: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null,
         videoId: parsed.videoId,
         images: sourceUrls.length,
+        translations,
+        translationErrors,
       },
       format: "blog_article",
       language: "en",
@@ -389,6 +446,8 @@ export async function POST(request: NextRequest) {
       video: Boolean(parsed.videoId),
       hero: Boolean(image),
       imageNote,
+      translations,
+      translationErrors,
       categories: categoryIds.map((id) => categories.find((c) => c.id === id)?.name).filter(Boolean),
       tags: tagIds.map((id) => tags.find((t) => t.id === id)?.name).filter(Boolean),
     },

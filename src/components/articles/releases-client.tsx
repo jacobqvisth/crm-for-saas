@@ -108,11 +108,21 @@ export function ReleasesClient() {
       const bits = [`${data.applied?.images ?? 0} screenshots`];
       if (data.applied?.video) bits.push("the demo video");
       if (data.applied?.hero) bits.push("a hero image");
+      const langs = Object.keys(data.applied?.translations ?? {});
+      if (langs.length) bits.push(`a ${langs.join(" and ")} translation`);
       toast.success(`Staged in Webflow with ${bits.join(", ")}. Not public yet.`, { duration: 8000 });
       if (data.applied?.failedImages?.length) {
         toast.error(`${data.applied.failedImages.length} image(s) could not be copied over`, {
           duration: 8000,
         });
+      }
+      // Worth surfacing loudly: the locale variant exists but still holds
+      // English, and it cannot be translated later by any automatic route.
+      if (data.applied?.translationErrors?.length) {
+        toast.error(
+          `Could not translate: ${data.applied.translationErrors.join(", ")}. The locale exists but still shows English.`,
+          { duration: 10000 },
+        );
       }
       await scan();
     } catch {

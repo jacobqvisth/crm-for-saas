@@ -170,9 +170,39 @@ export interface CreatedItem {
   slug: string;
 }
 
+/** The CMS payload for an article, shared by every create and update path. */
+function articleFieldData(input: WebflowArticleInput, slug: string): Record<string, unknown> {
+  return {
+    name: stripLongDashes(decodeStrayUnicodeEscapes(input.title)).slice(0, 256),
+    slug,
+    "post-body":
+      input.bodyFormat === "html"
+        ? sanitizeWebflowHtml(input.body)
+        : markdownToWebflowHtml(input.body),
+    ...(input.summary ? { "post-summary": stripLongDashes(decodeStrayUnicodeEscapes(input.summary)) } : {}),
+    ...(input.metaTitle ? { "meta-title": stripLongDashes(decodeStrayUnicodeEscapes(input.metaTitle)) } : {}),
+    ...(input.metaDescription
+      ? { "meta-description": stripLongDashes(decodeStrayUnicodeEscapes(input.metaDescription)) }
+      : {}),
+    ...(input.categoryIds?.length ? { category: input.categoryIds } : {}),
+    ...(input.tagIds?.length ? { tags: input.tagIds } : {}),
+    // One asset serves both fields, which is what the hand-authored articles on
+    // the site already do.
+    ...(input.image
+      ? {
+          "main-image": { fileId: input.image.fileId, url: input.image.url },
+          "thumbnail-image": { fileId: input.image.fileId, url: input.image.url },
+        }
+      : {}),
+  };
+}
+
 /**
  * Create the CMS item. Staged, not live: it exists in the collection but is not
  * on the public site until publishItems() runs.
+ *
+ * Primary locale only. If the article will ever need a Swedish version, use
+ * createLocalizedArticleItem instead: a locale cannot be added afterwards.
  */
 export async function createArticleItem(
   input: WebflowArticleInput,
@@ -188,35 +218,127 @@ export async function createArticleItem(
         // Not a Webflow "Draft" (which would hide it even after publishing).
         // Staged-but-publishable is what we want.
         isDraft: false,
-        fieldData: {
-          name: stripLongDashes(decodeStrayUnicodeEscapes(input.title)).slice(0, 256),
-          slug,
-          "post-body":
-            input.bodyFormat === "html"
-              ? sanitizeWebflowHtml(input.body)
-              : markdownToWebflowHtml(input.body),
-          ...(input.summary ? { "post-summary": stripLongDashes(decodeStrayUnicodeEscapes(input.summary)) } : {}),
-          ...(input.metaTitle ? { "meta-title": stripLongDashes(decodeStrayUnicodeEscapes(input.metaTitle)) } : {}),
-          ...(input.metaDescription
-            ? { "meta-description": stripLongDashes(decodeStrayUnicodeEscapes(input.metaDescription)) }
-            : {}),
-          ...(input.categoryIds?.length ? { category: input.categoryIds } : {}),
-          ...(input.tagIds?.length ? { tags: input.tagIds } : {}),
-          // One asset serves both fields, which is what the hand-authored
-          // articles on the site already do.
-          ...(input.image
-            ? {
-                "main-image": { fileId: input.image.fileId, url: input.image.url },
-                "thumbnail-image": { fileId: input.image.fileId, url: input.image.url },
-              }
-            : {}),
-        },
+        fieldData: articleFieldData(input, slug),
       },
     },
   );
 
   if (!res.ok) return res;
   return { ok: true, data: { id: res.data.id, slug: res.data.fieldData?.slug ?? slug } };
+}
+
+/* ------------------------------------------------------------- locales */
+
+/**
+ * LOCALES CAN ONLY BE SET WHEN AN ITEM IS CREATED.
+ *
+ * Webflow's own documentation is explicit: "For any Collection items that
+ * already exist, you must add the desired secondary locales in the CMS panel
+ * within the Designer. You can't add a new locale to an existing item via the
+ * API." Patching a locale onto an English-only item returns 404.
+ *
+ * So an article that should ever have a Swedish version has to be created
+ * across both locales up front, via the bulk endpoint, which returns one shared
+ * itemId with a variant per locale. That is how the hand-authored release
+ * articles on the site are structured, because the Designer creates every
+ * enabled locale for you.
+ *
+ * Getting this wrong is expensive: the only remedy for an English-only item is a
+ * manual step in the Designer, and it cannot be fixed by deleting and recreating
+ * once the item is published, because a published slug stays reserved.
+ */
+export interface SiteLocales {
+  primary: string;
+  /** cmsLocaleIds of every enabled secondary locale, keyed by language tag. */
+  secondary: Record<string, string>;
+}
+
+let localeCache: SiteLocales | null = null;
+
+export async function getSiteLocales(): Promise<SiteLocales | null> {
+  if (localeCache) return localeCache;
+  const siteId = process.env.WEBFLOW_SITE_ID;
+  if (!siteId) return null;
+
+  const res = await call<{
+    locales?: {
+      primary?: { cmsLocaleId?: string };
+      secondary?: { cmsLocaleId?: string; tag?: string; enabled?: boolean }[];
+    };
+  }>(`/sites/${siteId}`, { method: "GET" });
+  if (!res.ok || !res.data.locales?.primary?.cmsLocaleId) return null;
+
+  const secondary: Record<string, string> = {};
+  for (const loc of res.data.locales.secondary ?? []) {
+    if (loc.enabled && loc.tag && loc.cmsLocaleId) secondary[loc.tag] = loc.cmsLocaleId;
+  }
+  localeCache = { primary: res.data.locales.primary.cmsLocaleId, secondary };
+  return localeCache;
+}
+
+/**
+ * Create one item across several locales at once.
+ *
+ * Uses the bulk endpoint, the only one that accepts cmsLocaleIds. Every locale
+ * starts with the same fieldData; translating a secondary locale is a follow-up
+ * updateArticleItemLocale() call.
+ *
+ * Note isDraft: the bulk endpoint defaults it to TRUE, which would hide the item
+ * even after publishing. We want staged-but-publishable, same as createArticleItem.
+ */
+export async function createLocalizedArticleItem(
+  input: WebflowArticleInput,
+  cmsLocaleIds: string[],
+): Promise<WebflowResult<CreatedItem>> {
+  const slug = normalizeSlug(input.slug, input.title);
+
+  const res = await call<{ items?: { id: string; fieldData?: { slug?: string } }[] }>(
+    `/collections/${ARTICLES_COLLECTION_ID}/items/bulk`,
+    {
+      method: "POST",
+      body: {
+        isArchived: false,
+        isDraft: false,
+        cmsLocaleIds,
+        fieldData: [articleFieldData(input, slug)],
+      },
+    },
+  );
+
+  if (!res.ok) return res;
+  const first = res.data.items?.[0];
+  if (!first?.id) return { ok: false, reason: "Webflow created no item" };
+  return { ok: true, data: { id: first.id, slug: first.fieldData?.slug ?? slug } };
+}
+
+/**
+ * Overwrite one locale's variant of an existing item.
+ *
+ * 404 here means the item has no variant in that locale, which cannot be fixed
+ * from the API; see the note above.
+ */
+export async function updateArticleItemLocale(
+  itemId: string,
+  cmsLocaleId: string,
+  input: WebflowArticleInput,
+): Promise<WebflowResult<{ id: string }>> {
+  const res = await call<{ items?: { id: string }[] }>(
+    `/collections/${ARTICLES_COLLECTION_ID}/items`,
+    {
+      method: "PATCH",
+      body: {
+        items: [
+          {
+            id: itemId,
+            cmsLocaleId,
+            fieldData: articleFieldData(input, normalizeSlug(input.slug, input.title)),
+          },
+        ],
+      },
+    },
+  );
+  if (!res.ok) return res;
+  return { ok: true, data: { id: itemId } };
 }
 
 /* ------------------------------------------------- taxonomy (read-only) */
