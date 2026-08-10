@@ -6507,3 +6507,63 @@ genuine tracked link. Also run against the actual email: 3 screenshots, video
 **Still open:** only the first screenshot can become the hero (no way to pick).
 Swedish releases would need the secondary CMS locale, still unwired. The scan
 opens up to 40 messages one at a time, so it takes a few seconds.
+
+## Hot-lead tasks: diagnosed, then replaced by a Call Planner segment, 2026-08-10, PR #614 + #615
+
+Jacob, from a screenshot of `/tasks`: the page was wall-to-wall
+`Hot lead: Contact opened 3 times, consider calling` rows with no link and no
+way to tell them apart. "What can u do with these? make a plan."
+
+**What was actually wrong.** 232 of 293 open tasks (79%) were that one generator.
+Every row had a valid `contact_id` all along. Two separate things hid it:
+`tasks/page.tsx` only rendered the contact link when the contact had a name, and
+199 of the 232 are nameless `info@` shop inboxes; and the title's name fallback
+is the literal string `"Contact"`. The same fallback in `stop-on-reply.ts`
+produced 32 rows reading "Follow up with contact".
+
+**The deeper problem.** The trigger counted opens of one `tracking_id`, not a
+contact's engagement. So 1,209 contacts had 3+ opens across their emails but only
+221 ever got a task, and which ones got picked was close to arbitrary. Due date
+was creation + 2h and priority was always `high`, so everything was instantly
+red. 1 of the 221 was ever called in four months.
+
+**PR #614, the page.** Contact link falls back name, then company, then email,
+plus a click-to-call phone (184 of 232 have one). Newest-first with an
+oldest-first toggle. Type tabs (Calls/Emails/LinkedIn/Other) and a source filter
+(Hot leads 233 / Replies 49 / Created by us 12, verified against prod to sum to
+294 with zero overlap). Source is derived in `src/lib/tasks/source.ts` rather
+than stored.
+
+*Filtering by user was asked for and is not possible:* `tasks` has no assignee
+column and 282 of 294 rows have a null `created_by`. Shipped the source filter
+instead and flagged that real per-user work needs an `assigned_to` column.
+
+**PR #615, the replacement.** "Engaged prospects" playbook in the Call Planner:
+opened 3+ times, clicked at least once, engaged in the last 30 days. 174 contacts
+on prod, 146 with a phone. New `get_engaged_prospects` RPC aggregates
+`email_events` per contact and returns the contact columns in the same row.
+Aggregating in Postgres was deliberate: ~9.2k open/click rows is over PostgREST's
+1000-row ceiling so reading them into the route would silently truncate, and
+returning the contact fields avoids pushing ~1000 uuids through an `.in()` URL.
+
+`scoreProspect()` weights clicks over opens (open tracking is inflated by privacy
+proxies, a click is deliberate) and breadth of opens over repeat opens of one
+email. Same `ScoreResult` shape as `scoreContact`, so prospects rank in the same
+pool and render with the same reason chips. Prospects reach the ranked top-30 at
+all now; the candidate pool was gated on `wl_user_id`, which no prospect has.
+
+The task generator in `tracking/open` is gone, which also removes 3 queries per
+open from a route that runs on every pixel hit. Shared `contactDisplayName`
+fixes the nameless fallback across both reply generators.
+
+**Data.** 232 hot-lead tasks marked complete with a retirement note in
+`description` rather than deleted, so they stay auditable. Open tasks 293 -> 61.
+
+7 new unit tests for `scoreProspect`. Build, lint, tsc green on both PRs; both
+production deploys verified READY. The failing Vercel *preview* check and the
+E2E job are pre-existing on this repo (preview env has no Supabase vars, CI has
+no `CRON_SECRET`) and fail identically on every recent PR.
+
+**Still open, needs Jacob's call:** whether to widen the bar from strict (174,
+clicked) to broad (394, opens only); and whether to add an `assigned_to` column
+for per-user task filtering.
