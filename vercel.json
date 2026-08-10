@@ -21,6 +21,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/auto-enroll",
+      "schedule": "40 * * * *"
+    },
+    {
       "path": "/api/cron/check-sync-health",
       "schedule": "0 8 * * *"
     },

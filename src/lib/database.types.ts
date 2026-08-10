@@ -1226,6 +1226,7 @@ export type Database = {
       }
       contacts: {
         Row: {
+          active_days_count: number | null
           address: string | null
           all_emails: string[] | null
           all_phones: string[] | null
@@ -1290,6 +1291,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          active_days_count?: number | null
           address?: string | null
           all_emails?: string[] | null
           all_phones?: string[] | null
@@ -1354,6 +1356,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          active_days_count?: number | null
           address?: string | null
           all_emails?: string[] | null
           all_phones?: string[] | null
@@ -4805,6 +4808,77 @@ export type Database = {
           },
         ]
       }
+      sequence_auto_enrollments: {
+        Row: {
+          allow_customers: boolean
+          created_at: string
+          enabled: boolean
+          id: string
+          last_result: Json | null
+          last_run_at: string | null
+          list_id: string
+          sender_account_id: string | null
+          sequence_id: string
+          unenroll_when_left_list: boolean
+          workspace_id: string
+        }
+        Insert: {
+          allow_customers?: boolean
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_result?: Json | null
+          last_run_at?: string | null
+          list_id: string
+          sender_account_id?: string | null
+          sequence_id: string
+          unenroll_when_left_list?: boolean
+          workspace_id: string
+        }
+        Update: {
+          allow_customers?: boolean
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_result?: Json | null
+          last_run_at?: string | null
+          list_id?: string
+          sender_account_id?: string | null
+          sequence_id?: string
+          unenroll_when_left_list?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_auto_enrollments_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "contact_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_auto_enrollments_sender_account_id_fkey"
+            columns: ["sender_account_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_auto_enrollments_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_auto_enrollments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sequence_enrollments: {
         Row: {
           completed_at: string | null
@@ -5900,6 +5974,7 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: undefined
       }
+      refresh_active_days_aggregates: { Args: never; Returns: Json }
       refresh_diagnostics_aggregates: { Args: never; Returns: Json }
       reorder_route_stops: {
         Args: {
