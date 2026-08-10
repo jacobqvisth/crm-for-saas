@@ -6588,3 +6588,17 @@ for per-user task filtering.
 - Prod row counts measured via psql to target the fix; dtc-codes and search-terms also drop one needless warehouse read per view.
 - **Known remaining:** `/dashboard` (usage) itself still cold-loads 65-69k snapshot rows on non-default ranges — the real fix there is aggregating snapshots in SQL instead of `select("*")` + pageAll. Follow-up candidate.
 - Build, lint, tsc all pass. Deploy verified READY.
+
+## Free Users analysis page — 2026-08-10
+
+- **PRs:** #617 (page) merged as `2f36b03` · #621 (shell-lite follow-up) merged as `e2c4198` · both production deploys verified READY.
+- New **Free Users** tab (`/dashboard/free-users`, section key `free-users`, after Plan Stats): the freemium base analysed end-to-end.
+  - **KPI header:** free users / free workshops, active 7d/30d, ever-diagnosed, workshops on a paid tier now with paying / trialing / past-due split and overall conversion rate.
+  - **How often:** active-days-per-user frequency buckets over the last 30 days (dormant / 1 / 2–4 / 5–9 / 10+ days). At build time the free base was ~1,350 users, ~14% active in 30d, ~85% of those on a single day.
+  - **What they use:** per-feature users + events (30d and since 2026-06-11), plus activation stats — % ever ran a diagnostic, % first diagnostic day 0–1, % returning 7+ days after their first (base restricted to first diagnostics ≥14 days old so fresh signups don't drag the rate).
+  - **Free → paid:** One / Small / Large tier cards (status split + top countries), monthly new-paid trend summed from the Stripe `new_paid_workshops` daily counter, signup-cohort table (still free / paid tier / paying / trialing / conversion %), conversion by country (top 15).
+  - **Upgrade candidates:** top-50 engaged free users (active days, feature events, diagnostics 30d + lifetime, last active, signed up) with workshop links — the warm list for quota upsells and outreach.
+- Implementation: loader `src/lib/ceo/data/free-users.ts` (all-history `pageAll` reads with unique-tiebreaker ordering; every table ≤3.5k rows; internal-test exclusion; 5-min ceo-data cache), client-safe types in `src/lib/ceo/free-users-shared.ts`, content `src/components/ceo/free-users-content.tsx`. Registered in `dashboard-sections.tsx` + `FIXED_ALL_HISTORY_SECTIONS` (fixed windows, range pills hidden). "Active" is behaviour-based (feature events + diagnostics), matching Plan Stats — not login-based.
+- Caveat documented on-page: conversion reads the CURRENT plan (no plan-history table), so upgrades that churned back to Free count as free, and direct-to-trial signups are included in paid counts.
+- #621 landed minutes after #619 changed the shell contract mid-session: dropped the `getDashboardData()` chrome read (same conversion #619 applied to dtc-codes / search-terms).
+- tsc + eslint clean on both PRs; the failing Vercel *preview* check is the known pre-existing `/calls/feedback` prerender failure (preview env has no Supabase vars).
