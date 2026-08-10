@@ -174,7 +174,7 @@ export function PricingOptionsClient() {
                     <span className="text-xs font-bold text-slate-400 mr-2">{o.key}</span>
                     <span className="font-medium text-slate-900">{o.name}</span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{freeTierSummary(o)}</td>
+                  <td className="px-4 py-3 text-slate-600">{o.freeTierLabel}</td>
                   <td className="px-4 py-3 text-slate-600">{o.trial}</td>
                   <td className="px-4 py-3 text-slate-600">{o.revenueShape}</td>
                   <td className="px-4 py-3 text-slate-600">{entryPrice(o)}</td>
@@ -274,11 +274,24 @@ function OptionDetail({ option }: { option: PricingOption }) {
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
           How the pricing page would look
         </p>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          className={`grid gap-4 sm:grid-cols-2 ${
+            option.plans.length >= 4
+              ? "xl:grid-cols-4"
+              : option.plans.length === 3
+              ? "lg:grid-cols-3"
+              : "lg:grid-cols-2 max-w-2xl"
+          }`}
+        >
           {option.plans.map((p) => (
             <PlanCard key={p.name} plan={p} />
           ))}
         </div>
+        {option.footnote && (
+          <p className="mt-3 text-sm text-slate-600 leading-relaxed max-w-4xl">
+            {option.footnote}
+          </p>
+        )}
       </div>
 
       {/* Analysis panels */}
@@ -392,23 +405,18 @@ function PlanCard({ plan }: { plan: PlanDraft }) {
       >
         {plan.cta}
       </div>
+      {plan.trialNote && (
+        <p className="mt-2 text-[11px] text-slate-500 text-center leading-snug">
+          {plan.trialNote}
+        </p>
+      )}
     </div>
   );
 }
 
-function freeTierSummary(o: PricingOption): string {
-  const free = o.plans.find(
-    (p) => p.price === "SEK 0" || p.price.toLowerCase() === "free"
-  );
-  if (!free) return "None";
-  if (free.name === "Archive") return "Read-only Archive";
-  if (o.id === "free-diagnose-pay-fix") return "Unlimited, no procedures";
-  return `${free.name}, capped`;
-}
-
 function entryPrice(o: PricingOption): string {
   const paid = o.plans.filter(
-    (p) => p.price !== "SEK 0" && !p.price.includes("days") && p.price.toLowerCase() !== "free"
+    (p) => p.price !== "SEK 0" && p.price.toLowerCase() !== "free"
   );
   if (paid.length === 0) return "n/a";
   const first = paid[0];
