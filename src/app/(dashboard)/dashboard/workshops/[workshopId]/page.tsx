@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { WorkshopDetailContent } from "@/components/ceo/workshops-content";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getWorkshopDetail } from "@/lib/ceo/data/workshops";
+import { normalizeDashboardTimeRangeKey } from "@/lib/ceo/time-ranges";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +26,10 @@ export default async function WorkshopDetailPage({
   searchParams,
 }: WorkshopDetailPageProps) {
   const [{ workshopId }, { range }] = await Promise.all([params, searchParams]);
-  const data = await getDashboardData(range);
+  const rangeKey = normalizeDashboardTimeRangeKey(range);
 
   return (
-    <DashboardShell data={data} section="workshops">
+    <DashboardShell rangeKey={rangeKey} section="workshops">
       <Suspense fallback={<CeoPanelSkeleton />}>
         <WorkshopDetailPanel workshopId={workshopId} />
       </Suspense>

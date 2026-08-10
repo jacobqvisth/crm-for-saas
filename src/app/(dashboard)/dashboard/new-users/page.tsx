@@ -5,7 +5,6 @@ import { NewUsersContent } from "@/components/ceo/new-users-content";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getNewUsersData } from "@/lib/ceo/data/new-users";
 import {
   formatStockholmTime,
@@ -72,17 +71,11 @@ export default async function NewUsersPage({
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
   const country = normalizeDashboardCountry(params.country);
 
-  // getDashboardData + the "last synced" stamp are cached and cheap — await
-  // them so the shell + header render immediately, then stream the heavier
-  // new-users aggregation panel.
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(params.range),
-    getCoreAppLastSyncedAt(),
-  ]);
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="new-users"
       headerSubtext={
         <>

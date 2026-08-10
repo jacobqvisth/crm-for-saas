@@ -4,7 +4,6 @@ import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { ProductAnalyticsContent } from "@/components/ceo/product-analytics-content";
 import { UpdateButton } from "@/components/ceo/update-button";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   getProductAnalyticsData,
   PRODUCT_ANALYTICS_DEFAULT_RANGE_KEY,
@@ -25,11 +24,10 @@ export default async function ProductAnalyticsPage({
 }: DashboardRoutePageProps) {
   const params = await searchParams;
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
-  const data = await getDashboardData(rangeKey);
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="product-analytics"
       defaultRangeKey={PRODUCT_ANALYTICS_DEFAULT_RANGE_KEY}
       headerSubtext={

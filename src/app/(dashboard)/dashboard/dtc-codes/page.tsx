@@ -1,7 +1,6 @@
 import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { DtcCodesContent } from "@/components/ceo/dtc-codes-content";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getDiagnosticsDrilldownList } from "@/lib/ceo/data/diagnostics";
 import { analyseDtcCodes } from "@/lib/ceo/dtc/analyse";
 import { resolveDashboardTimeRange } from "@/lib/ceo/time-ranges";
@@ -34,20 +33,12 @@ export default async function DtcCodesPage({ searchParams }: DtcCodesPageProps) 
   //
   // The diagnostics read is always all-history: code-frequency analysis over a
   // 30-day slice is too thin to be useful, and the read is cheap (~2.4k rows).
-  //
-  // getDashboardData must NOT be asked for "all_time" — it pages every row of
-  // dashboard_metric_snapshots (161k rows / 87 MB), needing ~160 sequential
-  // round trips to eu-north-1 from a us-east function, which blows the 60s
-  // limit. It is used here only for shell chrome (title, banners, country
-  // list), so it takes the cheap default range while the range pills are hidden
-  // via FIXED_ALL_HISTORY_SECTIONS.
-  const [data, diagnostics] = await Promise.all([
-    getDashboardData(),
-    getDiagnosticsDrilldownList({
-      range: resolveDashboardTimeRange("all_time"),
-      includeInternal: showInternal,
-    }),
-  ]);
+  // The shell renders from the default range key alone (pills are hidden via
+  // FIXED_ALL_HISTORY_SECTIONS anyway) — no getDashboardData() read needed.
+  const diagnostics = await getDiagnosticsDrilldownList({
+    range: resolveDashboardTimeRange("all_time"),
+    includeInternal: showInternal,
+  });
 
   const scoped = country
     ? diagnostics.filter(
@@ -58,7 +49,7 @@ export default async function DtcCodesPage({ searchParams }: DtcCodesPageProps) 
   const analysis = analyseDtcCodes(scoped);
 
   return (
-    <DashboardShell data={data} section="dtc-codes">
+    <DashboardShell section="dtc-codes">
       <DtcCodesContent analysis={analysis} showInternal={showInternal} />
     </DashboardShell>
   );

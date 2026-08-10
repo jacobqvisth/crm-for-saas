@@ -4,8 +4,8 @@ import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { WorkshopListContent } from "@/components/ceo/workshops-content";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getWorkshopDrilldownList } from "@/lib/ceo/data/workshops";
+import { normalizeDashboardTimeRangeKey } from "@/lib/ceo/time-ranges";
 import {
   listInternalTestUsers,
   listInternalTestWorkshops,
@@ -127,10 +127,10 @@ export default async function WorkshopsDashboardPage({
   const status = asString(params.status) || "all";
   const showInternal = asBool(params.showInternal);
   const country = normalizeDashboardCountry(params.country);
-  const data = await getDashboardData(params.range);
+  const rangeKey = normalizeDashboardTimeRangeKey(params.range);
 
   return (
-    <DashboardShell data={data} section="workshops">
+    <DashboardShell rangeKey={rangeKey} section="workshops">
       <Suspense fallback={<CeoPanelSkeleton />}>
         <WorkshopsPanel
           rawQuery={rawQuery}

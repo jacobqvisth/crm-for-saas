@@ -6,7 +6,6 @@ import { MonthlyReviewContent } from "@/components/ceo/monthly-review-content";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   getMonthlyReviewData,
   listMonthOptions,
@@ -16,6 +15,7 @@ import {
   formatStockholmTime,
   getCoreAppLastSyncedAt,
 } from "@/lib/ceo/data/sync-freshness";
+import { normalizeDashboardTimeRangeKey } from "@/lib/ceo/time-ranges";
 import { refreshMonthlyReviewAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -40,14 +40,12 @@ export default async function MonthlyReviewPage({
   const country = normalizeDashboardCountry(params.country);
   const monthOptions = listMonthOptions();
 
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(params.range),
-    getCoreAppLastSyncedAt(),
-  ]);
+  const rangeKey = normalizeDashboardTimeRangeKey(params.range);
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="monthly-review"
       headerSubtext={
         <>

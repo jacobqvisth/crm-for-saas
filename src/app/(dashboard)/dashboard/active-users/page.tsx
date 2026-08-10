@@ -10,7 +10,6 @@ import {
   normalizeActiveUsersRangeKey,
 } from "@/lib/ceo/data/active-users";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   formatStockholmTime,
   getCoreAppLastSyncedAt,
@@ -68,17 +67,13 @@ export default async function ActiveUsersPage({
   const rangeKey = normalizeActiveUsersRangeKey(params.range);
   const country = normalizeDashboardCountry(params.country);
 
-  // Shell + header render from cached/cheap data; the GA4 + diagnostics panel
-  // streams in behind a skeleton. Pass the resolved key (default: yesterday)
-  // into getDashboardData so the time-range picker highlights correctly.
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(rangeKey),
-    getCoreAppLastSyncedAt(),
-  ]);
+  // Shell + header render instantly from the range key; the GA4 + diagnostics
+  // panel streams in behind a skeleton.
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="active-users"
       defaultRangeKey={ACTIVE_USERS_DEFAULT_RANGE_KEY}
       headerSubtext={
