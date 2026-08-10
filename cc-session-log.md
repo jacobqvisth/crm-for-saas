@@ -6577,3 +6577,14 @@ for per-user task filtering.
 - Chose `signed_up_at` over `created_at` (created_at is the sync row timestamp, starts 2025-11-20; signed_up_at covers 1,536/1,538 users back to 2025-03-24).
 - Sanity-checked against prod: July 2026 new users = Free 341 / Small 26 / One 6 / Large 1.
 - Build, lint, tsc all pass.
+
+## Perf: instant dashboard range switching — 2026-08-10
+
+- **PR:** #619 · branch `fix/dashboard-shell-no-blocking-warehouse-read` · merged as `c0866c5`
+- Jacob reported 30d → Last month on /dashboard/plan-stats taking forever. Root cause: every dashboard tab awaited `getDashboardData()` OUTSIDE its Suspense boundary just to render the header tabs + range pills. Cold range keys (anything but the warm last_30_days default) paged `dashboard_metric_snapshots` with `select("*")` — 69,143 rows for July ≈ 70 sequential PostgREST round trips — before the route could paint anything, so the browser froze on the old page with zero feedback.
+- `DashboardShell` now accepts `rangeKey` as a lightweight alternative to `data`: pills come from `getDashboardTimeRangeOptions(key)` (exactly what `calculateDashboardData` produced), setup mode from `hasSupabaseConfig()`. Limited-history banner only renders when full `data` is passed.
+- 19 pages converted to `rangeKey` (plan-stats, active-users, app-usage, feature-usage, toplists, new-users, diagnostics, workshops list+detail, conversions, cta-clicks, domain-health, payment-methods, pilot-stats, product-analytics, monthly-review, organic-analysis, dtc-codes, diagnostic-search-terms). Only `/dashboard` (usage) and `settings` still pass `data` — their content uses it.
+- Effect: range switches paint chrome + skeleton instantly; the cold cost left on plan-stats is its own small loaders (379 feature-usage rows + 447 diagnostics for July) plus the GA4-backed active-users read behind the skeleton.
+- Prod row counts measured via psql to target the fix; dtc-codes and search-terms also drop one needless warehouse read per view.
+- **Known remaining:** `/dashboard` (usage) itself still cold-loads 65-69k snapshot rows on non-default ranges — the real fix there is aggregating snapshots in SQL instead of `select("*")` + pageAll. Follow-up candidate.
+- Build, lint, tsc all pass. Deploy verified READY.
