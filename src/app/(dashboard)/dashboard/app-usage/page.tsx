@@ -8,7 +8,6 @@ import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { UpdateButton } from "@/components/ceo/update-button";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   getAppUsageData,
   normalizeAppUsagePlatform,
@@ -67,16 +66,13 @@ export default async function AppUsagePage({
   const platform = normalizeAppUsagePlatform(params.platform);
   const country = normalizeDashboardCountry(params.country);
 
-  // Shell + header render from cached/cheap data; the GA4 runReport panel
-  // streams in behind a skeleton.
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(params.range),
-    getCoreAppLastSyncedAt(),
-  ]);
+  // Shell + header render instantly from the range key; the GA4 runReport
+  // panel streams in behind a skeleton.
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="usage"
       headerActions={
         <AppUsagePlatformTabs rangeKey={rangeKey} active={platform} />

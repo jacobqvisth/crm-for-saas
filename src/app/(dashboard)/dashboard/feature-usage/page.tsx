@@ -10,7 +10,6 @@ import {
   normalizeFeatureUsageRangeKey,
 } from "@/lib/ceo/data/feature-usage";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   formatStockholmTime,
   getCoreAppLastSyncedAt,
@@ -38,14 +37,11 @@ export default async function FeatureUsagePage({
   const rangeKey = normalizeFeatureUsageRangeKey(params.range);
   const country = normalizeDashboardCountry(params.country);
 
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(rangeKey),
-    getCoreAppLastSyncedAt(),
-  ]);
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="feature-usage"
       defaultRangeKey={FEATURE_USAGE_DEFAULT_RANGE_KEY}
       headerSubtext={

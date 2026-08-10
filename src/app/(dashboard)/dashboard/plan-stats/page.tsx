@@ -10,7 +10,6 @@ import {
   normalizePlanStatsRangeKey,
 } from "@/lib/ceo/data/plan-stats";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   formatStockholmTime,
   getCoreAppLastSyncedAt,
@@ -38,14 +37,11 @@ export default async function PlanStatsPage({
   const rangeKey = normalizePlanStatsRangeKey(params.range);
   const country = normalizeDashboardCountry(params.country);
 
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(rangeKey),
-    getCoreAppLastSyncedAt(),
-  ]);
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="plan-stats"
       defaultRangeKey={PLAN_STATS_DEFAULT_RANGE_KEY}
       headerSubtext={

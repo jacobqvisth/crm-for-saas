@@ -12,7 +12,6 @@ import {
   normalizeCtaHost,
   type CtaClicksHostFilter,
 } from "@/lib/ceo/data/cta-clicks";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   normalizeDashboardTimeRangeKey,
   resolveDashboardTimeRange,
@@ -50,11 +49,9 @@ export default async function CtaClicksPage({
   const rangeKey = normalizeDashboardTimeRangeKey(params.range);
   const host = normalizeCtaHost(params.host);
 
-  const data = await getDashboardData(params.range);
-
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="cta-clicks"
       headerActions={<CtaHostTabs rangeKey={rangeKey} active={host} />}
       headerSubtext={

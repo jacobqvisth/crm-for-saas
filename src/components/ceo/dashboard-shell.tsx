@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import {
   DEFAULT_TIME_RANGE_KEY,
+  getDashboardTimeRangeOptions,
   type DashboardTimeRangeKey,
 } from "@/lib/ceo/time-ranges";
 import { getDashboardCountryOptions } from "@/lib/ceo/countries";
+import { hasSupabaseConfig } from "@/lib/ceo/env";
 import type { DashboardData } from "@/lib/ceo/metrics/types";
 import {
   DASHBOARD_SECTIONS,
@@ -41,7 +43,14 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
 >(["diagnostic-search-terms", "dtc-codes"]);
 
 type DashboardShellProps = {
-  data: DashboardData;
+  // Full warehouse read — only pass this when the page CONTENT actually uses
+  // it (/dashboard, settings). Pages that just need the chrome should pass
+  // `rangeKey` instead: the range pills are a pure function of the key, and
+  // getDashboardData() cold-loads ~70 paged Supabase requests (metric
+  // snapshots), which used to block the whole route render on range switches.
+  data?: DashboardData;
+  // Lightweight alternative to `data`: the normalized active range key.
+  rangeKey?: DashboardTimeRangeKey;
   section: DashboardSectionKey;
   children: ReactNode;
   headerActions?: ReactNode;
@@ -54,6 +63,7 @@ type DashboardShellProps = {
 
 export async function DashboardShell({
   data,
+  rangeKey,
   section,
   children,
   headerActions,
@@ -62,6 +72,11 @@ export async function DashboardShell({
 }: DashboardShellProps) {
   const page = getDashboardSectionConfig(section);
   const countryOptions = await getDashboardCountryOptions();
+
+  const selectedRange = data?.selectedRange ?? rangeKey ?? DEFAULT_TIME_RANGE_KEY;
+  const timeRangeOptions =
+    data?.timeRangeOptions ?? getDashboardTimeRangeOptions(selectedRange);
+  const setupMode = data ? data.setupMode : !hasSupabaseConfig();
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -89,9 +104,9 @@ export async function DashboardShell({
         }))}
         activeTabKey={section}
         pageHref={page.href}
-        selectedRange={data.selectedRange}
+        selectedRange={selectedRange}
         defaultRangeKey={defaultRangeKey}
-        rangePills={data.timeRangeOptions.map((option) => ({
+        rangePills={timeRangeOptions.map((option) => ({
           key: option.key,
           label: option.label,
           description: option.description,
@@ -102,7 +117,7 @@ export async function DashboardShell({
         supportsTimeRange={!FIXED_ALL_HISTORY_SECTIONS.has(section)}
       />
 
-      {data.setupMode ? (
+      {setupMode ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <strong className="font-semibold">Setup mode:</strong> add Supabase
           and source API environment variables to replace demo metrics with
@@ -110,7 +125,7 @@ export async function DashboardShell({
         </div>
       ) : null}
 
-      {data.hasLimitedHistory ? (
+      {data?.hasLimitedHistory ? (
         <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           <strong className="font-semibold">Limited synced history:</strong>{" "}
           this range has little or no stored data yet. The dashboard will fill

@@ -5,7 +5,6 @@ import { CeoPanelSkeleton } from "@/components/ceo/panel-skeleton";
 import { ToplistsContent } from "@/components/ceo/toplists-content";
 import { UpdateButton } from "@/components/ceo/update-button";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import {
   TOPLISTS_DEFAULT_RANGE_KEY,
   getToplistsData,
@@ -52,17 +51,13 @@ export default async function ToplistsPage({
   const rangeKey = normalizeToplistsRangeKey(params.range);
   const country = normalizeDashboardCountry(params.country);
 
-  // Shell + header render from cached/cheap data; the leaderboard panels stream
-  // in behind a skeleton. Pass the resolved key (default: last_30_days) into
-  // getDashboardData so the time-range picker highlights correctly.
-  const [data, lastSyncedAt] = await Promise.all([
-    getDashboardData(rangeKey),
-    getCoreAppLastSyncedAt(),
-  ]);
+  // Shell + header render instantly from the range key; the leaderboard panels
+  // stream in behind a skeleton.
+  const lastSyncedAt = await getCoreAppLastSyncedAt();
 
   return (
     <DashboardShell
-      data={data}
+      rangeKey={rangeKey}
       section="toplists"
       defaultRangeKey={TOPLISTS_DEFAULT_RANGE_KEY}
       headerSubtext={

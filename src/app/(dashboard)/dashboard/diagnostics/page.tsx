@@ -2,7 +2,6 @@ import { DashboardShell } from "@/components/ceo/dashboard-shell";
 import { DiagnosticsContent } from "@/components/ceo/diagnostics-content";
 import { InternalTestExclusionsPanel } from "@/components/ceo/internal-test-exclusions";
 import { normalizeDashboardCountry } from "@/lib/ceo/countries";
-import { getDashboardData } from "@/lib/ceo/data/dashboard";
 import { getDiagnosticsDrilldownList } from "@/lib/ceo/data/diagnostics";
 import { dtcsMatchAllCodes, parseDtcCodeFilter } from "@/lib/ceo/dtc/match";
 import {
@@ -70,15 +69,12 @@ export default async function DiagnosticsPage({
   // an empty table — only 7 of the 30 currently listed pairs have a session
   // inside the default 30-day window, and 27 inside 90 days. Widening costs
   // nothing: getDiagnosticsDrilldownList already reads every row and applies the
-  // range in memory. Deliberately only the *list* widens — getDashboardData keeps
-  // the requested range, because handing it all_time makes it read every metric
-  // snapshot ever synced and time out.
+  // range in memory.
   const listRange =
     codeFilter.length > 0 ? resolveDashboardTimeRange("all_time") : resolvedRange;
 
-  const [data, diagnostics, internalTestUsers, internalTestWorkshops] =
+  const [diagnostics, internalTestUsers, internalTestWorkshops] =
     await Promise.all([
-      getDashboardData(params.range),
       getDiagnosticsDrilldownList({
         range: listRange,
         includeInternal: showInternal,
@@ -122,7 +118,7 @@ export default async function DiagnosticsPage({
   });
 
   return (
-    <DashboardShell data={data} section="diagnostics">
+    <DashboardShell rangeKey={rangeKey} section="diagnostics">
       <div className="section-stack">
         <DiagnosticsContent
           items={filtered}
