@@ -16,6 +16,7 @@ import {
   fetchVariantsForStep,
   bumpVariantSendCount,
 } from "@/lib/sequences/variants";
+import { defaultLanguage } from "@/lib/sequences/language";
 import { insertActivity } from "@/lib/activities/insert";
 import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
 
@@ -633,6 +634,15 @@ export async function POST(request: NextRequest) {
           const sequence = enrollment.sequences as unknown as { settings: SequenceSettings };
           const settings = sequence?.settings;
 
+          // The language pinned when this contact enrolled. Every step of the
+          // sequence uses it, so a mid-campaign change to contacts.language
+          // can't switch someone's language between emails.
+          const languageCtx = {
+            language: (enrollment as unknown as { language: string | null })
+              .language,
+            defaultLanguage: defaultLanguage(settings),
+          };
+
           // Resolve the sender to use for subsequent emails.
           // Prefer the enrollment's pinned sender; fall back to getNextSender() if it's gone inactive.
           const enrollmentSenderId = (enrollment as unknown as { sender_account_id: string | null }).sender_account_id;
@@ -687,7 +697,7 @@ export async function POST(request: NextRequest) {
               }
 
               const variants = await fetchVariantsForStep(supabase, nextStep.id);
-              const picked = pickVariant(nextStep, variants, template);
+              const picked = pickVariant(nextStep, variants, template, languageCtx);
               let subject = picked.subject;
               let bodyHtml = picked.bodyHtml;
 
@@ -760,7 +770,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 const variants = await fetchVariantsForStep(supabase, stepAfterDelay.id);
-                const picked = pickVariant(stepAfterDelay, variants, template);
+                const picked = pickVariant(stepAfterDelay, variants, template, languageCtx);
                 let subject = picked.subject;
                 let bodyHtml = picked.bodyHtml;
 

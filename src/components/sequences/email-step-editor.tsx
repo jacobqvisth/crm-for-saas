@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
-import { Eye, EyeOff, FileText, Plus, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { Eye, EyeOff, FileText, Languages, Plus, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/i18n/languages";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 import { RichEmailEditor } from "./rich-email-editor";
@@ -319,6 +320,7 @@ export function EmailStepEditor({
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [variantsLoaded, setVariantsLoaded] = useState(false);
   const [showGenerateVariantsModal, setShowGenerateVariantsModal] = useState(false);
+  const [generatingLanguages, setGeneratingLanguages] = useState(false);
   const [ctaLock, setCtaLock] = useState(step.cta_lock || "");
   const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -552,6 +554,58 @@ export function EmailStepEditor({
     schedulePatch(activeVariantId, { is_active });
   };
 
+  // Tagging a variant with a language makes the step language-aware: contacts
+  // then get the variant in their own language instead of a round-robin pick.
+  const handleLanguageChange = (raw: string) => {
+    if (!activeVariantId) return;
+    const language = raw === "" ? null : raw;
+    setVariants((prev) =>
+      prev.map((v) => (v.id === activeVariantId ? { ...v, language } : v)),
+    );
+    schedulePatch(activeVariantId, { language });
+  };
+
+  const handleGenerateLanguages = async () => {
+    setGeneratingLanguages(true);
+    try {
+      const res = await fetch(
+        `/api/sequences/${step.sequence_id}/steps/${step.id}/variants/languages`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+      );
+      const data = (await res.json()) as {
+        error?: string;
+        variants?: StepVariant[];
+        created?: string[];
+        skipped?: string[];
+        failed?: { language: string; reason: string }[];
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not generate translations");
+        return;
+      }
+      if (data.variants) setVariants(data.variants);
+
+      const created = data.created ?? [];
+      const failed = data.failed ?? [];
+      if (created.length > 0) {
+        toast.success(
+          `Translated into ${created.map((c) => languageLabel(c)).join(", ")}. Review before sending.`,
+        );
+      } else if (failed.length === 0) {
+        toast("Every language already has a version");
+      }
+      if (failed.length > 0) {
+        toast.error(
+          `Failed: ${failed.map((f) => languageLabel(f.language)).join(", ")}`,
+        );
+      }
+    } catch {
+      toast.error("Could not generate translations");
+    } finally {
+      setGeneratingLanguages(false);
+    }
+  };
+
   const handleDeleteVariant = async () => {
     if (!activeVariantId) return;
     if (variants.length <= 1) {
@@ -601,9 +655,20 @@ export function EmailStepEditor({
                         ? "border-indigo-600 text-indigo-700"
                         : "border-transparent text-slate-500 hover:text-slate-800"
                     } ${disabled ? "italic opacity-60" : ""}`}
-                    title={disabled ? "Disabled — won't be sent" : v.name}
+                    title={
+                      disabled
+                        ? "Disabled — won't be sent"
+                        : v.language
+                          ? `${v.name} — sent to ${languageLabel(v.language)} readers`
+                          : v.name
+                    }
                   >
                     {v.name}
+                    {v.language && (
+                      <span className="ml-1 uppercase text-[10px] tracking-wide text-slate-400">
+                        {v.language}
+                      </span>
+                    )}
                     {disabled && " (off)"}
                   </button>
                 );
@@ -617,6 +682,16 @@ export function EmailStepEditor({
             >
               <Sparkles className="w-3 h-3" />
               Generate variants
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerateLanguages}
+              disabled={generatingLanguages}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 rounded font-medium disabled:opacity-50"
+              title="Translate this step into every language the sequence is set up for. Translations land as editable drafts, nothing sends until you review them."
+            >
+              <Languages className="w-3 h-3" />
+              {generatingLanguages ? "Translating…" : "Add languages"}
             </button>
             <button
               type="button"
@@ -637,6 +712,22 @@ export function EmailStepEditor({
                 className="text-xs font-medium text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none px-0.5 min-w-0 flex-shrink"
                 placeholder="Variant name"
               />
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Language
+                <select
+                  value={activeVariant.language ?? ""}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                  className="text-xs border border-slate-300 rounded px-1 py-0.5"
+                  title="Who gets this copy. 'Any language' means it competes in the normal A/B rotation; tagging a language sends it only to readers in that language."
+                >
+                  <option value="">Any language</option>
+                  {LANGUAGE_OPTIONS.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="flex items-center gap-1.5 text-xs text-slate-600">
                 Weight
                 <select

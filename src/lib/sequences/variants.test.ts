@@ -25,6 +25,7 @@ function v(
     body_html: `<p>body-${id}</p>`,
     weight: 1,
     is_active: true,
+    language: null,
     ai_generated: false,
     ai_generation_model: null,
     ai_parent_variant_id: null,
@@ -170,5 +171,109 @@ describe("createBatchVariantPicker", () => {
     expect(pick.variantId).toBeNull();
     expect(pick.subject).toBe("Step subject");
     expect(picker.deltas.size).toBe(0);
+  });
+});
+
+describe("pickVariant — language", () => {
+  const en = v("en1", { language: "en" });
+  const pl = v("pl1", { language: "pl" });
+  const sv = v("sv1", { language: "sv" });
+
+  it("ignores language entirely when no variant is tagged", () => {
+    // The backward-compatibility guarantee: existing sequences are untouched.
+    const pick = pickVariant(baseStep, [v("a"), v("b")], null, {
+      language: "pl",
+      defaultLanguage: "en",
+    });
+    expect(["a", "b"]).toContain(pick.variantId);
+  });
+
+  it("picks the variant matching the contact's language", () => {
+    const pick = pickVariant(baseStep, [en, pl, sv], null, {
+      language: "pl",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBe("pl1");
+    expect(pick.bodyHtml).toBe("<p>body-pl1</p>");
+  });
+
+  it("normalises the contact language before matching (nb resolves to no)", () => {
+    const no = v("no1", { language: "no" });
+    const pick = pickVariant(baseStep, [en, no], null, {
+      language: "nb",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBe("no1");
+  });
+
+  it("normalises a region-tagged language (sv-SE resolves to sv)", () => {
+    const pick = pickVariant(baseStep, [en, sv], null, {
+      language: "sv-SE",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBe("sv1");
+  });
+
+  it("falls back to the sequence default when the language has no copy", () => {
+    const pick = pickVariant(baseStep, [en, pl], null, {
+      language: "lt",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBe("en1");
+  });
+
+  it("falls back to language-neutral variants before the step body", () => {
+    const neutral = v("neutral");
+    const pick = pickVariant(baseStep, [pl, neutral], null, {
+      language: "lt",
+      defaultLanguage: "de",
+    });
+    expect(pick.variantId).toBe("neutral");
+  });
+
+  it("uses the step body rather than sending copy in the wrong language", () => {
+    const pick = pickVariant(baseStep, [pl], null, {
+      language: "sv",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBeNull();
+    expect(pick.subject).toBe("Step subject");
+  });
+
+  it("sends an off-language variant only when the step has no copy of its own", () => {
+    // A fully variant-driven step: an off-language email beats no email.
+    const emptyStep = { ...baseStep, subject_override: "", body_override: "" };
+    const pick = pickVariant(emptyStep, [pl], null, {
+      language: "sv",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBe("pl1");
+  });
+
+  it("A/B round-robins within a language, never across languages", () => {
+    const pl2 = v("pl2", { language: "pl" });
+    const picker = createBatchVariantPicker(
+      new Map([["step-1", [en, pl, pl2]]]),
+    );
+    const picks: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const p = picker.pickForStep(baseStep, null, {
+        language: "pl",
+        defaultLanguage: "en",
+      });
+      picks.push(p.variantId!);
+    }
+    expect(picks.filter((p) => p === "pl1")).toHaveLength(2);
+    expect(picks.filter((p) => p === "pl2")).toHaveLength(2);
+    expect(picks).not.toContain("en1");
+  });
+
+  it("skips inactive variants in the requested language", () => {
+    const plOff = v("plOff", { language: "pl", is_active: false });
+    const pick = pickVariant(baseStep, [en, plOff], null, {
+      language: "pl",
+      defaultLanguage: "en",
+    });
+    expect(pick.variantId).toBe("en1");
   });
 });

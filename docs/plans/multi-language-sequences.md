@@ -1,6 +1,7 @@
 # Multi-language sequences
 
-**Status:** proposal, not built
+**Status:** BUILT — phases 0 to 4 shipped 2026-08-10. Phase 5 (merging the six
+existing country sequences) deliberately not done; see section 8.
 **Written:** 2026-08-10
 **Grounded in:** prod data + code at `741d4e3`
 
@@ -239,7 +240,62 @@ for new enrollments only.
 Phases 1 and 2 are the ones that change behaviour. Phase 3 is what makes it
 pleasant. Phase 0 is worth doing this week regardless.
 
-## 7. Decisions needed from Jacob
+## 7. What shipped
+
+Phases 0 to 4, as designed above. Where the build differs from the plan, it is
+noted here.
+
+**Phase 0 — language coverage.** `TARGET_LANGUAGE_LABELS` grew from 17 to 26
+codes, adding sk, hu, ro, bg, uk, tr, ar, fa, zh. `normalizeLanguage()` now
+lowercases, strips region suffixes (`sv-SE`, `en_US`), and aliases `nb`/`nn`
+onto `no`. A test asserts every language code observed on prod contacts is
+covered, so this cannot silently regress when a new market appears.
+
+**Phase 1 — resolution and pinning.** `sequence_enrollments.language`, plus
+`src/lib/sequences/language.ts` holding `resolveContactLanguage`,
+`sequenceLanguages` and `defaultLanguage`. `COUNTRY_DEFAULT_LANGUAGE` covers 28
+unambiguous countries and deliberately omits BE, CH, CY and CA.
+
+**Phase 2 — language variants.** `sequence_step_variants.language`.
+`pickVariant` takes an optional `{ language, defaultLanguage }` and narrows to
+a language group before the existing A/B round-robin. All four pick sites pass
+the enrollment's pinned language.
+
+One refinement over the plan: when a step has language-tagged copy but none
+suitable for this reader, the picker prefers the **step's own body** over an
+off-language variant, and only falls back to an off-language variant if the
+step body is empty. Sending Polish to a Swedish reader is worse than sending
+the master copy; sending nothing is worse than either.
+
+**Phase 3 — authoring.** A Language select per variant, the code shown on each
+variant tab, and an "Add languages" button that calls
+`POST /api/sequences/[id]/steps/[stepId]/variants/languages`. That endpoint
+translates the master copy once per configured language via the existing
+`translateOutboundEmail`, storing each as an editable variant flagged
+`ai_generated`. It promotes an untagged master to the source language first, so
+the source language has a real variant rather than falling through to the step
+body. It never overwrites a hand-edited variant. Sequence settings gained a
+language checklist and a "master copy is written in" picker.
+
+**Phase 4 — analytics.** The per-variant breakdown shows each variant's
+language. Two bugs the language dimension introduced were fixed in the same
+pass: **"Promote winner" and the "Leader" trophy both compared variants across
+languages.** Left alone, promoting a winner would have set the Polish variant
+to weight 5 and demoted English to 1, starving whichever language lost, on a
+comparison that means nothing since the two never compete for the same reader.
+Both are now scoped per language.
+
+### Verifying it on a real sequence
+
+1. Sequence settings, tick the languages, set the master language.
+2. On each email step, write the master copy, then "Add languages".
+3. Review each generated tab. They are ordinary variants, so edit freely.
+4. Enroll. Check `sequence_enrollments.language` looks sane before sending.
+
+Existing sequences are untouched: with no language on any variant, every pick
+takes the original code path.
+
+## 8. Decisions needed from Jacob
 
 1. **Bounded or unbounded languages per sequence?** Recommended: bounded via
    `settings.languages`, so a campaign commits to the languages it will
@@ -251,3 +307,14 @@ pleasant. Phase 0 is worth doing this week regardless.
    unambiguous countries, and never overwriting `contacts.language`.
 4. **Do the six existing country sequences get merged?** Recommended: not
    initially. Leave 9,890 live enrollments alone.
+
+Decisions 1 to 3 are implemented as recommended: the language set is bounded
+per sequence, AI translations land as editable drafts that nothing sends until
+reviewed, and the country fallback is on but conservative. Decision 4 is open,
+and nothing was migrated.
+
+**Not done on purpose:** the failed-payment recovery sequence was left as
+English-only. Its master copy is still pending review (the billing link is a
+placeholder), and translating unreviewed copy would double the review burden
+and throw the translations away as soon as the master changes. Settle the
+English, then press "Add languages".

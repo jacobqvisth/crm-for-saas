@@ -16,11 +16,13 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { ArrowRight, ChevronDown, ChevronRight, Trophy } from "lucide-react";
+import { languageLabel } from "@/lib/i18n/languages";
 import toast from "react-hot-toast";
 
 interface VariantAnalytics {
   id: string;
   name: string;
+  language: string | null;
   weight: number;
   is_active: boolean;
   sent: number;
@@ -64,33 +66,63 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
   };
 
   const promoteWinner = async (step: StepAnalytics) => {
-    const eligibleVariants = step.variants.filter((v) => v.sent >= 20);
-    if (eligibleVariants.length < 2) {
-      toast.error("Need ≥2 variants with ≥20 sends each to promote a winner");
+    // Weights only compete within a language, so a winner has to be picked
+    // within one too. Promoting across languages would hand weight 5 to the
+    // Polish copy and demote the English one, which decides nothing and
+    // starves whichever language lost.
+    const byLanguage = new Map<string, VariantAnalytics[]>();
+    for (const v of step.variants) {
+      const key = v.language ?? "";
+      byLanguage.set(key, [...(byLanguage.get(key) ?? []), v]);
+    }
+
+    const winners: { winner: VariantAnalytics; group: VariantAnalytics[] }[] = [];
+    for (const group of byLanguage.values()) {
+      const eligible = group.filter((v) => v.sent >= 20);
+      if (eligible.length < 2) continue;
+      const winner = eligible.reduce((a, b) =>
+        a.replied / Math.max(1, a.sent) >= b.replied / Math.max(1, b.sent) ? a : b,
+      );
+      winners.push({ winner, group });
+    }
+
+    if (winners.length === 0) {
+      toast.error(
+        "Need ≥2 variants in the same language with ≥20 sends each to promote a winner",
+      );
       return;
     }
-    const winner = eligibleVariants.reduce((a, b) =>
-      a.replied / Math.max(1, a.sent) >= b.replied / Math.max(1, b.sent) ? a : b,
-    );
+
+    const summary = winners
+      .map(({ winner }) =>
+        winner.language
+          ? `"${winner.name}" (${languageLabel(winner.language)})`
+          : `"${winner.name}"`,
+      )
+      .join(", ");
+
     if (
       !confirm(
-        `Promote "${winner.name}" to weight 5 and set every other variant on this step to weight 1?`,
+        `Promote ${summary} to weight 5, and set the other variants in the same language to weight 1?`,
       )
     ) {
       return;
     }
-    for (const v of step.variants) {
-      const weight = v.id === winner.id ? 5 : 1;
-      await fetch(
-        `/api/sequences/${sequenceId}/steps/${step.step_id}/variants/${v.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ weight }),
-        },
-      );
+
+    for (const { winner, group } of winners) {
+      for (const v of group) {
+        const weight = v.id === winner.id ? 5 : 1;
+        await fetch(
+          `/api/sequences/${sequenceId}/steps/${step.step_id}/variants/${v.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ weight }),
+          },
+        );
+      }
     }
-    toast.success(`Promoted "${winner.name}"`);
+    toast.success(`Promoted ${summary}`);
     load();
   };
 
@@ -114,11 +146,11 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
     // Pre-fetch all variants for every step in this sequence so we can build
     // per-variant breakdowns without N+1 queries.
     const stepIds = steps.filter((s) => s.type === "email").map((s) => s.id);
-    const variantsByStep = new Map<string, Array<{ id: string; name: string; weight: number; is_active: boolean }>>();
+    const variantsByStep = new Map<string, Array<{ id: string; name: string; language: string | null; weight: number; is_active: boolean }>>();
     if (stepIds.length > 0) {
       const { data: allVariants } = await supabase
         .from("sequence_step_variants")
-        .select("id, sequence_step_id, name, weight, is_active")
+        .select("id, sequence_step_id, name, language, weight, is_active")
         .in("sequence_step_id", stepIds);
       for (const v of allVariants ?? []) {
         const arr = variantsByStep.get(v.sequence_step_id) ?? [];
@@ -239,6 +271,7 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
         (v) => ({
           id: v.id,
           name: v.name,
+          language: v.language,
           weight: v.weight,
           is_active: v.is_active,
           sent: sentByVariant.get(v.id) ?? 0,
@@ -395,16 +428,28 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
             {stepAnalytics.map((s) => {
               const isExpanded = expandedSteps.has(s.step_id);
               const hasVariants = s.variants.length > 0;
-              const variantWinnerId = hasVariants
-                ? s.variants
-                    .filter((v) => v.sent >= 20)
-                    .reduce<{ id: string; rate: number } | null>((best, v) => {
-                      const rate = v.replied / Math.max(1, v.sent);
-                      return best === null || rate > best.rate
-                        ? { id: v.id, rate }
-                        : best;
-                    }, null)?.id ?? null
-                : null;
+              // One leader per language: a Polish variant out-replying an
+              // English one says nothing about either, since they never
+              // compete for the same reader.
+              const variantWinnerIds = new Set<string>();
+              if (hasVariants) {
+                const groups = new Map<string, VariantAnalytics[]>();
+                for (const v of s.variants) {
+                  const key = v.language ?? "";
+                  groups.set(key, [...(groups.get(key) ?? []), v]);
+                }
+                for (const group of groups.values()) {
+                  const eligible = group.filter((v) => v.sent >= 20);
+                  if (eligible.length < 2) continue;
+                  const best = eligible.reduce((a, b) =>
+                    a.replied / Math.max(1, a.sent) >=
+                    b.replied / Math.max(1, b.sent)
+                      ? a
+                      : b,
+                  );
+                  variantWinnerIds.add(best.id);
+                }
+              }
               return (
                 <>
                   <tr key={s.step_order} className="hover:bg-slate-50">
@@ -472,11 +517,19 @@ export function SequenceAnalyticsTab({ sequenceId }: SequenceAnalyticsTabProps) 
                             <span className={v.is_active ? "" : "italic text-slate-400"}>
                               ↳ {v.name}
                             </span>
+                            {v.language && (
+                              <span
+                                className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 text-[11px] font-medium"
+                                title={`Sent to ${languageLabel(v.language)} readers`}
+                              >
+                                {languageLabel(v.language)}
+                              </span>
+                            )}
                             <span className="text-slate-400">
                               weight {v.weight}
                               {!v.is_active && " · disabled"}
                             </span>
-                            {variantWinnerId === v.id && (
+                            {variantWinnerIds.has(v.id) && (
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
                                 <Trophy className="w-3 h-3" />
                                 Leader
