@@ -99,13 +99,39 @@ async function propagateUsersToContacts(
     const { data, error } = await supabase
       .from("dashboard_users")
       .select(
-        "internal_user_id, last_seen_at, signed_up_at, name, phone, core_stripe_customer_id, metadata",
+        "internal_user_id, workshop_id, last_seen_at, signed_up_at, name, phone, core_stripe_customer_id, metadata",
       )
       .in("internal_user_id", slice);
     if (error) throw error;
     for (const u of data ?? []) {
       if (!u.internal_user_id) continue;
       usersById.set(u.internal_user_id, u as DashboardUserShape);
+    }
+  }
+
+  // Billing payment status lives on the workshop, not the user. Mirror it onto
+  // the contact so dynamic lists can target failed-payment recovery cohorts —
+  // a list filter is a single-table query on `contacts` and can't traverse the
+  // company relation (and `company_id` isn't reliably the contact's own
+  // workshop for chains that share a domain).
+  const workshopIds = [
+    ...new Set(
+      [...usersById.values()]
+        .map((u) => u.workshop_id)
+        .filter((v): v is string => !!v),
+    ),
+  ];
+  const paymentStatusByWorkshop = new Map<string, string | null>();
+  for (let i = 0; i < workshopIds.length; i += CHUNK_IN) {
+    const slice = workshopIds.slice(i, i + CHUNK_IN);
+    const { data, error } = await supabase
+      .from("dashboard_workshops")
+      .select("workshop_id, payment_status")
+      .in("workshop_id", slice);
+    if (error) throw error;
+    for (const w of data ?? []) {
+      if (!w.workshop_id) continue;
+      paymentStatusByWorkshop.set(w.workshop_id, w.payment_status ?? null);
     }
   }
 
@@ -136,6 +162,13 @@ async function propagateUsersToContacts(
           credits_remaining: meta.credits_remaining,
           user_plan_type: meta.plan_type,
           user_subscription_status: meta.subscription_status,
+          // Tri-state, straight from the core_app export: null (never had a
+          // subscription) | active | payment_failed. It flips back to `active`
+          // once the card is fixed, which is what lets a "failed payment"
+          // dynamic list drain itself as people recover.
+          payment_status: u.workshop_id
+            ? paymentStatusByWorkshop.get(u.workshop_id) ?? null
+            : null,
           user_stripe_customer_id:
             u.core_stripe_customer_id ?? meta.stripe_customer_id,
           user_stripe_subscription_id: meta.stripe_subscription_id,
@@ -242,6 +275,7 @@ async function propagateWorkshopsToCompanies(
 
 type DashboardUserShape = {
   internal_user_id: string | null;
+  workshop_id: string | null;
   last_seen_at: string | null;
   signed_up_at: string | null;
   name: string | null;

@@ -1268,6 +1268,7 @@ export type Database = {
           notes: string | null
           owner_auto: boolean
           owner_updated_at: string | null
+          payment_status: string | null
           phone: string | null
           phone_search_outcome: string | null
           phone_searched_at: string | null
@@ -1333,6 +1334,7 @@ export type Database = {
           notes?: string | null
           owner_auto?: boolean
           owner_updated_at?: string | null
+          payment_status?: string | null
           phone?: string | null
           phone_search_outcome?: string | null
           phone_searched_at?: string | null
@@ -1398,6 +1400,7 @@ export type Database = {
           notes?: string | null
           owner_auto?: boolean
           owner_updated_at?: string | null
+          payment_status?: string | null
           phone?: string | null
           phone_search_outcome?: string | null
           phone_searched_at?: string | null
