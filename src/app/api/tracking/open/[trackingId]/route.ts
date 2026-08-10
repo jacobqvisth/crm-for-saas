@@ -154,52 +154,16 @@ export async function GET(
       }
     }
 
-    // Hot-lead detection: if contact has opened 3+ times without a reply, create a task
-    if (queueItem.contact_id) {
-      const { count: openCount } = await supabase
-        .from("email_events")
-        .select("id", { count: "exact", head: true })
-        .eq("tracking_id", trackingId)
-        .eq("event_type", "open");
-
-      if ((openCount ?? 0) >= 3) {
-        const { count: replyCount } = await supabase
-          .from("email_events")
-          .select("id", { count: "exact", head: true })
-          .eq("tracking_id", trackingId)
-          .eq("event_type", "reply");
-
-        if ((replyCount ?? 0) === 0) {
-          const { count: taskExists } = await supabase
-            .from("tasks")
-            .select("id", { count: "exact", head: true })
-            .eq("contact_id", queueItem.contact_id)
-            .ilike("title", "Hot lead:%")
-            .is("completed_at", null);
-
-          if ((taskExists ?? 0) === 0) {
-            const { data: contact } = await supabase
-              .from("contacts")
-              .select("first_name, last_name, workspace_id")
-              .eq("id", queueItem.contact_id)
-              .maybeSingle();
-
-            if (contact) {
-              const name =
-                [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "Contact";
-              await supabase.from("tasks").insert({
-                workspace_id: contact.workspace_id,
-                contact_id: queueItem.contact_id,
-                type: "call",
-                title: `Hot lead: ${name} opened ${openCount} times — consider calling`,
-                due_date: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-                priority: "high",
-              });
-            }
-          }
-        }
-      }
-    }
+    // Hot-lead tasks used to be created here, one per contact, when a single
+    // tracking_id crossed 3 opens. That trigger measured the wrong thing: it
+    // counted opens of ONE email rather than a contact's engagement, so of the
+    // 1,209 contacts with 3+ opens only 221 ever got a task, and exactly 1 of
+    // those was ever called. The signal now lives in the Call Planner as the
+    // "Engaged prospects" segment, which ranks on clicks and recency across
+    // every email a contact received. See src/lib/calls/engaged-prospects.ts.
+    //
+    // Dropping it also takes 3 queries per open off this route, which runs on
+    // every tracking-pixel hit.
   } catch (err) {
     console.error("Open tracking error:", err);
   }

@@ -5820,6 +5820,34 @@ export type Database = {
         }
         Returns: string
       }
+      get_engaged_prospects: {
+        Args: {
+          p_limit?: number
+          p_min_clicks?: number
+          p_min_opens?: number
+          p_since?: string
+          p_workspace_id: string
+        }
+        Returns: {
+          clicks: number
+          company_id: string
+          company_name: string
+          contact_id: string
+          country_code: string
+          email: string
+          emails_opened: number
+          first_engaged_at: string
+          first_name: string
+          last_clicked_at: string
+          last_contacted_at: string
+          last_engaged_at: string
+          last_name: string
+          lead_status: string
+          opens: number
+          phone: string
+          primary_owner_id: string
+        }[]
+      }
       get_organic_analysis: {
         Args: { p_end?: string; p_start?: string }
         Returns: Json

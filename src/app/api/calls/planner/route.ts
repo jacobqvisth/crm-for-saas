@@ -14,6 +14,11 @@ import {
   loadNeverCallSets,
   type NeverCallSets,
 } from "@/lib/lists/exclusions";
+import {
+  fetchEngagedProspects,
+  scoreProspect,
+  type EngagedProspect,
+} from "@/lib/calls/engaged-prospects";
 
 // How many ranked contacts to surface as "today's top".
 const TOP_LIMIT = 30;
@@ -108,7 +113,9 @@ export async function GET(request: NextRequest) {
     else if (e.kind === "email") excludedEmails.add(e.value.toLowerCase());
     else if (e.kind === "company") excludedCompanies.add(e.value);
   }
-  const isExcluded = (c: CandidateRow) => {
+  // Same predicate as applyNeverCallNegativeFilters, evaluated on rows. Takes
+  // the minimum shape so it serves both app-user candidates and prospect rows.
+  const isExcluded = (c: { company_id: string | null; email: string | null }) => {
     if (c.company_id && excludedCompanies.has(c.company_id)) return true;
     const email = c.email?.toLowerCase();
     if (!email) return false;
@@ -168,6 +175,29 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
+  // 2b. Engaged prospects: outbound contacts who open and click but never
+  //     signed up. They have no wl_user_id so the pool above excludes them,
+  //     and every field the app-usage scorer reads is null for them.
+  const { rows: prospectRows, truncated: prospectsTruncated } = await fetchEngagedProspects(
+    supabase,
+    workspaceId,
+  );
+  const prospectsAfterExclusions = prospectRows.filter((p) => !isExcluded(p));
+  if (prospectsTruncated) {
+    console.warn(
+      "planner: engaged-prospect result hit the row limit — the ranking is over a truncated set",
+    );
+  }
+
+  const prospectOwnerToken = (p: EngagedProspect) =>
+    p.primary_owner_id ? (ownerIdToCanonical.get(p.primary_owner_id) ?? p.primary_owner_id) : "unassigned";
+  const filteredProspects = prospectsAfterExclusions.filter((p) => {
+    if (countryFilter.size > 0 && !(p.country_code && countryFilter.has(p.country_code.toUpperCase())))
+      return false;
+    if (excludeOwnerTokens.size > 0 && excludeOwnerTokens.has(prospectOwnerToken(p))) return false;
+    return true;
+  });
+
   // 3. Score the fresh-to-call candidates and rank them.
   const scored = filtered
     .filter((c) => isFreshToCall(c, now, FRESH_CUTOFF_DAYS))
@@ -187,18 +217,51 @@ export async function GET(request: NextRequest) {
           : false,
       };
       const result = scoreContact(snapshot, now);
-      return { c, result };
+      return { c, result, kind: "app_user" as const, activeAt: c.last_active_at };
     })
-    .filter(({ result }) => result.score > 0)
-    .sort((a, b) => {
-      if (b.result.score !== a.result.score) return b.result.score - a.result.score;
-      // Tie-break: more recently active first.
-      const aa = a.c.last_active_at ? Date.parse(a.c.last_active_at) : 0;
-      const bb = b.c.last_active_at ? Date.parse(b.c.last_active_at) : 0;
-      return bb - aa;
-    });
+    .filter(({ result }) => result.score > 0);
 
-  const scoredTop = scored.slice(0, TOP_LIMIT);
+  // Prospects are scored on email engagement instead, then ranked in the same
+  // pool so the top list is "who to call today" rather than "which app user".
+  const scoredProspects = filteredProspects
+    .filter((p) => isFreshToCall(p, now, FRESH_CUTOFF_DAYS))
+    .map((p) => {
+      const result = scoreProspect(p, now);
+      const c: CandidateRow = {
+        id: p.contact_id,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        email: p.email,
+        phone: p.phone,
+        company_id: p.company_id,
+        lead_status: p.lead_status,
+        country_code: p.country_code,
+        primary_owner_id: p.primary_owner_id,
+        user_plan_type: null,
+        user_subscription_status: null,
+        user_stripe_customer_id: null,
+        signed_up_at: null,
+        diagnostics_total: null,
+        diagnostics_last_30d: null,
+        login_count: null,
+        last_active_at: p.last_engaged_at,
+        credits_remaining: null,
+        last_contacted_at: p.last_contacted_at,
+        companies: p.company_name ? { name: p.company_name } : null,
+      };
+      return { c, result, kind: "prospect" as const, activeAt: p.last_engaged_at };
+    })
+    .filter(({ result }) => result.score > 0);
+
+  const ranked = [...scored, ...scoredProspects].sort((a, b) => {
+    if (b.result.score !== a.result.score) return b.result.score - a.result.score;
+    // Tie-break: more recently active (app usage, or email engagement) first.
+    const aa = a.activeAt ? Date.parse(a.activeAt) : 0;
+    const bb = b.activeAt ? Date.parse(b.activeAt) : 0;
+    return bb - aa;
+  });
+
+  const scoredTop = ranked.slice(0, TOP_LIMIT);
 
   // Best-effort: annotate number-less rows with their last phone-search outcome
   // so the UI can show "searched — none". Kept as a SEPARATE query (not in the
@@ -218,7 +281,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const top = scoredTop.map(({ c, result }) => ({
+  const top = scoredTop.map(({ c, result, kind }) => ({
+    kind,
     contactId: c.id,
     name: [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.email,
     email: c.email,
@@ -243,14 +307,25 @@ export async function GET(request: NextRequest) {
   //    matches the worklist you get after turning it into a call list.
   const neverCallSets = await loadNeverCallSets(supabase, workspaceId);
   const playbookResults = await Promise.all(
-    PLAYBOOKS.map(async (pb) => countPlaybook(supabase, workspaceId, pb, bouncedCustomerIds, neverCallSets)),
+    PLAYBOOKS.map(async (pb) => {
+      // engaged_prospect is already resolved above (the top list needs the same
+      // rows), so count it here instead of re-running the aggregate.
+      if (pb.special === "engaged_prospect") {
+        return {
+          key: pb.key,
+          count: prospectsAfterExclusions.length,
+          withPhone: prospectsAfterExclusions.filter((p) => !!p.phone).length,
+        };
+      }
+      return countPlaybook(supabase, workspaceId, pb, bouncedCustomerIds, neverCallSets);
+    }),
   );
 
   return NextResponse.json({
     topContacts: top,
     topWithPhone,
-    candidateCount: filtered.length,
-    totalCandidateCount: candidates.length,
+    candidateCount: filtered.length + filteredProspects.length,
+    totalCandidateCount: candidates.length + prospectsAfterExclusions.length,
     excludedByListCount,
     freshCutoffDays: FRESH_CUTOFF_DAYS,
     playbooks: playbookResults,
