@@ -15,9 +15,13 @@ import {
   type FeatureMixRow,
   type FreeUsersData,
   type FreeUsersKpis,
+  type LiveTrialRow,
   type NewPaidTrendRow,
   type PaidTierKey,
+  type PaymentFailedRow,
+  type RevertedWorkshopRow,
   type TierStatusBreakdown,
+  type UpgradeFunnel,
 } from "@/lib/ceo/free-users-shared";
 import { loadInternalTestSets } from "@/lib/ceo/internal-test/loader";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
@@ -40,11 +44,13 @@ import { pageAll } from "@/lib/supabase-paging";
 
 const NOTE =
   "Free = current plan on the workshop (dashboard_workshops.plan_key, Stripe-synced). " +
-  "Activity unions per-day feature counters (dashboard_feature_usage, history starts " +
-  "2026-06-11) with the full diagnostics history (dashboard_diagnostics). Conversion views " +
-  "reflect the CURRENT plan — a workshop that upgraded and later churned back to Free " +
-  "counts as free, and workshops that started directly on a paid trial are included in " +
-  "the paid counts. Internal-test accounts are excluded everywhere.";
+  "Every signup lands on Free — there is no direct paid signup — so every paid workshop " +
+  "is a converted free user. Upgrading starts a 14-day card-required trial; cancelling " +
+  "reverts the workshop to Free, which means the free pool also contains reverted " +
+  "upgrades (identified by a Stripe subscription id on a free workshop). Activity unions " +
+  "per-day feature counters (dashboard_feature_usage, history starts 2026-06-11) with the " +
+  "full diagnostics history (dashboard_diagnostics). Internal-test accounts are excluded " +
+  "everywhere.";
 
 type WorkshopDbRow = {
   workshop_id: string;
@@ -52,6 +58,10 @@ type WorkshopDbRow = {
   country: string | null;
   plan_key: string | null;
   core_subscription_status: string | null;
+  payment_status: string | null;
+  trial_end: string | null;
+  core_stripe_customer_id: string | null;
+  core_stripe_subscription_id: string | null;
   created_at: string | null;
   churned_at: string | null;
 };
@@ -150,6 +160,24 @@ function emptyData(): FreeUsersData {
     countries: [],
     newPaidTrend: [],
     engagedUsers: [],
+    funnel: {
+      freeNow: 0,
+      checkoutStarted: 0,
+      trialsStarted: 0,
+      paidManualNoStripe: 0,
+      trialingNow: 0,
+      payingNow: 0,
+      pastDueNow: 0,
+      revertedToFree: 0,
+      revertedNeverUsed: 0,
+      abandonedCheckout: 0,
+      completedTrials: 0,
+      trialSurvivalPct: 0,
+      payingSurvivalPct: 0,
+    },
+    liveTrials: [],
+    revertedWorkshops: [],
+    paymentFailed: [],
   };
 }
 
@@ -164,7 +192,7 @@ async function getFreeUsersDataUncached(): Promise<FreeUsersData> {
       pageAll<WorkshopDbRow>(({ from, to }) =>
         supabase
           .from(TABLES.workshops)
-          .select("workshop_id, name, country, plan_key, core_subscription_status, created_at, churned_at")
+          .select("workshop_id, name, country, plan_key, core_subscription_status, payment_status, trial_end, core_stripe_customer_id, core_stripe_subscription_id, created_at, churned_at")
           .order("workshop_id", { ascending: true })
           .range(from, to),
       ),
@@ -623,6 +651,189 @@ async function getFreeUsersDataUncached(): Promise<FreeUsersData> {
       a.internalUserId.localeCompare(b.internalUserId),
   );
 
+  // ---- Upgrade funnel: Free → 14-day card trial → paid --------------------
+  // Every signup starts on Free; upgrading requires a card and starts a
+  // 14-day trial; cancelling reverts to Free. Historical states are
+  // reconstructed from Stripe fingerprints on the workshop row (see the
+  // shared-file comment for the full mapping).
+  const hasSubId = (row: WorkshopDbRow) =>
+    Boolean(row.core_stripe_subscription_id);
+  const hasCustId = (row: WorkshopDbRow) =>
+    Boolean(row.core_stripe_customer_id);
+  const isPaidTier = (row: WorkshopDbRow) =>
+    (PAID_TIER_KEYS as string[]).includes(tierFromPlanKey(row.plan_key));
+
+  // Per-workshop activity, aggregated up from its users.
+  const workshopDays = new Map<string, Set<string>>();
+  const workshopDiagDays = new Map<string, string[]>();
+  for (const user of users) {
+    if (!user.workshop_id) continue;
+    const days = activityDays.get(user.internal_user_id);
+    if (days) {
+      let acc = workshopDays.get(user.workshop_id);
+      if (!acc) {
+        acc = new Set();
+        workshopDays.set(user.workshop_id, acc);
+      }
+      for (const day of days) acc.add(day);
+    }
+    const diagDays = diagDaysByUser.get(user.internal_user_id);
+    if (diagDays) {
+      const list = workshopDiagDays.get(user.workshop_id);
+      if (list) list.push(...diagDays);
+      else workshopDiagDays.set(user.workshop_id, [...diagDays]);
+    }
+  }
+  const workshopLastActive = (workshopId: string): string | null => {
+    const days = workshopDays.get(workshopId);
+    if (!days || days.size === 0) return null;
+    let last: string | null = null;
+    for (const day of days) {
+      if (!last || day > last) last = day;
+    }
+    return last;
+  };
+
+  const revertedRows = freeWorkshops.filter(hasSubId);
+  const abandonedRows = freeWorkshops.filter(
+    (row) => hasCustId(row) && !hasSubId(row),
+  );
+  const trialsStarted =
+    revertedRows.length + paidWorkshops.filter(hasSubId).length;
+  const trialingWithSub = paidWorkshops.filter(
+    (row) => statusOf(row) === "trialing" && hasSubId(row),
+  ).length;
+  const completedTrials = trialsStarted - trialingWithSub;
+  const survivedPaying = paidWorkshops.filter(
+    (row) => statusOf(row) === "active" && hasSubId(row),
+  ).length;
+  const survivedTotal = paidWorkshops.filter(
+    (row) =>
+      (statusOf(row) === "active" || statusOf(row) === "past_due") &&
+      hasSubId(row),
+  ).length;
+  let revertedNeverUsed = 0;
+  for (const row of revertedRows) {
+    if ((workshopDiagDays.get(row.workshop_id)?.length ?? 0) === 0) {
+      revertedNeverUsed += 1;
+    }
+  }
+
+  const funnel: UpgradeFunnel = {
+    freeNow: freeWorkshops.length,
+    checkoutStarted:
+      abandonedRows.length + revertedRows.length + paidWorkshops.filter(hasCustId).length,
+    trialsStarted,
+    paidManualNoStripe: paidWorkshops.filter((row) => !hasSubId(row)).length,
+    trialingNow: kpis.trialingNow,
+    payingNow: kpis.payingActiveNow,
+    pastDueNow: kpis.pastDueNow,
+    revertedToFree: revertedRows.length,
+    revertedNeverUsed,
+    abandonedCheckout: abandonedRows.length,
+    completedTrials,
+    trialSurvivalPct: pct(survivedTotal, completedTrials),
+    payingSurvivalPct: pct(survivedPaying, completedTrials),
+  };
+
+  // Live trials — the rescue list, soonest deadline first.
+  const cutoff14Days = toStockholmIsoDate(
+    new Date(now.getTime() - 14 * 86400_000),
+  );
+  const liveTrials: LiveTrialRow[] = workshops
+    .filter((row) => statusOf(row) === "trialing" && isPaidTier(row))
+    .map((row) => {
+      const days = workshopDays.get(row.workshop_id);
+      let activeDays14 = 0;
+      if (days) {
+        for (const day of days) {
+          if (day >= cutoff14Days && day <= todayIso) activeDays14 += 1;
+        }
+      }
+      const diags14 = (workshopDiagDays.get(row.workshop_id) ?? []).filter(
+        (day) => day >= cutoff14Days,
+      ).length;
+      const daysLeft = row.trial_end
+        ? Math.ceil((Date.parse(row.trial_end) - now.getTime()) / 86400_000)
+        : null;
+      return {
+        workshopId: row.workshop_id,
+        name: row.name,
+        tier: tierFromPlanKey(row.plan_key),
+        country: row.country,
+        trialEnd: row.trial_end,
+        daysLeft,
+        activeDays14,
+        diags14,
+        lastActiveDate: workshopLastActive(row.workshop_id),
+      };
+    })
+    .sort((a, b) => {
+      const aEnd = a.trialEnd ?? "9999";
+      const bEnd = b.trialEnd ?? "9999";
+      return aEnd.localeCompare(bEnd) || a.workshopId.localeCompare(b.workshopId);
+    });
+
+  // Reverted upgrades — the win-back list. Most recently active first, so
+  // "cancelled but still using the product on Free" floats to the top.
+  const revertedWorkshops: RevertedWorkshopRow[] = revertedRows
+    .map((row) => {
+      const days = workshopDays.get(row.workshop_id);
+      let activeDays30 = 0;
+      if (days) {
+        for (const day of days) {
+          if (day >= cutoff30 && day <= todayIso) activeDays30 += 1;
+        }
+      }
+      return {
+        workshopId: row.workshop_id,
+        name: row.name,
+        country: row.country,
+        signupMonth: row.created_at
+          ? toStockholmIsoDate(new Date(row.created_at)).slice(0, 7)
+          : null,
+        paymentFailed: (row.payment_status ?? "") === "payment_failed",
+        diagsLifetime: workshopDiagDays.get(row.workshop_id)?.length ?? 0,
+        activeDays30,
+        lastActiveDate: workshopLastActive(row.workshop_id),
+      };
+    })
+    .sort((a, b) => {
+      const aLast = a.lastActiveDate ?? "";
+      const bLast = b.lastActiveDate ?? "";
+      return (
+        bLast.localeCompare(aLast) ||
+        b.diagsLifetime - a.diagsLifetime ||
+        a.workshopId.localeCompare(b.workshopId)
+      );
+    })
+    .slice(0, 30);
+
+  // Payment failures — paid tiers past_due plus free workshops whose charge
+  // failed (they were demoted to Free by the failure, not by choice).
+  const paymentFailed: PaymentFailedRow[] = workshops
+    .filter(
+      (row) =>
+        (isPaidTier(row) && statusOf(row) === "past_due") ||
+        (tierFromPlanKey(row.plan_key) === "free" &&
+          (row.payment_status ?? "") === "payment_failed"),
+    )
+    .map((row) => ({
+      workshopId: row.workshop_id,
+      name: row.name,
+      tier: tierFromPlanKey(row.plan_key),
+      country: row.country,
+      status:
+        statusOf(row) === "past_due"
+          ? "past due"
+          : "payment failed → reverted to Free",
+    }))
+    .sort(
+      (a, b) =>
+        (a.tier === "free" ? 1 : 0) - (b.tier === "free" ? 1 : 0) ||
+        a.workshopId.localeCompare(b.workshopId),
+    );
+
   return {
     note: NOTE,
     kpis,
@@ -634,6 +845,10 @@ async function getFreeUsersDataUncached(): Promise<FreeUsersData> {
     countries,
     newPaidTrend,
     engagedUsers: engaged.slice(0, 50),
+    funnel,
+    liveTrials,
+    revertedWorkshops,
+    paymentFailed,
   };
 }
 
