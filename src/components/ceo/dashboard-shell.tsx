@@ -38,7 +38,7 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
 // default range for the shell chrome and scope their own reads themselves.
 const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   DashboardSectionKey
->(["diagnostic-search-terms", "dtc-codes"]);
+>(["diagnostic-search-terms", "dtc-codes", "free-users"]);
 
 type DashboardShellProps = {
   data: DashboardData;

@@ -31,6 +31,7 @@ export type DashboardSectionKey =
   | "feature-usage"
   | "product-analytics"
   | "plan-stats"
+  | "free-users"
   | "toplists"
   | "cta-clicks"
   | "conversions"
@@ -108,6 +109,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Plan Stats",
     description:
       "The public pricing page brought to life: every plan (Free / One / Small / Large) with how many users and workshops are on it, how many are active in the range, and the real feature-event counts behind each listed feature. Expand a card for the full per-feature breakdown. Feature counters exist from 2026-06-11 onward.",
+  },
+  {
+    key: "free-users",
+    label: "Free Users",
+    glyph: "FR",
+    href: "/dashboard/free-users",
+    title: "Free Users",
+    description:
+      "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus free → paid conversion — how many workshops sit on One / Small / Large today, by signup cohort and country — and the most engaged free users as an upgrade-candidate list.",
   },
   {
     key: "toplists",
