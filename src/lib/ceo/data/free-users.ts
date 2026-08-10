@@ -144,6 +144,7 @@ function emptyData(): FreeUsersData {
       payingActiveNow: 0,
       trialingNow: 0,
       pastDueNow: 0,
+      manualNoStatusNow: 0,
       conversionRatePct: 0,
     },
     tiers: [],
@@ -370,6 +371,15 @@ async function getFreeUsersDataUncached(): Promise<FreeUsersData> {
     (row) => tierFromPlanKey(row.plan_key) === "free",
   );
 
+  const payingActiveNow = paidWorkshops.filter(
+    (row) => statusOf(row) === "active",
+  ).length;
+  const trialingNow = paidWorkshops.filter(
+    (row) => statusOf(row) === "trialing",
+  ).length;
+  const pastDueNow = paidWorkshops.filter(
+    (row) => statusOf(row) === "past_due",
+  ).length;
   const kpis: FreeUsersKpis = {
     freeUsers: freeUserIds.size,
     freeWorkshops: freeWorkshops.length,
@@ -378,12 +388,13 @@ async function getFreeUsersDataUncached(): Promise<FreeUsersData> {
     everActive,
     everDiagnosed,
     paidWorkshopsNow: paidWorkshops.length,
-    payingActiveNow: paidWorkshops.filter((row) => statusOf(row) === "active")
-      .length,
-    trialingNow: paidWorkshops.filter((row) => statusOf(row) === "trialing")
-      .length,
-    pastDueNow: paidWorkshops.filter((row) => statusOf(row) === "past_due")
-      .length,
+    payingActiveNow,
+    trialingNow,
+    pastDueNow,
+    // Difference, not a status filter — the four status cards must always
+    // sum to paidWorkshopsNow even if a new Stripe status shows up.
+    manualNoStatusNow:
+      paidWorkshops.length - payingActiveNow - trialingNow - pastDueNow,
     conversionRatePct: pct(paidWorkshops.length, workshops.length),
   };
 

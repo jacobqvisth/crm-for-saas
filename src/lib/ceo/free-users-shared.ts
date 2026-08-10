@@ -21,6 +21,12 @@ export type FreeUsersKpis = {
   payingActiveNow: number;
   trialingNow: number;
   pastDueNow: number;
+  // Remainder bucket so the four status cards always sum to paidWorkshopsNow:
+  // workshops on a paid plan whose subscription status is none of
+  // active/trialing/past_due (in practice manually provisioned/comped rows
+  // with no billing status). Computed as a difference on purpose — a new
+  // Stripe status can never make the row stop adding up.
+  manualNoStatusNow: number;
   conversionRatePct: number;
 };
 
