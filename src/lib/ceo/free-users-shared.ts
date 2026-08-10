@@ -97,6 +97,68 @@ export type EngagedFreeUserRow = {
   signedUpAt: string | null;
 };
 
+// ---- Upgrade funnel (Free → 14-day card trial → paid) ---------------------
+//
+// Product model: EVERY signup lands on Free — there is no direct paid signup.
+// Upgrading to One/Small/Large starts a 14-day free trial that requires a
+// card; cancelling (during or after the trial) reverts the workshop to Free.
+// So every paid workshop is a converted free user, and the free pool contains
+// an invisible population that upgraded and came back.
+//
+// Historical funnel states are reconstructed from Stripe fingerprints on the
+// workshop row: a `core_stripe_subscription_id` on a FREE workshop means a
+// subscription existed and was cancelled (reverted upgrade); a customer id
+// without a subscription id means checkout was started but never completed
+// (abandoned). Paid workshops without any Stripe id are manually provisioned
+// or comped (mostly Large pilots) and sit outside the self-serve funnel.
+
+export type UpgradeFunnel = {
+  freeNow: number;
+  checkoutStarted: number;
+  trialsStarted: number;
+  paidManualNoStripe: number;
+  trialingNow: number;
+  payingNow: number;
+  pastDueNow: number;
+  revertedToFree: number;
+  revertedNeverUsed: number;
+  abandonedCheckout: number;
+  completedTrials: number;
+  trialSurvivalPct: number;
+  payingSurvivalPct: number;
+};
+
+export type LiveTrialRow = {
+  workshopId: string;
+  name: string | null;
+  tier: string;
+  country: string | null;
+  trialEnd: string | null;
+  daysLeft: number | null;
+  activeDays14: number;
+  diags14: number;
+  lastActiveDate: string | null;
+};
+
+export type RevertedWorkshopRow = {
+  workshopId: string;
+  name: string | null;
+  country: string | null;
+  signupMonth: string | null;
+  paymentFailed: boolean;
+  diagsLifetime: number;
+  activeDays30: number;
+  lastActiveDate: string | null;
+};
+
+export type PaymentFailedRow = {
+  workshopId: string;
+  name: string | null;
+  tier: string;
+  country: string | null;
+  status: string | null;
+};
+
 export type FreeUsersData = {
   note: string;
   kpis: FreeUsersKpis;
@@ -108,4 +170,8 @@ export type FreeUsersData = {
   countries: CountryRow[];
   newPaidTrend: NewPaidTrendRow[];
   engagedUsers: EngagedFreeUserRow[];
+  funnel: UpgradeFunnel;
+  liveTrials: LiveTrialRow[];
+  revertedWorkshops: RevertedWorkshopRow[];
+  paymentFailed: PaymentFailedRow[];
 };

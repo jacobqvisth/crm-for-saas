@@ -117,7 +117,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     href: "/dashboard/free-users",
     title: "Free Users",
     description:
-      "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus free → paid conversion — how many workshops sit on One / Small / Large today, by signup cohort and country — and the most engaged free users as an upgrade-candidate list.",
+      "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus the full upgrade funnel — every signup starts on Free, upgrades open a 14-day card-required trial, cancels revert to Free — reconstructed from Stripe fingerprints: trials live now (rescue list), trial survival, reverted upgrades (win-back list), abandoned checkouts, payment failures, conversion by cohort and country, and the most engaged free users as an upgrade-candidate list.",
   },
   {
     key: "toplists",
