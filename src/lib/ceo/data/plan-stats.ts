@@ -84,6 +84,7 @@ type FeatureUsageDbRow = {
 type DashboardUserDbRow = {
   internal_user_id: string;
   workshop_id: string | null;
+  signed_up_at: string | null;
 };
 
 type WorkshopDbRow = {
@@ -100,6 +101,7 @@ function emptyPlanRow(tier: PlanTier): PlanStatRow {
   return {
     tier,
     users: 0,
+    newUsers: 0,
     workshops: 0,
     activeUsers: 0,
     featureEvents: 0,
@@ -125,7 +127,7 @@ function emptyData(
     rangeLabel,
     rangeSpan,
     note,
-    totals: { users: 0, activeUsers: 0, featureEvents: 0 },
+    totals: { users: 0, newUsers: 0, activeUsers: 0, featureEvents: 0 },
     plans: PLAN_TIERS.map(emptyPlanRow),
   };
 }
@@ -133,8 +135,12 @@ function emptyData(
 const PLAN_STATS_NOTE =
   "A user's plan comes from their workshop's plan_key on dashboard_workshops " +
   "(Stripe-synced); users with no plan (unassigned workshops) are excluded. " +
-  "Users on a plan is current membership and does not change with the time " +
-  "range — only Active and the feature counts do. 'Active' is behaviour-based: " +
+  "'New' counts users whose account was created (signed_up_at) inside the " +
+  "selected range, so it responds to the time filter like Active and the " +
+  "feature counts do. Attribution is to the user's CURRENT plan — plan " +
+  "history isn't tracked, so a signup that later upgraded shows under the " +
+  "upgraded plan. Total current membership sits in each card's footer. " +
+  "'Active' is behaviour-based: " +
   "a user counts as active if they had a GA4 engagement event on " +
   "app.wrenchlane.com, ran a diagnostic, or triggered a tracked feature in the " +
   "selected range (logins are ignored — sessions are long-lived, so a login is " +
@@ -196,7 +202,7 @@ async function getPlanStatsDataUncached(
     pageAll<DashboardUserDbRow>(({ from, to }) =>
       supabase
         .from(TABLES.users)
-        .select("internal_user_id, workshop_id")
+        .select("internal_user_id, workshop_id, signed_up_at")
         .order("internal_user_id", { ascending: true })
         .range(from, to),
     ),
@@ -244,8 +250,13 @@ async function getPlanStatsDataUncached(
     (!countrySets || countrySets.userIds.has(userId));
 
   // Tier per user, only for users that survive the internal-test + country
-  // filters and whose workshop maps to a known tier.
+  // filters and whose workshop maps to a known tier. Users whose account was
+  // created (signed_up_at) inside the range also land in newUserIds — that
+  // drives the range-scoped "New" stat.
+  const startMs = range.start ? range.start.getTime() : null;
+  const endMs = range.end.getTime();
   const userTier = new Map<string, PlanTier>();
+  const newUserIds = new Set<string>();
   for (const row of userRowsResult.data) {
     if (!passesUser(row.internal_user_id)) continue;
     if (!row.workshop_id) continue;
@@ -253,11 +264,22 @@ async function getPlanStatsDataUncached(
     const tier = workshopTier.get(row.workshop_id) ?? null;
     if (!tier) continue;
     userTier.set(row.internal_user_id, tier);
+    if (row.signed_up_at) {
+      const ts = Date.parse(row.signed_up_at);
+      if (
+        Number.isFinite(ts) &&
+        ts < endMs &&
+        (startMs === null || ts >= startMs)
+      ) {
+        newUserIds.add(row.internal_user_id);
+      }
+    }
   }
 
   // ---- Per-plan accumulators ---------------------------------------------
   type Acc = {
     users: Set<string>;
+    newUsers: Set<string>;
     workshops: Set<string>;
     activeUsers: Set<string>;
     featureEvents: number;
@@ -268,6 +290,7 @@ async function getPlanStatsDataUncached(
   for (const tier of PLAN_TIERS) {
     accs.set(tier, {
       users: new Set(),
+      newUsers: new Set(),
       workshops: new Set(),
       activeUsers: new Set(),
       featureEvents: 0,
@@ -276,9 +299,11 @@ async function getPlanStatsDataUncached(
     });
   }
 
-  // Whole-base user counts per plan.
+  // Whole-base user counts per plan, plus the range-scoped "New" subset.
   for (const [userId, tier] of userTier) {
-    accs.get(tier)!.users.add(userId);
+    const acc = accs.get(tier)!;
+    acc.users.add(userId);
+    if (newUserIds.has(userId)) acc.newUsers.add(userId);
   }
 
   // Workshop counts per plan (respecting internal-test + country filters).
@@ -368,6 +393,7 @@ async function getPlanStatsDataUncached(
     return {
       tier,
       users: acc.users.size,
+      newUsers: acc.newUsers.size,
       workshops: acc.workshops.size,
       activeUsers: acc.activeUsers.size,
       featureEvents: acc.featureEvents,
@@ -376,6 +402,7 @@ async function getPlanStatsDataUncached(
   });
 
   const totalUsers = plans.reduce((sum, plan) => sum + plan.users, 0);
+  const totalNewUsers = plans.reduce((sum, plan) => sum + plan.newUsers, 0);
   const totalActive = plans.reduce((sum, plan) => sum + plan.activeUsers, 0);
 
   return {
@@ -385,6 +412,7 @@ async function getPlanStatsDataUncached(
     note: PLAN_STATS_NOTE,
     totals: {
       users: totalUsers,
+      newUsers: totalNewUsers,
       activeUsers: totalActive,
       featureEvents: overallFeatureEvents,
     },

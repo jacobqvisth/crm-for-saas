@@ -17,13 +17,16 @@ type PlanStatsContentProps = {
   data: PlanStatsData;
 };
 
-const PLAN_INFO: SourceInfo = {
-  title: "Users on a plan",
+const NEW_INFO: SourceInfo = {
+  title: "New users in range",
   body:
-    "Every app user mapped to this plan via their workshop's plan_key on dashboard_workshops (synced hourly from Stripe). The four tiers mirror the public pricing page; users on an unassigned workshop (no plan) are excluded.",
-  sources: ["Stripe → dashboard_workshops.plan_key", "dashboard_users.workshop_id"],
+    "Users whose account was created during the selected range (dashboard_users.signed_up_at), mapped to a plan via their workshop's plan_key on dashboard_workshops (synced hourly from Stripe). Users on an unassigned workshop (no plan) are excluded.",
+  sources: [
+    "dashboard_users.signed_up_at",
+    "Stripe → dashboard_workshops.plan_key",
+  ],
   logic:
-    "plan_key values like small_monthly / large_yearly collapse to their tier (Free / One / Small / Large). This is current membership — the whole base on the plan — so it does NOT change with the time-range filter. Only Active and the feature counts respond to the range.",
+    "Responds to the time filter, like Active and the feature counts. plan_key values like small_monthly / large_yearly collapse to their tier (Free / One / Small / Large). Attribution is to the user's CURRENT plan — plan history isn't tracked, so a signup that later upgraded counts under the upgraded plan. Total current membership (everyone on the plan today) is the small footer under each card.",
 };
 
 const ACTIVE_INFO: SourceInfo = {
@@ -105,14 +108,14 @@ function PlanCard({
     <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="text-lg font-semibold text-slate-900">{definition.name}</h3>
 
-      {/* Plan headline stats */}
+      {/* Plan headline stats — all three are scoped to the selected range */}
       <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">
-        <div>
+        <div title="Users whose account was created in the selected range">
           <div className="text-lg font-semibold text-slate-900">
-            {formatNumber(row.users)}
+            {formatNumber(row.newUsers)}
           </div>
           <div className="text-[11px] uppercase tracking-wide text-slate-500">
-            Users
+            New
           </div>
         </div>
         <div>
@@ -218,6 +221,7 @@ function PlanCard({
       ) : null}
 
       <div className="mt-3 text-center text-[11px] text-slate-400">
+        {formatNumber(row.users)} user{row.users === 1 ? "" : "s"} on plan ·{" "}
         {formatNumber(row.workshops)} workshop{row.workshops === 1 ? "" : "s"}
       </div>
     </div>
@@ -236,10 +240,13 @@ export function PlanStatsContent({ data }: PlanStatsContentProps) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-slate-500">
-            Users on a plan <InfoHint info={PLAN_INFO} />
+            New users in range <InfoHint info={NEW_INFO} />
           </div>
           <div className="mt-1 text-2xl font-semibold text-slate-900">
-            {formatNumber(data.totals.users)}
+            {formatNumber(data.totals.newUsers)}
+          </div>
+          <div className="mt-0.5 text-[11px] text-slate-400">
+            of {formatNumber(data.totals.users)} on a plan today
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -272,6 +279,7 @@ export function PlanStatsContent({ data }: PlanStatsContentProps) {
             ({
               tier: definition.tier,
               users: 0,
+              newUsers: 0,
               workshops: 0,
               activeUsers: 0,
               featureEvents: 0,
