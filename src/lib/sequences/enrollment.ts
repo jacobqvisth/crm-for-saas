@@ -8,6 +8,7 @@ import {
   fetchVariantsByStepId,
   flushSendCountDeltas,
 } from "./variants";
+import { defaultLanguage, resolveContactLanguage } from "./language";
 import type { Database, SequenceSettings, Tables } from "@/lib/database.types";
 
 type ContactWithCompany = Tables<"contacts"> & {
@@ -268,6 +269,16 @@ export async function enrollContacts(
       }
     }
 
+    // Resolve the contact's language ONCE, here, and pin it on the enrollment.
+    // Recomputing it per step would let the hourly propagator rewrite
+    // contacts.language mid-campaign and send email 1 in English, email 2 in
+    // Polish, to the same person.
+    const contactLanguage = resolveContactLanguage(contact, settings);
+    const languageCtx = {
+      language: contactLanguage,
+      defaultLanguage: defaultLanguage(settings),
+    };
+
     // Create enrollment — pin the sender so all steps use the same account
     const { data: enrollment, error: enrollError } = await supabase
       .from("sequence_enrollments")
@@ -277,6 +288,7 @@ export async function enrollContacts(
         sender_account_id: assignedSenderId,
         status: "active",
         current_step: 0,
+        language: contactLanguage,
       })
       .select()
       .single();
@@ -297,7 +309,7 @@ export async function enrollContacts(
       const template = firstStep.template_id
         ? templateById.get(firstStep.template_id) ?? null
         : null;
-      const picked = variantPicker.pickForStep(firstStep, template);
+      const picked = variantPicker.pickForStep(firstStep, template, languageCtx);
       let subject = picked.subject;
       let bodyHtml = picked.bodyHtml;
 
@@ -343,7 +355,7 @@ export async function enrollContacts(
         const template = nextStep.template_id
           ? templateById.get(nextStep.template_id) ?? null
           : null;
-        const picked = variantPicker.pickForStep(nextStep, template);
+        const picked = variantPicker.pickForStep(nextStep, template, languageCtx);
         let subject = picked.subject;
         let bodyHtml = picked.bodyHtml;
 

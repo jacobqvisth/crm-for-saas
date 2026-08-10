@@ -7,6 +7,7 @@ import { SlideOver } from "@/components/ui/slide-over";
 import { Save } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables, SequenceSettings as SequenceSettingsType } from "@/lib/database.types";
+import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/i18n/languages";
 
 type Sequence = Tables<"sequences">;
 
@@ -74,6 +75,12 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pauseNewContacts, setPauseNewContacts] = useState(settings.pause_new_contacts ?? false);
+  // Languages this campaign is authored in. Empty = single-language sequence,
+  // which is the existing behaviour for every sequence built so far.
+  const [languages, setLanguages] = useState<string[]>(settings.languages ?? []);
+  const [defaultLang, setDefaultLang] = useState(
+    settings.default_language ?? settings.languages?.[0] ?? "en",
+  );
   const [togglingPause, setTogglingPause] = useState(false);
 
   useEffect(() => {
@@ -89,6 +96,8 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
     setSenderRotation(s.sender_rotation ?? true);
     setRotationAccountIds(s.rotation_account_ids ?? []);
     setPauseNewContacts(s.pause_new_contacts ?? false);
+    setLanguages(s.languages ?? []);
+    setDefaultLang(s.default_language ?? s.languages?.[0] ?? "en");
   }, [sequence]);
 
   // The "finish in-progress only" toggle has an immediate side effect (it
@@ -180,6 +189,11 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
       // is owned by its dedicated toggle/endpoint.
       ...(settings.allow_customers ? { allow_customers: true } : {}),
       ...(pauseNewContacts ? { pause_new_contacts: true } : {}),
+      // Omit entirely when no language is picked, so a single-language
+      // sequence keeps behaving exactly as it always has.
+      ...(languages.length > 0
+        ? { languages, default_language: defaultLang }
+        : {}),
     };
 
     const { error } = await supabase
@@ -303,6 +317,62 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
             />
           </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-800">
+              Languages
+            </label>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Pick more than one and each contact gets the version in their own
+              language, based on their contact language and country. Leave
+              everything unticked to keep this a single-language sequence. Add
+              the copy per language on each step with &ldquo;Add
+              languages&rdquo;.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+            {LANGUAGE_OPTIONS.map((l) => (
+              <label key={l.code} className="flex items-center gap-1.5 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={languages.includes(l.code)}
+                  onChange={(e) => {
+                    setLanguages((prev) => {
+                      const next = e.target.checked
+                        ? [...prev, l.code]
+                        : prev.filter((c) => c !== l.code);
+                      // Keep the default pointing at something still selected.
+                      if (!next.includes(defaultLang) && next.length > 0) {
+                        setDefaultLang(next[0]);
+                      }
+                      return next;
+                    });
+                  }}
+                  className="rounded border-slate-300 text-indigo-600"
+                />
+                {l.label}
+              </label>
+            ))}
+          </div>
+          {languages.length > 0 && (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              Master copy is written in
+              <select
+                value={defaultLang}
+                onChange={(e) => setDefaultLang(e.target.value)}
+                className="text-sm border border-slate-300 rounded px-2 py-1"
+                title="Translations are generated from this language, and anyone whose language has no version gets it."
+              >
+                {languages.map((code) => (
+                  <option key={code} value={code}>
+                    {languageLabel(code)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         <div className="space-y-3">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeLanguage } from "@/lib/i18n/languages";
 
 /**
  * PATCH /api/sequences/[id]/steps/[stepId]/variants/[variantId]
@@ -29,6 +30,7 @@ export async function PATCH(
     body_html?: string;
     weight?: number;
     is_active?: boolean;
+    language?: string | null;
   };
 
   const updates: Record<string, unknown> = {};
@@ -37,6 +39,11 @@ export async function PATCH(
   if (typeof body.body_html === "string") updates.body_html = body.body_html;
   if (typeof body.weight === "number") updates.weight = body.weight;
   if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
+  // null clears the tag back to language-neutral, so this can't use a
+  // truthiness check.
+  if (body.language === null || typeof body.language === "string") {
+    updates.language = normalizeLanguage(body.language);
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });

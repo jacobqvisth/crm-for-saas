@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/lib/database.types";
+import { normalizeLanguage } from "@/lib/i18n/languages";
 
 export type StepVariant = Tables<"sequence_step_variants">;
+
+/** Which language a contact should get, and what to fall back to. */
+export type VariantLanguageContext = {
+  /** The enrollment's pinned language. */
+  language?: string | null;
+  /** The sequence's default language, used when the step has no copy in `language`. */
+  defaultLanguage?: string | null;
+};
 
 export interface ResolvedVariant {
   variantId: string | null;
@@ -33,31 +42,90 @@ export function pickVariant(
   step: StepLike,
   variants: StepVariant[],
   template: TemplateLike | null,
+  ctx?: VariantLanguageContext,
 ): ResolvedVariant {
   const active = variants.filter((v) => v.is_active && v.weight > 0);
+  const fallback = stepFallback(step, template);
 
-  if (active.length === 0) {
-    let subject = step.subject_override ?? "";
-    let bodyHtml = step.body_override ?? "";
-    if (template && step.template_id) {
-      subject = step.subject_override || template.subject;
-      bodyHtml = step.body_override || template.body_html;
-    }
-    return { variantId: null, subject, bodyHtml };
+  if (active.length === 0) return fallback;
+
+  const group = languageGroup(active, ctx);
+  if (group === null) {
+    // No copy in a language this reader should get. Prefer the step's own
+    // body over shipping, say, Polish to a Swedish reader.
+    const hasStepCopy =
+      fallback.subject.trim() !== "" || fallback.bodyHtml.trim() !== "";
+    if (hasStepCopy) return fallback;
   }
 
-  const picked = [...active].sort((a, b) => {
-    const scoreA = a.sends_count / Math.max(1, a.weight);
-    const scoreB = b.sends_count / Math.max(1, b.weight);
-    if (scoreA !== scoreB) return scoreA - scoreB;
-    return a.id.localeCompare(b.id);
-  })[0];
+  const picked = leastUsed(group && group.length > 0 ? group : active);
 
   return {
     variantId: picked.id,
     subject: picked.subject,
     bodyHtml: picked.body_html,
   };
+}
+
+/** The step's own copy, used when no variant applies. */
+function stepFallback(
+  step: StepLike,
+  template: TemplateLike | null,
+): ResolvedVariant {
+  let subject = step.subject_override ?? "";
+  let bodyHtml = step.body_override ?? "";
+  if (template && step.template_id) {
+    subject = step.subject_override || template.subject;
+    bodyHtml = step.body_override || template.body_html;
+  }
+  return { variantId: null, subject, bodyHtml };
+}
+
+/** Least-used by `sends_count / max(1, weight)`, deterministic tie-break on id. */
+function leastUsed(variants: StepVariant[]): StepVariant {
+  return [...variants].sort((a, b) => {
+    const scoreA = a.sends_count / Math.max(1, a.weight);
+    const scoreB = b.sends_count / Math.max(1, b.weight);
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    return a.id.localeCompare(b.id);
+  })[0];
+}
+
+/**
+ * Narrow a step's active variants to the ones that should compete for this
+ * contact, so A/B round-robin happens *within* a language rather than across
+ * languages.
+ *
+ * A step with no language-tagged variants returns every active variant, which
+ * is what makes this a backward-compatible addition rather than a migration.
+ * Returns null when the step has language-tagged copy but none of it suits
+ * this reader.
+ */
+function languageGroup(
+  active: StepVariant[],
+  ctx: VariantLanguageContext | undefined,
+): StepVariant[] | null {
+  const langOf = (v: StepVariant) => normalizeLanguage(v.language);
+  const anyTagged = active.some((v) => langOf(v) !== null);
+  if (!anyTagged) return active;
+
+  const wanted = normalizeLanguage(ctx?.language);
+  if (wanted) {
+    const exact = active.filter((v) => langOf(v) === wanted);
+    if (exact.length > 0) return exact;
+  }
+
+  const fallbackLang = normalizeLanguage(ctx?.defaultLanguage);
+  if (fallbackLang) {
+    const byDefault = active.filter((v) => langOf(v) === fallbackLang);
+    if (byDefault.length > 0) return byDefault;
+  }
+
+  // Untagged variants on a language-aware step are language-neutral copy.
+  const neutral = active.filter((v) => langOf(v) === null);
+  if (neutral.length > 0) return neutral;
+
+  return null;
 }
 
 /**
@@ -79,9 +147,13 @@ export function createBatchVariantPicker(
   const countDeltas = new Map<string, number>();
 
   return {
-    pickForStep(step: StepLike, template: TemplateLike | null): ResolvedVariant {
+    pickForStep(
+      step: StepLike,
+      template: TemplateLike | null,
+      ctx?: VariantLanguageContext,
+    ): ResolvedVariant {
       const variants = mutableByStep.get(step.id) ?? [];
-      const pick = pickVariant(step, variants, template);
+      const pick = pickVariant(step, variants, template, ctx);
       if (pick.variantId) {
         countDeltas.set(
           pick.variantId,

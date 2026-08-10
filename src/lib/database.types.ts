@@ -49,6 +49,20 @@ export type SequenceSettings = {
    */
   allow_customers?: boolean;
   /**
+   * Languages this campaign has been authored and reviewed in, as ISO 639-1
+   * codes. When empty or absent the sequence is single-language and behaves
+   * exactly as it always has. Bounding the set is what stops "support every
+   * language" from meaning "translate every step 26 times".
+   * See docs/plans/multi-language-sequences.md.
+   */
+  languages?: string[];
+  /**
+   * The master copy's language, used when a contact's own language isn't one
+   * this campaign speaks. Defaults to the first entry of `languages`, then
+   * to 'en'.
+   */
+  default_language?: string;
+  /**
    * When true, this sequence keeps sending follow-ups to contacts who have
    * already received at least one email (current_step >= 1), but does NOT
    * start sending the first email to brand-new contacts (current_step === 0).
@@ -4889,6 +4903,7 @@ export type Database = {
           current_step: number | null
           enrolled_at: string | null
           id: string
+          language: string | null
           sender_account_id: string | null
           sequence_id: string
           status: string | null
@@ -4899,6 +4914,7 @@ export type Database = {
           current_step?: number | null
           enrolled_at?: string | null
           id?: string
+          language?: string | null
           sender_account_id?: string | null
           sequence_id: string
           status?: string | null
@@ -4909,6 +4925,7 @@ export type Database = {
           current_step?: number | null
           enrolled_at?: string | null
           id?: string
+          language?: string | null
           sender_account_id?: string | null
           sequence_id?: string
           status?: string | null
@@ -4946,6 +4963,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          language: string | null
           name: string
           sends_count: number
           sequence_step_id: string
@@ -4962,6 +4980,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          language?: string | null
           name: string
           sends_count?: number
           sequence_step_id: string
@@ -4978,6 +4997,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          language?: string | null
           name?: string
           sends_count?: number
           sequence_step_id?: string
