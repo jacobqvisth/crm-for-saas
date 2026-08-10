@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { SequenceHeader } from "@/components/sequences/sequence-header";
+import { SequenceLanguagePanel } from "@/components/sequences/sequence-language-panel";
 import type { SendingStatus } from "@/components/sequences/sequence-header";
 import { SequenceContactsTab } from "@/components/sequences/sequence-contacts-tab";
 import { SequenceAnalyticsTab } from "@/components/sequences/sequence-analytics-tab";
@@ -396,6 +397,7 @@ export default function SequenceDetailPage() {
 
       {activeTab === "overview" && (
         <div>
+          <SequenceLanguagePanel sequenceId={sequenceId} onGenerated={load} />
           {steps.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
               <Mail className="w-12 h-12 text-slate-300 mx-auto mb-3" />

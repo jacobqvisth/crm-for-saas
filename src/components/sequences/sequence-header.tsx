@@ -11,9 +11,11 @@ import {
   Check,
   X,
   RefreshCw,
+  Languages,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
+import { languageLabel } from "@/lib/i18n/languages";
 import type { Tables } from "@/lib/database.types";
 import { ChangeSenderModal } from "@/components/sequences/change-sender-modal";
 
@@ -78,6 +80,8 @@ export function SequenceHeader({
 
   const badge = STATUS_BADGES[sequence.status ?? 'draft'] || STATUS_BADGES.draft;
   const pauseNewContacts = !!(sequence.settings as { pause_new_contacts?: boolean } | null)?.pause_new_contacts;
+  const sequenceLangs =
+    (sequence.settings as { languages?: string[] } | null)?.languages ?? [];
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
   const saveName = async () => {
@@ -135,6 +139,15 @@ export function SequenceHeader({
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
             {badge.label}
           </span>
+          {sequenceLangs.length > 1 && (
+            <span
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700"
+              title={`Each contact gets this email in their own language. Configured: ${sequenceLangs.map((c) => languageLabel(c)).join(", ")}`}
+            >
+              <Languages className="w-3 h-3" />
+              {sequenceLangs.length} languages
+            </span>
+          )}
           {pauseNewContacts && (
             <span
               className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
