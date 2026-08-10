@@ -32,6 +32,7 @@ import {
   Globe,
   Star,
   ScanSearch,
+  Tag,
 } from "lucide-react";
 
 type NavItem = {
@@ -61,6 +62,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/domain-portfolio", label: "Domain Portfolio", icon: Globe },
   { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/dtc-lookup", label: "DTC Codes Lookup", icon: ScanSearch },
+  { href: "/pricing-options", label: "Pricing options", icon: Tag },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
