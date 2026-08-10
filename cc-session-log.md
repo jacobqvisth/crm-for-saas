@@ -6685,3 +6685,21 @@ for per-user task filtering.
 - Backfilled `sequence_enrollments.language` for 4,217 pre-existing enrollments so a campaign that later turns languages on picks correctly instead of sending everyone the master copy.
 - `npx tsc --noEmit` clean, `eslint` clean, `npx vitest run src/` 638 passed (24 new tests). `src/lib/routes/generate.test.ts` fails to load — verified pre-existing on clean `main`, unrelated.
 - **Deliberately not done:** the six country sequences were not merged (9,890 live enrollments left alone), and the failed-payment sequence is still English-only — its master copy is pending review, and translating unreviewed copy would be thrown away when the master changes.
+
+
+## Multi-language UX + failed-payment campaign re-enrolled in 9 languages — 2026-08-10
+
+- **PR:** #637 merged as `25545a9` · production deploy verified READY.
+- Three gaps Jacob hit using the multi-language feature (PR #635) for real.
+- **Select all / Clear** in the language picker, plus a live count in the label. Ticking 26 checkboxes one at a time is not a workflow.
+- **Translate the whole sequence in one action.** The per-step "Add languages" button meant opening each email in turn. New `POST /api/sequences/[id]/languages` walks every email step and runs the same generator, **sequentially on purpose** — each step is several LLM calls and firing a long sequence at once would hit the rate limit. Per-step and whole-sequence routes now share `generateLanguageVariantsForStep`, so they cannot drift.
+- **Say so on the page.** A multi-language sequence looked identical to a single-language one, so "is this actually ready to send in Polish?" needed opening every step. New `SequenceLanguagePanel` on the overview shows the languages, which is the master, and per-step coverage naming the gaps ("Step 3 — missing Polish, Romanian"), backed by a GET on the same route. Badge in the sequence header and the sequences list. All of it renders nothing below two languages.
+
+### Failed-payment campaign now live in 9 languages
+- Jacob ticked all 26 languages and generated copy for all 3 email steps (78 variants, all active).
+- **Re-enrolled the 26 contacts.** Their first emails had been queued before the feature existed, so `variant_id` was NULL — and `renderQueuedEmail` falls back to the step body for an unpinned row, meaning all 26 would have sent in English regardless of the 26 variants sitting on each step. Steps 3 and 5 (queued later by the cron) would have picked up languages correctly, so the campaign would have opened in English and followed up in Polish.
+- Preflight gates before clearing: 0 sent, 0 `sent_at`, 0 activities logged, sequence `paused` so the send cron was gated off. Deleted the 26 queue rows + 26 enrollments, re-ran `/api/cron/auto-enroll`, which rebuilt both from the dynamic list.
+- **Verified after:** 26/26 queue rows pin a variant, 26/26 variant languages match the enrollment language, 0 mismatches, 0 unresolved `{{merge}}` placeholders. Spread: en 8, lt 4, pl 4, ro 3, sv 3, bg/cs/fi/no 1 each.
+- `michael.bieber@mekonomenbilverkstad.se` has no `contacts.language` but is SE, and now resolves to `sv` via the country fallback (sv went 2 → 3). That path only runs at enrollment, which is exactly why the re-enroll was needed rather than a SQL backfill.
+- Subjects render correctly in all 9 languages. **Caveat:** one small grammar slip spotted in the Polish body ("na planie, który się zarejestrowałeś" should be "na planie, na który się zarejestrowałeś"), so the translations are good but not native-perfect and are worth a skim before sending.
+- Sequence remains **paused** — nothing sends until Jacob presses Start Sending. The billing-link placeholder in the master copy is still open; changing it means re-translating.
