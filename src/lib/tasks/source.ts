@@ -8,7 +8,7 @@
  *   - cron/check-replies       → title "Reply from …", type email, created_by null
  *   - the UI / API POST        → created_by set
  *
- * Keep TASK_SOURCE_TITLE_PREFIX in sync with those generators — the API filters
+ * Keep TASK_SOURCE_TITLE_PREFIX in sync with those generators. The API filters
  * on the same prefixes so client and server agree on what a tab contains.
  */
 export type TaskSource = "hot_lead" | "reply" | "manual";

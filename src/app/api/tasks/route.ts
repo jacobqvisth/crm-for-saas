@@ -85,14 +85,14 @@ export async function GET(request: NextRequest) {
     query = query.eq("type", typeParam);
   }
 
-  // Source has no column of its own — filter on the same signals taskSource() reads.
+  // Source has no column of its own, so filter on the same signals taskSource() reads.
   switch (sourceParam) {
     case "hot_lead":
       query = query.ilike("title", `${TASK_SOURCE_TITLE_PREFIX.hot_lead}%`);
       break;
     case "reply":
       // Both remaining auto-generators are reply-driven, so "auto and not a hot
-      // lead" is the same set as matching their title prefixes — and avoids
+      // lead" is the same set as matching their title prefixes, and avoids
       // quoting spaced ilike patterns inside an .or().
       query = query
         .is("created_by", null)
@@ -127,8 +127,8 @@ export async function GET(request: NextRequest) {
     // "all" — no status/date filter
   }
 
-  // Newest first by default — the list is dominated by auto-generated tasks and
-  // the useful end is the recent one. `id` breaks ties so paging stays stable.
+  // Newest first by default, since the list is dominated by auto-generated tasks
+  // and the useful end is the recent one. `id` breaks ties so paging stays stable.
   const ascending = sortParam === "oldest";
   query = query
     .order("due_date", { ascending, nullsFirst: false })
