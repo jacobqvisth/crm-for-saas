@@ -143,6 +143,10 @@ export type PlanStatRow = {
   tier: PlanTier;
   // Distinct app users mapped to this plan (whole user base, not just active).
   users: number;
+  // Distinct users on this plan whose account was created (signed_up_at)
+  // inside the selected range. Attributed to the user's CURRENT plan (plan
+  // history isn't tracked).
+  newUsers: number;
   // Distinct workshops on this plan.
   workshops: number;
   // Distinct users active in the range (behaviour-based: GA4 engagement OR a
@@ -160,6 +164,7 @@ export type PlanStatsData = {
   note: string;
   totals: {
     users: number;
+    newUsers: number;
     activeUsers: number;
     featureEvents: number;
   };

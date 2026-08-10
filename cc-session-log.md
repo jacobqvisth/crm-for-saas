@@ -6567,3 +6567,13 @@ no `CRON_SECRET`) and fail identically on every recent PR.
 **Still open, needs Jacob's call:** whether to widen the bar from strict (174,
 clicked) to broad (394, opens only); and whether to add an `assigned_to` column
 for per-user task filtering.
+
+## Plan Stats: range-scoped "New users" stat — 2026-08-10
+
+- **PR:** #TBD · branch `feature/plan-stats-new-users`
+- Replaced the static USERS headline on each plan card with **New** — distinct users whose account was created (`dashboard_users.signed_up_at`) inside the selected range, mapped to their current plan. All three card stats (New / Active / Events) now respond to the time filter.
+- Total current membership moved to each card's footer ("N users on plan · M workshops"); top KPI card became "New users in range" with "of N on a plan today" as a sub-line.
+- Attribution caveat documented in the info hint + page note: plan history isn't tracked, so a signup that later upgraded counts under the upgraded plan.
+- Chose `signed_up_at` over `created_at` (created_at is the sync row timestamp, starts 2025-11-20; signed_up_at covers 1,536/1,538 users back to 2025-03-24).
+- Sanity-checked against prod: July 2026 new users = Free 341 / Small 26 / One 6 / Large 1.
+- Build, lint, tsc all pass.
