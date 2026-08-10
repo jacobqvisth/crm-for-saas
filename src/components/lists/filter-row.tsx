@@ -14,6 +14,8 @@ import {
   PLAN_TYPE_OPTIONS,
   PLAN_TYPE_LABELS,
   SUBSCRIPTION_STATUS_OPTIONS,
+  PAYMENT_STATUS_OPTIONS,
+  PAYMENT_STATUS_LABELS,
 } from '@/lib/lists/filter-query';
 
 const NUMERIC_FIELDS: FilterField[] = [
@@ -205,13 +207,23 @@ export function FilterRow({ filter, onChange, onRemove, companies, countries }: 
       );
     }
 
-    if (filter.field === 'user_plan_type' || filter.field === 'user_subscription_status') {
+    if (
+      filter.field === 'user_plan_type' ||
+      filter.field === 'user_subscription_status' ||
+      filter.field === 'payment_status'
+    ) {
       const options: readonly string[] =
-        filter.field === 'user_plan_type' ? PLAN_TYPE_OPTIONS : SUBSCRIPTION_STATUS_OPTIONS;
+        filter.field === 'user_plan_type'
+          ? PLAN_TYPE_OPTIONS
+          : filter.field === 'payment_status'
+            ? PAYMENT_STATUS_OPTIONS
+            : SUBSCRIPTION_STATUS_OPTIONS;
       const labelFor = (s: string) =>
         filter.field === 'user_plan_type'
           ? PLAN_TYPE_LABELS[s] ?? s
-          : s.charAt(0).toUpperCase() + s.slice(1);
+          : filter.field === 'payment_status'
+            ? PAYMENT_STATUS_LABELS[s] ?? s
+            : s.charAt(0).toUpperCase() + s.slice(1);
       if (filter.operator === 'in') {
         const selected = Array.isArray(filter.value) ? filter.value : [];
         return (

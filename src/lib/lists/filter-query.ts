@@ -35,6 +35,7 @@ export type FilterField =
   | 'signed_up_at'
   | 'user_plan_type'
   | 'user_subscription_status'
+  | 'payment_status'
   | 'diagnostics_total'
   | 'diagnostics_last_30d'
   | 'active_days_count'
@@ -67,6 +68,7 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'signed_up_at', label: 'App: Signed Up' },
   { value: 'user_plan_type', label: 'App: Plan' },
   { value: 'user_subscription_status', label: 'App: Subscription Status' },
+  { value: 'payment_status', label: 'App: Payment Status' },
   { value: 'diagnostics_total', label: 'App: Diagnoses (total)' },
   { value: 'diagnostics_last_30d', label: 'App: Diagnoses (last 30d)' },
   { value: 'active_days_count', label: 'App: Active Days (distinct)' },
@@ -171,6 +173,13 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'in', label: 'is any of' },
     { value: 'is_null', label: 'has no subscription' },
   ],
+  payment_status: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'in', label: 'is any of' },
+    { value: 'is_null', label: 'never had a subscription' },
+    { value: 'is_not_null', label: 'has billing history' },
+  ],
   diagnostics_total: [
     { value: 'gte', label: 'at least' },
     { value: 'lte', label: 'at most' },
@@ -225,9 +234,19 @@ export const PLAN_TYPE_LABELS: Record<string, string> = {
 export const SUBSCRIPTION_STATUS_OPTIONS = [
   'trialing',
   'active',
+  'past_due',
   'paused',
   'canceled',
 ] as const;
+
+// contacts.payment_status mirrors dashboard_workshops.payment_status — the
+// workshop's billing state, not the user's. Only two non-null values exist in
+// the core_app export; null means "never had a subscription".
+export const PAYMENT_STATUS_OPTIONS = ['active', 'payment_failed'] as const;
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  active: 'Paying fine',
+  payment_failed: 'Payment failed',
+};
 
 export const STATUS_OPTIONS = ['active', 'bounced', 'unsubscribed'] as const;
 export const LEAD_STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
@@ -428,6 +447,13 @@ export function describeFilter(filter: ListFilter, companyName?: string): string
     const pretty = Array.isArray(filter.value)
       ? filter.value.map((v) => PLAN_TYPE_LABELS[v] ?? v).join(', ')
       : PLAN_TYPE_LABELS[String(filter.value)] ?? String(filter.value);
+    return `${fieldLabel} ${opLabel} ${pretty}`;
+  }
+
+  if (filter.field === 'payment_status') {
+    const pretty = Array.isArray(filter.value)
+      ? filter.value.map((v) => PAYMENT_STATUS_LABELS[v] ?? v).join(', ')
+      : PAYMENT_STATUS_LABELS[String(filter.value)] ?? String(filter.value);
     return `${fieldLabel} ${opLabel} ${pretty}`;
   }
 
