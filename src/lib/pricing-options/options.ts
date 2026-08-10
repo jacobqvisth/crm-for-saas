@@ -102,6 +102,11 @@ export type PlanDraft = {
   /** Rendered greyed out with a lock, like the real pricing page. */
   locked?: string[];
   cta: string;
+  /**
+   * Small print under the CTA. The free trial is an attribute of a plan, not a
+   * plan of its own, so it belongs here rather than in a card of its own.
+   */
+  trialNote?: string;
 };
 
 export type PricingOption = {
@@ -114,6 +119,10 @@ export type PricingOption = {
   /** Chips in the option header. */
   revenueShape: string;
   buildEffort: "Low" | "Medium" | "High";
+  /** What the compare matrix shows in the "Free tier" column. */
+  freeTierLabel: string;
+  /** Anything that is real but is not a purchasable card, e.g. B's Archive. */
+  footnote?: string;
   plans: PlanDraft[];
   changes: string[];
   bet: string;
@@ -135,6 +144,7 @@ export const CURRENT: PricingOption = {
   trial: "14 days, card required, unlimited vehicles, on any paid tier.",
   revenueShape: "Freemium subscription",
   buildEffort: "Low",
+  freeTierLabel: "Free, capped",
   plans: [
     {
       name: "Free",
@@ -216,6 +226,7 @@ export const CURRENT: PricingOption = {
   risks: [
     "Free is doing the job of a demo without any of the urgency of a trial.",
     "The 75% yearly discount on One prices a year of One at roughly SEK 45 / month, far below Small and Large yearly. Worth confirming that is deliberate.",
+    "Small and Large are sold on user counts (up to 3, up to 11), but a workshop runs one shared login on the shop terminal. That dimension cannot be enforced, so the seat limit prices honesty rather than usage. Every draft below except this one drops it.",
   ],
   bestIf: "Volume of signups is the goal and monetisation can wait.",
 };
@@ -224,7 +235,14 @@ export const CURRENT: PricingOption = {
 // The drafts.
 // ---------------------------------------------------------------------------
 
-const PAID_LADDER_UNCHANGED: PlanDraft[] = [
+// The trial is an attribute of every plan, not a plan of its own, so it is a
+// line of small print on each card rather than a fourth card in the grid.
+const TRIAL_NOTE = "Includes a 7-day free trial on 1 vehicle. Card required.";
+
+// Today's three paid tiers with the seat limits stripped out. A workshop runs
+// one shared login on the shop terminal, so "up to 3 users" prices a dimension
+// we cannot police. Vehicles per month is the only dial left.
+const PAID_LADDER: PlanDraft[] = [
   {
     name: "One",
     tagline: "1 vehicle, fully unlocked",
@@ -236,38 +254,40 @@ const PAID_LADDER_UNCHANGED: PlanDraft[] = [
       "Full InfoPro technical data",
       "Verified measurements",
       "Unlimited AI search and chat",
-      "Full history",
+      "Unlimited users",
     ],
-    locked: ["Team members"],
-    cta: "Choose One",
+    cta: "Start free trial",
+    trialNote: TRIAL_NOTE,
   },
   {
     name: "Small",
-    tagline: "For small workshops, 1-3 mechanics",
+    tagline: "For shops that use it on the tricky jobs",
     price: "SEK 749",
     period: "/ month",
     badge: "Most popular",
     highlight: true,
     features: [
-      "Up to 3 users",
-      "Premium data for 20 vehicles / month",
+      "Unlimited users",
+      "20 vehicles / month",
       "Everything in One",
       "Priority support",
     ],
-    cta: "Choose Small",
+    cta: "Start free trial",
+    trialNote: TRIAL_NOTE,
   },
   {
     name: "Large",
-    tagline: "For growing workshops, up to 11",
+    tagline: "For high-volume shops, per site",
     price: "SEK 1,799",
     period: "/ month",
     features: [
-      "Up to 11 users",
-      "Premium data for 80 vehicles / month",
+      "Unlimited users",
+      "80 vehicles / month",
       "Everything in Small",
       "Priority support",
     ],
-    cta: "Choose Large",
+    cta: "Start free trial",
+    trialNote: TRIAL_NOTE,
   },
 ];
 
@@ -282,26 +302,10 @@ export const OPTIONS: PricingOption[] = [
     trial: "7 days, card required, 1 vehicle, otherwise fully unlocked.",
     revenueShape: "Pure subscription",
     buildEffort: "Medium",
-    plans: [
-      {
-        name: "Free trial",
-        tagline: "Bring one real car and see what it does",
-        price: "7 days",
-        priceNote: "Card required, converts automatically",
-        badge: "Everyone starts here",
-        features: [
-          "1 vehicle, fully unlocked",
-          "Unlimited diagnostics on that vehicle",
-          "Full InfoPro technical data",
-          "Verified measurements",
-          "Unlimited AI search and chat",
-          "Cancel any time in the 7 days",
-        ],
-        locked: ["Second vehicle", "Team members"],
-        cta: "Start 7-day trial",
-      },
-      ...PAID_LADDER_UNCHANGED,
-    ],
+    freeTierLabel: "None",
+    footnote:
+      "Three cards, three choices. The trial is not a plan, it is how every plan starts: pick a tier, add a card, get 7 days on one vehicle, and the tier you picked begins charging on day 8. Cancel inside the 7 days and you are never billed.",
+    plans: PAID_LADDER,
     changes: [
       "Free plan is removed from the pricing page and from signup.",
       "Signup routes through Stripe checkout before the app opens, so a card exists from minute one.",
@@ -336,37 +340,10 @@ export const OPTIONS: PricingOption[] = [
     trial: "7 days, card required, 1 vehicle. Expiry drops to Archive, not to nothing.",
     revenueShape: "Subscription with a retention floor",
     buildEffort: "Medium",
-    plans: [
-      {
-        name: "Free trial",
-        tagline: "One car, one week, everything unlocked",
-        price: "7 days",
-        priceNote: "Card required",
-        badge: "Everyone starts here",
-        features: [
-          "1 vehicle, fully unlocked",
-          "Unlimited diagnostics on that vehicle",
-          "Full InfoPro and verified measurements",
-          "Cancel any time in the 7 days",
-        ],
-        cta: "Start 7-day trial",
-      },
-      {
-        name: "Archive",
-        tagline: "Where an expired trial lands",
-        price: "SEK 0",
-        priceNote: "Not sold, only fallen into",
-        features: [
-          "Read every diagnostic you already ran",
-          "Export your reports",
-          "Account and team stay intact",
-          "Resubscribe in one click",
-        ],
-        locked: ["New diagnostics", "AI chat and search", "InfoPro data", "Verified measurements"],
-        cta: "Upgrade to continue",
-      },
-      ...PAID_LADDER_UNCHANGED,
-    ],
+    freeTierLabel: "Read-only Archive",
+    footnote:
+      "Same three cards as option A. Archive is never advertised and never appears on the pricing page, because it is not something you buy, it is where you land. Cancel or let the trial lapse and the account goes read-only: every diagnostic you already ran stays readable and exportable, the team stays intact, and one click resubscribes. What you lose is the ability to run anything new.",
+    plans: PAID_LADDER,
     changes: [
       "Free is replaced by Archive, which is read-only and is never advertised as a plan.",
       "The 1,297 existing free workshops migrate to Archive cleanly, which solves A's biggest migration problem.",
@@ -396,28 +373,25 @@ export const OPTIONS: PricingOption[] = [
     trial: "1 free credit, no card. One real car, fully unlocked, no clock.",
     revenueShape: "Usage, with an optional subscription on top",
     buildEffort: "High",
+    freeTierLabel: "None, 1 free credit",
+    footnote:
+      "The first credit is free and needs no card, which replaces the trial entirely: one real car, fully unlocked, no clock running. Volume discounts are pack sizes on the pay-as-you-go card rather than cards of their own.",
     plans: [
       {
-        name: "Single vehicle",
+        name: "Pay as you go",
         tagline: "One car, 72 hours, fully unlocked",
         price: "SEK 99",
         period: "/ vehicle",
+        priceNote: "10 for SEK 790, so SEK 79 each",
         features: [
           "Full InfoPro on that vehicle",
           "Unlimited diagnostics on it for 72 hours",
           "Verified measurements",
           "Unlimited AI chat and search",
-          "No subscription, no card on file needed",
+          "No subscription, no card on file",
         ],
-        cta: "Buy 1 credit",
-      },
-      {
-        name: "10 pack",
-        tagline: "SEK 79 per vehicle",
-        price: "SEK 790",
-        priceNote: "Credits never expire",
-        features: ["10 vehicle credits", "Shared across the whole workshop", "Full history kept forever"],
-        cta: "Buy 10",
+        cta: "Buy credits",
+        trialNote: "First credit is free. No card needed.",
       },
       {
         name: "50 pack",
@@ -426,8 +400,15 @@ export const OPTIONS: PricingOption[] = [
         priceNote: "Credits never expire",
         badge: "Best value",
         highlight: true,
-        features: ["50 vehicle credits", "Up to 3 users", "Priority support"],
+        features: [
+          "50 vehicle credits",
+          "Shared across the whole workshop",
+          "Unlimited users",
+          "Full history kept forever",
+          "Priority support",
+        ],
         cta: "Buy 50",
+        trialNote: "First credit is free. No card needed.",
       },
       {
         name: "Workshop",
@@ -437,10 +418,11 @@ export const OPTIONS: PricingOption[] = [
         features: [
           "20 credits every month",
           "Unused credits roll over",
-          "Up to 3 users",
+          "Unlimited users",
           "Priority support",
         ],
         cta: "Subscribe",
+        trialNote: "First credit is free. No card needed.",
       },
     ],
     changes: [
@@ -465,61 +447,86 @@ export const OPTIONS: PricingOption[] = [
 
   // -------------------------------------------------------------- D
   {
-    id: "single-seat-plan",
+    id: "per-workshop-flat",
     key: "D",
-    name: "One plan, priced per mechanic",
+    name: "One price per workshop",
     thesis:
-      "Collapse the ladder. One plan, one price, per user, everything unlocked, no vehicle quota at all. You buy seats, the way a workshop already buys every other tool.",
-    trial: "7 days, card required, unlimited vehicles, 1 seat.",
-    revenueShape: "Per-seat subscription",
+      "Stop counting people. A workshop shares one login on the shop terminal no matter what the licence says, so seats are unenforceable and pricing them is a fiction. Charge the shop a flat rate, let the whole team in, and scale the price on the one thing that is both measurable and actually costs us money: how many cars you work on.",
+    trial: "7 days, card required, 1 vehicle, on any tier.",
+    revenueShape: "Flat per-site subscription, scaled by vehicles",
     buildEffort: "Low",
+    freeTierLabel: "None",
+    footnote:
+      "Unlimited users on every tier, because that is what happens anyway. The licence is per workshop location, so a chain buys one per site. Vehicles are counted as distinct cars unlocked in a month, not diagnostics, so re-running the same car all week costs nothing extra.",
     plans: [
       {
-        name: "Wrenchlane",
-        tagline: "Everything, per mechanic",
-        price: "SEK 449",
-        period: "/ user / month",
-        badge: "The only plan",
-        highlight: true,
+        name: "Workshop",
+        tagline: "For shops that use it on the tricky jobs",
+        price: "SEK 749",
+        period: "/ month",
         features: [
-          "Unlimited vehicles",
-          "Unlimited diagnostics",
-          "Full InfoPro technical data on every vehicle",
+          "Unlimited users",
+          "20 vehicles / month",
+          "Full InfoPro technical data",
           "Verified measurements",
           "Unlimited AI search and chat",
           "Full history",
-          "Add and remove seats any month",
-          "Priority support",
         ],
-        cta: "Start 7-day trial",
+        cta: "Start free trial",
+        trialNote: TRIAL_NOTE,
       },
       {
-        name: "Wrenchlane yearly",
-        tagline: "Same plan, two months free",
-        price: "SEK 4,490",
-        period: "/ user / year",
-        priceNote: "Equivalent to SEK 374 / month",
-        features: ["Everything in the monthly plan", "Locked price for 12 months", "Invoice billing available"],
-        cta: "Go yearly",
+        name: "Workshop 50",
+        tagline: "For shops that reach for it daily",
+        price: "SEK 1,299",
+        period: "/ month",
+        badge: "Most popular",
+        highlight: true,
+        features: [
+          "Unlimited users",
+          "50 vehicles / month",
+          "Everything in Workshop",
+          "Priority support",
+        ],
+        cta: "Start free trial",
+        trialNote: TRIAL_NOTE,
+      },
+      {
+        name: "Workshop unlimited",
+        tagline: "For high-volume shops and chains, per site",
+        price: "SEK 1,999",
+        period: "/ month",
+        features: [
+          "Unlimited users",
+          "Unlimited vehicles",
+          "Everything in Workshop 50",
+          "Invoice billing",
+          "Priority support",
+        ],
+        cta: "Start free trial",
+        trialNote: TRIAL_NOTE,
       },
     ],
     changes: [
-      "Three tiers become one. The vehicle quota disappears entirely.",
-      "Simplest option to actually build, it is mostly deleting things.",
-      "Single-mechanic shops currently on One at SEK 179 jump to SEK 449, which is a 2.5x increase for that segment.",
+      "The seat dimension is deleted everywhere. No user counts, no per-mechanic maths, no licence we cannot police.",
+      "The ladder keeps exactly one dial, vehicles per month, so a shop can pick its tier without doing arithmetic.",
+      "The unit of sale becomes the workshop location rather than the account, which is what a chain expects to buy anyway.",
+      "The One tier at SEK 179 disappears, so the cheapest entry rises from SEK 179 to SEK 749 unless a solo tier is kept alongside.",
     ],
-    bet: "That the current ladder loses sales to confusion. Two dials move at once, vehicles and seats, and a mechanic cannot tell which plan is theirs without doing arithmetic.",
+    bet: "That we are currently pricing a dimension we cannot enforce. Every mechanic in the bay uses the shop's login, so seat counts measure honesty rather than usage. Vehicles are the honest meter: the shop cannot fake them, they track the value delivered, and they are the only line item that costs us real money.",
     evidence: [
-      "Current ARPA is roughly SEK 862 / month, so a 2-mechanic shop at SEK 898 is close to revenue-neutral and every 3-seat shop is an increase.",
-      "24 of 60 payers are on Small, which is 1-3 users, so the middle of the market is already seat-shaped.",
-      "The 20 and 80 vehicles-per-month quotas are almost certainly never hit given the median workshop runs one diagnostic ever, so the quota is buying us complexity and no revenue protection.",
+      "Today's Small and Large already bundle a vehicle quota (20 and 80 per month), so this deletes the seat dial rather than inventing a new one.",
+      "Per-vehicle premium data is the only meaningful COGS, at $0.014 of AI cost per diagnostic. Pricing on vehicles lines revenue up with the cost we actually incur.",
+      "The median diagnosing workshop ran one diagnostic ever and only 30 workshops have ever exceeded 20, so the entry tier covers almost the entire base and the upper tiers exist for the handful that genuinely scale.",
+      "24 of 60 payers already sit on Small at SEK 749, so the entry price here matches where the market has already settled.",
     ],
     risks: [
-      "Unlimited vehicles removes the cap on per-vehicle data cost. One heavy shop could be unprofitable and nothing stops it.",
-      "The One tier at SEK 179 is our only cheap entry point. Removing it may lose the solo mechanic entirely.",
-      "Loses upsell headroom. With one price there is no natural expansion path except more seats.",
+      "Quota anxiety. A shop one car short of its limit may hold off on a diagnostic to avoid an upgrade, which suppresses exactly the usage we want. Soft overage rather than a hard block matters here.",
+      "Unlimited users invites a chain to run several locations off one account. The per-site rule needs a real check, probably org number plus address, or the top tier gets abused.",
+      "Losing the SEK 179 entry point may lose the solo mechanic entirely unless a cheap single-vehicle tier survives next to this.",
+      "The top tier is uncapped on vehicles, so a genuinely huge shop could be unprofitable if the data licence is expensive.",
     ],
-    bestIf: "We think the ladder is costing us more in confusion than the quotas are saving us in data cost, and we can verify that heavy users are rare.",
+    bestIf: "We accept that a workshop is one shared account and want the price to track the cars that come through the door rather than the people standing around them.",
   },
 
   // -------------------------------------------------------------- E
@@ -532,11 +539,15 @@ export const OPTIONS: PricingOption[] = [
     trial: "No card, 7 days of full access, unlimited vehicles.",
     revenueShape: "Freemium with the wall at the moment of value",
     buildEffort: "High",
+    freeTierLabel: "Unlimited, no procedures",
+    footnote:
+      "The only draft that keeps four cards, because here Free is a real permanent plan rather than a trial in disguise. There is no separate trial card in this model either: the first 7 days simply have the paywall lifted, so a new workshop sees the full depth before it decides.",
     plans: [
       {
         name: "Free",
         tagline: "Diagnose any car, unlimited",
         price: "SEK 0",
+        priceNote: "Forever, no card",
         features: [
           "Unlimited diagnostics on any vehicle",
           "Ranked likely causes with confidence",
@@ -559,24 +570,27 @@ export const OPTIONS: PricingOption[] = [
         period: "/ month",
         features: ["1 fully unlocked vehicle", "Full procedures and measurements", "Full InfoPro technical data"],
         cta: "Unlock",
+        trialNote: "Everything unlocked for your first 7 days. No card needed.",
       },
       {
         name: "Small",
-        tagline: "For small workshops, 1-3 mechanics",
+        tagline: "For shops that use it on the tricky jobs",
         price: "SEK 749",
         period: "/ month",
         badge: "Most popular",
         highlight: true,
-        features: ["Up to 3 users", "Premium data for 20 vehicles / month", "Everything unlocked on those vehicles"],
+        features: ["Unlimited users", "20 vehicles / month", "Everything unlocked on those vehicles"],
         cta: "Choose Small",
+        trialNote: "Everything unlocked for your first 7 days. No card needed.",
       },
       {
         name: "Large",
-        tagline: "For growing workshops, up to 11",
+        tagline: "For high-volume shops, per site",
         price: "SEK 1,799",
         period: "/ month",
-        features: ["Up to 11 users", "Premium data for 80 vehicles / month", "Priority support"],
+        features: ["Unlimited users", "80 vehicles / month", "Priority support"],
         cta: "Choose Large",
+        trialNote: "Everything unlocked for your first 7 days. No card needed.",
       },
     ],
     changes: [
@@ -608,6 +622,9 @@ export const OPTIONS: PricingOption[] = [
     trial: "7 days, card required, 1 vehicle, then the annual term starts.",
     revenueShape: "Annual subscription",
     buildEffort: "Low",
+    freeTierLabel: "None",
+    footnote:
+      "Seat limits are gone here too, for the same reason as in option D: a shop shares one login regardless of what we write on the card. The tiers scale on vehicles per month, and the year is the unit of sale.",
     plans: [
       {
         name: "One",
@@ -615,34 +632,47 @@ export const OPTIONS: PricingOption[] = [
         price: "SEK 179",
         period: "/ month",
         priceNote: "or SEK 1,490 / year",
-        features: ["1 fully unlocked vehicle", "Unlimited diagnostics", "Full InfoPro on that vehicle"],
-        cta: "Start 7-day trial",
+        features: [
+          "1 fully unlocked vehicle",
+          "Unlimited diagnostics",
+          "Full InfoPro on that vehicle",
+          "Unlimited users",
+        ],
+        cta: "Start free trial",
+        trialNote: TRIAL_NOTE,
       },
       {
         name: "Small",
-        tagline: "For small workshops, 1-3 mechanics",
+        tagline: "For shops that use it on the tricky jobs",
         price: "SEK 6,990",
         period: "/ year",
         priceNote: "Equivalent to SEK 582 / month",
         badge: "Most popular",
         highlight: true,
         features: [
-          "Up to 3 users",
-          "Premium data for 20 vehicles / month",
+          "Unlimited users",
+          "20 vehicles / month",
           "Everything in One",
           "Priority support",
           "Invoice billing available",
         ],
-        cta: "Start 7-day trial",
+        cta: "Start free trial",
+        trialNote: TRIAL_NOTE,
       },
       {
         name: "Large",
-        tagline: "For growing workshops, up to 11",
+        tagline: "For high-volume shops, per site",
         price: "SEK 15,900",
         period: "/ year",
         priceNote: "Equivalent to SEK 1,325 / month",
-        features: ["Up to 11 users", "Premium data for 80 vehicles / month", "Everything in Small", "Priority support"],
-        cta: "Start 7-day trial",
+        features: [
+          "Unlimited users",
+          "80 vehicles / month",
+          "Everything in Small",
+          "Priority support",
+        ],
+        cta: "Start free trial",
+        trialNote: TRIAL_NOTE,
       },
     ],
     changes: [
@@ -668,6 +698,10 @@ export const OPTIONS: PricingOption[] = [
 export type OpenQuestion = { question: string; why: string };
 
 export const OPEN_QUESTIONS: OpenQuestion[] = [
+  {
+    question: "If we sell per workshop location, how do we actually enforce a location?",
+    why: "Seats are out because a shop shares one login, which is fine and expected. But the same logic lets a five-branch chain run every site off one account. Org number plus address is the obvious check, and without it option D's top tier is the cheapest way for a chain to buy us.",
+  },
   {
     question: "What is the real per-vehicle cost of the premium (InfoPro) data?",
     why: "Options C and D are unpriceable without it. C sets a credit price against it directly, and D removes the vehicle quota entirely, which only works if a heavy user cannot be unprofitable.",
