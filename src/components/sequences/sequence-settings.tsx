@@ -320,16 +320,44 @@ export function SequenceSettingsPanel({ open, onClose, sequence, onSave }: Seque
         </div>
 
         <div className="rounded-lg border border-slate-200 p-3 space-y-3">
-          <div>
+          <div className="flex items-start justify-between gap-3">
             <label className="block text-sm font-medium text-slate-800">
               Languages
+              {languages.length > 0 && (
+                <span className="ml-1.5 font-normal text-slate-500">
+                  ({languages.length} selected)
+                </span>
+              )}
             </label>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const all = LANGUAGE_OPTIONS.map((l) => l.code);
+                  setLanguages(all);
+                  if (!all.includes(defaultLang)) setDefaultLang(all[0]);
+                }}
+                className="px-2 py-0.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguages([])}
+                disabled={languages.length === 0}
+                className="px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 rounded disabled:opacity-40"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">
               Pick more than one and each contact gets the version in their own
               language, based on their contact language and country. Leave
-              everything unticked to keep this a single-language sequence. Add
-              the copy per language on each step with &ldquo;Add
-              languages&rdquo;.
+              everything unticked to keep this a single-language sequence.
+              Ticking a language only declares it, the copy is written on the
+              sequence page with &ldquo;Translate all steps&rdquo;.
             </p>
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1.5">

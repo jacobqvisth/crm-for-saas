@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Zap,
   AlertTriangle,
+  Languages,
   TrendingUp,
   X,
   Trash2,
@@ -436,6 +437,16 @@ export function SequenceList() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-slate-900">{seq.name}</span>
+                        {((seq.settings as { languages?: string[] } | null)
+                          ?.languages?.length ?? 0) > 1 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700"
+                            title="Multi-language: each contact gets this in their own language"
+                          >
+                            <Languages className="w-3 h-3" />
+                            {(seq.settings as { languages?: string[] }).languages!.length}
+                          </span>
+                        )}
                         {healthData[seq.id]?.auth_issue && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
                             <AlertTriangle className="w-3 h-3" />
