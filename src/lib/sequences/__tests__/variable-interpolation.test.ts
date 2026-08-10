@@ -72,6 +72,7 @@ const contact = {
   diagnostics_first_at: null,
   diagnostics_last_at: null,
   diagnostics_last_30d: null,
+  active_days_count: null,
   attributed_to_send_id: null,
   attributed_to_sequence_id: null,
   attributed_via: null,
