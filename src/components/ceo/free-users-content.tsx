@@ -26,7 +26,7 @@ const CONVERSION_INFO: SourceInfo = {
     "Every signup starts on Free — there is no direct paid signup. Conversion is read from the CURRENT Stripe-synced plan on the workshop (dashboard_workshops.plan_key + core_subscription_status). There is no plan-history table, so a workshop that upgraded and later reverted to Free counts as free again — the upgrade-funnel section reconstructs those from Stripe fingerprints.",
   sources: ["dashboard_workshops (Stripe sync)", "dashboard_metric_snapshots · stripe.new_paid_workshops"],
   logic:
-    "Paid tier = plan_key prefix one/small/large. Paying = subscription status active; trialing and past_due are shown separately so trials don't inflate the paying count.",
+    "Paid tier = plan_key prefix one/small/large, and always equals paying + trialing + past due + manual. Paying = subscription status active; trialing and past_due are shown separately so trials don't inflate the paying count; manual = a paid plan set by hand with no billing status (comped/pilot accounts, no Stripe subscription).",
 };
 
 const FUNNEL_INFO: SourceInfo = {
@@ -112,7 +112,7 @@ function TierCard({ tier }: { tier: TierStatusBreakdown }) {
       <small>
         {formatNumber(tier.active)} paying · {formatNumber(tier.trialing)}{" "}
         trialing · {formatNumber(tier.pastDue)} past due
-        {tier.other > 0 ? ` · ${formatNumber(tier.other)} other` : ""}
+        {tier.other > 0 ? ` · ${formatNumber(tier.other)} manual` : ""}
       </small>
       <small>
         {tier.topCountries
@@ -166,7 +166,11 @@ export function FreeUsersContent({ data }: FreeUsersContentProps) {
           <SummaryCard
             value={formatNumber(kpis.paidWorkshopsNow)}
             label="Workshops on a paid plan"
-            hint={`${pctLabel(kpis.conversionRatePct)} of all workshops`}
+            hint={`${pctLabel(kpis.conversionRatePct)} of all workshops = ${formatNumber(
+              kpis.payingActiveNow,
+            )} paying + ${formatNumber(kpis.trialingNow)} trialing + ${formatNumber(
+              kpis.pastDueNow,
+            )} past due + ${formatNumber(kpis.manualNoStatusNow)} manual`}
             info={CONVERSION_INFO}
           />
           <SummaryCard
@@ -180,6 +184,11 @@ export function FreeUsersContent({ data }: FreeUsersContentProps) {
           <SummaryCard
             value={formatNumber(kpis.pastDueNow)}
             label="Past due (payment failed)"
+          />
+          <SummaryCard
+            value={formatNumber(kpis.manualNoStatusNow)}
+            label="Manual (no billing status)"
+            hint="Plan set by hand, no Stripe subscription behind it — comped or pilot accounts"
           />
         </div>
         <p className="panel-description">{data.note}</p>
@@ -560,9 +569,11 @@ export function FreeUsersContent({ data }: FreeUsersContentProps) {
               <p className="eyebrow">Cohorts</p>
               <h2>Signup month → where those workshops are today</h2>
               <p className="panel-description">
-                Current plan by workshop signup month. Paid tier includes
-                trialing; the Paying column is card-charging subscriptions
-                only.
+                Current plan by workshop signup month. &quot;On paid
+                tier&quot; counts every workshop whose plan is One/Small/Large
+                — paying + trialing + past due + manually provisioned — so it
+                can exceed the Paying and Trialing columns combined. Paying is
+                card-charging subscriptions only.
               </p>
             </div>
           </div>
@@ -602,8 +613,9 @@ export function FreeUsersContent({ data }: FreeUsersContentProps) {
               <p className="eyebrow">Geography</p>
               <h2>Conversion by country</h2>
               <p className="panel-description">
-                Top countries by workshop count, with how many sit on a paid
-                tier today.
+                Top countries by workshop count. Paid counts every One /
+                Small / Large workshop (incl. trialing, past due, and manual);
+                Paying is active subscriptions only.
               </p>
             </div>
           </div>
