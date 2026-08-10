@@ -19,6 +19,7 @@ export type PropagationResult = {
   companiesUpdated: number;
   diagnosticsContactsRefreshed: number;
   diagnosticsCompaniesRefreshed: number;
+  activeDaysContactsRefreshed: number;
 };
 
 export async function propagateDashboardToCrm(
@@ -30,12 +31,27 @@ export async function propagateDashboardToCrm(
   ]);
   const { diagnosticsContactsRefreshed, diagnosticsCompaniesRefreshed } =
     await refreshDiagnosticsAggregates(supabase);
+  const activeDaysContactsRefreshed = await refreshActiveDaysAggregates(supabase);
   return {
     contactsUpdated,
     companiesUpdated,
     diagnosticsContactsRefreshed,
     diagnosticsCompaniesRefreshed,
+    activeDaysContactsRefreshed,
   };
+}
+
+// Recomputes contacts.active_days_count (distinct days with a product action)
+// from dashboard_diagnostics + dashboard_feature_usage via the
+// refresh_active_days_aggregates() SQL RPC. Feeds the "App: Active Days"
+// dynamic-list filter field.
+async function refreshActiveDaysAggregates(
+  supabase: SupabaseClient<Database>,
+): Promise<number> {
+  const { data, error } = await supabase.rpc("refresh_active_days_aggregates");
+  if (error) throw error;
+  const payload = (data ?? {}) as { contacts_updated?: number };
+  return payload.contacts_updated ?? 0;
 }
 
 // Recomputes contacts.diagnostics_* and companies.diagnostics_* from

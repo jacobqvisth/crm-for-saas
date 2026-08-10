@@ -37,6 +37,7 @@ export type FilterField =
   | 'user_subscription_status'
   | 'diagnostics_total'
   | 'diagnostics_last_30d'
+  | 'active_days_count'
   | 'login_count'
   | 'credits_remaining'
   | 'last_active_at';
@@ -68,6 +69,7 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'user_subscription_status', label: 'App: Subscription Status' },
   { value: 'diagnostics_total', label: 'App: Diagnoses (total)' },
   { value: 'diagnostics_last_30d', label: 'App: Diagnoses (last 30d)' },
+  { value: 'active_days_count', label: 'App: Active Days (distinct)' },
   { value: 'login_count', label: 'App: Login Count' },
   { value: 'credits_remaining', label: 'App: Credits Remaining' },
   { value: 'last_active_at', label: 'App: Last Active' },
@@ -175,6 +177,11 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'equals', label: 'exactly' },
   ],
   diagnostics_last_30d: [
+    { value: 'gte', label: 'at least' },
+    { value: 'lte', label: 'at most' },
+    { value: 'equals', label: 'exactly' },
+  ],
+  active_days_count: [
     { value: 'gte', label: 'at least' },
     { value: 'lte', label: 'at most' },
     { value: 'equals', label: 'exactly' },
