@@ -33,10 +33,12 @@ export interface Playbook {
    */
   filters?: ListFilter[];
   /**
-   * Special resolver key. Currently only "payment_bounced", which joins
-   * dashboard_subscriptions. Special playbooks create static (snapshot) lists.
+   * Special resolver key for segments that need data not on `contacts`:
+   *  - "payment_bounced"  joins dashboard_subscriptions for raw Stripe status
+   *  - "engaged_prospect" aggregates email_events via the get_engaged_prospects RPC
+   * Special playbooks create static (snapshot) lists.
    */
-  special?: "payment_bounced";
+  special?: "payment_bounced" | "engaged_prospect";
 }
 
 export const PLAYBOOKS: Playbook[] = [
@@ -50,6 +52,17 @@ export const PLAYBOOKS: Playbook[] = [
     icon: "CreditCard",
     listName: "Payment bounced",
     special: "payment_bounced",
+  },
+  {
+    key: "engaged_prospect",
+    label: "Engaged prospects",
+    hint: "Opened 3+ times and clicked, not signed up",
+    rationale:
+      "Outbound contacts who keep opening our email and have clicked a link, but have never signed up. A click is a deliberate act, unlike an open, so these are the warmest people in the outbound list. Ranked by clicks, then recency.",
+    tone: "good",
+    icon: "MousePointerClick",
+    listName: "Engaged prospects",
+    special: "engaged_prospect",
   },
   {
     key: "trialing_now",

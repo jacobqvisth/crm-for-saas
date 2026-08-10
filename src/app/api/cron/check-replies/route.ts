@@ -7,6 +7,7 @@ import { parseNdr, SUGGESTED_NDR_GMAIL_QUERY } from "@/lib/gmail/parse-ndr";
 import { translateInboundMessage } from "@/lib/inbox/translate-inbound";
 import { insertActivity } from "@/lib/activities/insert";
 import { applyStopOnReply } from "@/lib/sequences/stop-on-reply";
+import { contactDisplayName } from "@/lib/contacts/display-name";
 
 // Reply detection iterates Gmail threads sequentially — give it a real budget.
 // Hit the Pro plan's max so a slow pass can't take down newer items at the
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
           // Look up contact by from email
           const { data: contact } = await supabase
             .from("contacts")
-            .select("id, first_name, last_name")
+            .select("id, first_name, last_name, email, companies(name)")
             .eq("workspace_id", account.workspace_id)
             .eq("email", fromEmail.toLowerCase())
             .maybeSingle();
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest) {
                 workspace_id: account.workspace_id,
                 contact_id: contact.id,
                 type: "email",
-                title: `Reply from ${contact.first_name || fromEmail}`,
+                title: `Reply from ${contactDisplayName({ ...contact, email: contact.email ?? fromEmail })}`,
                 description: "Review and respond to their reply in Inbox.",
                 due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                 priority: "medium",

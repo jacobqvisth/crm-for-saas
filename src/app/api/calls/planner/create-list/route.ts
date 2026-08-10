@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
 import { getPlaybook, BOUNCED_SUB_STATUSES } from "@/lib/calls/playbooks";
+import { fetchEngagedProspects } from "@/lib/calls/engaged-prospects";
 import { ALWAYS_ON_CALLING, resolveExcludedContactIds } from "@/lib/lists/exclusions";
 
 async function getWorkspaceId(
@@ -86,6 +87,12 @@ export async function POST(request: NextRequest) {
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         staticIds = (matched ?? []).map((c) => c.id);
       }
+    } else if (pb.special === "engaged_prospect") {
+      // Snapshot: the aggregate lives in email_events, not on `contacts`, so a
+      // dynamic list's filter engine cannot express it.
+      const { rows, error } = await fetchEngagedProspects(supabase, workspaceId);
+      if (error) return NextResponse.json({ error }, { status: 500 });
+      staticIds = rows.map((p) => p.contact_id);
     } else {
       isDynamic = true;
       filters = (pb.filters ?? []) as unknown as Json;

@@ -22,6 +22,7 @@ import {
   UserPlus,
   PlugZap,
   HeartHandshake,
+  MousePointerClick,
   Target,
   Search,
   SlidersHorizontal,
@@ -64,6 +65,7 @@ const ICONS: Record<string, LucideIcon> = {
   UserPlus,
   PlugZap,
   HeartHandshake,
+  MousePointerClick,
 };
 
 const TONE_CHIP: Record<ReasonTone, string> = {
@@ -89,6 +91,8 @@ const PRIORITY_BADGE: Record<string, string> = {
 type Reason = { label: string; tone: ReasonTone; weight: number };
 
 type TopContact = {
+  /** app_user is scored on app usage, prospect on email engagement. */
+  kind: "app_user" | "prospect";
   contactId: string;
   name: string;
   email: string;
@@ -751,6 +755,14 @@ export default function CallPlannerPage() {
                       {c.plan && (
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
                           {PLAN_TYPE_LABELS[c.plan] ?? c.plan}
+                        </span>
+                      )}
+                      {c.kind === "prospect" && (
+                        <span
+                          className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 ring-1 ring-inset ring-violet-600/20"
+                          title="Not signed up. Ranked on email opens and clicks."
+                        >
+                          Prospect
                         </span>
                       )}
                     </div>

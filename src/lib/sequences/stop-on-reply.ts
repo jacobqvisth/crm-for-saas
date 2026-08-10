@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { insertActivities, type ActivityRow } from "@/lib/activities/insert";
+import { contactDisplayName } from "@/lib/contacts/display-name";
 
 type Supabase = SupabaseClient<Database>;
 
@@ -27,7 +28,7 @@ export async function applyStopOnReply(
 
   const { data: enrollment } = await supabase
     .from("sequence_enrollments")
-    .select("*, sequences(*), contacts(id, company_id, first_name, last_name)")
+    .select("*, sequences(*), contacts(id, company_id, first_name, last_name, email, companies(name))")
     .eq("id", enrollmentId)
     .eq("status", "active")
     .maybeSingle();
@@ -60,19 +61,21 @@ export async function applyStopOnReply(
       id: string;
       first_name: string | null;
       last_name: string | null;
+      email: string | null;
       company_id: string | null;
+      companies: { name: string | null } | null;
     } | null;
     const seqName = sequence?.name ?? "sequence";
     const contactName = enrollmentContact
-      ? [enrollmentContact.first_name, enrollmentContact.last_name].filter(Boolean).join(" ") || "contact"
-      : "contact";
+      ? contactDisplayName(enrollmentContact)
+      : "Unknown contact";
     if (enrollmentContact?.id) {
       await supabase.from("tasks").insert({
         workspace_id: workspaceId,
         contact_id: enrollmentContact.id,
         enrollment_id: enrollment.id,
         type: "email",
-        title: `Follow up with ${contactName || "contact"} — replied to "${seqName}"`,
+        title: `Follow up with ${contactName}, replied to "${seqName}"`,
         description: "They replied to your sequence. Review their reply in Inbox and respond.",
         due_date: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         priority: "high",
