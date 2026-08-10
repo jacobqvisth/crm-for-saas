@@ -12,21 +12,34 @@ import {
   Pencil,
   Trash2,
   AlarmClock,
+  ArrowUpDown,
 } from "lucide-react";
 import { format, isToday, isPast, isTomorrow } from "date-fns";
 import toast from "react-hot-toast";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { type TaskSource } from "@/lib/tasks/source";
 
 type TaskType = "email" | "call" | "linkedin" | "generic";
 type TaskPriority = "low" | "medium" | "high";
 type FilterType = "all" | "due_today" | "overdue" | "upcoming" | "completed";
+type TypeFilter = "all" | TaskType;
+type SourceFilter = "all" | TaskSource;
+type SortOrder = "newest" | "oldest";
 
 type Contact = {
   first_name: string | null;
   last_name: string | null;
   email: string;
   title: string | null;
+  phone: string | null;
   company_id: string | null;
+  companies: { name: string | null } | null;
+};
+
+type TaskCounts = {
+  status: Record<FilterType, number>;
+  type: Record<TaskType, number>;
+  source: Record<TaskSource, number>;
 };
 
 type Task = {
@@ -91,6 +104,26 @@ const FILTER_TABS: { key: FilterType; label: string }[] = [
   { key: "completed", label: "Completed" },
 ];
 
+const TYPE_TABS: { key: TypeFilter; label: string }[] = [
+  { key: "all", label: "All types" },
+  { key: "call", label: "Calls" },
+  { key: "email", label: "Emails" },
+  { key: "linkedin", label: "LinkedIn" },
+  { key: "generic", label: "Other" },
+];
+
+/**
+ * `tasks` has no assignee column and 282 of 294 rows have a null `created_by`,
+ * so a per-user filter would be almost entirely empty. Source is the split that
+ * actually separates this list: auto-generated noise vs. what a human made.
+ */
+const SOURCE_TABS: { key: SourceFilter; label: string }[] = [
+  { key: "all", label: "Any source" },
+  { key: "hot_lead", label: "Hot leads" },
+  { key: "reply", label: "Replies" },
+  { key: "manual", label: "Created by us" },
+];
+
 const EMPTY_MESSAGES: Record<FilterType, string> = {
   due_today: "Nothing due today — you're clear!",
   overdue: "No overdue tasks.",
@@ -110,7 +143,11 @@ type EditState = {
 export default function TasksPage() {
   const { workspaceId } = useWorkspace();
   const [filter, setFilter] = useState<FilterType>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [sort, setSort] = useState<SortOrder>("newest");
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [counts, setCounts] = useState<TaskCounts | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -127,16 +164,20 @@ export default function TasksPage() {
     if (!workspaceId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/tasks?filter=${filter}`);
+      const params = new URLSearchParams({ filter, sort });
+      if (typeFilter !== "all") params.set("type", typeFilter);
+      if (sourceFilter !== "all") params.set("source", sourceFilter);
+      const res = await fetch(`/api/tasks?${params}`);
       if (!res.ok) throw new Error("Failed to load tasks");
-      const data = await res.json() as { tasks: Task[] };
+      const data = await res.json() as { tasks: Task[]; counts: TaskCounts };
       setTasks(data.tasks);
+      setCounts(data.counts);
     } catch {
       toast.error("Failed to load tasks");
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, filter]);
+  }, [workspaceId, filter, typeFilter, sourceFilter, sort]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -227,9 +268,17 @@ export default function TasksPage() {
   const regularTasks = tasks.filter((t) => !isOverdue(t));
 
   function renderTaskCard(task: Task) {
+    // Most auto-generated hot-lead contacts are nameless (info@… inboxes), so
+    // fall back to the company, then the email. Gating the link on a name is
+    // what left 199 of these tasks with no way to reach the contact at all.
     const contactName = task.contacts
       ? [task.contacts.first_name, task.contacts.last_name].filter(Boolean).join(" ")
+      : "";
+    const contactLabel = task.contacts
+      ? contactName || task.contacts.companies?.name || task.contacts.email
       : null;
+    const showEmailToo = Boolean(contactLabel && contactLabel !== task.contacts?.email);
+    const phone = task.contacts?.phone ?? null;
 
     if (editState?.id === task.id) {
       return (
@@ -314,14 +363,23 @@ export default function TasksPage() {
               {task.title}
             </span>
           </div>
-          {task.contacts && contactName && (
-            <div className="mt-0.5">
+          {task.contacts && contactLabel && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <Link
                 href={`/contacts/${task.contact_id}`}
                 className="text-xs text-indigo-600 hover:underline"
               >
-                → {contactName} · {task.contacts.email}
+                → {contactLabel}
+                {showEmailToo && ` · ${task.contacts.email}`}
               </Link>
+              {phone && (
+                <a
+                  href={`tel:${phone.replace(/\s/g, "")}`}
+                  className="text-xs text-green-700 hover:underline"
+                >
+                  {phone}
+                </a>
+              )}
             </div>
           )}
           {task.description && (
@@ -475,8 +533,8 @@ export default function TasksPage() {
         </button>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 mb-4 border-b border-slate-200 pb-0">
+      {/* Status tabs */}
+      <div className="flex gap-1 border-b border-slate-200">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -488,8 +546,56 @@ export default function TasksPage() {
             }`}
           >
             {tab.label}
+            {counts && (
+              <span className="ml-1.5 text-xs text-slate-400">{counts.status[tab.key]}</span>
+            )}
           </button>
         ))}
+      </div>
+
+      {/* Type + source + sort */}
+      <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
+        <div className="flex flex-wrap gap-1">
+          {TYPE_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setTypeFilter(tab.key)}
+              className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
+                typeFilter === tab.key
+                  ? "bg-indigo-50 border-indigo-300 text-indigo-700"
+                  : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+              }`}
+            >
+              {tab.label}
+              {counts && tab.key !== "all" && (
+                <span className="ml-1 text-slate-400">{counts.type[tab.key]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+            className="border border-slate-200 rounded px-2 py-1 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          >
+            {SOURCE_TABS.map((tab) => (
+              <option key={tab.key} value={tab.key}>
+                {tab.label}
+                {counts && tab.key !== "all" ? ` (${counts.source[tab.key]})` : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => setSort(sort === "newest" ? "oldest" : "newest")}
+            className="flex items-center gap-1 border border-slate-200 rounded px-2 py-1 text-xs text-slate-600 hover:border-slate-300"
+            title="Toggle sort order"
+          >
+            <ArrowUpDown className="w-3 h-3" />
+            {sort === "newest" ? "Newest first" : "Oldest first"}
+          </button>
+        </div>
       </div>
 
       {/* Task list */}
