@@ -33,6 +33,7 @@ import {
   Star,
   ScanSearch,
   Tag,
+  Route,
 } from "lucide-react";
 
 type NavItem = {
@@ -58,6 +59,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/articles", label: "Articles", icon: Newspaper },
   { href: "/forums", label: "Forums", icon: MessagesSquare },
   { href: "/activation", label: "Activation Plan", icon: Rocket },
+  { href: "/journey", label: "User Journey", icon: Route },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/domain-portfolio", label: "Domain Portfolio", icon: Globe },
   { href: "/reviews", label: "Reviews", icon: Star },
