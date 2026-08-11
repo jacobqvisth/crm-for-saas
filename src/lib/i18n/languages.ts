@@ -71,6 +71,23 @@ export function normalizeLanguage(
   return LANGUAGE_ALIASES[bare] ?? bare;
 }
 
+/**
+ * Every raw tag that means this language, for matching a stored column value.
+ *
+ * `contacts.language` holds whatever the app wrote, so a filter for Norwegian
+ * has to match `nb` as well as `no`. Callers that compare against raw column
+ * values should use this rather than the normalised code alone.
+ */
+export function languageVariants(code: string | null | undefined): string[] {
+  const normalized = normalizeLanguage(code);
+  if (!normalized) return [];
+  const out = [normalized];
+  for (const [alias, target] of Object.entries(LANGUAGE_ALIASES)) {
+    if (target === normalized && !out.includes(alias)) out.push(alias);
+  }
+  return out;
+}
+
 /** True when we can actually author and translate copy in this language. */
 export function isSupportedLanguage(code: string | null | undefined): boolean {
   const normalized = normalizeLanguage(code);

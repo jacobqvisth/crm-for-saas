@@ -17,6 +17,7 @@ import {
   PAYMENT_STATUS_OPTIONS,
   PAYMENT_STATUS_LABELS,
 } from '@/lib/lists/filter-query';
+import { LANGUAGE_OPTIONS } from '@/lib/i18n/languages';
 
 const NUMERIC_FIELDS: FilterField[] = [
   'diagnostics_total',
@@ -202,6 +203,44 @@ export function FilterRow({ filter, onChange, onRemove, companies, countries }: 
           <option value="">Select country...</option>
           {countries.map(c => (
             <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (filter.field === 'language') {
+      if (filter.operator === 'in') {
+        const selected = Array.isArray(filter.value) ? filter.value : [];
+        return (
+          <div className="flex flex-wrap gap-1.5">
+            {LANGUAGE_OPTIONS.map(l => (
+              <label key={l.code} className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(l.code)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? [...selected, l.code]
+                      : selected.filter(x => x !== l.code);
+                    onChange({ ...filter, value: next });
+                  }}
+                  className="rounded border-slate-300 text-indigo-600"
+                />
+                {l.label}
+              </label>
+            ))}
+          </div>
+        );
+      }
+      return (
+        <select
+          value={(filter.value as string) || ''}
+          onChange={(e) => onChange({ ...filter, value: e.target.value })}
+          className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Select language...</option>
+          {LANGUAGE_OPTIONS.map(l => (
+            <option key={l.code} value={l.code}>{l.label}</option>
           ))}
         </select>
       );

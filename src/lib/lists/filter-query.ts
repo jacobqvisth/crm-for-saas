@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
+import { languageLabel, languageVariants } from '@/lib/i18n/languages';
 
 export type FilterOperator =
   | 'equals'
@@ -29,6 +30,7 @@ export type FilterField =
   | 'first_name'
   | 'last_name'
   | 'phone'
+  | 'language'
   | 'custom_fields'
   // Wrenchlane-app user fields (synced hourly from dashboard_users)
   | 'wl_user_id'
@@ -63,6 +65,7 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'first_name', label: 'First Name' },
   { value: 'last_name', label: 'Last Name' },
   { value: 'phone', label: 'Phone Number' },
+  { value: 'language', label: 'Language (app UI)' },
   { value: 'custom_fields', label: 'Custom Field' },
   { value: 'wl_user_id', label: 'App: Is App User' },
   { value: 'signed_up_at', label: 'App: Signed Up' },
@@ -144,6 +147,13 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'is_not_null', label: 'has a phone number' },
     { value: 'is_null', label: 'has no phone number' },
     { value: 'contains', label: 'contains' },
+  ],
+  language: [
+    { value: 'equals', label: 'is' },
+    { value: 'not_equals', label: 'is not' },
+    { value: 'in', label: 'is any of' },
+    { value: 'is_null', label: 'has no language set' },
+    { value: 'is_not_null', label: 'has a language set' },
   ],
   custom_fields: [
     { value: 'equals', label: 'equals' },
@@ -296,6 +306,26 @@ export function applyListFilters<Q>(query: Q, filters: ListFilter[]): Q {
       } else if (operator === 'contains' && typeof value === 'string') {
         q = q.ilike(`custom_fields->>` + key, `%${value}%`);
       }
+      continue;
+    }
+
+    // `contacts.language` stores whatever tag the app wrote, so "Norwegian"
+    // has to match `nb` as well as `no`. Every language comparison therefore
+    // goes through .in()/.not-in() over the tag's variants rather than a bare
+    // equality, which would silently return nothing for those contacts.
+    if (
+      field === 'language' &&
+      (operator === 'equals' || operator === 'not_equals' || operator === 'in')
+    ) {
+      const requested = Array.isArray(value) ? value : [value];
+      const variants = Array.from(
+        new Set(requested.flatMap((code) => languageVariants(code as string))),
+      );
+      if (variants.length === 0) continue;
+      q =
+        operator === 'not_equals'
+          ? q.not(field, 'in', `(${variants.join(',')})`)
+          : q.in(field, variants);
       continue;
     }
 
@@ -454,6 +484,13 @@ export function describeFilter(filter: ListFilter, companyName?: string): string
     const pretty = Array.isArray(filter.value)
       ? filter.value.map((v) => PAYMENT_STATUS_LABELS[v] ?? v).join(', ')
       : PAYMENT_STATUS_LABELS[String(filter.value)] ?? String(filter.value);
+    return `${fieldLabel} ${opLabel} ${pretty}`;
+  }
+
+  if (filter.field === 'language') {
+    const pretty = Array.isArray(filter.value)
+      ? filter.value.map((v) => languageLabel(String(v))).join(', ')
+      : languageLabel(String(filter.value));
     return `${fieldLabel} ${opLabel} ${pretty}`;
   }
 
