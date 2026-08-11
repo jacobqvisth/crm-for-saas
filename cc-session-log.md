@@ -13,6 +13,25 @@ updated: 2026-05-26
 
 ---
 
+## User Journey canvas page + seeded current-flow board — 2026-08-11 — PR #640 — worktree-user-journey-canvas
+
+Jacob asked for a Miro-style **User Journey** page in the CRM (drag/drop images + sticky notes) and for the real current flow — landing → signup → paying customer — to be walked, screenshotted, and laid out on it.
+
+**What shipped (PR #640, merged, prod deploy READY at `c6e6783a`):**
+- **`/journey`** page + sidebar entry "User Journey" (Route icon). Free-form infinite canvas: pan (drag), zoom (⌘/Ctrl+scroll or toolbar), fit-to-content, dotted grid. Item types **note** (8 colors, dbl-click edit), **label**, **frame** (stage rectangle), **image** (upload via button / drag-drop / clipboard paste, ≤10 MB). All autosave (debounced bulk PATCH). Multiple boards per workspace (create/rename/delete).
+- Files: `src/components/journey/{journey-client,journey-canvas}.tsx`, `src/app/(dashboard)/journey/page.tsx`, `src/app/api/journey/{route,items/route,upload/route}.ts`, `src/lib/journey/types.ts`, `src/components/sidebar.tsx`.
+- DB: migration `20260811090000_user_journey_canvas.sql` — `journey_boards` + `journey_items` (free-form x/y/w/h/z, type note|label|image|frame), standard workspace RLS, applied to prod via psql. `database.types.ts` hand-updated. Public storage bucket `journey-images` (lazy-created, mirrors email-images).
+
+**The walkthrough (real, live):** created a fresh account `jacob+5@wrenchlane.com` on app.wrenchlane.com, read the AWS-Cognito verification code from jacob@wrenchlane.com (after Jacob's plain-chat "yes"; classifier gates mailbox reads), and screenshotted the whole funnel with a headless Playwright/CDP session: landing + pricing → signup form/verify → first login + "What's new v3.7" onboarding → select-vehicle home → BMW X5 demo vehicle hub → AI diagnostic input + report → FREE account menu → Profile Plan & billing → Choose your plan → **Stripe Checkout** (billing.wrenchlane.com, "Workshop Small, 14 days free, SEK 0.00 due today" — reached only, no card entered, trial NOT started).
+
+**Board seeded** ("User Journey (current flow)", 40 items across 5 color-coded stage frames) via a service-role seed script (PostgREST storage upload → public URL → bulk `journey_items` insert). **Gotcha:** PostgREST bulk insert is PGRST102 unless every row object has an identical key set — normalize all rows. Service-role seed was NOT classifier-blocked (unlike the Gmail/checkout browser steps, which needed Jacob's go-ahead).
+
+**Journey friction flagged on the board:** (1) email-verify gate before any value; (2) redundant separate login right after verifying (no auto-login); (3) account menu shows FREE but hides the upgrade path inside Profile; (4) inline "upgrade for OEM-verified specs" nudge in the diagnostic result; (5) free limits 1 diag/3 chat/10 searches per day; (6) cookie consent overlays the landing CTA.
+
+**Checks:** `tsc --noEmit` exit 0, eslint clean on all new files (fixed a `react-hooks/refs` error — read `dragRef.current` in render → moved pan cursor to state). CI Build & Lint green; prod deploy verified READY; `/journey` 307→/login, `/api/journey` 401 (auth guards intact). Left a real FREE `jacob+5` account in prod (no subscription created).
+
+---
+
 ## Forums "Find posts" stops timing out — 2026-07-09 — PR #529 + #537 — fix/forums-parallel-subreddit-scrape
 
 Jacob (from screenshots of `/forums/answers`): "Find posts to answer" spun ~90s then always showed "No posts found. Try different keywords." even with an empty keyword field — is the feature working? Diagnosed live, then fixed in two PRs.
