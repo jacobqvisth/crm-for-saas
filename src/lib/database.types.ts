@@ -126,6 +126,107 @@ export type Database = {
         }
         Relationships: []
       }
+      journey_boards: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_boards_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journey_items: {
+        Row: {
+          board_id: string
+          color: string | null
+          content: string | null
+          created_at: string
+          h: number
+          id: string
+          image_url: string | null
+          type: string
+          updated_at: string
+          w: number
+          workspace_id: string
+          x: number
+          y: number
+          z: number
+        }
+        Insert: {
+          board_id: string
+          color?: string | null
+          content?: string | null
+          created_at?: string
+          h?: number
+          id?: string
+          image_url?: string | null
+          type?: string
+          updated_at?: string
+          w?: number
+          workspace_id: string
+          x?: number
+          y?: number
+          z?: number
+        }
+        Update: {
+          board_id?: string
+          color?: string | null
+          content?: string | null
+          created_at?: string
+          h?: number
+          id?: string
+          image_url?: string | null
+          type?: string
+          updated_at?: string
+          w?: number
+          workspace_id?: string
+          x?: number
+          y?: number
+          z?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_items_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "journey_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activation_plan_groups: {
         Row: {
           collapsed: boolean
