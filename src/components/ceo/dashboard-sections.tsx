@@ -32,6 +32,7 @@ export type DashboardSectionKey =
   | "product-analytics"
   | "plan-stats"
   | "free-users"
+  | "cac-ltv"
   | "toplists"
   | "cta-clicks"
   | "conversions"
@@ -118,6 +119,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Free Users",
     description:
       "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus the full upgrade funnel — every signup starts on Free, upgrades open a 14-day card-required trial, cancels revert to Free — reconstructed from Stripe fingerprints: trials live now (rescue list), trial survival, reverted upgrades (win-back list), abandoned checkouts, payment failures, conversion by cohort and country, and the most engaged free users as an upgrade-candidate list.",
+  },
+  {
+    key: "cac-ltv",
+    label: "CAC/LTV",
+    glyph: "CL",
+    href: "/dashboard/cac-ltv",
+    title: "CAC / LTV",
+    description:
+      "The unit-economics model: what a registered customer costs, what a paying one is worth, and when the two cross. Answers \"if we pay 100 kr per registered customer, when does it turn profitable?\" — 100 kr per signup is not a 100 kr CAC, because only a few percent of free signups ever pay. Live funnel, spend and cohort conversion come from prod; price, churn, discount and premium-data cost are sliders, labelled so it is always clear which figures are measured and which are argued. Includes a survival-weighted payback curve (the CEO workbook's CAC ÷ gross profit ignores churn and reads far too kindly), a sensitivity grid over cost per registration × conversion × churn, per-tier economics for One / Small / Large, and the channel-attribution gaps that stop five of the six channels in the workbook from being measurable at all.",
   },
   {
     key: "toplists",
