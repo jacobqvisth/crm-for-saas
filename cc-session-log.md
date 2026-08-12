@@ -6819,3 +6819,33 @@ Jacob asked directly. Answer: **yes at 90-110 kr, marginal at 120 kr** — but t
 - **Alias trap avoided:** contacts store `nb` for Norwegian while the label map keys on `no` (same trap PR #635 hit in the sequence resolver). A plain `.eq('language','no')` would have returned an empty list with no error. New `languageVariants()` expands a code to every raw tag that means it, and every language comparison goes through `.in()` / `not.in()` over that set. 12 tests in `src/lib/lists/language-filter.test.ts`, including one pinning that other fields keep the original code path.
 - `npx tsc --noEmit` clean, `eslint` clean (1 pre-existing warning in `call-provider.tsx`), vitest green.
 - **Nothing has sent.** The sequence is draft, queue rows sit `pending` until Jacob presses Start Sending. **Open:** the 30% for 6 months promo code needs to exist in Stripe before the first replies arrive, and one contact in the cohort is on `suppressions` (the send cron cancels it, `enrollContacts` does not gate on suppressions).
+
+## CAC/LTV: conversion rate was wrong — corrected, plus actual-vs-modelled markers — 2026-08-11
+
+- **PR:** #648 merged as `8b974f0` · production deploy verified success, page confirmed live with the corrected figures.
+- **Ask (Jacob):** "u say it 3.4% here? is that the current actual conversion? can u explain more about the numbers. also mark the actual current stat and number so user can see what is now and what can affect if we change."
+
+### The 3.4% was wrong. Two defects, together overstating it ~50%.
+1. **Age, not cohort maturity.** The rate only counted calendar-month cohorts whose month-end was 60+ days old. On 2026-08-12 exactly ONE cohort qualified (May 2026) — the headline rested on 236 signups and 8 customers while the copy said "mature self-serve cohorts", plural. Now every *individual* signup 45+ days old counts (14-day trial + ~one invoice cycle): **694 signups**, 2026-05-02 → 2026-06-28.
+2. **Self-serve only.** 7 paying workshops in the window carry **no Stripe customer AND no subscription id** — they never went through checkout, they were provisioned by hand (comped / pilot / sales-closed). They were being counted as conversions. They also sit mostly in Large, precisely the tier ads do not produce: across all cohorts **Large is 7 Stripe-billed vs 10 hand-provisioned**, One 12/0, Small 31/2.
+
+**Corrected measured funnel:** 694 signups → 109 reached checkout (15.7%) → 68 started a trial (9.8%) → **16 paying today, Stripe-billed (2.31%)**.
+
+Knock-on, all worse and all correct: CAC per payer **2,941 → 4,348 kr**, break-even **3.7 → 5.8 mo**, LTV:CAC **5.8x → 3.9x**. Still clears 3x on the blended tier mix.
+
+**This revises the ad-spend answer given earlier in the session**, which used the inflated 3.4%. Corrected at 100 kr/signup on the self-serve mix: roughly **2.5x LTV:CAC and ~10 months** — under the 3x bar rather than comfortably over it. The earlier "yes at 90-110 kr" should be read as "marginal at 100 kr, below the bar at 130 kr attributed".
+
+Growth simulator's default plan mix also switched to Stripe-billed ads-era customers (One 21 / Small 30 / Large 4) rather than all trials, same reason.
+
+### Actual vs modelled, as asked
+- Every slider draws a **tick at its current actual value** and names it underneath: `Now: 2.3% (actual)`, becoming `Now 2.3% → modelling 6%` in indigo once moved.
+- Banner above the inputs: **"Actual — this is the business as it stands today"** or **"Modelling — N inputs changed from actual: …"** naming which.
+- Every headline stat gains a `Now:` line whenever the scenario differs (CAC, break-even, LTV, LTV:CAC, churn ceiling). Values the change does not affect show **no** `Now` line, so the marker only appears where it is meaningful — e.g. moving conversion shows Now on CAC/break-even/LTV:CAC but not on LTV.
+
+### "Explain the numbers"
+New **"Where these numbers come from"** panel: the measured funnel with its base (percentages all against the 694 so they read as "X% of everything we bought"), the explicit note on why it is 2.3% and not 3.3%, and every headline metric with formula + worked substitution (`LTV ÷ CAC per paying customer → 16 799 kr ÷ 4 348 kr = 3.9x`). Sample size stated rather than hidden: 16 customers, so one more or fewer is meaningful movement.
+
+### Verification
+- 696 tests pass, 0 failures. `tsc --noEmit`, `eslint`, `npm run build` clean.
+- Loader figures cross-checked against direct prod SQL — 694 / 109 / 68 / 16 match exactly.
+- Browser-driven against live prod: banner, ticks and per-stat `Now` lines all behave; no console errors; no horizontal overflow at 1440px. Prod confirmed showing 2.3%, 4,348 kr, 5.8 mo, 3.9x and 8 "(actual)" slider markers.
