@@ -3,6 +3,7 @@
 import type {
   CrmSequenceRow,
   FunnelData,
+  Journey,
   LifecycleCampaignRow,
   PayerOriginBucket,
 } from "@/lib/ceo/data/funnel";
@@ -149,6 +150,87 @@ function FunnelFlow({ data }: { data: FunnelData }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const JOURNEY_TONE_CHIP: Record<Journey["tone"], { label: string; className: string } | null> = {
+  good: { label: "CONVERTING", className: "bg-emerald-50 text-emerald-600" },
+  neutral: null,
+  pending: { label: "TOO EARLY TO JUDGE", className: "bg-amber-50 text-amber-700" },
+  dead: { label: "NOT WORKING", className: "bg-red-50 text-red-600" },
+};
+
+function JourneyStrip({ journey }: { journey: Journey }) {
+  const chip = JOURNEY_TONE_CHIP[journey.tone];
+  const endToEnd =
+    journey.entrants > 0 ? (journey.payers / journey.entrants) * 100 : 0;
+  return (
+    <div className="border border-slate-200 rounded-xl p-4">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h3 className="text-sm font-semibold text-slate-900">{journey.name}</h3>
+        {chip && (
+          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${chip.className}`}>
+            {chip.label}
+          </span>
+        )}
+        <span className="ml-auto text-xs text-slate-500 tabular-nums whitespace-nowrap">
+          end to end:{" "}
+          <b className="text-slate-900">
+            {formatNumber(journey.payers)} payers
+          </b>{" "}
+          ({endToEnd >= 10 ? formatPercent(endToEnd, 0) : formatPercent(endToEnd, 1)} of{" "}
+          {formatNumber(journey.entrants)})
+        </span>
+      </div>
+      <p className="text-xs text-slate-500 mt-1">{journey.description}</p>
+      <div className="mt-3 overflow-x-auto">
+        <div className="flex items-stretch gap-0 min-w-max pb-1">
+          {journey.steps.map((step, index) => {
+            const prev = index > 0 ? journey.steps[index - 1] : null;
+            const pct =
+              prev && prev.count > 0 ? (step.count / prev.count) * 100 : null;
+            const isLast = index === journey.steps.length - 1;
+            return (
+              <div key={step.label} className="flex items-stretch">
+                {index > 0 && (
+                  <div className="flex flex-col items-center justify-center px-2 w-[110px] flex-shrink-0">
+                    <span className="text-[11px] font-bold text-slate-700 tabular-nums">
+                      {pct != null && pct <= 100
+                        ? `${pct >= 10 ? Math.round(pct) : pct.toFixed(1)}% →`
+                        : "→"}
+                    </span>
+                    {step.trigger && (
+                      <span className="text-[10px] text-slate-400 text-center leading-tight mt-0.5">
+                        {step.trigger}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div
+                  className={`w-[130px] flex-shrink-0 rounded-lg border px-3 py-2.5 ${
+                    isLast && step.label.toLowerCase().includes("pay")
+                      ? "border-emerald-300 bg-emerald-50/50"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <p className="text-lg font-semibold text-slate-900 tabular-nums leading-tight">
+                    {formatNumber(step.count)}
+                  </p>
+                  <p className="text-[11px] font-medium text-slate-600 leading-tight mt-0.5">
+                    {step.label}
+                  </p>
+                  {step.note && (
+                    <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
+                      {step.note}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -315,6 +397,68 @@ export function FunnelContent({ data }: { data: FunnelData }) {
         subtitle="Workshops per stage, all time, internal-test excluded."
       >
         <FunnelFlow data={data} />
+      </SectionCard>
+
+      {/* Journeys, left to right */}
+      <SectionCard
+        title="Journeys: every way a workshop finds us, step by step"
+        subtitle="Read each strip left to right: the count that reached the step, the percentage that continued, and what triggers the next step. The green box at the end is money."
+      >
+        {/* comparison summary */}
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="py-1.5 pr-4 font-semibold">Journey</th>
+                <th className="py-1.5 pr-4 font-semibold text-right">Entrants</th>
+                <th className="py-1.5 pr-4 font-semibold text-right">Payers</th>
+                <th className="py-1.5 font-semibold text-right">End-to-end</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...data.journeys]
+                .sort((a, b) => {
+                  const rateA = a.entrants > 0 ? a.payers / a.entrants : 0;
+                  const rateB = b.entrants > 0 ? b.payers / b.entrants : 0;
+                  return rateB - rateA;
+                })
+                .map((journey) => {
+                  const rate =
+                    journey.entrants > 0
+                      ? (journey.payers / journey.entrants) * 100
+                      : 0;
+                  return (
+                    <tr key={journey.key} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-4 text-slate-700">{journey.name}</td>
+                      <td className="py-1.5 pr-4 text-right tabular-nums">
+                        {formatNumber(journey.entrants)}
+                      </td>
+                      <td className="py-1.5 pr-4 text-right tabular-nums font-medium">
+                        {formatNumber(journey.payers)}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {rate >= 10 ? formatPercent(rate, 0) : formatPercent(rate, 1)}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-4">
+          {data.journeys.map((journey) => (
+            <JourneyStrip key={journey.key} journey={journey} />
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-3">
+          Cohorts are first-touch: a workshop that got a cold email before
+          signup counts in the cold-email journey even if it also saw an ad.
+          Percentages compare adjacent steps only where the unit is the same;
+          arrows without a percentage cross a unit or system boundary (GA4
+          clicks vs workshops, PostHog users vs workshops). The paywall-path
+          strip counts users, not workshops.
+        </p>
       </SectionCard>
 
       <div className="grid lg:grid-cols-2 gap-6">

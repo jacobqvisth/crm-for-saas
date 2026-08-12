@@ -70,7 +70,11 @@ export type PayerTriggerCounts = {
   priorUpgradeStarted: number;
   priorTrialStarted: number;
   priorDiagnosticRun: number;
+  /** Subscribers with a paywall OR quota event before subscribing. */
+  priorPaywallOrQuota: number;
   noFrictionEvent: number;
+  /** All persons who ever hit a paywall or quota (subscribed or not). */
+  frictionUsersTotal: number;
   posthogError?: string;
 };
 
@@ -86,6 +90,26 @@ export type LifecycleCampaignRow = {
 };
 
 export type MonthlySignups = { month: string; signups: number };
+
+export type JourneyStep = {
+  label: string;
+  count: number;
+  /** Small print under the count (unit, qualifier). */
+  note?: string;
+  /** What moves someone from the PREVIOUS step to this one; shown on the arrow. */
+  trigger?: string;
+};
+
+export type Journey = {
+  key: string;
+  name: string;
+  description: string;
+  steps: JourneyStep[];
+  /** Entrants used for the end-to-end conversion (first countable step). */
+  entrants: number;
+  payers: number;
+  tone: "good" | "neutral" | "pending" | "dead";
+};
 
 export type CrmSequenceRow = {
   sequenceId: string;
@@ -125,6 +149,7 @@ export type FunnelData = {
   payerTriggers: PayerTriggerCounts;
   lifecycleCampaigns: LifecycleCampaignRow[];
   crmSequences: CrmSequenceRow[];
+  journeys: Journey[];
   error?: string;
 };
 
@@ -218,10 +243,13 @@ function emptyFunnelData(error: string): FunnelData {
       priorUpgradeStarted: 0,
       priorTrialStarted: 0,
       priorDiagnosticRun: 0,
+      priorPaywallOrQuota: 0,
       noFrictionEvent: 0,
+      frictionUsersTotal: 0,
     },
     lifecycleCampaigns: [],
     crmSequences: [],
+    journeys: [],
     error,
   };
 }
@@ -300,7 +328,7 @@ async function loadFunnelData(): Promise<FunnelData> {
         .from(TABLES.metricSnapshots)
         .select("metric_key, value, dimensions")
         .eq("source_key", "google_ads")
-        .in("metric_key", ["ad_spend", "ad_signups"])
+        .in("metric_key", ["ad_spend", "ad_signups", "ad_clicks"])
         .order("id")
         .range(from, to),
     ),
@@ -537,10 +565,28 @@ async function loadFunnelData(): Promise<FunnelData> {
         .from("activities")
         .select("id", { count: "exact", head: true })
         .eq("type", "call"),
-    ]).then(([sent, replies, calls]) => ({
+      supabase
+        .from("activities")
+        .select("id", { count: "exact", head: true })
+        .eq("type", "call")
+        .in("outcome", [
+          "interested",
+          "callback_scheduled",
+          "closed",
+          "not_interested",
+          "wrong_number",
+        ]),
+      supabase
+        .from("activities")
+        .select("id", { count: "exact", head: true })
+        .eq("type", "call")
+        .in("outcome", ["interested", "callback_scheduled"]),
+    ]).then(([sent, replies, calls, reached, interested]) => ({
       emailsSent: sent.count ?? 0,
       replies: replies.count ?? 0,
       callsLogged: calls.count ?? 0,
+      callsReached: reached.count ?? 0,
+      callsInterested: interested.count ?? 0,
     })),
   ]);
 
@@ -594,8 +640,30 @@ async function loadFunnelData(): Promise<FunnelData> {
   let crmEmailedBeforePaying = 0;
   let crmCalledBeforePaying = 0;
 
-  // Outbound-sourced signups across ALL signups (not only payers), for the
-  // channel summary.
+  // Journey cohorts across ALL signed-up workshops (not only payers): every
+  // workshop gets one first-touch bucket, then we count how many of that
+  // bucket reach each later stage.
+  type JourneyCohort = {
+    signedUp: number;
+    activated: number;
+    trialed: number;
+    charged: number;
+    activeToday: number;
+  };
+  const emptyCohort = (): JourneyCohort => ({
+    signedUp: 0,
+    activated: 0,
+    trialed: 0,
+    charged: 0,
+    activeToday: 0,
+  });
+  const cohorts = {
+    outbound_email: emptyCohort(),
+    outbound_call: emptyCohort(),
+    pre_ads: emptyCohort(),
+    ads_era: emptyCohort(),
+  };
+
   for (const [workshopId, workshopUsers] of usersByWorkshop) {
     const signupAt = signupAtByWorkshop.get(workshopId);
     if (!signupAt) continue;
@@ -611,6 +679,21 @@ async function loadFunnelData(): Promise<FunnelData> {
     }
     if (emailedBefore) emailedThenSignedUp += 1;
     if (calledBefore) calledThenSignedUp += 1;
+
+    const cohort = emailedBefore
+      ? cohorts.outbound_email
+      : calledBefore
+        ? cohorts.outbound_call
+        : signupAt < ADS_ERA_START
+          ? cohorts.pre_ads
+          : cohorts.ads_era;
+    cohort.signedUp += 1;
+    if (firstDiagnosticByWorkshop.has(workshopId)) cohort.activated += 1;
+    if (trialedWorkshops.has(workshopId)) cohort.trialed += 1;
+    if (paidWorkshopIds.has(workshopId)) {
+      cohort.charged += 1;
+      if (activeOrPastDueWorkshops.has(workshopId)) cohort.activeToday += 1;
+    }
   }
 
   for (const workshopId of paidWorkshopIds) {
@@ -719,7 +802,9 @@ async function loadFunnelData(): Promise<FunnelData> {
     priorUpgradeStarted: 0,
     priorTrialStarted: 0,
     priorDiagnosticRun: 0,
+    priorPaywallOrQuota: 0,
     noFrictionEvent: 0,
+    frictionUsersTotal: 0,
   };
 
   try {
@@ -753,7 +838,8 @@ async function loadFunnelData(): Promise<FunnelData> {
         countIf(upgrade > 0) AS prior_upgrade,
         countIf(trial > 0) AS prior_trial,
         countIf(diagnosed > 0) AS prior_diagnosed,
-        countIf(paywall = 0 AND quota = 0 AND billing = 0 AND upgrade = 0 AND trial = 0) AS no_friction
+        countIf(paywall = 0 AND quota = 0 AND billing = 0 AND upgrade = 0 AND trial = 0) AS no_friction,
+        countIf(paywall > 0 OR quota > 0) AS friction_any
       FROM prior
       `,
     );
@@ -767,8 +853,17 @@ async function loadFunnelData(): Promise<FunnelData> {
       payerTriggers.priorTrialStarted = toNumber(row[5] as number);
       payerTriggers.priorDiagnosticRun = toNumber(row[6] as number);
       payerTriggers.noFrictionEvent = toNumber(row[7] as number);
+      payerTriggers.priorPaywallOrQuota = toNumber(row[8] as number);
     } else if (response.error || response.detail) {
       payerTriggers.posthogError = response.error ?? response.detail;
+    }
+
+    const frictionResponse = await runPostHogQuery(
+      `SELECT count(DISTINCT person_id) FROM events WHERE event IN ('feature_paywall_hit', 'quota_exceeded')`,
+    );
+    const frictionRow = frictionResponse.results?.[0];
+    if (frictionRow) {
+      payerTriggers.frictionUsersTotal = toNumber(frictionRow[0] as number);
     }
   } catch (error) {
     payerTriggers.posthogError =
@@ -821,10 +916,12 @@ async function loadFunnelData(): Promise<FunnelData> {
 
   let spendUsd = 0;
   let adSignups = 0;
+  let adClicks = 0;
   for (const row of adsRes.data) {
     const value = toNumber(row.value);
     if (row.metric_key === "ad_spend") spendUsd += value;
     if (row.metric_key === "ad_signups") adSignups += value;
+    if (row.metric_key === "ad_clicks") adClicks += value;
   }
   const ads: AdsSummary = {
     spendUsd: Math.round(spendUsd * 100) / 100,
@@ -912,6 +1009,225 @@ async function loadFunnelData(): Promise<FunnelData> {
     calledThenSignedUp,
   };
 
+  // ---- journeys: one left-to-right strip per acquisition path ---------------
+
+  const contactsOpened = new Set(
+    sentContactsRes.data
+      .filter((row) => openedQueueIds.has(row.id) && row.contact_id)
+      .map((row) => row.contact_id),
+  ).size;
+
+  const paywallCampaignSent = lifecycleCampaigns
+    .filter((row) => /paywall|quota/i.test(row.name))
+    .reduce((sum, row) => sum + row.sent, 0);
+
+  const journeys: Journey[] = [
+    {
+      key: "pre_ads_organic",
+      name: "Organic and word of mouth (pre-ads era)",
+      description:
+        "Workshops that found Wrenchlane on their own before Google Ads existed (before 2026-05-19): search, guides, the App Store, other mechanics talking.",
+      tone: "good",
+      entrants: cohorts.pre_ads.signedUp,
+      payers: cohorts.pre_ads.charged,
+      steps: [
+        {
+          label: "Signed up",
+          count: cohorts.pre_ads.signedUp,
+          note: "workshops, own initiative",
+        },
+        {
+          label: "Activated",
+          count: cohorts.pre_ads.activated,
+          trigger: "welcome email + first diagnostic",
+        },
+        {
+          label: "Started a trial",
+          count: cohorts.pre_ads.trialed,
+          trigger: "hit paywall or quota, opened billing",
+        },
+        {
+          label: "Paid",
+          count: cohorts.pre_ads.charged,
+          trigger: "trial converts, median 48 days from signup",
+        },
+        {
+          label: "Still paying",
+          count: cohorts.pre_ads.activeToday,
+          trigger: "keeps using it",
+        },
+      ],
+    },
+    {
+      key: "ads_era",
+      name: "Google Ads, App Store and organic (since May 2026)",
+      description:
+        "Everything self-serve since Pmax launched. Ads-tracked signups (848 via GA4) cannot be separated from App Store and organic until UTM forwarding lands, so this journey shows the whole self-serve era.",
+      tone: "neutral",
+      entrants: cohorts.ads_era.signedUp,
+      payers: cohorts.ads_era.charged,
+      steps: [
+        {
+          label: "Ad clicks",
+          count: Math.round(adClicks),
+          note: "Google Ads, since Apr 17",
+        },
+        {
+          label: "Signed up",
+          count: cohorts.ads_era.signedUp,
+          note: "848 ads-tracked (GA4) + App Store + organic",
+          trigger: "landing page, $10.67 per ads signup",
+        },
+        {
+          label: "Activated",
+          count: cohorts.ads_era.activated,
+          trigger: "welcome email + first diagnostic",
+        },
+        {
+          label: "Started a trial",
+          count: cohorts.ads_era.trialed,
+          trigger: "hit paywall or quota, opened billing",
+        },
+        {
+          label: "Paid",
+          count: cohorts.ads_era.charged,
+          trigger: "trial converts",
+        },
+        {
+          label: "Still paying",
+          count: cohorts.ads_era.activeToday,
+          trigger: "keeps using it",
+        },
+      ],
+    },
+    {
+      key: "cold_email",
+      name: "Cold email outreach",
+      description:
+        "The CRM's 3-email sequences over ~12 days to scraped and verified workshop contacts. A reply stops the sequence and becomes a human conversation.",
+      tone: "neutral",
+      entrants: distinctContactsEmailed,
+      payers: cohorts.outbound_email.charged,
+      steps: [
+        {
+          label: "Contacted",
+          count: distinctContactsEmailed,
+          note: "distinct contacts, 3 emails each",
+        },
+        {
+          label: "Opened",
+          count: contactsOpened,
+          note: "distinct contacts",
+          trigger: "subject line + sender reputation",
+        },
+        {
+          label: "Replied",
+          count: outboundTotalsRes.replies,
+          note: "real replies, OOO excluded",
+          trigger: "email content; the day-12 email pulls best",
+        },
+        {
+          label: "Signed up",
+          count: cohorts.outbound_email.signedUp,
+          trigger: "human reply with signup link",
+        },
+        {
+          label: "Activated",
+          count: cohorts.outbound_email.activated,
+          trigger: "first diagnostic",
+        },
+        {
+          label: "Paid",
+          count: cohorts.outbound_email.charged,
+          trigger: "trial + paywall",
+        },
+      ],
+    },
+    {
+      key: "cold_call",
+      name: "Cold calling",
+      description:
+        "46elks dial-outs with AI transcription and auto-logging. Started recently, volume is still tiny: judge the shape, not the rates.",
+      tone: "pending",
+      entrants: outboundTotalsRes.callsLogged,
+      payers: cohorts.outbound_call.charged,
+      steps: [
+        {
+          label: "Called",
+          count: outboundTotalsRes.callsLogged,
+          note: "logged dials",
+        },
+        {
+          label: "Reached",
+          count: outboundTotalsRes.callsReached,
+          trigger: "picks up the phone",
+        },
+        {
+          label: "Interested or callback",
+          count: outboundTotalsRes.callsInterested,
+          trigger: "pitch lands, callback booked",
+        },
+        {
+          label: "Signed up",
+          count: cohorts.outbound_call.signedUp,
+          trigger: "follow-up after the call",
+        },
+        {
+          label: "Paid",
+          count: cohorts.outbound_call.charged,
+          trigger: "trial + paywall",
+        },
+      ],
+    },
+    {
+      key: "paywall_path",
+      name: "Inside the app: the paywall path (user-level)",
+      description:
+        "The strongest payment trigger, counted in users via PostHog (events since June 2026). Free usage runs into a locked feature or an exhausted quota, and that moment starts most subscriptions.",
+      tone: "good",
+      entrants: payerTriggers.frictionUsersTotal,
+      payers: payerTriggers.priorPaywallOrQuota,
+      steps: [
+        {
+          label: "Hit a paywall or quota",
+          count: payerTriggers.frictionUsersTotal,
+          note: "users, since June",
+        },
+        {
+          label: "Got the upsell email",
+          count: paywallCampaignSent,
+          note: "Customer.io, +3-4h after the hit",
+          trigger: "feature_paywall_hit / quota_exceeded event",
+        },
+        {
+          label: "Subscribed after friction",
+          count: payerTriggers.priorPaywallOrQuota,
+          note: `${payerTriggers.posthogSubscribers} subscribers total; 66% had friction first`,
+          trigger: "mostly the paywall itself, barely the email",
+        },
+      ],
+    },
+    {
+      key: "partner",
+      name: "Partner: Hedin (from the 2026-08-12 analysis)",
+      description:
+        "Sales-assisted signups carrying partner_source=hedin, the US/CA July cluster. Static snapshot: PostHog partner data is not joined live yet.",
+      tone: "pending",
+      entrants: 16,
+      payers: 0,
+      steps: [
+        { label: "Partner signups", count: 16, note: "users, July 2026" },
+        {
+          label: "In paid-plan trials",
+          count: 15,
+          note: "workshops",
+          trigger: "sales-assisted checkout",
+        },
+        { label: "Paid", count: 0, trigger: "trial has to convert first" },
+      ],
+    },
+  ];
+
   return {
     generatedAt: new Date().toISOString(),
     stages,
@@ -922,6 +1238,7 @@ async function loadFunnelData(): Promise<FunnelData> {
     payerTriggers,
     lifecycleCampaigns,
     crmSequences,
+    journeys,
     error: firstError ? firstError.message : undefined,
   };
 }
