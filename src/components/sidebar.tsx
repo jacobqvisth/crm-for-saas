@@ -34,6 +34,7 @@ import {
   ScanSearch,
   Tag,
   Route,
+  Filter,
 } from "lucide-react";
 
 type NavItem = {
@@ -65,6 +66,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/dtc-lookup", label: "DTC Codes Lookup", icon: ScanSearch },
   { href: "/pricing-options", label: "Pricing options", icon: Tag },
+  { href: "/funnel", label: "Funnel", icon: Filter },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
