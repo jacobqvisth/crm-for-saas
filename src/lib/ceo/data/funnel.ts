@@ -87,6 +87,18 @@ export type LifecycleCampaignRow = {
 
 export type MonthlySignups = { month: string; signups: number };
 
+export type CrmSequenceRow = {
+  sequenceId: string;
+  name: string;
+  emailSteps: number;
+  enrolled: number;
+  sent: number;
+  opened: number;
+  replies: number;
+  /** Enrolled but effectively not sending (verification-paused etc.). */
+  stalled: boolean;
+};
+
 export type AdsSummary = {
   spendUsd: number;
   adSignups: number;
@@ -112,6 +124,7 @@ export type FunnelData = {
   payerOrigins: PayerOriginBucket[];
   payerTriggers: PayerTriggerCounts;
   lifecycleCampaigns: LifecycleCampaignRow[];
+  crmSequences: CrmSequenceRow[];
   error?: string;
 };
 
@@ -208,6 +221,7 @@ function emptyFunnelData(error: string): FunnelData {
       noFrictionEvent: 0,
     },
     lifecycleCampaigns: [],
+    crmSequences: [],
     error,
   };
 }
@@ -226,6 +240,11 @@ async function loadFunnelData(): Promise<FunnelData> {
     linkedContactsRes,
     cioRes,
     adsRes,
+    sequencesRes,
+    stepsRes,
+    enrollmentSeqRes,
+    openEventsRes,
+    replyMessagesRes,
   ] = await Promise.all([
     pageAll<WorkshopRow>(({ from, to }) =>
       supabase
@@ -285,6 +304,45 @@ async function loadFunnelData(): Promise<FunnelData> {
         .order("id")
         .range(from, to),
     ),
+    pageAll<{ id: string; name: string }>(({ from, to }) =>
+      supabase
+        .from("sequences")
+        .select("id, name")
+        .eq("status", "active")
+        .order("id")
+        .range(from, to),
+    ),
+    pageAll<{ id: string; sequence_id: string; type: string }>(({ from, to }) =>
+      supabase
+        .from("sequence_steps")
+        .select("id, sequence_id, type")
+        .order("id")
+        .range(from, to),
+    ),
+    pageAll<{ sequence_id: string }>(({ from, to }) =>
+      supabase
+        .from("sequence_enrollments")
+        .select("sequence_id")
+        .order("id")
+        .range(from, to),
+    ),
+    pageAll<{ email_queue_id: string | null }>(({ from, to }) =>
+      supabase
+        .from("email_events")
+        .select("email_queue_id")
+        .eq("event_type", "open")
+        .order("id")
+        .range(from, to),
+    ),
+    pageAll<{ email_queue_id: string | null }>(({ from, to }) =>
+      supabase
+        .from("inbox_messages")
+        .select("email_queue_id")
+        .not("email_queue_id", "is", null)
+        .eq("is_auto_reply", false)
+        .order("id")
+        .range(from, to),
+    ),
   ]);
 
   const firstError =
@@ -294,7 +352,12 @@ async function loadFunnelData(): Promise<FunnelData> {
     subscriptionsRes.error ??
     linkedContactsRes.error ??
     cioRes.error ??
-    adsRes.error;
+    adsRes.error ??
+    sequencesRes.error ??
+    stepsRes.error ??
+    enrollmentSeqRes.error ??
+    openEventsRes.error ??
+    replyMessagesRes.error;
 
   const workshops = workshopsRes.data;
   const users = usersRes.data;
@@ -484,14 +547,17 @@ async function loadFunnelData(): Promise<FunnelData> {
   // Distinct contacts emailed (for the summary card). PostgREST cannot
   // express COUNT(DISTINCT ...), so page the contact ids and dedupe here
   // (~15k single-uuid rows).
-  const sentContactsRes = await pageAll<{ contact_id: string | null }>(
-    ({ from, to }) =>
-      supabase
-        .from("email_queue")
-        .select("contact_id")
-        .not("sent_at", "is", null)
-        .order("id")
-        .range(from, to),
+  const sentContactsRes = await pageAll<{
+    id: string;
+    contact_id: string | null;
+    step_id: string | null;
+  }>(({ from, to }) =>
+    supabase
+      .from("email_queue")
+      .select("id, contact_id, step_id")
+      .not("sent_at", "is", null)
+      .order("id")
+      .range(from, to),
   );
   const distinctContactsEmailed = new Set(
     sentContactsRes.data.map((row) => row.contact_id).filter(Boolean),
@@ -767,6 +833,76 @@ async function loadFunnelData(): Promise<FunnelData> {
     sinceDate: "2026-04-17",
   };
 
+  // ---- CRM sequence rollup ----------------------------------------------------
+  // Everything the CRM itself sends, per active sequence: cold country
+  // sequences plus the post-signup check-ins. "Stalled" = a real audience is
+  // enrolled but sends never happen (the unverified-address pause).
+
+  const stepToSequence = new Map<string, string>();
+  const emailStepsBySequence = new Map<string, number>();
+  for (const step of stepsRes.data) {
+    stepToSequence.set(step.id, step.sequence_id);
+    if (step.type === "email") {
+      emailStepsBySequence.set(
+        step.sequence_id,
+        (emailStepsBySequence.get(step.sequence_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  const enrolledBySequence = new Map<string, number>();
+  for (const enrollment of enrollmentSeqRes.data) {
+    enrolledBySequence.set(
+      enrollment.sequence_id,
+      (enrolledBySequence.get(enrollment.sequence_id) ?? 0) + 1,
+    );
+  }
+
+  const queueToSequence = new Map<string, string>();
+  const sentBySequence = new Map<string, number>();
+  for (const row of sentContactsRes.data) {
+    const sequenceId = row.step_id ? stepToSequence.get(row.step_id) : undefined;
+    if (!sequenceId) continue;
+    queueToSequence.set(row.id, sequenceId);
+    sentBySequence.set(sequenceId, (sentBySequence.get(sequenceId) ?? 0) + 1);
+  }
+
+  const openedQueueIds = new Set(
+    openEventsRes.data.map((row) => row.email_queue_id).filter(Boolean) as string[],
+  );
+  const openedBySequence = new Map<string, number>();
+  for (const queueId of openedQueueIds) {
+    const sequenceId = queueToSequence.get(queueId);
+    if (!sequenceId) continue;
+    openedBySequence.set(sequenceId, (openedBySequence.get(sequenceId) ?? 0) + 1);
+  }
+
+  const repliesBySequence = new Map<string, number>();
+  for (const row of replyMessagesRes.data) {
+    if (!row.email_queue_id) continue;
+    const sequenceId = queueToSequence.get(row.email_queue_id);
+    if (!sequenceId) continue;
+    repliesBySequence.set(sequenceId, (repliesBySequence.get(sequenceId) ?? 0) + 1);
+  }
+
+  const crmSequences: CrmSequenceRow[] = sequencesRes.data
+    .map((sequence) => {
+      const enrolled = enrolledBySequence.get(sequence.id) ?? 0;
+      const sent = sentBySequence.get(sequence.id) ?? 0;
+      return {
+        sequenceId: sequence.id,
+        name: sequence.name,
+        emailSteps: emailStepsBySequence.get(sequence.id) ?? 0,
+        enrolled,
+        sent,
+        opened: openedBySequence.get(sequence.id) ?? 0,
+        replies: repliesBySequence.get(sequence.id) ?? 0,
+        stalled: enrolled >= 20 && sent <= 1,
+      };
+    })
+    .filter((row) => row.enrolled > 0 || row.sent > 0)
+    .sort((a, b) => b.sent - a.sent || b.enrolled - a.enrolled);
+
   const outbound: OutboundSummary = {
     contactsEmailed: distinctContactsEmailed,
     emailsSent: outboundTotalsRes.emailsSent,
@@ -785,6 +921,7 @@ async function loadFunnelData(): Promise<FunnelData> {
     payerOrigins,
     payerTriggers,
     lifecycleCampaigns,
+    crmSequences,
     error: firstError ? firstError.message : undefined,
   };
 }

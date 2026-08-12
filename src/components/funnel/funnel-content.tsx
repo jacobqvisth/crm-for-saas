@@ -1,6 +1,7 @@
 // Server-rendered content for /funnel. No interactivity: every panel is a
 // read of FunnelData, so this stays out of the client bundle.
 import type {
+  CrmSequenceRow,
   FunnelData,
   LifecycleCampaignRow,
   PayerOriginBucket,
@@ -151,6 +152,87 @@ function FunnelFlow({ data }: { data: FunnelData }) {
     </div>
   );
 }
+
+function sequenceStateChip(row: CrmSequenceRow) {
+  if (row.stalled) {
+    return (
+      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+        STALLED
+      </span>
+    );
+  }
+  if (row.replies > 0) {
+    return (
+      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+        GETTING REPLIES
+      </span>
+    );
+  }
+  return (
+    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+      SENDING
+    </span>
+  );
+}
+
+// Analysis-derived recommendations (funnel report 2026-08-12). Static on
+// purpose: these change when the strategy changes, not when the data does.
+const SUGGESTED_EMAILS: { title: string; trigger: string; why: string; owner: string }[] = [
+  {
+    title: "Post-diagnostic follow-up: the fault, explained",
+    trigger: "diagnostic_analyzed +2h, first diagnostic only",
+    why: "66% of payers hit a paywall or quota before paying. This email manufactures that exposure: recap the finding, point at InfoPro/Motor depth on the same car.",
+    owner: "Customer.io",
+  },
+  {
+    title: "Rebuilt dunning, 3 touches",
+    trigger: "payment_failed day 0, +3d, +7d, plain text from Hans",
+    why: "Current dunning recovered 0 of 211. Paying customers are walking out unbothered; 7 sit in past_due right now.",
+    owner: "Customer.io + unstall the CRM recovery sequence",
+  },
+  {
+    title: "Cold email 4: the breakup",
+    trigger: "step 4 in all six cold sequences, ~day 20",
+    why: "Email 3 is already the best reply step (36 vs 31 for the intro) and 4,190 enrollments ended in silence. Breakups classically out-pull every prior step.",
+    owner: "CRM sequences",
+  },
+  {
+    title: "Trial-will-end rewrite: show their own usage",
+    trigger: "-3d and -1d before trial end, no card",
+    why: "Current version converted 0 of 31. Lead with what they did during the trial so the loss is concrete; one-click card add.",
+    owner: "Customer.io",
+  },
+  {
+    title: "Pre-quota warning with an offer",
+    trigger: "80% of the free monthly quota consumed",
+    why: "quota_exceeded fires after the wall (177 sent, 5 converted). Catch them one diagnostic before it and convert intent instead of frustration.",
+    owner: "Customer.io, needs one new app event",
+  },
+  {
+    title: "Paying-but-idle rescue",
+    trigger: "paid plan + 0 diagnostics 14d after first charge",
+    why: "33 confirmed payers have never diagnosed: the highest-churn-risk money in the base. Offer a 15-minute onboarding call.",
+    owner: "CRM sequence + call task",
+  },
+  {
+    title: "Review ask",
+    trigger: "4+ star in-app rating, or 5th diagnostic",
+    why: "Known gap since June; the Reviews dashboard is empty because there is nothing to sync. Social proof feeds every self-serve channel for free.",
+    owner: "Customer.io",
+  },
+  {
+    title: "14-day inactivity win-back",
+    trigger: "no login 14d after signup",
+    why: "The day-3 nudge is the last automatic touch a silent signup ever gets, and 70% of workshops go silent.",
+    owner: "Customer.io",
+  },
+  {
+    title: "Canceled win-back with WRENCH30",
+    trigger: "30d after cancellation or card-revert",
+    why: "15 genuine cancellations plus 191 reverted-after-carding. The 30% offer machinery exists (campaign 52), it just points at the wrong segment.",
+    owner: "Customer.io",
+  },
+];
 
 function campaignStateChip(row: LifecycleCampaignRow) {
   if (row.sent >= 30 && row.converted === 0) {
@@ -403,6 +485,83 @@ export function FunnelContent({ data }: { data: FunnelData }) {
               ))}
             </tbody>
           </table>
+        </div>
+      </SectionCard>
+
+      {/* CRM-sent emails */}
+      <SectionCard
+        title="Emails we send from the CRM"
+        subtitle="Every active sequence: cold outreach plus the post-signup check-ins. Opens are unique emails opened; replies exclude out-of-office."
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="py-2 pr-4 font-semibold">Sequence</th>
+                <th className="py-2 pr-4 font-semibold text-right">Emails</th>
+                <th className="py-2 pr-4 font-semibold text-right">Enrolled</th>
+                <th className="py-2 pr-4 font-semibold text-right">Sent</th>
+                <th className="py-2 pr-4 font-semibold text-right">Opened</th>
+                <th className="py-2 pr-4 font-semibold text-right">Replies</th>
+                <th className="py-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.crmSequences.map((row) => (
+                <tr key={row.sequenceId} className="border-t border-slate-100">
+                  <td className="py-2 pr-4 text-slate-700">{row.name}</td>
+                  <td className="py-2 pr-4 text-right tabular-nums">{row.emailSteps}</td>
+                  <td className="py-2 pr-4 text-right tabular-nums">{formatNumber(row.enrolled)}</td>
+                  <td className="py-2 pr-4 text-right tabular-nums">{formatNumber(row.sent)}</td>
+                  <td className="py-2 pr-4 text-right tabular-nums">
+                    {formatNumber(row.opened)}
+                    {row.sent > 0 && (
+                      <span className="text-slate-400">
+                        {" "}
+                        ({formatPercent((row.opened / row.sent) * 100, 0)})
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-4 text-right tabular-nums font-medium">{formatNumber(row.replies)}</td>
+                  <td className="py-2">{sequenceStateChip(row)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-slate-400 mt-3">
+          STALLED = a real audience is enrolled but sends are not happening,
+          almost always the unverified-address pause: the send cron demotes
+          never-verified addresses instead of sending blind. Verify the
+          audience (MillionVerifier) and resume.
+        </p>
+      </SectionCard>
+
+      {/* Suggested new emails */}
+      <SectionCard
+        title="Suggested next emails"
+        subtitle="Ranked by expected impact, each derived from a number on this page. From the funnel analysis, 2026-08-12."
+      >
+        <div className="space-y-3">
+          {SUGGESTED_EMAILS.map((suggestion, index) => (
+            <div key={suggestion.title} className="flex gap-3 border border-slate-200 rounded-lg p-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center">
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">
+                  {suggestion.title}
+                  <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    {suggestion.owner}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  <span className="text-slate-400">Trigger:</span> {suggestion.trigger}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">{suggestion.why}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </SectionCard>
 
