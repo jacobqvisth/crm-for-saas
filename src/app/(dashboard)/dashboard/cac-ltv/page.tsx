@@ -13,16 +13,25 @@ import { refreshCacLtvAction } from "./actions";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function CacLtvPanel() {
-  const data = await getCacLtvData();
+async function CacLtvPanel({ rangeKey }: { rangeKey?: string }) {
+  const data = await getCacLtvData(rangeKey);
   return <CacLtvContent data={data} />;
 }
 
-export default async function CacLtvPage() {
+export default async function CacLtvPage({
+  searchParams,
+}: {
+  // `?window=` rather than `?range=`, so it cannot collide with the shell's own
+  // range pills (which this page hides) if they are ever re-enabled here.
+  searchParams: Promise<{ window?: string }>;
+}) {
   // Reads all synced history (the model is cohort-based and the spend series is
   // only four months long), so it sits in FIXED_ALL_HISTORY_SECTIONS and the
   // range pills are hidden — no getDashboardData() read needed for the chrome.
-  const lastSyncedAt = await getCoreAppLastSyncedAt();
+  const [lastSyncedAt, params] = await Promise.all([
+    getCoreAppLastSyncedAt(),
+    searchParams,
+  ]);
 
   return (
     <DashboardShell
@@ -36,8 +45,8 @@ export default async function CacLtvPage() {
         </>
       }
     >
-      <Suspense fallback={<CeoPanelSkeleton />}>
-        <CacLtvPanel />
+      <Suspense fallback={<CeoPanelSkeleton />} key={params.window ?? "default"}>
+        <CacLtvPanel rangeKey={params.window} />
       </Suspense>
     </DashboardShell>
   );

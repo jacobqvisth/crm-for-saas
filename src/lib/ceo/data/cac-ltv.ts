@@ -1,13 +1,18 @@
 import { unstable_cache } from "next/cache";
 import { CEO_CACHE_OPTIONS } from "@/lib/ceo/cache";
 import {
+  AD_SIGNUPS_FIRST_DAY,
   CAC_LTV_TIERS,
+  DEFAULT_RANGE_PRESET_KEY,
   MIN_VEHICLE_SAMPLE,
+  resolveCacLtvRange,
   type CacLtvChannelRow,
   type CacLtvData,
   type CacLtvMonthRow,
+  type CacLtvRange,
   type CacLtvTierKey,
   type ChurnEvidence,
+  type SourceCoverage,
 } from "@/lib/ceo/cac-ltv-shared";
 import { loadInternalTestSets } from "@/lib/ceo/internal-test/loader";
 import { createSupabaseServiceClient } from "@/lib/ceo/supabase";
@@ -123,9 +128,12 @@ function monthsBetween(from: Date, to: Date): number {
   return (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
 }
 
-function emptyData(): CacLtvData {
+function emptyData(rangePresetKey: string = DEFAULT_RANGE_PRESET_KEY): CacLtvData {
   return {
     asOf: new Date().toISOString(),
+    range: resolveCacLtvRange(rangePresetKey, new Date()),
+    rangePresetKey,
+    coverage: [],
     months: [],
     channels: [],
     vehiclesPerMonthByTier: { one: 0, small: 0, large: 0 },
@@ -155,6 +163,7 @@ function emptyData(): CacLtvData {
     },
     matureSignupToPaidPct: null,
     conversionBasis: {
+      signupsInRange: 0,
       windowDays: CONVERSION_AGE_DAYS,
       firstSignup: null,
       lastSignup: null,
@@ -175,12 +184,111 @@ function emptyData(): CacLtvData {
   };
 }
 
-async function getCacLtvDataUncached(): Promise<CacLtvData> {
+// What each source feeds, for the coverage table. Kept next to the loader so it
+// cannot drift from what is actually read above.
+const COVERAGE_SOURCES: Array<{
+  metricKey: string;
+  label: string;
+  feeds: string;
+  note?: string;
+}> = [
+  { metricKey: "ad_spend", label: "Google Ads spend", feeds: "Ad spend, cost per signup, channel table" },
+  {
+    metricKey: "ad_signups",
+    label: "Ad-attributed signups",
+    feeds: "Cost per ad signup, the Paid Ads channel row",
+    note: `Only exists from ${AD_SIGNUPS_FIRST_DAY}. Earlier days have spend but no attributed signups, so a window starting before then reads cost per ad signup as artificially expensive.`,
+  },
+  { metricKey: "new_users", label: "GA4 new users", feeds: "Traffic column" },
+  {
+    metricKey: "signup",
+    label: "GA4 sign_up events",
+    feeds: "Signups column (cross-check against workshop cohorts)",
+    note: "Days with no row are true zeros, not gaps: GA4 only writes a row when the event fired, and those days still carry new_users data.",
+  },
+  { metricKey: "core_diagnostics_created", label: "Diagnostics", feeds: "Activation, AI cost per diagnostic" },
+  { metricKey: "active_subscriptions", label: "Stripe subscriptions", feeds: "Average paying base behind the churn estimate" },
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function buildCoverage(
+  rows: Array<{ metric_key: string; period_start: string }>,
+  range: CacLtvRange,
+  now: Date,
+): SourceCoverage[] {
+  const fromMs = new Date(`${range.from}T00:00:00Z`).getTime();
+  const toMs = new Date(`${range.to}T00:00:00Z`).getTime();
+  // Today is only partly elapsed but its row exists, so the ceiling is the start
+  // of tomorrow. Without this a rolling window reads "31 / 30".
+  const tomorrowMs =
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + DAY_MS;
+  const windowEndMs = Math.min(toMs, tomorrowMs);
+
+  const inWindow = new Map<string, Set<string>>();
+  const firstEver = new Map<string, string>();
+  for (const row of rows) {
+    const day = row.period_start.slice(0, 10);
+    const previous = firstEver.get(row.metric_key);
+    if (!previous || day < previous) firstEver.set(row.metric_key, day);
+
+    const ms = new Date(`${day}T00:00:00Z`).getTime();
+    if (ms < fromMs || ms >= toMs) continue;
+    const set = inWindow.get(row.metric_key) ?? new Set<string>();
+    set.add(day);
+    inWindow.set(row.metric_key, set);
+  }
+
+  return COVERAGE_SOURCES.map((source) => {
+    const days = Array.from(inWindow.get(source.metricKey) ?? []).sort();
+    const daysPresent = days.length;
+    const sourceFirstEverDay = firstEver.get(source.metricKey) ?? null;
+    const sourceStartMs = sourceFirstEverDay
+      ? new Date(`${sourceFirstEverDay}T00:00:00Z`).getTime()
+      : fromMs;
+    const windowPredatesSource = sourceStartMs > fromMs;
+    // Clip the denominator to when the source could actually have had data.
+    const effectiveStartMs = Math.max(fromMs, sourceStartMs);
+    const daysExpected = Math.max(
+      0,
+      Math.round((windowEndMs - effectiveStartMs) / DAY_MS),
+    );
+
+    const status: SourceCoverage["status"] =
+      daysPresent === 0 ? "missing" : daysPresent >= daysExpected ? "complete" : "partial";
+
+    return {
+      key: source.metricKey,
+      label: source.label,
+      feeds: source.feeds,
+      firstDayInRange: days[0] ?? null,
+      lastDayInRange: days[days.length - 1] ?? null,
+      daysPresent,
+      daysExpected,
+      sourceFirstEverDay,
+      windowPredatesSource,
+      note: source.note ?? null,
+      status,
+    };
+  });
+}
+
+async function getCacLtvDataUncached(
+  rangePresetKey: string = DEFAULT_RANGE_PRESET_KEY,
+): Promise<CacLtvData> {
   const supabase = createSupabaseServiceClient();
-  if (!supabase) return emptyData();
+  if (!supabase) return emptyData(rangePresetKey);
 
   const sets = await loadInternalTestSets();
   const now = new Date();
+  const range = resolveCacLtvRange(rangePresetKey, now);
+  const rangeFromMs = new Date(`${range.from}T00:00:00Z`).getTime();
+  const rangeToMs = new Date(`${range.to}T00:00:00Z`).getTime();
+  const inRange = (iso: string | null) => {
+    if (!iso) return false;
+    const ms = new Date(iso).getTime();
+    return ms >= rangeFromMs && ms < rangeToMs;
+  };
 
   const [
     snapshotResult,
@@ -476,9 +584,11 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
     cohorts.set(month, cohort);
   }
 
-  const allMonths = Array.from(
-    new Set([...metricsByMonth.keys(), ...cohorts.keys()]),
-  ).sort();
+  // Only months that intersect the selected window. A month counts if its first
+  // day falls inside [from, to).
+  const allMonths = Array.from(new Set([...metricsByMonth.keys(), ...cohorts.keys()]))
+    .filter((month) => inRange(`${month}-01T00:00:00Z`))
+    .sort();
 
   const maturityCutoff = new Date(
     now.getTime() - COHORT_MATURITY_DAYS * 24 * 60 * 60 * 1000,
@@ -520,12 +630,15 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
   const isPayingNow = (row: WorkshopRow) =>
     isPaidTier(row) && row.core_subscription_status === "active";
 
-  const agedRows = workshops.filter(
-    (row) =>
-      row.created_at !== null &&
-      row.created_at >= `${SELF_SERVE_COHORT_START}-01` &&
-      new Date(row.created_at) <= ageCutoff,
+  // Signups inside the selected window that are ALSO old enough to judge. Both
+  // filters matter: the window is what the reader asked for, the age filter is
+  // what makes the rate meaningful. `signupsInRange` is reported alongside so
+  // the page can say how much of the window was too recent to count.
+  const rangeRows = workshops.filter((row) => inRange(row.created_at));
+  const agedRows = rangeRows.filter(
+    (row) => new Date(row.created_at as string) <= ageCutoff,
   );
+  const signupsInRange = rangeRows.length;
   const agedSignups = agedRows.length;
   const reachedCheckout = agedRows.filter((row) => row.core_stripe_customer_id).length;
   const startedTrial = agedRows.filter((row) => row.core_stripe_subscription_id).length;
@@ -541,6 +654,7 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
 
   const pctOf = (n: number) => (agedSignups > 0 ? (n / agedSignups) * 100 : null);
   const conversionBasis = {
+    signupsInRange,
     windowDays: CONVERSION_AGE_DAYS,
     firstSignup: agedDates[0]?.slice(0, 10) ?? null,
     lastSignup: agedDates[agedDates.length - 1]?.slice(0, 10) ?? null,
@@ -793,6 +907,16 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
 
   return {
     asOf: now.toISOString(),
+    range,
+    rangePresetKey,
+    coverage: buildCoverage(
+      snapshotResult.data.map((row) => ({
+        metric_key: row.metric_key,
+        period_start: row.period_start,
+      })),
+      range,
+      now,
+    ),
     months,
     channels,
     vehiclesPerMonthByTier,
@@ -820,6 +944,8 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
   };
 }
 
+// unstable_cache includes the call arguments in the cache key, so each range
+// preset gets its own cached entry.
 export const getCacLtvData = unstable_cache(
   getCacLtvDataUncached,
   ["ceo-cac-ltv"],

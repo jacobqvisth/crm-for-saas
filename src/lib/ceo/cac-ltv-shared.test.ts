@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  AD_SIGNUPS_FIRST_DAY,
+  CAC_LTV_RANGE_PRESETS,
   CAC_LTV_TIERS,
   DEFAULT_ASSUMPTIONS,
   DEFAULT_GROWTH,
+  DEFAULT_RANGE_PRESET_KEY,
   LIST_PRICES_SEK,
   affordableCostPerSignup,
   blendTiers,
   mixEconomics,
   requiredPriceForTarget,
+  resolveCacLtvRange,
   simulateGrowth,
   type GrowthInputs,
   breakEvenMonths,
@@ -200,6 +204,54 @@ describe("maxSurvivableChurnPct", () => {
 
   it("caps at 100%", () => {
     expect(maxSurvivableChurnPct(10, 600)).toBe(100);
+  });
+});
+
+describe("resolveCacLtvRange", () => {
+  // 2026-08-12, the day the window feature was built.
+  const today = new Date("2026-08-12T09:00:00Z");
+
+  it("defaults to the last three complete calendar months", () => {
+    const range = resolveCacLtvRange(undefined, today);
+    // Half-open, so 2026-08-01 is the first day NOT counted: May, June, July.
+    expect(range).toEqual({ from: "2026-05-01", to: "2026-08-01" });
+  });
+
+  it("excludes the month in progress", () => {
+    const range = resolveCacLtvRange("last_3_full_months", today);
+    expect(range.to).toBe("2026-08-01");
+    expect(new Date(range.to).getTime()).toBeLessThanOrEqual(today.getTime());
+  });
+
+  it("rolls forward with the calendar rather than pinning dates", () => {
+    const later = resolveCacLtvRange("last_3_full_months", new Date("2026-11-03T00:00:00Z"));
+    expect(later).toEqual({ from: "2026-08-01", to: "2026-11-01" });
+  });
+
+  it("starts the clean-paid window on the first day ad_signups exists", () => {
+    const range = resolveCacLtvRange("paid_attribution_clean", today);
+    expect(range.from).toBe(AD_SIGNUPS_FIRST_DAY);
+    expect(range.from).toBe("2026-05-20");
+  });
+
+  it("falls back to the default for an unknown preset", () => {
+    expect(resolveCacLtvRange("nonsense", today)).toEqual(
+      resolveCacLtvRange(DEFAULT_RANGE_PRESET_KEY, today),
+    );
+  });
+
+  it("gives every preset a from strictly before its to", () => {
+    for (const preset of CAC_LTV_RANGE_PRESETS) {
+      const range = preset.resolve(today);
+      expect(range.from < range.to).toBe(true);
+    }
+  });
+
+  it("crosses a year boundary correctly", () => {
+    expect(resolveCacLtvRange("last_3_full_months", new Date("2027-01-15T00:00:00Z"))).toEqual({
+      from: "2026-10-01",
+      to: "2027-01-01",
+    });
   });
 });
 
