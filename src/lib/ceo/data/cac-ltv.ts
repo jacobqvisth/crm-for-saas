@@ -53,6 +53,12 @@ const ACQUISITION_METRIC_KEYS = [
 // reasons, so the page labels it rather than averaging it in.
 const COHORT_MATURITY_DAYS = 60;
 
+// How old an INDIVIDUAL signup must be to count toward the conversion rate:
+// a 14-day trial plus roughly one invoice cycle. Applied per signup rather than
+// per calendar month, because the whole-month rule left only one qualifying
+// cohort on 2026-08-12 and put the entire model on 236 signups.
+const CONVERSION_AGE_DAYS = 45;
+
 // Cohorts before this month were hand-sold pilots converting at 30-60%, which
 // says nothing about self-serve economics. Paid acquisition scaled from May.
 const SELF_SERVE_COHORT_START = "2026-05";
@@ -148,6 +154,21 @@ function emptyData(): CacLtvData {
       observedWindowMonths: 0,
     },
     matureSignupToPaidPct: null,
+    conversionBasis: {
+      windowDays: CONVERSION_AGE_DAYS,
+      firstSignup: null,
+      lastSignup: null,
+      agedSignups: 0,
+      reachedCheckout: 0,
+      startedTrial: 0,
+      payingSelfServe: 0,
+      payingManual: 0,
+      selfServePct: null,
+      checkoutPct: null,
+      trialPct: null,
+      inflatedPct: null,
+    },
+    selfServeMixByTier: { one: 0, small: 0, large: 0 },
     blendedCostPerSignupSek: null,
     paidCostPerSignupSek: null,
     notes: ["Supabase is not configured, so no live figures were read."],
@@ -487,14 +508,65 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
     };
   });
 
-  // ---- Mature self-serve signup -> paying --------------------------------
-  const matureSelfServe = months.filter(
-    (row) => row.month >= SELF_SERVE_COHORT_START && !row.cohortImmature && row.workshopSignups > 0,
+  // ---- Measured signup -> paying (self-serve, age-filtered) --------------
+  //
+  // Counts a signup only once it has had CONVERSION_AGE_DAYS to convert, and
+  // counts it as converted only if it is paying AND Stripe-billed. A paying
+  // workshop with no Stripe ids at all never went through checkout — it was
+  // provisioned by hand — so crediting it to acquisition would overstate the
+  // rate. On 2026-08-12 that distinction alone moved the rate from 3.4% to 2.3%.
+  const ageCutoff = new Date(now.getTime() - CONVERSION_AGE_DAYS * 24 * 60 * 60 * 1000);
+  const isPaidTier = (row: WorkshopRow) => tierFromPlanKey(row.plan_key) !== null;
+  const isPayingNow = (row: WorkshopRow) =>
+    isPaidTier(row) && row.core_subscription_status === "active";
+
+  const agedRows = workshops.filter(
+    (row) =>
+      row.created_at !== null &&
+      row.created_at >= `${SELF_SERVE_COHORT_START}-01` &&
+      new Date(row.created_at) <= ageCutoff,
   );
-  const matureSignups = matureSelfServe.reduce((sum, row) => sum + row.workshopSignups, 0);
-  const maturePaying = matureSelfServe.reduce((sum, row) => sum + row.payingNow, 0);
-  const matureSignupToPaidPct =
-    matureSignups > 0 ? (maturePaying / matureSignups) * 100 : null;
+  const agedSignups = agedRows.length;
+  const reachedCheckout = agedRows.filter((row) => row.core_stripe_customer_id).length;
+  const startedTrial = agedRows.filter((row) => row.core_stripe_subscription_id).length;
+  const payingSelfServe = agedRows.filter(
+    (row) => isPayingNow(row) && row.core_stripe_subscription_id,
+  ).length;
+  const payingManual = agedRows.filter(
+    (row) => isPayingNow(row) && !row.core_stripe_subscription_id,
+  ).length;
+  const agedDates = agedRows
+    .map((row) => row.created_at as string)
+    .sort();
+
+  const pctOf = (n: number) => (agedSignups > 0 ? (n / agedSignups) * 100 : null);
+  const conversionBasis = {
+    windowDays: CONVERSION_AGE_DAYS,
+    firstSignup: agedDates[0]?.slice(0, 10) ?? null,
+    lastSignup: agedDates[agedDates.length - 1]?.slice(0, 10) ?? null,
+    agedSignups,
+    reachedCheckout,
+    startedTrial,
+    payingSelfServe,
+    payingManual,
+    selfServePct: pctOf(payingSelfServe),
+    checkoutPct: pctOf(reachedCheckout),
+    trialPct: pctOf(startedTrial),
+    inflatedPct: pctOf(payingSelfServe + payingManual),
+  };
+  const matureSignupToPaidPct = conversionBasis.selfServePct;
+
+  // Plan mix of Stripe-billed ads-era customers — the mix ads actually produce.
+  const selfServeMixByTier: Record<CacLtvTierKey, number> = { one: 0, small: 0, large: 0 };
+  for (const row of workshops) {
+    if (!row.created_at || row.created_at < `${SELF_SERVE_COHORT_START}-01`) continue;
+    if (!row.core_stripe_subscription_id) continue;
+    if (row.core_subscription_status !== "active" && row.core_subscription_status !== "trialing") {
+      continue;
+    }
+    const tier = tierFromPlanKey(row.plan_key);
+    if (tier) selfServeMixByTier[tier] += 1;
+  }
 
   // ---- Cost per signup, actual ------------------------------------------
   // Two readings, both worth having. Paid = spend over the signups Google Ads
@@ -690,6 +762,11 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
     "core_ai_total_cost is a cumulative lifetime counter and is read with max(), not sum(). Summing it would overstate AI cost roughly 75-fold.",
     "ad_conversions is ignored: it reports 184,706 conversions against 37,849 clicks because it counts every GA4 conversion event. ad_signups is used instead.",
   ];
+  if (payingManual > 0) {
+    notes.push(
+      `Signup → paying counts only Stripe-billed customers. ${payingManual} paying workshop${payingManual === 1 ? "" : "s"} in the measurement window carry no Stripe customer or subscription id at all, meaning they never went through checkout — provisioned by hand (comped / pilot / sales-closed). Including them would read ${conversionBasis.inflatedPct?.toFixed(2) ?? "?"}% instead of ${conversionBasis.selfServePct?.toFixed(2) ?? "?"}%, and they sit mostly in Large, the tier ads do not produce.`,
+    );
+  }
   if (agentSourced === 0) {
     notes.push(
       "created_by_agent is false on every workshop, so the Agent channel in the CEO model cannot be populated until the flag is written at signup.",
@@ -733,6 +810,8 @@ async function getCacLtvDataUncached(): Promise<CacLtvData> {
     diagnosticsPerPayingWorkshopPerMonth,
     churn,
     matureSignupToPaidPct,
+    conversionBasis,
+    selfServeMixByTier,
     blendedCostPerSignupSek:
       totalGa4Signups > 0 ? spendSek(totalSpendUsd, RATE_FOR_TABLE) / totalGa4Signups : null,
     paidCostPerSignupSek:
