@@ -3,9 +3,11 @@ import {
   CAC_LTV_TIERS,
   DEFAULT_ASSUMPTIONS,
   DEFAULT_GROWTH,
+  LIST_PRICES_SEK,
   affordableCostPerSignup,
   blendTiers,
   mixEconomics,
+  requiredPriceForTarget,
   simulateGrowth,
   type GrowthInputs,
   breakEvenMonths,
@@ -198,6 +200,115 @@ describe("maxSurvivableChurnPct", () => {
 
   it("caps at 100%", () => {
     expect(maxSurvivableChurnPct(10, 600)).toBe(100);
+  });
+});
+
+describe("tier price overrides", () => {
+  const observed = { vehiclesPerMonth: 4.3, aiCostPerMonthSek: 0.35, payingNow: 32 };
+
+  it("defaults to the prices Stripe bills today", () => {
+    const tier = computeTierEconomics(SMALL, assumptions(), observed);
+    expect(tier.listPriceSek).toBe(749);
+    expect(tier.actualListPriceSek).toBe(749);
+    expect(tier.netArpaSek).toBe(749);
+  });
+
+  it("uses the modelled price and remembers the real one", () => {
+    const tier = computeTierEconomics(
+      SMALL,
+      assumptions({ tierPricesSek: { ...LIST_PRICES_SEK, small: 999 } }),
+      observed,
+    );
+    expect(tier.listPriceSek).toBe(999);
+    expect(tier.actualListPriceSek).toBe(749);
+    expect(tier.netArpaSek).toBe(999);
+  });
+
+  it("raises LTV and cuts payback when the price goes up", () => {
+    const at749 = computeTierEconomics(SMALL, assumptions(), observed);
+    const at999 = computeTierEconomics(
+      SMALL,
+      assumptions({ tierPricesSek: { ...LIST_PRICES_SEK, small: 999 } }),
+      observed,
+    );
+    expect(at999.grossProfitSek).toBeGreaterThan(at749.grossProfitSek);
+    expect(at999.ltvSek).toBeGreaterThan(at749.ltvSek);
+    expect(at999.ltvCac).toBeGreaterThan(at749.ltvCac);
+    expect(at999.breakEvenMonths!).toBeLessThan(at749.breakEvenMonths!);
+  });
+
+  it("goes unprofitable when the price drops under the variable cost", () => {
+    const tier = computeTierEconomics(
+      SMALL,
+      assumptions({ tierPricesSek: { ...LIST_PRICES_SEK, small: 20 } }),
+      observed,
+    );
+    expect(tier.grossProfitSek).toBeLessThan(0);
+    expect(tier.breakEvenMonths).toBeNull();
+  });
+
+  it("feeds price changes through the growth mix", () => {
+    const vehicles = { one: 1, small: 4.3, large: 8.1 };
+    const base = mixEconomics({ one: 0, small: 100, large: 0 }, assumptions(), vehicles, 0.35);
+    const dearer = mixEconomics(
+      { one: 0, small: 100, large: 0 },
+      assumptions({ tierPricesSek: { ...LIST_PRICES_SEK, small: 1100 } }),
+      vehicles,
+      0.35,
+    );
+    expect(dearer.arpaSek).toBeCloseTo(1100, 6);
+    expect(dearer.grossProfitSek).toBeGreaterThan(base.grossProfitSek);
+  });
+});
+
+describe("requiredPriceForTarget", () => {
+  const vehicles = 4.3;
+  const ai = 0.35;
+
+  it("round-trips: charging the required price yields exactly the target", () => {
+    const a = assumptions();
+    const needed = requiredPriceForTarget("small", a, vehicles, ai, 3)!;
+    const tier = computeTierEconomics(
+      SMALL,
+      assumptions({ tierPricesSek: { ...LIST_PRICES_SEK, small: needed } }),
+      { vehiclesPerMonth: vehicles, aiCostPerMonthSek: ai, payingNow: 1 },
+    );
+    expect(tier.ltvCac).toBeCloseTo(3, 6);
+  });
+
+  it("round-trips for One, the tier that actually needs it", () => {
+    const a = assumptions();
+    const needed = requiredPriceForTarget("one", a, 1, ai, 3)!;
+    const tier = computeTierEconomics(
+      { key: "one", label: "One", listPriceSek: 179, includedVehicles: 1 },
+      assumptions({ tierPricesSek: { ...LIST_PRICES_SEK, one: needed } }),
+      { vehiclesPerMonth: 1, aiCostPerMonthSek: ai, payingNow: 1 },
+    );
+    expect(tier.ltvCac).toBeCloseTo(3, 6);
+    // One's real price is well below what 100 kr/signup demands.
+    expect(needed).toBeGreaterThan(179);
+  });
+
+  it("needs a higher price when the signup costs more", () => {
+    const cheap = requiredPriceForTarget("small", assumptions({ cacPerSignupSek: 50 }), vehicles, ai, 3)!;
+    const dear = requiredPriceForTarget("small", assumptions({ cacPerSignupSek: 200 }), vehicles, ai, 3)!;
+    expect(dear).toBeGreaterThan(cheap);
+  });
+
+  it("needs a higher price when churn is worse", () => {
+    const low = requiredPriceForTarget("small", assumptions({ monthlyChurnPct: 3 }), vehicles, ai, 3)!;
+    const high = requiredPriceForTarget("small", assumptions({ monthlyChurnPct: 10 }), vehicles, ai, 3)!;
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it("grosses up for a discount", () => {
+    const none = requiredPriceForTarget("small", assumptions({ discountPct: 0 }), vehicles, ai, 3)!;
+    const twenty = requiredPriceForTarget("small", assumptions({ discountPct: 20 }), vehicles, ai, 3)!;
+    expect(twenty).toBeCloseTo(none / 0.8, 4);
+  });
+
+  it("returns null when churn is zero (LTV is unbounded, any price works)", () => {
+    expect(requiredPriceForTarget("small", assumptions({ monthlyChurnPct: 0 }), vehicles, ai, 3)).toBeNull();
   });
 });
 

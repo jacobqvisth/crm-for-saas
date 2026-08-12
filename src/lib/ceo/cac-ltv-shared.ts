@@ -87,6 +87,14 @@ export type CacLtvTierKey = (typeof CAC_LTV_TIERS)[number]["key"];
 // ---------------------------------------------------------------------------
 
 export type CacLtvAssumptions = {
+  /**
+   * Monthly list price per tier, SEK ex VAT. Defaults to what Stripe actually
+   * bills (see CAC_LTV_TIERS) but is adjustable, because "what would we have to
+   * charge for this to work?" is the other half of the CAC question — One at
+   * 179 kr cannot support the same acquisition cost as Small at 749 kr, and the
+   * fix is either a cheaper signup or a different price.
+   */
+  tierPricesSek: Record<CacLtvTierKey, number>;
   /** CAC per registered customer (per signup). The CEO's question sets 100. */
   cacPerSignupSek: number;
   /** Signup -> paying conversion, %. Seeded from mature workshop cohorts. */
@@ -110,7 +118,15 @@ export type CacLtvAssumptions = {
   sekPerUsd: number;
 };
 
+/** The prices Stripe actually bills today, for "reset" and delta display. */
+export const LIST_PRICES_SEK: Record<CacLtvTierKey, number> = {
+  one: 179,
+  small: 749,
+  large: 1799,
+};
+
 export const DEFAULT_ASSUMPTIONS: CacLtvAssumptions = {
+  tierPricesSek: { ...LIST_PRICES_SEK },
   cacPerSignupSek: 100,
   // 2026-05 cohort 3.4%, 2026-06 cohort 3.8%. Later cohorts still have trials
   // in flight so they read lower for age reasons, not quality reasons.
@@ -127,9 +143,27 @@ export const DEFAULT_ASSUMPTIONS: CacLtvAssumptions = {
   sekPerUsd: 9.6,
 };
 
+/**
+ * Slider bounds for the per-tier price controls.
+ *
+ * The ceilings are deliberately generous rather than a tidy multiple of list
+ * price. `requiredPriceForTarget` can name a price well above list — at 100 kr
+ * per registration One already "needs" 465 kr against a 179 kr list price, and
+ * worse churn pushes that higher still. A slider that cannot reach the price the
+ * model is asking for is a dead end, so these are set well clear of it.
+ */
+export const PRICE_BOUNDS: Record<
+  CacLtvTierKey,
+  { min: number; max: number; step: number; label: string; unit: string }
+> = {
+  one: { min: 0, max: 1_200, step: 10, label: "One price", unit: "SEK" },
+  small: { min: 0, max: 3_000, step: 10, label: "Small price", unit: "SEK" },
+  large: { min: 0, max: 6_000, step: 25, label: "Large price", unit: "SEK" },
+};
+
 // Bounds for the on-page sliders.
 export const ASSUMPTION_BOUNDS: Record<
-  keyof CacLtvAssumptions,
+  Exclude<keyof CacLtvAssumptions, "tierPricesSek">,
   { min: number; max: number; step: number; label: string; unit: string }
 > = {
   cacPerSignupSek: { min: 0, max: 500, step: 5, label: "CAC per registered customer", unit: "SEK" },
@@ -149,7 +183,10 @@ export const ASSUMPTION_BOUNDS: Record<
 export type TierEconomics = {
   key: CacLtvTierKey;
   label: string;
+  /** The price being modelled (may differ from what Stripe bills today). */
   listPriceSek: number;
+  /** What Stripe bills today, so the UI can show the delta. */
+  actualListPriceSek: number;
   netArpaSek: number;
   /** Observed premium vehicle lookups per paying workshop per month. */
   vehiclesPerMonth: number;
@@ -232,7 +269,8 @@ export function computeTierEconomics(
   assumptions: CacLtvAssumptions,
   observed: { vehiclesPerMonth: number; aiCostPerMonthSek: number; payingNow: number },
 ): TierEconomics {
-  const netArpaSek = tier.listPriceSek * (1 - assumptions.discountPct / 100);
+  const modelledPriceSek = assumptions.tierPricesSek[tier.key] ?? tier.listPriceSek;
+  const netArpaSek = modelledPriceSek * (1 - assumptions.discountPct / 100);
   const dataCostSek = observed.vehiclesPerMonth * assumptions.perVehicleDataCostSek;
   const paymentFeeSek =
     (netArpaSek * assumptions.stripeFeePct) / 100 + assumptions.stripeFeeFixedSek;
@@ -247,7 +285,8 @@ export function computeTierEconomics(
   return {
     key: tier.key,
     label: tier.label,
-    listPriceSek: tier.listPriceSek,
+    listPriceSek: modelledPriceSek,
+    actualListPriceSek: tier.listPriceSek,
     netArpaSek,
     vehiclesPerMonth: observed.vehiclesPerMonth,
     aiCostSek: observed.aiCostPerMonthSek,
@@ -291,6 +330,7 @@ export function blendTiers(
     key: "small",
     label: "Blended",
     listPriceSek: weighted((tier) => tier.listPriceSek),
+    actualListPriceSek: weighted((tier) => tier.actualListPriceSek),
     netArpaSek,
     vehiclesPerMonth: weighted((tier) => tier.vehiclesPerMonth),
     aiCostSek: weighted((tier) => tier.aiCostSek),
@@ -366,6 +406,43 @@ export function affordableCostPerSignup(
 
 /** The LTV:CAC bar this page judges against. */
 export const TARGET_LTV_CAC = 3;
+
+/**
+ * The list price a tier would need to hit a target LTV:CAC at the current CAC,
+ * churn and cost base. The inverse of the whole model, and the actionable half
+ * of "One only clears 1.1x": either the signup gets cheaper or the price moves.
+ *
+ * Closed form. With p_net = price x (1 - discount):
+ *   grossProfit = p_net x (1 - fee%) - ai - vehicles x dataCost - feeFixed
+ *   LTV         = grossProfit / churn,  and we want LTV = target x CAC
+ * so
+ *   p_net = (target x CAC x churn + ai + vehicles x dataCost + feeFixed) / (1 - fee%)
+ *
+ * Returns null when the fee rate makes it unsolvable (fee >= 100%).
+ */
+export function requiredPriceForTarget(
+  tierKey: CacLtvTierKey,
+  assumptions: CacLtvAssumptions,
+  vehiclesPerMonth: number,
+  aiCostPerMonthSek: number,
+  targetLtvCac: number,
+): number | null {
+  const churn = assumptions.monthlyChurnPct / 100;
+  const feeFactor = 1 - assumptions.stripeFeePct / 100;
+  const discountFactor = 1 - assumptions.discountPct / 100;
+  if (feeFactor <= 0 || discountFactor <= 0 || churn <= 0) return null;
+
+  const cac = cacPerCustomer(assumptions.cacPerSignupSek, assumptions.signupToPaidPct);
+  if (!Number.isFinite(cac)) return null;
+
+  const requiredGrossProfit = targetLtvCac * cac * churn;
+  const fixedVariable =
+    aiCostPerMonthSek +
+    vehiclesPerMonth * assumptions.perVehicleDataCostSek +
+    assumptions.stripeFeeFixedSek;
+  const netArpaNeeded = (requiredGrossProfit + fixedVariable) / feeFactor;
+  return netArpaNeeded / discountFactor;
+}
 
 // ---------------------------------------------------------------------------
 // Spend → growth simulator
@@ -485,7 +562,8 @@ export function mixEconomics(
   let variableCostSek = 0;
   for (const tier of CAC_LTV_TIERS) {
     const weight = (mix[tier.key] || 0) / total;
-    const netArpa = tier.listPriceSek * (1 - assumptions.discountPct / 100);
+    const price = assumptions.tierPricesSek[tier.key] ?? tier.listPriceSek;
+    const netArpa = price * (1 - assumptions.discountPct / 100);
     const variable =
       aiCostPerMonthSek +
       vehiclesByTier[tier.key] * assumptions.perVehicleDataCostSek +

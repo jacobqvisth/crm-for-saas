@@ -17,7 +17,9 @@ import {
   DEFAULT_ASSUMPTIONS,
   DEFAULT_GROWTH,
   GROWTH_BOUNDS,
+  LIST_PRICES_SEK,
   MIN_VEHICLE_SAMPLE,
+  PRICE_BOUNDS,
   SENSITIVITY_CAC_SEK,
   SENSITIVITY_CHURN_PCT,
   SENSITIVITY_CONVERSION_PCT,
@@ -30,6 +32,7 @@ import {
   cumulativeGrossProfit,
   maxSurvivableChurnPct,
   requiredConversionPct,
+  requiredPriceForTarget,
   simulateGrowth,
   type CacLtvAssumptions,
   type CacLtvData,
@@ -188,7 +191,9 @@ function Slider({
   onChange,
   seeded,
 }: {
-  field?: keyof CacLtvAssumptions;
+  // tierPricesSek is a per-tier record, not a scalar, so it has its own
+  // controls and is excluded here.
+  field?: Exclude<keyof CacLtvAssumptions, "tierPricesSek">;
   bounds?: SliderBounds;
   id?: string;
   value: number;
@@ -1180,6 +1185,10 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
     0,
   );
 
+  const priceChanged = CAC_LTV_TIERS.some(
+    (tier) => assumptions.tierPricesSek[tier.key] !== LIST_PRICES_SEK[tier.key],
+  );
+
   const affordableFor = (tier: TierEconomics) =>
     affordableCostPerSignup(
       tier.grossProfitSek,
@@ -1593,10 +1602,105 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
       {/* Unit economics per tier                                          */}
       {/* ---------------------------------------------------------------- */}
       <Panel
-        description="The CEO workbook's 'Economics Assumptions' sheet, per tier, with variable cost broken into its three real parts. Note that gross margin is DERIVED here and churn is the input — the workbook has those two swapped, which turns its LTV formula upside down."
+        actions={
+          priceChanged ? (
+            <button
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+              onClick={() =>
+                setAssumptions((cur) => ({ ...cur, tierPricesSek: { ...LIST_PRICES_SEK } }))
+              }
+              type="button"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Back to live prices
+            </button>
+          ) : null
+        }
+        description="The CEO workbook's 'Economics Assumptions' sheet, per tier, with variable cost broken into its three real parts. Prices are adjustable — drag them to see how a different price moves gross profit, LTV, LTV:CAC and payback. Note that gross margin is DERIVED here and churn is the input; the workbook has those two swapped, which turns its LTV formula upside down."
         eyebrow="Product unit economics"
         title="One, Small and Large"
       >
+        {/* Price controls. Kept above the table so the cause sits next to the
+            effect, and the delta against the live Stripe price is always shown
+            so nobody mistakes a modelled price for what we actually charge. */}
+        <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-700">Monthly price per plan</p>
+            {priceChanged ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                Modelling prices that differ from Stripe
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-500">
+                Matching what Stripe bills today
+              </span>
+            )}
+          </div>
+          <div className="mt-3 grid gap-x-8 gap-y-4 sm:grid-cols-3">
+            {CAC_LTV_TIERS.map((tier) => {
+              const current = assumptions.tierPricesSek[tier.key];
+              const delta = current - tier.listPriceSek;
+              const needed = requiredPriceForTarget(
+                tier.key,
+                assumptions,
+                data.vehiclesPerMonthByTier[tier.key],
+                aiCostPerMonthSek,
+                TARGET_LTV_CAC,
+              );
+              return (
+                <div key={tier.key}>
+                  <Slider
+                    bounds={PRICE_BOUNDS[tier.key]}
+                    id={`price-${tier.key}`}
+                    onChange={(next) =>
+                      setAssumptions((cur) => ({
+                        ...cur,
+                        tierPricesSek: { ...cur.tierPricesSek, [tier.key]: next },
+                      }))
+                    }
+                    value={current}
+                  />
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                    Live {sek(tier.listPriceSek)}
+                    {delta !== 0 ? (
+                      <span
+                        className={`ml-1 font-semibold ${delta > 0 ? "text-emerald-700" : "text-rose-700"}`}
+                      >
+                        ({delta > 0 ? "+" : "−"}
+                        {sek(Math.abs(delta))})
+                      </span>
+                    ) : null}
+                    {needed !== null && needed > 0 ? (
+                      <>
+                        {" · "}
+                        needs{" "}
+                        <strong
+                          className={
+                            needed > current ? "text-rose-700" : "text-emerald-700"
+                          }
+                        >
+                          {sek(needed)}
+                        </strong>{" "}
+                        for {TARGET_LTV_CAC}x
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
+            &ldquo;Needs X for {TARGET_LTV_CAC}x&rdquo; is the inverse of the whole
+            model: at {sek(assumptions.cacPerSignupSek)} per registration,{" "}
+            {pct(assumptions.signupToPaidPct)} conversion and{" "}
+            {pct(assumptions.monthlyChurnPct)} churn, that is the price the tier
+            would have to carry. Where it sits above the live price, the tier is
+            being acquired more expensively than its price can support — the fix is
+            either a cheaper signup, better conversion, or that price. Nothing here
+            touches Stripe.
+          </p>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full min-w-[880px] text-sm">
             <thead>
@@ -1624,7 +1728,18 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
               {tiers.map((tier) => (
                 <tr key={tier.key}>
                   <td className="py-2.5 pr-3 font-semibold text-slate-900">{tier.label}</td>
-                  <td className="py-2.5 pr-3 text-right tabular-nums text-slate-600">
+                  <td
+                    className={`py-2.5 pr-3 text-right tabular-nums ${
+                      tier.listPriceSek !== tier.actualListPriceSek
+                        ? "font-semibold text-amber-700"
+                        : "text-slate-600"
+                    }`}
+                    title={
+                      tier.listPriceSek !== tier.actualListPriceSek
+                        ? `Modelled. Stripe bills ${sek(tier.actualListPriceSek)} today.`
+                        : "Matches what Stripe bills today."
+                    }
+                  >
                     {sek(tier.listPriceSek)}
                   </td>
                   <td className="py-2.5 pr-3 text-right tabular-nums text-slate-900">
