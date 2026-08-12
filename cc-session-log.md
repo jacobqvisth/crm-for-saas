@@ -6773,3 +6773,35 @@ for per-user task filtering.
 - `npm run build`, `npx tsc --noEmit`, `eslint` all clean.
 - Rendered against live prod in a real browser before merge: no console errors, no horizontal overflow at 1440px, and slider interaction verified — pushing churn to 30% correctly flips the verdict to "Never pays back" with the payback curve visibly asymptoting below the CAC line.
 - **Known and pre-existing:** the Vercel *preview* build fails on `/calls/feedback` prerendering ("URL and API key are required") because preview envs lack the Supabase vars. Every preview deploy on this project errors the same way (PRs #632, #635, #637, #640) while every production deploy from `main` is READY. Build & Lint is the real gate. Worth fixing separately by adding preview env vars or forcing that route dynamic.
+
+## CAC/LTV: spend → growth simulator + adjustable plan prices — 2026-08-11
+
+Two follow-ups on the CAC/LTV page (PR #641), both live in prod.
+
+### Should we keep spending on ads at 90-120 kr / signup?
+Jacob asked directly. Answer: **yes at 90-110 kr, marginal at 120 kr** — but the page's blended 5.8x LTV:CAC is flattered and should not be the basis. It is weighted by 17 Large accounts on a legacy base ads did not produce; the current trial pipeline has only **2 Large out of 34**.
+- Forward mix (trials in flight): gross profit 578 kr/mo, affordable **131 kr** per registration at 3x → 3.9x at 100 kr, 3.3x at 120 kr.
+- Same excluding Large as sales-led: affordable **116 kr** → 3.5x at 100 kr, **2.9x at 120 kr** (just under the bar).
+- Jacob's 90-120 kr matches the *blended* cost (102 kr). The strictly ad-attributed figure is **130 kr**, which is the honest denominator for an incremental decision and gives 3.0x / 2.7x. Operating near the bar, not far above it.
+- **Churn is not the risk here:** even the conservative mix survives 17.4% monthly churn at 100 kr.
+- **Two things that would break it:** premium data above **~36 kr per lookup** (conservative mix hits exactly 3.0x there, 1.6x at 100 kr/vehicle), and conversion below **~3%** (2.6x at 120 kr). Activation has been falling as volume scaled (36.9% → 30.4% → 23.2% May/June/July cohorts) so the latter is worth watching, though those cohorts are still young.
+- **The lever is mix, not budget.** One is 31% of the trial pipeline and affords only 36 kr; the blended answer is carried entirely by Small at 152 kr.
+- Checked and did NOT claim ads select for One: One's first subscription is 2026-06-20, so zero pre-ads One payers is simply because the plan did not exist.
+
+### PR #645 — spend → growth simulator
+- New "What a monthly budget actually buys" section. Shows the dilution as four steps rather than one number: `35,000 kr ÷ 100 kr → 350 signups × 3.4% → 11.9 payers/mo ÷ 5% churn → 238 payer ceiling`, and states the tail: the other 338 signups/month (96.6%) never pay, 8,114 free accounts over 24 months. Counted, not costed — Jacob's explicit call mid-build (the measured 7-11% of free accounts that do run diagnostics monthly is out of scope).
+- **The output people miss:** at constant spend the payer base does not grow linearly, it asymptotes on `newPayersPerMonth ÷ churn`. A test pins it — doubling a 120-month horizon to 240 adds under 1% of the ceiling while spend keeps accruing, so cost per retained payer gets strictly worse.
+- Controls: budget, horizon, signup→payment lag, and the **new-customer plan mix**, seeded from the 46 trials in flight rather than the paying base (which would flatter it). Mix is the strongest control: at 100k/month a 100%-One mix turns "cash-positive month 13" into **Never**.
+- Two separate charts, not one dual-axis: payers with the ceiling asymptote; cumulative spend vs cumulative gross profit with the net line's zero-crossing marked. Payers and SEK are different units.
+- Incremental by design (starts from zero payers) so today's base cannot flatter it. Stated limitation on the page: constant spend and constant conversion are simplifications, real campaigns get dearer as you scale past the cheapest audience.
+
+### PR #646 — adjustable plan prices + the price each tier needs
+- Price was a hardcoded constant with only a global discount slider, so the one lever the pricing conversation is about could not be moved. `tierPricesSek` is now a per-tier assumption feeding net ARPA, variable cost (the Stripe % fee scales with price), gross profit, margin, LTV, LTV:CAC, break-even, affordable/registration, the blended row and the growth simulator's ARPA.
+- Added the inverse, `requiredPriceForTarget`, closed-form: `p_net = (target x CAC x churn + ai + vehicles x dataCost + feeFixed) / (1 - fee%)`. At 100 kr/registration: **One live 179 needs 465**, Small live 749 needs 514, Large live 1,799 needs 576. So One is ~2.6x underpriced for the traffic it is bought with — not a rounding error.
+- Guardrails so a modelled price is never mistaken for a real one: amber price cell + tooltip naming what Stripe bills, per-slider delta vs live, "Modelling prices that differ from Stripe" badge, "Back to live prices" button, and copy stating nothing here touches Stripe.
+- **Found while testing:** at a 3x-list ceiling One's slider capped at 537 kr while the model asks for 465 and worse churn pushes it higher — a slider that cannot reach the requested price is a dead end. Ceilings widened to One 1,200 / Small 3,000 / Large 6,000.
+
+### Verification
+- **696 tests pass, 0 failures** (56 in `cac-ltv-shared.test.ts`, up from 32). Key test round-trips the price inverse: charging exactly the required price yields exactly the target ratio, for both Small and One. One earlier test used an arbitrary absolute threshold (0.5 payers) and was rewritten to assert against the ceiling as a proportion.
+- `tsc --noEmit`, `eslint`, `npm run build` clean. Both PRs' production deploys verified state=success/READY and the sections confirmed rendering on prod with live numbers.
+- Browser-driven checks against live prod for both PRs: no console errors, no horizontal overflow at 1440px. `/dashboard/free-users` used as a control after a transient Supabase auth "Failed to fetch" turned out to be a Playwright teardown artefact rather than a page error.
