@@ -6849,3 +6849,33 @@ New **"Where these numbers come from"** panel: the measured funnel with its base
 - 696 tests pass, 0 failures. `tsc --noEmit`, `eslint`, `npm run build` clean.
 - Loader figures cross-checked against direct prod SQL — 694 / 109 / 68 / 16 match exactly.
 - Browser-driven against live prod: banner, ticks and per-stat `Now` lines all behave; no console errors; no horizontal overflow at 1440px. Prod confirmed showing 2.3%, 4,348 kr, 5.8 mo, 3.9x and 8 "(actual)" slider markers.
+
+## CAC/LTV: selectable measurement window + per-source coverage — 2026-08-12
+
+- **PR:** #650 merged as `8b36da3` · production deploy verified success; all five presets confirmed live.
+- **Ask (Jacob):** more info on where the numbers come from; make the time span changeable where applicable; default should be 1 May – 31 July; double-check whether we have all data from 1 May or whether another date is better.
+
+### Do we have data from 1 May? Yes, except one metric.
+Verified against prod for 2026-05-01..2026-07-31 (92 days): `ad_spend` **92/92**, GA4 `new_users` **92/92**, Stripe `active_subscriptions` **92/92**, diagnostics 91/92, GA4 `signup` **87/92**, `ad_signups` **72/92**.
+- The 5 absent `signup` days (May 7, 9, 15, 16, 17) all carry `new_users` data, so the GA4 sync ran and those are **genuine zero-signup days**, not gaps.
+- **`ad_signups` only exists from 2026-05-20.** A 1 May start therefore includes 19 days of ad spend with no attributed signups, making cost-per-ad-signup read artificially expensive. 1 May is still the right default; the answer is to say so on the page and add a **"Clean paid attribution"** preset starting 2026-05-20.
+
+### Window control
+`?window=<preset>`, five presets. Default **"Last 3 full months"** is a *rolling* rule, not pinned dates — resolves to exactly 1 May – 31 Jul today without rotting into a stale quarter later; resolved dates printed next to the control and in the verdict header. Range-scoped: traffic, spend, signups, monthly funnel, conversion measurement. Explicitly **not** range-scoped and labelled: plan state, churn tenure, premium-data usage (they describe *now*, not a period).
+
+### Coverage table
+Per source: what it feeds, days-with-data / days-expected, first→last day in window, status dot. Denominator is **clipped to the day each source first has any data** — without it a wide window reads "118 / 588" and implies a broken pipeline when the source simply did not exist yet.
+
+### Three bugs found by actually switching windows
+1. **A short window silently faked the conversion rate.** "Last 30 days" holds 399 signups but none 45+ days old, so nothing is measurable — the page fell back to the 3.5% constant and rendered a confident green "Profitable after 3.6 months, 5.9x" on top of it. Now: warning **inside the verdict panel itself** (not only lower down), slider suffix flips `(actual)` → `not measurable in this window`, and the note says it is a placeholder.
+2. **Coverage denominators off by one** on rolling windows ("31 / 30") because today's row exists while today is only partly elapsed. Ceiling is now start-of-tomorrow.
+3. **Active window pill rendered black-on-black.** Root cause is systemic and pre-existing: `ceo-legacy.css` has an **unlayered** `a { color: inherit }`, and unlayered rules beat Tailwind's *layered* utilities regardless of specificity, so `text-white` was ignored. Fixed with `!` modifiers on this component only.
+
+**OPEN / worth its own PR:** that same CSS bug affects the **dashboard nav tabs** — the active tab computes `rgb(16,24,40)` instead of indigo, so "which tab am I on" rests on the underline alone. Measured via `getComputedStyle`. Left alone deliberately: scoping `a { color: inherit }` properly has a blast radius across every analytics page.
+
+Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` to drop the contradicting "All synced history" chip on this page — a chip claiming all history above a control saying 1 May – 31 Jul is simply wrong.
+
+### Verification
+- **715 tests pass, 0 failures** (63 in `cac-ltv-shared.test.ts`, +7). New tests pin the default window to 2026-05-01..2026-08-01, that it excludes the month in progress, rolls forward, crosses a year boundary, and that the clean-paid preset starts on the first day `ad_signups` exists.
+- `tsc --noEmit`, `eslint`, `npm run build` clean.
+- Driven against live prod across all presets: window, signup/aged counts, conversion, CAC and every coverage denominator correct; the unmeasurable-window warning appears only where it applies; the stale chip is gone everywhere.
