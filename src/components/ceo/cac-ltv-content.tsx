@@ -82,6 +82,10 @@ function months(value: number | null): string {
 // Every cell prints its own number, so color is secondary encoding only.
 // ---------------------------------------------------------------------------
 
+// Matches SELF_SERVE_COHORT_START in the loader. Kept as a label rather than
+// imported because the loader is server-only.
+const SELF_SERVE_START_LABEL = "May 2026";
+
 function paybackBand(value: number | null): {
   cell: string;
   text: string;
@@ -150,11 +154,14 @@ function Stat({
   value,
   hint,
   tone = "neutral",
+  now,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "neutral" | "good" | "bad" | "warn";
+  /** The value at today's actuals. Shown only when it differs from `value`. */
+  now?: string;
 }) {
   const toneClass = {
     neutral: "text-slate-900",
@@ -162,11 +169,17 @@ function Stat({
     bad: "text-rose-700",
     warn: "text-amber-700",
   }[tone];
+  const showNow = now !== undefined && now !== value;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
       <div className={`text-xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
       <div className="mt-0.5 text-xs font-medium text-slate-600">{label}</div>
+      {showNow ? (
+        <div className="mt-1 text-[11px] font-medium tabular-nums text-indigo-700">
+          Now: {now}
+        </div>
+      ) : null}
       {hint ? <div className="mt-1 text-[11px] leading-snug text-slate-500">{hint}</div> : null}
     </div>
   );
@@ -190,6 +203,7 @@ function Slider({
   value,
   onChange,
   seeded,
+  baseline,
 }: {
   // tierPricesSek is a per-tier record, not a scalar, so it has its own
   // controls and is excluded here.
@@ -199,17 +213,29 @@ function Slider({
   value: number;
   onChange: (next: number) => void;
   seeded?: string;
+  /** The current/actual value. Drawn as a tick and named under the control. */
+  baseline?: number;
 }) {
   const bounds = boundsProp ?? (field ? ASSUMPTION_BOUNDS[field] : undefined);
   const id = idProp ?? (field ? `slider-${field}` : undefined);
   if (!bounds || !id) return null;
 
-  const formatted =
+  const fmt = (v: number) =>
     bounds.unit === "%"
-      ? `${value}%`
+      ? `${v}%`
       : bounds.unit === "months"
-        ? `${value} mo`
-        : `${new Intl.NumberFormat("sv-SE").format(value)} ${bounds.unit}`;
+        ? `${v} mo`
+        : `${new Intl.NumberFormat("sv-SE").format(v)} ${bounds.unit}`;
+
+  // Where the current/actual value sits on the track, so "what is now" is
+  // visible at a glance and it is obvious when a slider has been moved off it.
+  const hasBaseline = baseline !== undefined && Number.isFinite(baseline);
+  const span = bounds.max - bounds.min;
+  const baselinePct =
+    hasBaseline && span > 0
+      ? Math.max(0, Math.min(100, ((baseline! - bounds.min) / span) * 100))
+      : null;
+  const movedOff = hasBaseline && Math.abs(value - baseline!) > bounds.step / 2;
 
   return (
     <div>
@@ -217,18 +243,49 @@ function Slider({
         <label className="text-xs font-medium text-slate-700" htmlFor={id}>
           {bounds.label}
         </label>
-        <span className="text-sm font-semibold tabular-nums text-slate-900">{formatted}</span>
+        <span
+          className={`text-sm font-semibold tabular-nums ${
+            movedOff ? "text-indigo-700" : "text-slate-900"
+          }`}
+        >
+          {fmt(value)}
+        </span>
       </div>
-      <input
-        className="mt-1.5 w-full accent-indigo-600"
-        id={id}
-        max={bounds.max}
-        min={bounds.min}
-        onChange={(event) => onChange(Number(event.target.value))}
-        step={bounds.step}
-        type="range"
-        value={value}
-      />
+
+      <div className="relative mt-1.5">
+        <input
+          className="w-full accent-indigo-600"
+          id={id}
+          max={bounds.max}
+          min={bounds.min}
+          onChange={(event) => onChange(Number(event.target.value))}
+          step={bounds.step}
+          type="range"
+          value={value}
+        />
+        {/* Tick at the current/actual value. */}
+        {baselinePct !== null ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -bottom-0.5 h-2 w-0.5 rounded-full bg-slate-800/70"
+            style={{ left: `calc(${baselinePct}% )` }}
+            title={`Now: ${fmt(baseline!)}`}
+          />
+        ) : null}
+      </div>
+
+      {hasBaseline ? (
+        <p className="mt-1 text-[11px] font-medium tabular-nums">
+          {movedOff ? (
+            <span className="text-indigo-700">
+              Now {fmt(baseline!)} → modelling {fmt(value)}
+            </span>
+          ) : (
+            <span className="text-slate-500">Now: {fmt(baseline!)} (actual)</span>
+          )}
+        </p>
+      ) : null}
+
       {seeded ? (
         <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{seeded}</p>
       ) : null}
@@ -730,15 +787,15 @@ function GrowthSection({
   // it would flatter the projection — the trial pipeline is what spend is
   // actually converting into right now.
   const seededMix = useMemo(() => {
-    const trials = data.trialingByTier;
-    const total = CAC_LTV_TIERS.reduce((sum, tier) => sum + trials[tier.key], 0);
+    const mix = data.selfServeMixByTier;
+    const total = CAC_LTV_TIERS.reduce((sum, tier) => sum + mix[tier.key], 0);
     if (total <= 0) return DEFAULT_GROWTH.newCustomerMix;
     return {
-      one: Math.round((trials.one / total) * 100),
-      small: Math.round((trials.small / total) * 100),
-      large: Math.round((trials.large / total) * 100),
+      one: Math.round((mix.one / total) * 100),
+      small: Math.round((mix.small / total) * 100),
+      large: Math.round((mix.large / total) * 100),
     };
-  }, [data.trialingByTier]);
+  }, [data.selfServeMixByTier]);
 
   const [growth, setGrowth] = useState<GrowthInputs>({
     ...DEFAULT_GROWTH,
@@ -932,12 +989,14 @@ function GrowthSection({
           ))}
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-          Seeded from the {num(CAC_LTV_TIERS.reduce((s, t) => s + data.trialingByTier[t.key], 0))}{" "}
-          trials in flight, which is what spend is converting into right now — not
-          from the paying base, which still carries Large accounts that ads did not
-          produce. Mix is the most powerful control here: One and Large differ 10x
-          in what they can support, so shifting these sliders moves the outcome
-          more than doubling the budget does.
+          Seeded from the{" "}
+          {num(CAC_LTV_TIERS.reduce((s, t) => s + data.selfServeMixByTier[t.key], 0))}{" "}
+          Stripe-billed customers acquired since {SELF_SERVE_START_LABEL} (paying or in
+          trial) — the mix self-serve acquisition actually produces. Deliberately not
+          the whole paying base, which carries Large accounts provisioned by hand that
+          ads did not produce. Mix is the most powerful control here: One and Large
+          differ ~10x in what they can support, so shifting these sliders moves the
+          outcome more than doubling the budget does.
         </p>
       </div>
 
@@ -1175,6 +1234,7 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
     bad: "text-rose-900",
   }[verdict.tone];
 
+  const basis = data.conversionBasis;
   const recentMonths = data.months.slice(-8);
   const totalPastDue = CAC_LTV_TIERS.reduce(
     (sum, tier) => sum + data.pastDueByTier[tier.key],
@@ -1187,6 +1247,44 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
 
   const priceChanged = CAC_LTV_TIERS.some(
     (tier) => assumptions.tierPricesSek[tier.key] !== LIST_PRICES_SEK[tier.key],
+  );
+
+  // Which inputs have been moved off their actual value, and the same model run
+  // at those actuals — so every headline number can show "now" beside the
+  // scenario instead of leaving the reader to remember what it said before.
+  const changedFields = useMemo(() => {
+    const labels: string[] = [];
+    for (const key of Object.keys(ASSUMPTION_BOUNDS) as Array<
+      Exclude<keyof CacLtvAssumptions, "tierPricesSek">
+    >) {
+      if (assumptions[key] !== seededAssumptions[key]) labels.push(ASSUMPTION_BOUNDS[key].label);
+    }
+    if (priceChanged) labels.push("plan prices");
+    return labels;
+  }, [assumptions, seededAssumptions, priceChanged]);
+  const isModelling = changedFields.length > 0;
+
+  const baselineTiers = useMemo(
+    () =>
+      CAC_LTV_TIERS.map((tier) =>
+        computeTierEconomics(tier, seededAssumptions, {
+          vehiclesPerMonth: data.vehiclesPerMonthByTier[tier.key],
+          aiCostPerMonthSek:
+            data.diagnosticsPerPayingWorkshopPerMonth *
+            data.aiCostPerDiagnosticUsd *
+            seededAssumptions.sekPerUsd,
+          payingNow: data.payingByTier[tier.key],
+        }),
+      ),
+    [seededAssumptions, data],
+  );
+  const baselineHeadline = useMemo(
+    () => blendTiers(baselineTiers, seededAssumptions) ?? baselineTiers[1],
+    [baselineTiers, seededAssumptions],
+  );
+  const baselineCac = cacPerCustomer(
+    seededAssumptions.cacPerSignupSek,
+    seededAssumptions.signupToPaidPct,
   );
 
   const affordableFor = (tier: TierEconomics) =>
@@ -1254,28 +1352,33 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
           <Stat
             hint={`${sek(assumptions.cacPerSignupSek)} per signup ÷ ${pct(assumptions.signupToPaidPct)}`}
             label="CAC per paying customer"
+            now={sek(baselineCac)}
             value={sek(cac)}
           />
           <Stat
             hint={`${sek(headline.grossProfitSek)} gross profit/mo, survival-weighted`}
             label="Break-even"
+            now={months(baselineHeadline.breakEvenMonths)}
             tone={headline.breakEvenMonths === null ? "bad" : headline.breakEvenMonths <= 12 ? "good" : "warn"}
             value={months(headline.breakEvenMonths)}
           />
           <Stat
             hint={`Gross-profit LTV at ${pct(assumptions.monthlyChurnPct)} churn`}
             label="LTV"
+            now={sek(baselineHeadline.ltvSek)}
             value={sek(headline.ltvSek)}
           />
           <Stat
             hint="3x or better is the bar"
             label="LTV:CAC"
+            now={`${baselineHeadline.ltvCac.toFixed(1)}x`}
             tone={headline.ltvCac >= 3 ? "good" : headline.ltvCac >= 1 ? "warn" : "bad"}
             value={`${headline.ltvCac.toFixed(1)}x`}
           />
           <Stat
             hint="Above this, the CAC is never repaid"
             label="Max survivable churn"
+            now={pct(maxSurvivableChurnPct(baselineCac, baselineHeadline.grossProfitSek))}
             tone="neutral"
             value={pct(churnCeiling)}
           />
@@ -1323,6 +1426,143 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
       </div>
 
       {/* ---------------------------------------------------------------- */}
+      {/* Where the numbers come from                                      */}
+      {/* ---------------------------------------------------------------- */}
+      <Panel
+        description="Every figure above, traced back to the rows it was counted from. Measured values are stated with their base so the sample size is never hidden."
+        eyebrow="Show your work"
+        title="Where these numbers come from"
+      >
+        <div className="mb-5">
+          <p className="text-xs font-semibold text-slate-700">
+            The measured funnel — {num(basis.agedSignups)} signups old enough to have
+            converted
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Counts every workshop that signed up from {SELF_SERVE_START_LABEL} onwards
+            and is at least {basis.windowDays} days old (a 14-day trial plus about one
+            invoice cycle), so nothing is judged before it had the chance to pay.
+            Signups {basis.firstSignup} to {basis.lastSignup}. Internal-test accounts
+            excluded.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-3">
+            <FunnelStep label="Signed up" sub="on Free" value={num(basis.agedSignups)} />
+            <StepArrow note={pct(basis.checkoutPct, 1)} />
+            <FunnelStep
+              label="Reached checkout"
+              sub="Stripe customer"
+              value={num(basis.reachedCheckout)}
+            />
+            <StepArrow note={pct(basis.trialPct, 1)} />
+            <FunnelStep
+              label="Started a trial"
+              sub="card on file"
+              value={num(basis.startedTrial)}
+            />
+            <StepArrow note={pct(basis.selfServePct, 2)} />
+            <FunnelStep
+              label="Paying today"
+              sub="Stripe-billed"
+              tone="good"
+              value={num(basis.payingSelfServe)}
+            />
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
+            The percentages under each arrow are all measured against the{" "}
+            <strong>{num(basis.agedSignups)}</strong> signups, not against the previous
+            step, so they can be read directly as &ldquo;X% of everything we bought&rdquo;.
+            So the{" "}
+            <strong className="text-slate-900">
+              {pct(basis.selfServePct, 1)} signup → paying
+            </strong>{" "}
+            rate is {num(basis.payingSelfServe)} paying customers out of{" "}
+            {num(basis.agedSignups)} signups. It is a real count, not a forecast — but it
+            is {num(basis.payingSelfServe)} customers, so treat one more or fewer as
+            meaningful movement.
+          </p>
+          {basis.payingManual > 0 ? (
+            <div className="mt-3 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <p className="text-xs leading-relaxed text-amber-900">
+                <strong className="font-semibold">
+                  Why this is {pct(basis.selfServePct, 1)} and not {pct(basis.inflatedPct, 1)}.
+                </strong>{" "}
+                A further {basis.payingManual} paying workshop
+                {basis.payingManual === 1 ? "" : "s"} in this window carry no Stripe
+                customer or subscription id at all, so they never went through checkout —
+                they were provisioned by hand (comped, pilot, or closed by a person).
+                Counting them as acquisition would read {pct(basis.inflatedPct, 1)}, and
+                they sit mostly in Large, the tier ads do not produce. They are real
+                revenue, just not something a signup budget bought.
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="border-t border-slate-200 pt-4">
+          <p className="text-xs font-semibold text-slate-700">
+            How each headline number is built
+          </p>
+          <div className="mt-2 space-y-2">
+            {[
+              {
+                name: "CAC per paying customer",
+                formula: "cost per signup ÷ signup→paying",
+                worked: `${sek(assumptions.cacPerSignupSek)} ÷ ${pct(assumptions.signupToPaidPct, 2)} = ${sek(cac)}`,
+                why: "The step the whole question turns on. Buying a payer means buying all the signups that did not convert too.",
+              },
+              {
+                name: "Net ARPA",
+                formula: "list price × (1 − discount)",
+                worked: `blended ${sek(headline.netArpaSek)} across the ${num(headline.payingNow)} paying customers today`,
+                why: "SEK list prices, cross-checked against Stripe price ids. Yearly plans are counted at their monthly equivalent.",
+              },
+              {
+                name: "Gross profit / month",
+                formula: "net ARPA − AI − premium data − payment fees",
+                worked: `${sek(headline.netArpaSek)} − ${sek(headline.variableCostSek)} = ${sek(headline.grossProfitSek)} (${pct(headline.grossMarginPct, 0)} margin)`,
+                why: "AI is measured and tiny. Premium vehicle data is measured in volume but its unit rate is an assumption — the biggest hole in the model.",
+              },
+              {
+                name: "LTV",
+                formula: "monthly gross profit ÷ monthly churn",
+                worked: `${sek(headline.grossProfitSek)} ÷ ${pct(assumptions.monthlyChurnPct)} = ${sek(headline.ltvSek)}`,
+                why: "Gross-profit LTV, not revenue LTV. Churn is the least-evidenced input on the page, so treat this as a scenario.",
+              },
+              {
+                name: "Break-even",
+                formula: "months until survival-weighted gross profit repays CAC",
+                worked:
+                  headline.breakEvenMonths === null
+                    ? "never — CAC is at or above LTV"
+                    : `${months(headline.breakEvenMonths)} (the workbook's CAC ÷ gross profit would say ${months(headline.naivePaybackMonths)})`,
+                why: "Each future month is discounted by the chance the customer is still there, which is why it is slower than the naive figure.",
+              },
+              {
+                name: "LTV:CAC",
+                formula: "LTV ÷ CAC per paying customer",
+                worked: `${sek(headline.ltvSek)} ÷ ${sek(cac)} = ${headline.ltvCac.toFixed(1)}x`,
+                why: `3x is the conventional bar. Below 1x the customer is bought at a loss for life.`,
+              },
+            ].map((row) => (
+              <div className="rounded-lg border border-slate-200 p-3" key={row.name}>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <strong className="text-xs font-semibold text-slate-900">{row.name}</strong>
+                  <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">
+                    {row.formula}
+                  </code>
+                </div>
+                <p className="mt-1 text-xs font-medium tabular-nums text-slate-900">
+                  {row.worked}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{row.why}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Panel>
+
+      {/* ---------------------------------------------------------------- */}
       {/* Assumptions                                                      */}
       {/* ---------------------------------------------------------------- */}
       <Panel
@@ -1336,12 +1576,36 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
             Reset
           </button>
         }
-        description="Blue-font cells in the CEO's workbook. Two are measured and seeded from prod; the rest are genuinely unknown and are yours to argue about. What is measured and what is assumed is labelled on every control."
+        description="Blue-font cells in the CEO's workbook. Every control shows its current actual value as a tick on the track and as 'Now:' underneath, so it is always clear what is real and what you have changed. Two are measured from prod; the rest are genuinely unknown and are yours to argue about."
         eyebrow="Inputs"
         title="Assumptions"
       >
+        {isModelling ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
+            <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+              Modelling
+            </span>
+            <span className="text-xs text-indigo-900">
+              {changedFields.length} input{changedFields.length === 1 ? "" : "s"} changed from
+              actual: {changedFields.join(", ")}. Everything below reflects your
+              scenario, not today.
+            </span>
+          </div>
+        ) : (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[11px] font-semibold text-white">
+              Actual
+            </span>
+            <span className="text-xs text-slate-700">
+              Every input is at its current measured or agreed value. This is the
+              business as it stands today.
+            </span>
+          </div>
+        )}
+
         <div className="grid gap-x-8 gap-y-4 md:grid-cols-2 lg:grid-cols-4">
           <Slider
+            baseline={seededAssumptions.cacPerSignupSek}
             field="cacPerSignupSek"
             onChange={set("cacPerSignupSek")}
             seeded={
@@ -1352,16 +1616,18 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
             value={assumptions.cacPerSignupSek}
           />
           <Slider
+            baseline={seededAssumptions.signupToPaidPct}
             field="signupToPaidPct"
             onChange={set("signupToPaidPct")}
             seeded={
-              data.matureSignupToPaidPct !== null
-                ? `Measured: ${pct(data.matureSignupToPaidPct)} across mature self-serve cohorts.`
-                : "Not enough mature cohorts yet."
+              basis.selfServePct !== null
+                ? `Measured: ${num(basis.payingSelfServe)} Stripe-billed payers out of ${num(basis.agedSignups)} signups aged ${basis.windowDays}+ days. See "Where these numbers come from".`
+                : "Not enough aged signups yet."
             }
             value={assumptions.signupToPaidPct}
           />
           <Slider
+            baseline={seededAssumptions.monthlyChurnPct}
             field="monthlyChurnPct"
             onChange={set("monthlyChurnPct")}
             seeded={
@@ -1372,30 +1638,35 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
             value={assumptions.monthlyChurnPct}
           />
           <Slider
+            baseline={seededAssumptions.perVehicleDataCostSek}
             field="perVehicleDataCostSek"
             onChange={set("perVehicleDataCostSek")}
             seeded="Assumption. Supplier rate for one InfoPro/Motor lookup — exists in no table we sync."
             value={assumptions.perVehicleDataCostSek}
           />
           <Slider
+            baseline={seededAssumptions.discountPct}
             field="discountPct"
             onChange={set("discountPct")}
             seeded="Assumption. Average realized discount off SEK list price."
             value={assumptions.discountPct}
           />
           <Slider
+            baseline={seededAssumptions.stripeFeePct}
             field="stripeFeePct"
             onChange={set("stripeFeePct")}
             seeded="Assumption. Stripe's EU card rate is ~1.5% + fixed."
             value={assumptions.stripeFeePct}
           />
           <Slider
+            baseline={seededAssumptions.stripeFeeFixedSek}
             field="stripeFeeFixedSek"
             onChange={set("stripeFeeFixedSek")}
             seeded="Assumption. Per-charge fixed fee."
             value={assumptions.stripeFeeFixedSek}
           />
           <Slider
+            baseline={seededAssumptions.sekPerUsd}
             field="sekPerUsd"
             onChange={set("sekPerUsd")}
             seeded="Assumption. Ad spend and AI cost are synced in USD."

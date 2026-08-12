@@ -753,6 +753,40 @@ export type ChurnEvidence = {
   observedWindowMonths: number;
 };
 
+/**
+ * Exactly what backs the signup → paying rate, so the page can show its work.
+ *
+ * Two corrections live in here, both of which moved the headline materially:
+ *
+ *  1. AGE, NOT COHORT MATURITY. Judging a whole calendar month as mature or not
+ *     threw away most of the data — on 2026-08-12 only the May cohort qualified,
+ *     so the entire model rested on one month. Filtering individual signups by
+ *     their own age keeps every signup that has had time to convert.
+ *  2. SELF-SERVE ONLY. Some paying workshops carry no Stripe customer OR
+ *     subscription id, meaning they never went through checkout — they were
+ *     provisioned by hand (comped, pilot, sales-closed). Counting them as ad
+ *     conversions overstated the rate by roughly half, and they are concentrated
+ *     in Large, which is exactly the tier ads do not produce.
+ */
+export type ConversionBasis = {
+  /** A signup must be at least this old to count: 14-day trial + first invoice. */
+  windowDays: number;
+  firstSignup: string | null;
+  lastSignup: string | null;
+  agedSignups: number;
+  reachedCheckout: number;
+  startedTrial: number;
+  /** Paying now AND Stripe-billed. This is the numerator. */
+  payingSelfServe: number;
+  /** Paying now with no Stripe ids at all. Excluded, and counted here. */
+  payingManual: number;
+  selfServePct: number | null;
+  checkoutPct: number | null;
+  trialPct: number | null;
+  /** What the rate would read if manually provisioned accounts were included. */
+  inflatedPct: number | null;
+};
+
 export type CacLtvData = {
   asOf: string;
   months: CacLtvMonthRow[];
@@ -778,8 +812,15 @@ export type CacLtvData = {
   aiCostPerDiagnosticUsd: number;
   diagnosticsPerPayingWorkshopPerMonth: number;
   churn: ChurnEvidence;
-  /** Mature-cohort signup → paying, used to seed the conversion assumption. */
+  /** Measured signup → paying (self-serve). Seeds the conversion assumption. */
   matureSignupToPaidPct: number | null;
+  conversionBasis: ConversionBasis;
+  /**
+   * Plan mix of Stripe-billed ads-era customers (paying + trialing). This is the
+   * mix ads actually produce, and it differs sharply from the whole paying base:
+   * most Large accounts were provisioned by hand.
+   */
+  selfServeMixByTier: Record<CacLtvTierKey, number>;
   /** Blended cost per signup actually paid: ad spend / all signups. */
   blendedCostPerSignupSek: number | null;
   /** Cost per ad-attributed signup: ad spend / ad signups. */
