@@ -680,6 +680,190 @@ export type Database = {
           },
         ]
       }
+      call_agent_jobs: {
+        Row: {
+          attempts: number
+          call_session_id: string | null
+          campaign_key: string | null
+          company_id: string | null
+          contact_id: string
+          created_at: string
+          enqueued_at: string
+          enqueued_by: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          list_id: string | null
+          objective: string | null
+          provider_conversation_id: string | null
+          scheduled_for: string
+          skip_reason: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          call_session_id?: string | null
+          campaign_key?: string | null
+          company_id?: string | null
+          contact_id: string
+          created_at?: string
+          enqueued_at?: string
+          enqueued_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          list_id?: string | null
+          objective?: string | null
+          provider_conversation_id?: string | null
+          scheduled_for?: string
+          skip_reason?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          call_session_id?: string | null
+          campaign_key?: string | null
+          company_id?: string | null
+          contact_id?: string
+          created_at?: string
+          enqueued_at?: string
+          enqueued_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          list_id?: string | null
+          objective?: string | null
+          provider_conversation_id?: string | null
+          scheduled_for?: string
+          skip_reason?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_agent_jobs_call_session_id_fkey"
+            columns: ["call_session_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_agent_jobs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_agent_jobs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_agent_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_agent_settings: {
+        Row: {
+          call_days: number[]
+          call_end_hour: number
+          call_start_hour: number
+          callback_owner_user_id: string | null
+          created_at: string
+          daily_call_count: number
+          daily_call_date: string | null
+          daily_cap: number
+          enabled: boolean
+          greeting_note: string | null
+          languages_enabled: string[]
+          max_attempts_per_contact: number
+          min_days_between_calls: number
+          mode: string
+          persona_name: string
+          provider: string
+          provider_agent_ids: Json
+          provider_api_key_encrypted: string | null
+          provider_kb_doc_id: string | null
+          updated_at: string
+          voice_ids: Json
+          webhook_secret: string | null
+          workspace_id: string
+        }
+        Insert: {
+          call_days?: number[]
+          call_end_hour?: number
+          call_start_hour?: number
+          callback_owner_user_id?: string | null
+          created_at?: string
+          daily_call_count?: number
+          daily_call_date?: string | null
+          daily_cap?: number
+          enabled?: boolean
+          greeting_note?: string | null
+          languages_enabled?: string[]
+          max_attempts_per_contact?: number
+          min_days_between_calls?: number
+          mode?: string
+          persona_name?: string
+          provider?: string
+          provider_agent_ids?: Json
+          provider_api_key_encrypted?: string | null
+          provider_kb_doc_id?: string | null
+          updated_at?: string
+          voice_ids?: Json
+          webhook_secret?: string | null
+          workspace_id: string
+        }
+        Update: {
+          call_days?: number[]
+          call_end_hour?: number
+          call_start_hour?: number
+          callback_owner_user_id?: string | null
+          created_at?: string
+          daily_call_count?: number
+          daily_call_date?: string | null
+          daily_cap?: number
+          enabled?: boolean
+          greeting_note?: string | null
+          languages_enabled?: string[]
+          max_attempts_per_contact?: number
+          min_days_between_calls?: number
+          mode?: string
+          persona_name?: string
+          provider?: string
+          provider_agent_ids?: Json
+          provider_api_key_encrypted?: string | null
+          provider_kb_doc_id?: string | null
+          updated_at?: string
+          voice_ids?: Json
+          webhook_secret?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_agent_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_exclusions: {
         Row: {
           created_at: string
@@ -802,6 +986,7 @@ export type Database = {
       call_sessions: {
         Row: {
           activity_id: string | null
+          agent_job_id: string | null
           agent_number: string | null
           ai_json: Json | null
           ai_model: string | null
@@ -816,10 +1001,12 @@ export type Database = {
           error: string | null
           from_number: string | null
           id: string
+          initiated_by: string
           list_id: string | null
           live_tips: Json | null
           provider: string
           provider_call_id: string | null
+          provider_conversation_id: string | null
           recording_storage_path: string | null
           recording_url: string | null
           started_at: string
@@ -833,6 +1020,7 @@ export type Database = {
         }
         Insert: {
           activity_id?: string | null
+          agent_job_id?: string | null
           agent_number?: string | null
           ai_json?: Json | null
           ai_model?: string | null
@@ -847,10 +1035,12 @@ export type Database = {
           error?: string | null
           from_number?: string | null
           id?: string
+          initiated_by?: string
           list_id?: string | null
           live_tips?: Json | null
           provider?: string
           provider_call_id?: string | null
+          provider_conversation_id?: string | null
           recording_storage_path?: string | null
           recording_url?: string | null
           started_at?: string
@@ -864,6 +1054,7 @@ export type Database = {
         }
         Update: {
           activity_id?: string | null
+          agent_job_id?: string | null
           agent_number?: string | null
           ai_json?: Json | null
           ai_model?: string | null
@@ -878,10 +1069,12 @@ export type Database = {
           error?: string | null
           from_number?: string | null
           id?: string
+          initiated_by?: string
           list_id?: string | null
           live_tips?: Json | null
           provider?: string
           provider_call_id?: string | null
+          provider_conversation_id?: string | null
           recording_storage_path?: string | null
           recording_url?: string | null
           started_at?: string
