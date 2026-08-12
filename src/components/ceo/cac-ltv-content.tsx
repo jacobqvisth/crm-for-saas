@@ -15,6 +15,8 @@ import {
   ASSUMPTION_BOUNDS,
   CAC_LTV_TIERS,
   DEFAULT_ASSUMPTIONS,
+  DEFAULT_GROWTH,
+  GROWTH_BOUNDS,
   MIN_VEHICLE_SAMPLE,
   SENSITIVITY_CAC_SEK,
   SENSITIVITY_CHURN_PCT,
@@ -28,8 +30,13 @@ import {
   cumulativeGrossProfit,
   maxSurvivableChurnPct,
   requiredConversionPct,
+  simulateGrowth,
   type CacLtvAssumptions,
   type CacLtvData,
+  type CacLtvTierKey,
+  type GrowthInputs,
+  type GrowthMonthRow,
+  type GrowthResult,
   type TierEconomics,
 } from "@/lib/ceo/cac-ltv-shared";
 
@@ -162,31 +169,54 @@ function Stat({
   );
 }
 
+type SliderBounds = {
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+  readonly label: string;
+  readonly unit: string;
+};
+
+// Takes either an assumption `field` (bounds looked up from ASSUMPTION_BOUNDS,
+// id derived so it stays stable for tests) or an explicit bounds + id, which is
+// what the growth controls use.
 function Slider({
   field,
+  bounds: boundsProp,
+  id: idProp,
   value,
   onChange,
   seeded,
 }: {
-  field: keyof CacLtvAssumptions;
+  field?: keyof CacLtvAssumptions;
+  bounds?: SliderBounds;
+  id?: string;
   value: number;
   onChange: (next: number) => void;
   seeded?: string;
 }) {
-  const bounds = ASSUMPTION_BOUNDS[field];
+  const bounds = boundsProp ?? (field ? ASSUMPTION_BOUNDS[field] : undefined);
+  const id = idProp ?? (field ? `slider-${field}` : undefined);
+  if (!bounds || !id) return null;
+
+  const formatted =
+    bounds.unit === "%"
+      ? `${value}%`
+      : bounds.unit === "months"
+        ? `${value} mo`
+        : `${new Intl.NumberFormat("sv-SE").format(value)} ${bounds.unit}`;
+
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
-        <label className="text-xs font-medium text-slate-700" htmlFor={`slider-${field}`}>
+        <label className="text-xs font-medium text-slate-700" htmlFor={id}>
           {bounds.label}
         </label>
-        <span className="text-sm font-semibold tabular-nums text-slate-900">
-          {bounds.unit === "%" ? `${value}%` : `${value} ${bounds.unit}`}
-        </span>
+        <span className="text-sm font-semibold tabular-nums text-slate-900">{formatted}</span>
       </div>
       <input
         className="mt-1.5 w-full accent-indigo-600"
-        id={`slider-${field}`}
+        id={id}
         max={bounds.max}
         min={bounds.min}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -436,6 +466,615 @@ function BreakEvenCurve({
         Months since acquisition. Gross profit in SEK per acquired customer, each
         month weighted by the chance the customer is still subscribed.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Growth simulator charts.
+//
+// Two separate charts on purpose. Payers and SEK are different units, and a
+// dual-axis chart would invite reading a crossing point that means nothing.
+// ---------------------------------------------------------------------------
+
+function PayerGrowthChart({ result }: { result: GrowthResult }) {
+  const rows = result.rows;
+  const width = 720;
+  const height = 200;
+  const padLeft = 56;
+  const padRight = 16;
+  const padTop = 12;
+  const padBottom = 26;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+
+  const ceiling = Number.isFinite(result.steadyStatePayers) ? result.steadyStatePayers : 0;
+  const maxValue = Math.max(ceiling * 1.08, ...rows.map((r) => r.payerBase), 1);
+  const x = (month: number) =>
+    padLeft + ((month - 1) / Math.max(1, rows.length - 1)) * plotW;
+  const y = (value: number) => padTop + plotH - (value / maxValue) * plotH;
+
+  const line = rows
+    .map((r, i) => `${i === 0 ? "M" : "L"} ${x(r.month).toFixed(1)} ${y(r.payerBase).toFixed(1)}`)
+    .join(" ");
+  const area = `${line} L ${x(rows[rows.length - 1]?.month ?? 1).toFixed(1)} ${y(0).toFixed(1)} L ${x(1).toFixed(1)} ${y(0).toFixed(1)} Z`;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((r) => r * maxValue);
+  const monthTicks = rows
+    .map((r) => r.month)
+    .filter((m) => m === 1 || m % Math.max(1, Math.round(rows.length / 6)) === 0);
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded bg-[#12b76a]" />
+          Paying customers
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0 w-4 border-t-2 border-dashed border-slate-400" />
+          Steady-state ceiling ({num(ceiling)} payers)
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <svg
+          className="min-w-[560px]"
+          height={height}
+          role="img"
+          aria-label={`Paying customers over ${rows.length} months, converging on ${num(ceiling)}`}
+          viewBox={`0 0 ${width} ${height}`}
+          width="100%"
+        >
+          <defs>
+            <linearGradient id="growth-fill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#12b76a" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#12b76a" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {ticks.map((t) => (
+            <g key={t}>
+              <line stroke="#e2e8f0" x1={padLeft} x2={width - padRight} y1={y(t)} y2={y(t)} />
+              <text
+                className="fill-slate-400 text-[10px] tabular-nums"
+                textAnchor="end"
+                x={padLeft - 8}
+                y={y(t) + 3}
+              >
+                {num(t)}
+              </text>
+            </g>
+          ))}
+          {ceiling > 0 && ceiling <= maxValue ? (
+            <line
+              stroke="#94a3b8"
+              strokeDasharray="4 3"
+              strokeWidth="1.5"
+              x1={padLeft}
+              x2={width - padRight}
+              y1={y(ceiling)}
+              y2={y(ceiling)}
+            />
+          ) : null}
+          <path d={area} fill="url(#growth-fill)" />
+          <path d={line} fill="none" stroke="#12b76a" strokeWidth="2" />
+          {monthTicks.map((m) => (
+            <text
+              className="fill-slate-400 text-[10px] tabular-nums"
+              key={m}
+              textAnchor="middle"
+              x={x(m)}
+              y={height - 8}
+            >
+              {m}
+            </text>
+          ))}
+        </svg>
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500">
+        Months of constant spend. The curve flattens onto the ceiling because
+        churn removes a fixed share of the base every month — past that point more
+        months buy nothing, only more budget, better conversion or lower churn do.
+      </p>
+    </div>
+  );
+}
+
+function CashChart({ result }: { result: GrowthResult }) {
+  const rows = result.rows;
+  const width = 720;
+  const height = 200;
+  const padLeft = 64;
+  const padRight = 16;
+  const padTop = 12;
+  const padBottom = 26;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+
+  const values = rows.flatMap((r) => [r.cumulativeSpendSek, r.cumulativeSpendSek + r.cumulativeNetSek]);
+  const maxValue = Math.max(...values, 1);
+  const minValue = Math.min(0, ...rows.map((r) => r.cumulativeNetSek));
+  const span = maxValue - minValue || 1;
+
+  const x = (month: number) => padLeft + ((month - 1) / Math.max(1, rows.length - 1)) * plotW;
+  const y = (value: number) => padTop + plotH - ((value - minValue) / span) * plotH;
+
+  const path = (pick: (r: GrowthMonthRow) => number) =>
+    rows.map((r, i) => `${i === 0 ? "M" : "L"} ${x(r.month).toFixed(1)} ${y(pick(r)).toFixed(1)}`).join(" ");
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((r) => minValue + r * span);
+  const monthTicks = rows
+    .map((r) => r.month)
+    .filter((m) => m === 1 || m % Math.max(1, Math.round(rows.length / 6)) === 0);
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded bg-rose-500" />
+          Cumulative spend
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded bg-[#465fff]" />
+          Cumulative gross profit
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0 w-4 border-t-2 border-dotted border-slate-500" />
+          Net (profit − spend)
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <svg
+          className="min-w-[560px]"
+          height={height}
+          role="img"
+          aria-label="Cumulative spend against cumulative gross profit in SEK"
+          viewBox={`0 0 ${width} ${height}`}
+          width="100%"
+        >
+          {ticks.map((t) => (
+            <g key={t}>
+              <line stroke="#e2e8f0" x1={padLeft} x2={width - padRight} y1={y(t)} y2={y(t)} />
+              <text
+                className="fill-slate-400 text-[10px] tabular-nums"
+                textAnchor="end"
+                x={padLeft - 8}
+                y={y(t) + 3}
+              >
+                {compactSek(t)}
+              </text>
+            </g>
+          ))}
+          {/* Zero line — the net series crossing it is payback. */}
+          {minValue < 0 ? (
+            <line stroke="#94a3b8" strokeWidth="1" x1={padLeft} x2={width - padRight} y1={y(0)} y2={y(0)} />
+          ) : null}
+          <path d={path((r) => r.cumulativeSpendSek)} fill="none" stroke="#f43f5e" strokeWidth="2" />
+          <path
+            d={path((r) => r.cumulativeSpendSek + r.cumulativeNetSek)}
+            fill="none"
+            stroke="#465fff"
+            strokeWidth="2"
+          />
+          <path
+            d={path((r) => r.cumulativeNetSek)}
+            fill="none"
+            stroke="#475569"
+            strokeDasharray="3 3"
+            strokeWidth="1.5"
+          />
+          {result.paybackMonth !== null ? (
+            <g>
+              <circle
+                cx={x(result.paybackMonth)}
+                cy={y(0)}
+                fill="#ffffff"
+                r="5"
+                stroke="#0f172a"
+                strokeWidth="2"
+              />
+              <text
+                className="fill-slate-900 text-[11px] font-semibold"
+                textAnchor={result.paybackMonth > rows.length * 0.7 ? "end" : "start"}
+                x={x(result.paybackMonth) + (result.paybackMonth > rows.length * 0.7 ? -8 : 8)}
+                y={y(0) - 8}
+              >
+                Cash-positive month {result.paybackMonth}
+              </text>
+            </g>
+          ) : null}
+          {monthTicks.map((m) => (
+            <text
+              className="fill-slate-400 text-[10px] tabular-nums"
+              key={m}
+              textAnchor="middle"
+              x={x(m)}
+              y={height - 8}
+            >
+              {m}
+            </text>
+          ))}
+        </svg>
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500">
+        Cumulative SEK. The dotted net line crossing zero is the month the
+        programme has returned more gross profit than it has spent. Spend keeps
+        accruing forever, so if the net line turns down again the programme is
+        running past the point the funnel can support.
+      </p>
+    </div>
+  );
+}
+
+function compactSek(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${Math.round(value / 1_000)}k`;
+  return num(value);
+}
+
+function GrowthSection({
+  data,
+  assumptions,
+  aiCostPerMonthSek,
+}: {
+  data: CacLtvData;
+  assumptions: CacLtvAssumptions;
+  aiCostPerMonthSek: number;
+}) {
+  // Seed the new-customer mix from the trials in flight, not the paying base.
+  // The paying base carries Large accounts that ads did not produce, and using
+  // it would flatter the projection — the trial pipeline is what spend is
+  // actually converting into right now.
+  const seededMix = useMemo(() => {
+    const trials = data.trialingByTier;
+    const total = CAC_LTV_TIERS.reduce((sum, tier) => sum + trials[tier.key], 0);
+    if (total <= 0) return DEFAULT_GROWTH.newCustomerMix;
+    return {
+      one: Math.round((trials.one / total) * 100),
+      small: Math.round((trials.small / total) * 100),
+      large: Math.round((trials.large / total) * 100),
+    };
+  }, [data.trialingByTier]);
+
+  const [growth, setGrowth] = useState<GrowthInputs>({
+    ...DEFAULT_GROWTH,
+    newCustomerMix: seededMix,
+  });
+
+  const result = useMemo(
+    () =>
+      simulateGrowth(growth, assumptions, data.vehiclesPerMonthByTier, aiCostPerMonthSek),
+    [growth, assumptions, data.vehiclesPerMonthByTier, aiCostPerMonthSek],
+  );
+
+  const setField = (field: "monthlyBudgetSek" | "horizonMonths" | "conversionLagMonths") =>
+    (next: number) => setGrowth((cur) => ({ ...cur, [field]: next }));
+
+  const setMix = (tier: CacLtvTierKey) => (next: number) =>
+    setGrowth((cur) => ({
+      ...cur,
+      newCustomerMix: { ...cur.newCustomerMix, [tier]: next },
+    }));
+
+  const mixTotal = CAC_LTV_TIERS.reduce((sum, t) => sum + growth.newCustomerMix[t.key], 0);
+  const annualSpend = growth.monthlyBudgetSek * 12;
+
+  // Table is sampled so a 48-month horizon stays readable.
+  const step = Math.max(1, Math.round(result.rows.length / 12));
+  const tableRows = result.rows.filter(
+    (r) => r.month === 1 || r.month % step === 0 || r.month === result.rows.length,
+  );
+
+  return (
+    <Panel
+      actions={
+        <button
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          onClick={() => setGrowth({ ...DEFAULT_GROWTH, newCustomerMix: seededMix })}
+          type="button"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reset
+        </button>
+      }
+      description="Constant monthly spend projected forward. A signup is only a signup — this section keeps the dilution visible at every step, because the gap between what spend buys in signups and what it buys in revenue is the entire question."
+      eyebrow="Spend → growth"
+      title="What a monthly budget actually buys"
+    >
+      {/* Controls */}
+      <div className="grid gap-x-8 gap-y-4 md:grid-cols-2 lg:grid-cols-3">
+        <Slider
+          bounds={GROWTH_BOUNDS.monthlyBudgetSek}
+          id="growth-budget"
+          onChange={setField("monthlyBudgetSek")}
+          seeded={`${sek(annualSpend)} a year. Actual spend has run ${sek(data.months.filter((m) => m.adSpendUsd > 0).slice(-1)[0]?.adSpendUsd * assumptions.sekPerUsd || 0)} in the latest month with spend.`}
+          value={growth.monthlyBudgetSek}
+        />
+        <Slider
+          bounds={GROWTH_BOUNDS.horizonMonths}
+          id="growth-horizon"
+          onChange={setField("horizonMonths")}
+          seeded="How far to project. Watch the payer curve flatten."
+          value={growth.horizonMonths}
+        />
+        <Slider
+          bounds={GROWTH_BOUNDS.conversionLagMonths}
+          id="growth-lag"
+          onChange={setField("conversionLagMonths")}
+          seeded="14-day trial plus the first invoice, so roughly one month."
+          value={growth.conversionLagMonths}
+        />
+      </div>
+
+      {/* The dilution chain, stated plainly */}
+      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+        <p className="text-xs font-semibold text-slate-700">
+          What {sek(growth.monthlyBudgetSek)} a month buys, step by step
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-3">
+          <FunnelStep
+            label="Spend"
+            sub="per month"
+            value={sek(growth.monthlyBudgetSek)}
+          />
+          <StepArrow note={`÷ ${sek(assumptions.cacPerSignupSek)}`} />
+          <FunnelStep
+            label="Signups"
+            sub="per month"
+            value={num(result.signupsPerMonth)}
+          />
+          <StepArrow note={`× ${pct(assumptions.signupToPaidPct)}`} />
+          <FunnelStep
+            label="New payers"
+            sub="per month"
+            tone="good"
+            value={result.newPayersPerMonth.toFixed(1)}
+          />
+          <StepArrow note={`÷ ${pct(assumptions.monthlyChurnPct)} churn`} />
+          <FunnelStep
+            label="Payer ceiling"
+            sub="steady state"
+            tone="good"
+            value={num(result.steadyStatePayers)}
+          />
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
+          The other{" "}
+          <strong className="tabular-nums">
+            {num(result.signupsPerMonth - result.newPayersPerMonth)}
+          </strong>{" "}
+          signups a month ({pct(100 - assumptions.signupToPaidPct)} of them) never
+          pay and stay on Free. Over {growth.horizonMonths} months that is{" "}
+          <strong className="tabular-nums">{num(result.endFreeBase)}</strong>{" "}
+          free accounts added. They are counted here but not costed.
+        </p>
+      </div>
+
+      {/* Headline outcomes */}
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          hint={`${num(result.steadyStatePayers)} payer ceiling × ${sek(result.newMixArpaSek)} ARPA`}
+          label="Steady-state MRR"
+          tone="good"
+          value={sek(result.steadyStateMrrSek)}
+        />
+        <Stat
+          hint={`${num(result.endPayers)} payers alive at month ${growth.horizonMonths}`}
+          label={`MRR at month ${growth.horizonMonths}`}
+          value={sek(result.endMrrSek)}
+        />
+        <Stat
+          hint={`${sek(result.totalSpendSek)} spent over the horizon`}
+          label="Cost per retained payer"
+          value={
+            Number.isFinite(result.costPerRetainedPayerSek)
+              ? sek(result.costPerRetainedPayerSek)
+              : "—"
+          }
+        />
+        <Stat
+          hint={
+            result.paybackMonth !== null
+              ? "Cumulative gross profit passes cumulative spend"
+              : "Gross profit never catches spend at these settings"
+          }
+          label="Programme turns cash-positive"
+          tone={result.paybackMonth !== null ? "good" : "bad"}
+          value={result.paybackMonth !== null ? `Month ${result.paybackMonth}` : "Never"}
+        />
+      </div>
+
+      {/* New-customer mix */}
+      <div className="mt-5 rounded-lg border border-slate-200 p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700">
+            Plan mix of new customers
+          </p>
+          <p className="text-[11px] text-slate-500">
+            Blended ARPA{" "}
+            <strong className="tabular-nums text-slate-700">{sek(result.newMixArpaSek)}</strong>{" "}
+            · gross profit{" "}
+            <strong className="tabular-nums text-slate-700">
+              {sek(result.newMixGrossProfitSek)}
+            </strong>
+            /mo
+            {mixTotal !== 100 ? (
+              <span className="ml-1 text-amber-700">(shares total {mixTotal}%, normalised)</span>
+            ) : null}
+          </p>
+        </div>
+        <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-3">
+          {CAC_LTV_TIERS.map((tier) => (
+            <div key={tier.key}>
+              <div className="flex items-baseline justify-between gap-2">
+                <label className="text-xs font-medium text-slate-700" htmlFor={`mix-${tier.key}`}>
+                  {tier.label} · {sek(tier.listPriceSek)}
+                </label>
+                <span className="text-sm font-semibold tabular-nums text-slate-900">
+                  {growth.newCustomerMix[tier.key]}%
+                </span>
+              </div>
+              <input
+                className="mt-1.5 w-full accent-indigo-600"
+                id={`mix-${tier.key}`}
+                max={100}
+                min={0}
+                onChange={(e) => setMix(tier.key)(Number(e.target.value))}
+                step={1}
+                type="range"
+                value={growth.newCustomerMix[tier.key]}
+              />
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          Seeded from the {num(CAC_LTV_TIERS.reduce((s, t) => s + data.trialingByTier[t.key], 0))}{" "}
+          trials in flight, which is what spend is converting into right now — not
+          from the paying base, which still carries Large accounts that ads did not
+          produce. Mix is the most powerful control here: One and Large differ 10x
+          in what they can support, so shifting these sliders moves the outcome
+          more than doubling the budget does.
+        </p>
+      </div>
+
+      {/* Charts */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-xs font-semibold text-slate-700">
+            Paying customers over time
+          </p>
+          <PayerGrowthChart result={result} />
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold text-slate-700">
+            Cumulative spend vs cumulative gross profit
+          </p>
+          <CashChart result={result} />
+        </div>
+      </div>
+
+      {/* Month table */}
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full min-w-[860px] text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
+              <th className="py-2 pr-3">Month</th>
+              <th className="py-2 pr-3 text-right">Spend</th>
+              <th className="py-2 pr-3 text-right">Signups</th>
+              <th className="py-2 pr-3 text-right">Free added</th>
+              <th className="py-2 pr-3 text-right">New payers</th>
+              <th className="py-2 pr-3 text-right">Churned</th>
+              <th className="py-2 pr-3 text-right">Payer base</th>
+              <th className="py-2 pr-3 text-right">MRR</th>
+              <th className="py-2 pr-3 text-right">Gross profit</th>
+              <th className="py-2 pr-3 text-right">Net this month</th>
+              <th className="py-2 pr-3 text-right">Cumulative net</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {tableRows.map((row) => (
+              <tr
+                className={
+                  result.paybackMonth === row.month ? "bg-emerald-50 font-semibold" : ""
+                }
+                key={row.month}
+              >
+                <td className="py-2 pr-3 font-medium text-slate-900">{row.month}</td>
+                <td className="py-2 pr-3 text-right tabular-nums text-slate-600">
+                  {sek(row.spendSek)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums text-slate-900">
+                  {num(row.signups)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums text-slate-400">
+                  {num(row.freeAdded)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums text-emerald-700">
+                  {row.newPayers.toFixed(1)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums text-rose-600">
+                  {row.churnedPayers > 0 ? `−${row.churnedPayers.toFixed(1)}` : "0"}
+                </td>
+                <td className="py-2 pr-3 text-right font-medium tabular-nums text-slate-900">
+                  {num(row.payerBase)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums text-slate-900">
+                  {sek(row.mrrSek)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums text-slate-600">
+                  {sek(row.grossProfitSek)}
+                </td>
+                <td
+                  className={`py-2 pr-3 text-right tabular-nums ${
+                    row.netContributionSek >= 0 ? "text-emerald-700" : "text-rose-600"
+                  }`}
+                >
+                  {sek(row.netContributionSek)}
+                </td>
+                <td
+                  className={`py-2 pr-3 text-right font-medium tabular-nums ${
+                    row.cumulativeNetSek >= 0 ? "text-emerald-700" : "text-rose-600"
+                  }`}
+                >
+                  {sek(row.cumulativeNetSek)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+        Incremental on purpose: the projection starts from zero payers and models
+        only what this spend buys, so today&rsquo;s existing base cannot flatter it.
+        Cost per signup, conversion, churn, discount and premium-data cost all come
+        from the Assumptions panel above, so changing one there changes this too.
+        Constant spend and a constant conversion rate are simplifications — real
+        campaigns get more expensive as you scale past the cheapest audience, which
+        this does not model.
+      </p>
+    </Panel>
+  );
+}
+
+function FunnelStep({
+  label,
+  value,
+  sub,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone?: "neutral" | "good";
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 ${
+        tone === "good" ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"
+      }`}
+    >
+      <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <span
+        className={`block text-base font-semibold tabular-nums ${
+          tone === "good" ? "text-emerald-800" : "text-slate-900"
+        }`}
+      >
+        {value}
+      </span>
+      <span className="block text-[10px] text-slate-500">{sub}</span>
+    </div>
+  );
+}
+
+function StepArrow({ note }: { note: string }) {
+  return (
+    <div className="flex flex-col items-center px-1">
+      <ArrowRight className="h-4 w-4 text-slate-400" />
+      <span className="mt-0.5 whitespace-nowrap text-[10px] font-medium tabular-nums text-slate-500">
+        {note}
+      </span>
     </div>
   );
 }
@@ -771,6 +1410,15 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
           grossProfitSek={headline.grossProfitSek}
         />
       </Panel>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Spend → growth simulator                                         */}
+      {/* ---------------------------------------------------------------- */}
+      <GrowthSection
+        aiCostPerMonthSek={aiCostPerMonthSek}
+        assumptions={assumptions}
+        data={data}
+      />
 
       {/* ---------------------------------------------------------------- */}
       {/* Sensitivity grid                                                 */}

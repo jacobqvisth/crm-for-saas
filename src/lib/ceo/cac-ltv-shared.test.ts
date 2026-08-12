@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   CAC_LTV_TIERS,
   DEFAULT_ASSUMPTIONS,
+  DEFAULT_GROWTH,
   affordableCostPerSignup,
   blendTiers,
+  mixEconomics,
+  simulateGrowth,
+  type GrowthInputs,
   breakEvenMonths,
   cacPerCustomer,
   computeTierEconomics,
@@ -194,6 +198,143 @@ describe("maxSurvivableChurnPct", () => {
 
   it("caps at 100%", () => {
     expect(maxSurvivableChurnPct(10, 600)).toBe(100);
+  });
+});
+
+describe("simulateGrowth", () => {
+  const vehicles = { one: 1, small: 4.3, large: 8.1 };
+  const growth = (overrides: Partial<GrowthInputs> = {}): GrowthInputs => ({
+    ...DEFAULT_GROWTH,
+    ...overrides,
+  });
+
+  it("turns budget into signups via cost per signup", () => {
+    const result = simulateGrowth(
+      growth({ monthlyBudgetSek: 50_000 }),
+      assumptions({ cacPerSignupSek: 100 }),
+      vehicles,
+      0.35,
+    );
+    expect(result.signupsPerMonth).toBeCloseTo(500, 6);
+  });
+
+  it("dilutes signups into payers by the conversion rate", () => {
+    const result = simulateGrowth(
+      growth({ monthlyBudgetSek: 50_000 }),
+      assumptions({ cacPerSignupSek: 100, signupToPaidPct: 3.4 }),
+      vehicles,
+      0.35,
+    );
+    // 500 signups a month buys 17 payers and 483 permanent free accounts.
+    expect(result.newPayersPerMonth).toBeCloseTo(17, 6);
+    expect(result.rows[0].freeAdded).toBeCloseTo(483, 6);
+  });
+
+  it("holds payers back by the conversion lag", () => {
+    const result = simulateGrowth(
+      growth({ conversionLagMonths: 2, horizonMonths: 6 }),
+      assumptions(),
+      vehicles,
+      0.35,
+    );
+    expect(result.rows[0].newPayers).toBe(0);
+    expect(result.rows[1].newPayers).toBe(0);
+    expect(result.rows[2].newPayers).toBeGreaterThan(0);
+  });
+
+  it("asymptotes on newPayers/churn instead of growing linearly", () => {
+    const churnPct = 5;
+    const result = simulateGrowth(
+      growth({ horizonMonths: 240, monthlyBudgetSek: 50_000 }),
+      assumptions({ cacPerSignupSek: 100, signupToPaidPct: 3.4, monthlyChurnPct: churnPct }),
+      vehicles,
+      0.35,
+    );
+    const expectedCeiling = result.newPayersPerMonth / (churnPct / 100);
+    expect(result.steadyStatePayers).toBeCloseTo(expectedCeiling, 6);
+    // The base converges on the ceiling and never passes it.
+    expect(result.endPayers).toBeLessThanOrEqual(expectedCeiling + 1e-6);
+    expect(result.endPayers).toBeCloseTo(expectedCeiling, 2);
+  });
+
+  it("doubling the horizon past steady state adds almost no payers", () => {
+    const base = assumptions({ cacPerSignupSek: 100, signupToPaidPct: 3.4, monthlyChurnPct: 5 });
+    const short = simulateGrowth(growth({ horizonMonths: 120 }), base, vehicles, 0.35);
+    const long = simulateGrowth(growth({ horizonMonths: 240 }), base, vehicles, 0.35);
+    // Doubling 120 months to 240 adds under 1% of the ceiling — that flatness is
+    // the whole point, so assert it against the ceiling rather than an absolute.
+    const gain = (long.endPayers - short.endPayers) / long.steadyStatePayers;
+    expect(gain).toBeLessThan(0.01);
+    // But spend keeps accruing, so cost per retained payer gets worse.
+    expect(long.costPerRetainedPayerSek).toBeGreaterThan(short.costPerRetainedPayerSek);
+  });
+
+  it("never reaches payback when the mix has no gross profit", () => {
+    const result = simulateGrowth(
+      growth({ horizonMonths: 36 }),
+      assumptions({ perVehicleDataCostSek: 500 }),
+      vehicles,
+      0.35,
+    );
+    expect(result.newMixGrossProfitSek).toBeLessThan(0);
+    expect(result.paybackMonth).toBeNull();
+  });
+
+  it("reaches payback and keeps cumulative net rising after it", () => {
+    const result = simulateGrowth(
+      growth({ horizonMonths: 60, monthlyBudgetSek: 35_000 }),
+      assumptions({ cacPerSignupSek: 100, signupToPaidPct: 3.4, monthlyChurnPct: 5 }),
+      vehicles,
+      0.35,
+    );
+    expect(result.paybackMonth).not.toBeNull();
+    const at = result.rows[result.paybackMonth! - 1];
+    expect(at.cumulativeNetSek).toBeGreaterThanOrEqual(0);
+    // The month before payback must still be negative.
+    expect(result.rows[result.paybackMonth! - 2].cumulativeNetSek).toBeLessThan(0);
+  });
+
+  it("scales linearly with budget at fixed cost per signup", () => {
+    const base = assumptions({ cacPerSignupSek: 100 });
+    const a = simulateGrowth(growth({ monthlyBudgetSek: 20_000 }), base, vehicles, 0.35);
+    const b = simulateGrowth(growth({ monthlyBudgetSek: 40_000 }), base, vehicles, 0.35);
+    expect(b.steadyStatePayers).toBeCloseTo(a.steadyStatePayers * 2, 6);
+  });
+
+  it("a cheaper signup buys proportionally more payers for the same budget", () => {
+    const g = growth({ monthlyBudgetSek: 50_000 });
+    const dear = simulateGrowth(g, assumptions({ cacPerSignupSek: 120 }), vehicles, 0.35);
+    const cheap = simulateGrowth(g, assumptions({ cacPerSignupSek: 60 }), vehicles, 0.35);
+    expect(cheap.newPayersPerMonth).toBeCloseTo(dear.newPayersPerMonth * 2, 6);
+  });
+
+  it("produces no growth on a zero budget", () => {
+    const result = simulateGrowth(growth({ monthlyBudgetSek: 0 }), assumptions(), vehicles, 0.35);
+    expect(result.signupsPerMonth).toBe(0);
+    expect(result.endPayers).toBe(0);
+    expect(result.endMrrSek).toBe(0);
+  });
+});
+
+describe("mixEconomics", () => {
+  const vehicles = { one: 1, small: 4.3, large: 8.1 };
+
+  it("normalises shares that do not sum to 100", () => {
+    const a = mixEconomics({ one: 1, small: 1, large: 0 }, assumptions(), vehicles, 0.35);
+    const b = mixEconomics({ one: 50, small: 50, large: 0 }, assumptions(), vehicles, 0.35);
+    expect(a.arpaSek).toBeCloseTo(b.arpaSek, 6);
+  });
+
+  it("weights a One-heavy mix far below a Large-heavy one", () => {
+    const oneHeavy = mixEconomics({ one: 90, small: 10, large: 0 }, assumptions(), vehicles, 0.35);
+    const largeHeavy = mixEconomics({ one: 0, small: 10, large: 90 }, assumptions(), vehicles, 0.35);
+    expect(oneHeavy.grossProfitSek).toBeLessThan(largeHeavy.grossProfitSek);
+  });
+
+  it("returns zeros for an empty mix rather than dividing by zero", () => {
+    const result = mixEconomics({ one: 0, small: 0, large: 0 }, assumptions(), vehicles, 0.35);
+    expect(result.arpaSek).toBe(0);
+    expect(result.grossProfitSek).toBe(0);
   });
 });
 

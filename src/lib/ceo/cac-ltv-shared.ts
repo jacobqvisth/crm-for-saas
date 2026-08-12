@@ -367,6 +367,228 @@ export function affordableCostPerSignup(
 /** The LTV:CAC bar this page judges against. */
 export const TARGET_LTV_CAC = 3;
 
+// ---------------------------------------------------------------------------
+// Spend → growth simulator
+// ---------------------------------------------------------------------------
+//
+// "If we spend X per month at Y per signup, what do we actually get?"
+//
+// The whole point is that a signup is only a signup. Three things separate ad
+// spend from growth, and the simulator makes each visible rather than folding
+// them into one number:
+//
+//  1. DILUTION. Only `signupToPaidPct` of signups ever pay. At 3.4% a budget
+//     buying 500 signups buys 17 payers, and 483 permanent free accounts.
+//  2. LAG. Upgrading opens a 14-day card trial and the first invoice lands
+//     after it, so a signup in month t becomes a payer around month t+1.
+//  3. CHURN CAPS IT. This is the one people miss. At CONSTANT spend the payer
+//     base does not grow linearly — it asymptotes on newPayersPerMonth ÷ churn.
+//     Doubling the horizon past that point adds nothing; only more spend, better
+//     conversion, or lower churn moves the ceiling.
+//
+// The simulation is deliberately INCREMENTAL: it starts from zero payers and
+// models only what the ad program itself buys. Mixing in today's payer base
+// would let the Large-heavy legacy accounts (which ads did not produce) flatter
+// the result, which is the exact error this page exists to avoid.
+//
+// Non-converting signups are counted but NOT costed. They do consume a little
+// premium data (a measured 7-11% of free accounts run diagnostics in a given
+// month), but per Jacob that is deliberately out of scope here: this section
+// answers what spend buys in paying customers, and loading a free-tail cost
+// onto it would blur that. The free count is still shown, because the size of
+// the non-converting pool is the whole reason spend ≠ growth.
+
+export type GrowthInputs = {
+  /** Ad budget per month, SEK. */
+  monthlyBudgetSek: number;
+  /** How many months to project. */
+  horizonMonths: number;
+  /** Months from signup to first payment (14-day trial + first invoice). */
+  conversionLagMonths: number;
+  /** Plan mix of NEW customers, as shares of 100. */
+  newCustomerMix: Record<CacLtvTierKey, number>;
+};
+
+export const DEFAULT_GROWTH: GrowthInputs = {
+  monthlyBudgetSek: 35_000,
+  horizonMonths: 24,
+  conversionLagMonths: 1,
+  // Overwritten at render time with the observed trial-pipeline mix.
+  newCustomerMix: { one: 30, small: 65, large: 5 },
+};
+
+export const GROWTH_BOUNDS = {
+  monthlyBudgetSek: { min: 0, max: 300_000, step: 5_000, label: "Monthly ad budget", unit: "SEK" },
+  horizonMonths: { min: 6, max: 48, step: 1, label: "Horizon", unit: "months" },
+  conversionLagMonths: { min: 0, max: 4, step: 1, label: "Signup → payment lag", unit: "months" },
+} as const;
+
+export type GrowthMonthRow = {
+  month: number;
+  spendSek: number;
+  signups: number;
+  /** Signups that will never pay. They stay on Free permanently. */
+  freeAdded: number;
+  newPayers: number;
+  churnedPayers: number;
+  payerBase: number;
+  freeBase: number;
+  mrrSek: number;
+  /** Gross profit from the paying base. */
+  grossProfitSek: number;
+  /** Gross profit less that month's spend. */
+  netContributionSek: number;
+  cumulativeSpendSek: number;
+  /** Running total of netContribution. Crosses zero at payback. */
+  cumulativeNetSek: number;
+};
+
+export type GrowthResult = {
+  rows: GrowthMonthRow[];
+  /** Blended net ARPA of the NEW-customer mix. */
+  newMixArpaSek: number;
+  /** Blended monthly gross profit per new customer. */
+  newMixGrossProfitSek: number;
+  signupsPerMonth: number;
+  newPayersPerMonth: number;
+  /** newPayersPerMonth / churn — the ceiling constant spend converges on. */
+  steadyStatePayers: number;
+  steadyStateMrrSek: number;
+  /** Month cumulativeNet first crosses zero. null = never within horizon. */
+  paybackMonth: number | null;
+  totalSpendSek: number;
+  totalSignups: number;
+  /** Payers alive at the end of the horizon. */
+  endPayers: number;
+  endMrrSek: number;
+  endFreeBase: number;
+  /** Total spend / payers still alive at the end. */
+  costPerRetainedPayerSek: number;
+  /** Total spend / every payer ever acquired. */
+  costPerAcquiredPayerSek: number;
+};
+
+/**
+ * Blended economics of an arbitrary new-customer plan mix.
+ * Shares need not sum to exactly 100 — they are normalised.
+ */
+export function mixEconomics(
+  mix: Record<CacLtvTierKey, number>,
+  assumptions: CacLtvAssumptions,
+  vehiclesByTier: Record<CacLtvTierKey, number>,
+  aiCostPerMonthSek: number,
+): { arpaSek: number; grossProfitSek: number; variableCostSek: number } {
+  const total = CAC_LTV_TIERS.reduce((sum, tier) => sum + (mix[tier.key] || 0), 0);
+  if (total <= 0) return { arpaSek: 0, grossProfitSek: 0, variableCostSek: 0 };
+
+  let arpaSek = 0;
+  let variableCostSek = 0;
+  for (const tier of CAC_LTV_TIERS) {
+    const weight = (mix[tier.key] || 0) / total;
+    const netArpa = tier.listPriceSek * (1 - assumptions.discountPct / 100);
+    const variable =
+      aiCostPerMonthSek +
+      vehiclesByTier[tier.key] * assumptions.perVehicleDataCostSek +
+      (netArpa * assumptions.stripeFeePct) / 100 +
+      assumptions.stripeFeeFixedSek;
+    arpaSek += netArpa * weight;
+    variableCostSek += variable * weight;
+  }
+  return { arpaSek, grossProfitSek: arpaSek - variableCostSek, variableCostSek };
+}
+
+/** Project constant monthly ad spend forward. */
+export function simulateGrowth(
+  growth: GrowthInputs,
+  assumptions: CacLtvAssumptions,
+  vehiclesByTier: Record<CacLtvTierKey, number>,
+  aiCostPerMonthSek: number,
+): GrowthResult {
+  const mix = mixEconomics(growth.newCustomerMix, assumptions, vehiclesByTier, aiCostPerMonthSek);
+  const churn = assumptions.monthlyChurnPct / 100;
+  const conversion = assumptions.signupToPaidPct / 100;
+
+  const signupsPerMonth =
+    assumptions.cacPerSignupSek > 0
+      ? growth.monthlyBudgetSek / assumptions.cacPerSignupSek
+      : 0;
+  const newPayersPerMonth = signupsPerMonth * conversion;
+
+  const rows: GrowthMonthRow[] = [];
+  let payerBase = 0;
+  let freeBase = 0;
+  let cumulativeSpend = 0;
+  let cumulativeNet = 0;
+  let paybackMonth: number | null = null;
+  let totalPayersAcquired = 0;
+
+  for (let month = 1; month <= growth.horizonMonths; month += 1) {
+    const spendSek = growth.monthlyBudgetSek;
+    const signups = signupsPerMonth;
+
+    // Payers arriving this month were acquired `lag` months ago.
+    const newPayers = month > growth.conversionLagMonths ? newPayersPerMonth : 0;
+    // Everyone who signed up this month and will never pay joins Free for good.
+    const freeAdded = signups * (1 - conversion);
+
+    const churnedPayers = payerBase * churn;
+    payerBase = payerBase + newPayers - churnedPayers;
+    freeBase += freeAdded;
+    totalPayersAcquired += newPayers;
+
+    const mrrSek = payerBase * mix.arpaSek;
+    const grossProfitSek = payerBase * mix.grossProfitSek;
+    const netContributionSek = grossProfitSek - spendSek;
+
+    cumulativeSpend += spendSek;
+    cumulativeNet += netContributionSek;
+    if (paybackMonth === null && cumulativeNet >= 0 && month > growth.conversionLagMonths) {
+      paybackMonth = month;
+    }
+
+    rows.push({
+      month,
+      spendSek,
+      signups,
+      freeAdded,
+      newPayers,
+      churnedPayers,
+      payerBase,
+      freeBase,
+      mrrSek,
+      grossProfitSek,
+      netContributionSek,
+      cumulativeSpendSek: cumulativeSpend,
+      cumulativeNetSek: cumulativeNet,
+    });
+  }
+
+  const steadyStatePayers = churn > 0 ? newPayersPerMonth / churn : Number.POSITIVE_INFINITY;
+  const last = rows[rows.length - 1];
+
+  return {
+    rows,
+    newMixArpaSek: mix.arpaSek,
+    newMixGrossProfitSek: mix.grossProfitSek,
+    signupsPerMonth,
+    newPayersPerMonth,
+    steadyStatePayers,
+    steadyStateMrrSek: steadyStatePayers * mix.arpaSek,
+    paybackMonth,
+    totalSpendSek: last ? last.cumulativeSpendSek : 0,
+    totalSignups: signupsPerMonth * growth.horizonMonths,
+    endPayers: last ? last.payerBase : 0,
+    endMrrSek: last ? last.mrrSek : 0,
+    endFreeBase: last ? last.freeBase : 0,
+    costPerRetainedPayerSek:
+      last && last.payerBase > 0 ? last.cumulativeSpendSek / last.payerBase : Number.POSITIVE_INFINITY,
+    costPerAcquiredPayerSek:
+      totalPayersAcquired > 0 && last
+        ? last.cumulativeSpendSek / totalPayersAcquired
+        : Number.POSITIVE_INFINITY,
+  };
+}
+
 // Axes for the sensitivity grid. Deliberately straddle where the business
 // actually sits: blended cost per signup has run 94-135 SEK, and mature-cohort
 // signup-to-paid is 3.4-3.8%.
