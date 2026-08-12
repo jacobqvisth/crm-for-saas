@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -13,9 +14,11 @@ import {
 } from "lucide-react";
 import {
   ASSUMPTION_BOUNDS,
+  CAC_LTV_RANGE_PRESETS,
   CAC_LTV_TIERS,
   DEFAULT_ASSUMPTIONS,
   DEFAULT_GROWTH,
+  DEFAULT_RANGE_PRESET_KEY,
   GROWTH_BOUNDS,
   LIST_PRICES_SEK,
   MIN_VEHICLE_SAMPLE,
@@ -204,6 +207,7 @@ function Slider({
   onChange,
   seeded,
   baseline,
+  baselineLabel,
 }: {
   // tierPricesSek is a per-tier record, not a scalar, so it has its own
   // controls and is excluded here.
@@ -215,6 +219,8 @@ function Slider({
   seeded?: string;
   /** The current/actual value. Drawn as a tick and named under the control. */
   baseline?: number;
+  /** Overrides the "(actual)" suffix, e.g. when the value could not be measured. */
+  baselineLabel?: string;
 }) {
   const bounds = boundsProp ?? (field ? ASSUMPTION_BOUNDS[field] : undefined);
   const id = idProp ?? (field ? `slider-${field}` : undefined);
@@ -281,7 +287,9 @@ function Slider({
               Now {fmt(baseline!)} → modelling {fmt(value)}
             </span>
           ) : (
-            <span className="text-slate-500">Now: {fmt(baseline!)} (actual)</span>
+            <span className={baselineLabel ? "text-rose-700" : "text-slate-500"}>
+              Now: {fmt(baseline!)} ({baselineLabel ?? "actual"})
+            </span>
           )}
         </p>
       ) : null}
@@ -1236,6 +1244,26 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
 
   const basis = data.conversionBasis;
   const recentMonths = data.months.slice(-8);
+
+  // The window is half-open, so show the last day actually counted rather than
+  // the exclusive boundary — "to 2026-08-01" reads as if August is included.
+  // Capped at the data's own as-of stamp rather than the browser clock, so the
+  // label always matches the snapshot the numbers came from.
+  const rangeEndLabel = useMemo(() => {
+    const end = new Date(`${data.range.to}T00:00:00Z`);
+    end.setUTCDate(end.getUTCDate() - 1);
+    const asOf = new Date(data.asOf);
+    return (end.getTime() > asOf.getTime() ? asOf : end).toISOString().slice(0, 10);
+  }, [data.range.to, data.asOf]);
+  const activePresetHint = CAC_LTV_RANGE_PRESETS.find(
+    (preset) => preset.key === data.rangePresetKey,
+  )?.hint;
+
+  // A short window can contain plenty of signups and still measure nothing,
+  // because none of them are old enough to have converted. When that happens the
+  // conversion input falls back to a constant, and that must never be presented
+  // as a measurement.
+  const conversionMeasured = basis.selfServePct !== null && basis.agedSignups > 0;
   const totalPastDue = CAC_LTV_TIERS.reduce(
     (sum, tier) => sum + data.pastDueByTier[tier.key],
     0,
@@ -1340,10 +1368,28 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
       {/* Answer                                                           */}
       {/* ---------------------------------------------------------------- */}
       <div className={`rounded-xl border p-5 shadow-sm ${verdictStyle}`}>
+        {/* The verdict is only as good as the conversion rate under it. When the
+            window cannot supply one, say so HERE rather than only further down —
+            a confident green headline above a warning nobody scrolls to is worse
+            than no headline at all. */}
+        {!conversionMeasured ? (
+          <div className="mb-3 flex gap-2 rounded-lg border border-rose-300 bg-rose-100 p-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" />
+            <p className="text-xs leading-relaxed text-rose-900">
+              <strong className="font-semibold">This verdict is not measured.</strong>{" "}
+              The selected window has no signups old enough to have converted, so the
+              conversion rate is a placeholder and every number below it is
+              hypothetical. Switch to a window ending {basis.windowDays}+ days ago.
+            </p>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <h2 className={`text-lg font-semibold ${verdictTitleStyle}`}>{verdict.title}</h2>
           <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
             blended plan mix · {num(headline.payingNow)} payers today
+          </span>
+          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+            {data.range.from} → {rangeEndLabel}
           </span>
         </div>
         <p className="mt-2 max-w-4xl text-sm leading-relaxed text-slate-700">{verdict.body}</p>
@@ -1426,6 +1472,152 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
       </div>
 
       {/* ---------------------------------------------------------------- */}
+      {/* Measurement window                                               */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Measurement window
+            </p>
+            <h2 className="text-base font-semibold text-slate-900">
+              {data.range.from} to {rangeEndLabel}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">
+              Everything measured from history — traffic, spend, signups, the
+              conversion rate and the monthly funnel — is counted over this window.
+              Plan state (who is paying or trialing right now), churn tenure and
+              premium-data usage are always <strong>as of today</strong>, because they
+              describe the present rather than a period; those are labelled where
+              they appear.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {CAC_LTV_RANGE_PRESETS.map((preset) => {
+            const active = preset.key === data.rangePresetKey;
+            return (
+              <Link
+                // The `!` modifiers are load-bearing: ceo-legacy.css carries an
+                // UNLAYERED `a { color: inherit }`, and unlayered rules beat
+                // Tailwind's layered utilities regardless of specificity. Without
+                // them the active pill renders black-on-black and is unreadable.
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                  active
+                    ? "border-slate-900 bg-slate-900 !text-white"
+                    : "border-slate-300 bg-white !text-slate-700 hover:bg-slate-50"
+                }`}
+                href={
+                  preset.key === DEFAULT_RANGE_PRESET_KEY
+                    ? "/dashboard/cac-ltv"
+                    : `/dashboard/cac-ltv?window=${preset.key}`
+                }
+                key={preset.key}
+                title={preset.hint}
+              >
+                {preset.label}
+              </Link>
+            );
+          })}
+        </div>
+        {activePresetHint ? (
+          <p className="mt-2 text-[11px] leading-snug text-slate-500">{activePresetHint}</p>
+        ) : null}
+
+        {!conversionMeasured ? (
+          <div className="mt-4 flex gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" />
+            <p className="text-xs leading-relaxed text-rose-900">
+              <strong className="font-semibold">
+                Conversion cannot be measured in this window.
+              </strong>{" "}
+              It contains {num(basis.signupsInRange)} signups but none are yet{" "}
+              {basis.windowDays} days old, so none have had time to finish a trial and
+              pay. The signup → paying rate below therefore shows{" "}
+              {pct(DEFAULT_ASSUMPTIONS.signupToPaidPct)}, which is a placeholder
+              constant and <strong>not a measurement</strong> — and every figure derived
+              from it (CAC per payer, LTV:CAC, break-even, the whole growth projection)
+              inherits that. Choose a window ending at least {basis.windowDays} days ago
+              to get a real rate.
+            </p>
+          </div>
+        ) : null}
+
+        {/* Coverage — "do we actually have the data for this window". */}
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
+                <th className="py-2 pr-3">Source</th>
+                <th className="py-2 pr-3">Feeds</th>
+                <th className="py-2 pr-3">Days with data</th>
+                <th className="py-2 pr-3">First → last in window</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.coverage.map((row) => (
+                <tr key={row.key}>
+                  <td className="py-2.5 pr-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                          row.status === "complete"
+                            ? "bg-emerald-500"
+                            : row.status === "partial"
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                        }`}
+                      />
+                      <span className="font-medium text-slate-900">{row.label}</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 pr-3 text-xs text-slate-600">{row.feeds}</td>
+                  <td
+                    className={`py-2.5 pr-3 tabular-nums ${
+                      row.status === "complete" ? "text-slate-600" : "font-semibold text-amber-700"
+                    }`}
+                  >
+                    {num(row.daysPresent)} / {num(row.daysExpected)}
+                  </td>
+                  <td className="py-2.5 pr-3 text-xs tabular-nums text-slate-600">
+                    {row.firstDayInRange ? `${row.firstDayInRange} → ${row.lastDayInRange}` : "—"}
+                    {row.windowPredatesSource && row.sourceFirstEverDay ? (
+                      <span className="mt-0.5 block text-[10px] text-amber-700">
+                        source starts {row.sourceFirstEverDay}
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {data.coverage.some((row) => row.note && row.status !== "complete") ? (
+          <div className="mt-3 space-y-2">
+            {data.coverage
+              .filter((row) => row.note && row.status !== "complete")
+              .map((row) => (
+                <div
+                  className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3"
+                  key={row.key}
+                >
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
+                  <p className="text-[11px] leading-relaxed text-amber-900">
+                    <strong className="font-semibold">{row.label}:</strong> {row.note}
+                  </p>
+                </div>
+              ))}
+          </div>
+        ) : null}
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+          A green dot means every day in the window has a row. Amber means some days
+          are absent — which for GA4 sign_up events means a genuine zero rather than a
+          gap, and for ad-attributed signups means the metric did not exist yet.
+        </p>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
       {/* Where the numbers come from                                      */}
       {/* ---------------------------------------------------------------- */}
       <Panel
@@ -1439,11 +1631,20 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
             converted
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-            Counts every workshop that signed up from {SELF_SERVE_START_LABEL} onwards
-            and is at least {basis.windowDays} days old (a 14-day trial plus about one
-            invoice cycle), so nothing is judged before it had the chance to pay.
-            Signups {basis.firstSignup} to {basis.lastSignup}. Internal-test accounts
-            excluded.
+            Of the <strong>{num(basis.signupsInRange)}</strong> workshops that signed up
+            inside the selected window ({data.range.from} to {rangeEndLabel}),{" "}
+            <strong>{num(basis.agedSignups)}</strong> are at least {basis.windowDays} days
+            old — a 14-day trial plus about one invoice cycle — so nothing is judged
+            before it had the chance to pay. Actual signups counted:{" "}
+            {basis.firstSignup} to {basis.lastSignup}. Internal-test accounts excluded.
+            {basis.signupsInRange > basis.agedSignups ? (
+              <>
+                {" "}
+                The other{" "}
+                <strong>{num(basis.signupsInRange - basis.agedSignups)}</strong> are too
+                recent to count yet; they will pull the rate up or down as they mature.
+              </>
+            ) : null}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-3">
             <FunnelStep label="Signed up" sub="on Free" value={num(basis.agedSignups)} />
@@ -1619,10 +1820,11 @@ export function CacLtvContent({ data }: { data: CacLtvData }) {
             baseline={seededAssumptions.signupToPaidPct}
             field="signupToPaidPct"
             onChange={set("signupToPaidPct")}
+            baselineLabel={conversionMeasured ? undefined : "not measurable in this window"}
             seeded={
-              basis.selfServePct !== null
+              conversionMeasured
                 ? `Measured: ${num(basis.payingSelfServe)} Stripe-billed payers out of ${num(basis.agedSignups)} signups aged ${basis.windowDays}+ days. See "Where these numbers come from".`
-                : "Not enough aged signups yet."
+                : `NOT measured — this window has no signups aged ${basis.windowDays}+ days, so ${pct(DEFAULT_ASSUMPTIONS.signupToPaidPct)} is a placeholder, not a fact. Pick a wider window.`
             }
             value={assumptions.signupToPaidPct}
           />

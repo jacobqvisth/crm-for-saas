@@ -38,6 +38,8 @@ type DashboardShellNavProps = {
   // always read all synced history (text analysis needs every row) show a
   // static label instead of pills that would imply a filter they ignore.
   supportsTimeRange?: boolean;
+  /** The page renders its own window control, so show neither pills nor chip. */
+  hasOwnRangeControl?: boolean;
 };
 
 function normalizeCountryParam(value: string | null): string | null {
@@ -56,6 +58,7 @@ export function DashboardShellNav({
   countryOptions,
   supportsCountry,
   supportsTimeRange = true,
+  hasOwnRangeControl = false,
 }: DashboardShellNavProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -124,7 +127,7 @@ export function DashboardShellNav({
       </nav>
 
       <div className="mb-6 flex flex-wrap items-center gap-1">
-        {supportsTimeRange ? (
+        {hasOwnRangeControl ? null : supportsTimeRange ? (
           <div role="tablist" aria-label="Choose time frame" className="flex flex-wrap gap-1">
             {rangePills.map((option) => (
               <Link

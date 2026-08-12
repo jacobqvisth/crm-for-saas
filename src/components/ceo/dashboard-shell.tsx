@@ -42,6 +42,15 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   DashboardSectionKey
 >(["diagnostic-search-terms", "dtc-codes", "free-users", "cac-ltv"]);
 
+// Sections that render their OWN measurement-window control in the page body.
+// They get neither the range pills nor the "All synced history" chip, because a
+// second range control in the chrome contradicts the one the page owns —
+// /dashboard/cac-ltv defaults to the last three full months, so a chip reading
+// "All synced history" above it is simply wrong.
+const OWN_RANGE_CONTROL_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
+  DashboardSectionKey
+>(["cac-ltv"]);
+
 type DashboardShellProps = {
   // Full warehouse read — only pass this when the page CONTENT actually uses
   // it (/dashboard, settings). Pages that just need the chrome should pass
@@ -115,6 +124,7 @@ export async function DashboardShell({
         countryOptions={countryOptions}
         supportsCountry={COUNTRY_FILTER_SECTIONS.has(section)}
         supportsTimeRange={!FIXED_ALL_HISTORY_SECTIONS.has(section)}
+        hasOwnRangeControl={OWN_RANGE_CONTROL_SECTIONS.has(section)}
       />
 
       {setupMode ? (

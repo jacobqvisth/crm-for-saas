@@ -52,6 +52,119 @@
 
 export const CAC_LTV_CURRENCY = "SEK";
 
+// ---------------------------------------------------------------------------
+// Measurement window
+// ---------------------------------------------------------------------------
+//
+// Half-open [from, to): `to` is the first day NOT counted, which keeps month
+// boundaries clean and matches the rest of the dashboard's range handling.
+//
+// The default is the last three COMPLETE calendar months, which on 2026-08-12
+// resolves to 2026-05-01 → 2026-08-01 (i.e. May, June and July) — the window
+// Jacob asked for. Expressed as a rolling rule rather than pinned dates so it
+// does not silently rot into a stale quarter, with the resolved dates always
+// shown next to the control.
+
+export type CacLtvRange = { from: string; to: string };
+
+export type CacLtvRangePreset = {
+  key: string;
+  label: string;
+  /** Resolves against "today" so rolling presets stay current. */
+  resolve: (today: Date) => CacLtvRange;
+  hint?: string;
+};
+
+function iso(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfMonthUtc(date: Date, monthOffset = 0): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + monthOffset, 1, 0, 0, 0, 0),
+  );
+}
+
+function daysAgo(date: Date, days: number): Date {
+  return new Date(date.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+/** First day `ad_signups` exists in the warehouse. Verified against prod. */
+export const AD_SIGNUPS_FIRST_DAY = "2026-05-20";
+
+export const CAC_LTV_RANGE_PRESETS: CacLtvRangePreset[] = [
+  {
+    key: "last_3_full_months",
+    label: "Last 3 full months",
+    resolve: (today) => ({ from: iso(startOfMonthUtc(today, -3)), to: iso(startOfMonthUtc(today)) }),
+    hint: "Three complete calendar months, excluding the month in progress. The default.",
+  },
+  {
+    key: "paid_attribution_clean",
+    label: "Clean paid attribution",
+    // ad_signups (GA4-linked Google Ads sign_up events) only exists from
+    // 2026-05-20. Before that there is spend with no attributed signups, which
+    // makes cost-per-ad-signup read artificially expensive.
+    resolve: (today) => ({ from: AD_SIGNUPS_FIRST_DAY, to: iso(startOfMonthUtc(today)) }),
+    hint: `Starts ${AD_SIGNUPS_FIRST_DAY}, the first day ad-attributed signups exist. Use when comparing paid cost per signup.`,
+  },
+  {
+    key: "last_30_days",
+    label: "Last 30 days",
+    resolve: (today) => ({ from: iso(daysAgo(today, 30)), to: iso(daysAgo(today, -1)) }),
+    hint: "Rolling. Too short for conversion, which needs 45+ days of age.",
+  },
+  {
+    key: "last_6_full_months",
+    label: "Last 6 full months",
+    resolve: (today) => ({ from: iso(startOfMonthUtc(today, -6)), to: iso(startOfMonthUtc(today)) }),
+    hint: "Wider base. Reaches back before paid acquisition scaled, so it mixes hand-sold cohorts in.",
+  },
+  {
+    key: "all_synced",
+    label: "All synced history",
+    resolve: () => ({ from: "2025-01-01", to: "2100-01-01" }),
+    hint: "Everything. Earliest useful source data starts 2026-04-17.",
+  },
+];
+
+export const DEFAULT_RANGE_PRESET_KEY = "last_3_full_months";
+
+export function resolveCacLtvRange(presetKey: string | undefined, today: Date): CacLtvRange {
+  const preset =
+    CAC_LTV_RANGE_PRESETS.find((item) => item.key === presetKey) ??
+    CAC_LTV_RANGE_PRESETS.find((item) => item.key === DEFAULT_RANGE_PRESET_KEY)!;
+  return preset.resolve(today);
+}
+
+/**
+ * Per-source coverage inside the selected window, so "do we actually have the
+ * data for this range" is answerable on the page rather than by asking.
+ */
+export type SourceCoverage = {
+  key: string;
+  label: string;
+  /** What this source feeds on the page. */
+  feeds: string;
+  firstDayInRange: string | null;
+  lastDayInRange: string | null;
+  daysPresent: number;
+  /**
+   * Elapsed days in the window that this source COULD have covered — the window
+   * clipped to the day the source first has any data at all. Without the clip a
+   * wide window makes every source look broken ("118 / 588") when the real story
+   * is that the source did not exist yet.
+   */
+  daysExpected: number;
+  /** First day this source has data anywhere, ignoring the window. */
+  sourceFirstEverDay: string | null;
+  /** True when the window starts before this source existed. */
+  windowPredatesSource: boolean;
+  /** Days with no row that are genuinely zero rather than missing, where known. */
+  note: string | null;
+  status: "complete" | "partial" | "missing";
+};
+
 // Plan tiers, in ladder order. Prices are the SEK list prices shown on
 // app.wrenchlane.com/pricing (ex VAT), cross-checked against the Stripe price
 // ids in dashboard_subscriptions. Stripe stores the unit amount in the price's
@@ -769,6 +882,8 @@ export type ChurnEvidence = {
  *     in Large, which is exactly the tier ads do not produce.
  */
 export type ConversionBasis = {
+  /** Every signup inside the selected window, including ones too recent to judge. */
+  signupsInRange: number;
   /** A signup must be at least this old to count: 14-day trial + first invoice. */
   windowDays: number;
   firstSignup: string | null;
@@ -789,6 +904,11 @@ export type ConversionBasis = {
 
 export type CacLtvData = {
   asOf: string;
+  /** The window every range-scoped figure was measured over. */
+  range: CacLtvRange;
+  rangePresetKey: string;
+  /** Per-source coverage inside that window. */
+  coverage: SourceCoverage[];
   months: CacLtvMonthRow[];
   channels: CacLtvChannelRow[];
   /** Premium vehicle opens per paying workshop per month, by tier. */
