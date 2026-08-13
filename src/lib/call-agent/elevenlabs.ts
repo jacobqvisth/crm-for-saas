@@ -101,6 +101,9 @@ function agentPayload(input: AgentConfigInput) {
           agent: { first_message: true, language: true },
           tts: { voice_id: true },
         },
+        // Without this the workspace-level initiation webhook is never called
+        // for inbound (SIP) calls and the agent runs on placeholder defaults.
+        enable_conversation_initiation_client_data_from_webhook: true,
       },
     },
   };
