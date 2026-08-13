@@ -6889,3 +6889,16 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - **New sync source `ga4_attribution`** (hourly, pg_cron job 14 at H:11, scheduled in prod): one GA4 Data API report (customUser:crm_user_id × firstUser source/medium/campaign/channel-group/Google-Ads-campaign) → upserts new table `dashboard_user_attribution` (migration applied to prod + backfilled; first prod run: 1,602 rows read, 1,234 users written, 931 google_ads). Channel classification in `src/lib/ceo/attribution/classify.ts`.
 - Build/lint/tsc/middleware tests clean. Gotcha fixed along the way: `google_ads` spend snapshots have **no** `dimension_key='total'` row (per-campaign only) — loader sums across campaign dimensions.
 
+
+## AI Call Agent (voice agent over ElevenLabs + 46elks) — 2026-08-12
+
+**PR #654** (`feature/call-agent`, squash 0e8a5eaf) — merged; prod deploy verified READY. Plan artifact: https://claude.ai/code/artifact/5a6f03b9-0f27-4b78-b7ce-b73a728fc3ce
+
+- **New page `/call-agent`** ("Call Agent" in sidebar, Bot icon): Overview (stats + kill switch), Queue (enqueue from calling lists, approve/dismiss/retry), Calls (agent call log reusing CallDetailDrawer), Settings (API key stored encrypted, provision button, persona/voice picker, guardrails, webhook URLs, test-call box).
+- **Provider layer `src/lib/call-agent/`**: ElevenLabs Agents client (agent CRUD, knowledge base, voices, SIP phone numbers, workspace settings, conversations), prompt builder (AI + recording disclosure, language rule, no-invention guardrails), per-call brief from contact usage + scoreContact reasons, voice-safe sanitizer (the no-long-dash util now exists), rails (never_call + internal_testers, DNC/nix, suppressions, per-country calling hours via sequences scheduler, daily cap, attempts, 30d cool-down), 46elks agent dial (contact first, then connect to sip:{callerId}@sip.rtc.elevenlabs.io).
+- **Queue + cron `/api/cron/call-agent`** (*/2, GET+POST): claim → rails → dial → collect; one live call at a time; polling collector makes the ElevenLabs post-call webhook optional.
+- **Webhooks**: initiation (per-call dynamic variables + localized greeting override) and post-call (token or HMAC) — both public routes with shared-secret auth.
+- **Migration** `20260812120000_call_agent.sql` applied to prod via psql after plain-chat approval (call_agent_settings, call_agent_jobs, 3 cols on call_sessions). database.types.ts extended by hand per repo convention.
+- **Provisioned via API from here**: agent `agent_2501kzx2d28kea1bx4axdwf5wp64` (Elsa, sv default, KB doc attached), +46766860335 imported as SIP trunk + assigned, initiation webhook registered, encrypted API key seeded into all 3 workspaces.
+- Build/lint/tsc clean; vitest 8/8. Vercel preview fail = known prerender issue (Build & Lint was green).
+- **Open items**: (1) first real test call = the actual 46elks→ElevenLabs SIP audio validation (Twilio trunk fallback if bad); (2) post-call webhook URL can be pasted once in the ElevenLabs dashboard for instant results (collector covers it otherwise); (3) ELEVENLABS_API_KEY not on Vercel env (classifier-blocked) — not needed, DB key wins; (4) mode=approve_each, enabled=false until Jacob flips it.
