@@ -45,7 +45,7 @@ type JobRow = {
 };
 
 type Voice = { voice_id: string; name: string; labels: Record<string, string>; preview_url: string | null };
-type ListRow = { id: string; name: string; member_count?: number };
+type ListRow = { id: string; name: string; purpose?: string | null; is_dynamic?: boolean };
 
 const STATUS_TONE: Record<string, string> = {
   pending_approval: "bg-amber-100 text-amber-700",
@@ -328,7 +328,7 @@ function Queue({
   const [enqueueing, setEnqueueing] = useState(false);
 
   useEffect(() => {
-    fetch("/api/calls/lists")
+    fetch("/api/call-agent/lists")
       .then((r) => r.json())
       .then((j) => setLists(j.lists ?? []))
       .catch(() => {});
@@ -391,6 +391,8 @@ function Queue({
             {lists.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
+                {l.purpose && l.purpose !== "calling" ? ` (${l.purpose} list)` : ""}
+                {l.is_dynamic ? " · dynamic" : ""}
               </option>
             ))}
           </select>
