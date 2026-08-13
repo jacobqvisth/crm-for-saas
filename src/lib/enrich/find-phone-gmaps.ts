@@ -52,6 +52,9 @@ export interface GoogleMapsLookupInput {
   countryCode?: string | null;
   /** Google place_id when we already have one — an exact, unambiguous match. */
   placeId?: string | null;
+  /** Wall-clock budget for this lookup. The caller derives it from the time left
+   *  in the whole search, so a slow Apify run can't eat the function's budget. */
+  budgetMs?: number;
 }
 
 export interface GoogleMapsLookupResult {
@@ -111,14 +114,19 @@ export async function findPhonesViaGoogleMaps(
     ? `place_id:${input.placeId}`
     : [subject, input.city, input.country || "Sweden"].filter(Boolean).join(", ");
 
-  // Bound the whole thing: cap the actor run server-side (timeout=45) and abort
-  // our own wait a little after, so this can never eat the serverless budget.
+  // Bound the whole thing: cap the actor run server-side and abort our own wait
+  // a little after, so this can never eat the serverless budget. The caller
+  // passes what's actually left of the search's budget.
+  const budgetMs = Math.max(5_000, input.budgetMs ?? 55_000);
+  // Leave a few seconds between the actor's own timeout and our abort so a run
+  // that hits the cap comes back as a real response we can explain.
+  const actorTimeoutSec = Math.max(3, Math.floor((budgetMs - 10_000) / 1000));
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 55_000);
+  const timer = setTimeout(() => controller.abort(), budgetMs);
   let items: GmapsItem[] | null = null;
   try {
     const res = await fetch(
-      `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?token=${token}&timeout=45`,
+      `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?token=${token}&timeout=${actorTimeoutSec}`,
       {
         method: "POST",
         signal: controller.signal,
@@ -131,7 +139,24 @@ export async function findPhonesViaGoogleMaps(
         }),
       },
     );
-    if (!res.ok) return empty(`google maps http ${res.status}`);
+    if (!res.ok) {
+      // Apify reports a blown monthly usage cap as a normal HTTP error. Name it,
+      // because "http 403" reads like a bug when it's really just the plan limit
+      // and every Apify-backed feature is dead until the cycle resets.
+      let why = `google maps http ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: { type?: string; message?: string } };
+        const type = body?.error?.type;
+        if (type === "platform-feature-disabled") {
+          why = "Google Maps skipped, the Apify monthly usage limit is exceeded";
+        } else if (body?.error?.message) {
+          why = `google maps: ${body.error.message}`;
+        }
+      } catch {
+        /* non-JSON error body — keep the status-code message */
+      }
+      return empty(why);
+    }
     items = (await res.json()) as GmapsItem[];
   } catch (err) {
     const aborted = controller.signal.aborted || (err instanceof Error && err.name === "AbortError");

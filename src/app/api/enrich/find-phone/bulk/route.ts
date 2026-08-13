@@ -10,6 +10,10 @@ export const maxDuration = 180;
 // so we finish comfortably inside maxDuration.
 const MAX_BATCH = 6;
 const CONCURRENCY = 3;
+// Shared wall-clock deadline for the whole batch. Every search bounds its own
+// legs against it, so a later wave degrades gracefully (skipping the slow legs)
+// instead of the platform killing the request and discarding the whole batch.
+const BATCH_BUDGET_MS = 150_000;
 
 type ItemResult = {
   contactId: string;
@@ -54,10 +58,11 @@ export async function POST(request: NextRequest) {
   }
 
   const ids = Array.from(new Set(contactIds)).slice(0, MAX_BATCH);
+  const deadline = Date.now() + BATCH_BUDGET_MS;
 
   const runOne = async (contactId: string): Promise<ItemResult> => {
     try {
-      const result = await findPhonesForRecord(supabase, { workspaceId, contactId });
+      const result = await findPhonesForRecord(supabase, { workspaceId, contactId, deadline });
       const saved = result.phones.length
         ? await saveFoundPhones(supabase, {
             workspaceId,
