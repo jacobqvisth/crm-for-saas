@@ -6,6 +6,10 @@ export const SOURCE_KEYS = [
   // no search terms. This one is the Google Ads API itself: market keyword
   // volume plus the queries that actually triggered our ads.
   "google_ads_api",
+  // Per-user first-touch attribution (firstUserSource x customUser:crm_user_id)
+  // from the same GA4 property. Separate from `ga4` (aggregate traffic) so a
+  // schema hiccup in one report never blocks the other.
+  "ga4_attribution",
   "search_console",
   "customer_io",
   "stripe",
@@ -20,6 +24,7 @@ export const SOURCE_LABELS: Record<SourceKey, string> = {
   ga4: "GA4 / Firebase",
   google_ads: "Google Ads (via GA4)",
   google_ads_api: "Google Ads API",
+  ga4_attribution: "GA4 User Attribution",
   search_console: "Search Console",
   customer_io: "Customer.io",
   stripe: "Stripe",

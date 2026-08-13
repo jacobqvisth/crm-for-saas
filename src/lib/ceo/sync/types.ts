@@ -65,6 +65,16 @@ export type UserLoginRow = {
   logged_in_at: string;
 };
 
+export type UserAttributionRow = {
+  internal_user_id: string;
+  first_source: string | null;
+  first_medium: string | null;
+  first_campaign: string | null;
+  first_channel_group: string | null;
+  google_ads_campaign: string | null;
+  channel: string;
+};
+
 export type FeatureUsageRow = {
   internal_user_id: string;
   feature_key: string;
@@ -160,6 +170,7 @@ export type SourceSyncResult = {
   subscriptions?: SubscriptionRow[];
   users?: UserRow[];
   userLogins?: UserLoginRow[];
+  userAttribution?: UserAttributionRow[];
   featureUsage?: FeatureUsageRow[];
   workshops?: WorkshopRow[];
   diagnostics?: DiagnosticRow[];
