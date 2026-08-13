@@ -13,6 +13,36 @@ updated: 2026-05-26
 
 ---
 
+## "Find numbers" 504 fixed, plus live search progress — 2026-08-13 — PR #663 — worktree-find-phone-progress
+
+Jacob (from a screenshot of a contact profile): "I just clicked on find number but it is taking some time", then "I now got search failed". It was not slow, it was dead: `POST /api/enrich/find-phone` returned **504 Vercel Runtime Timeout Error: Task timed out after 180 seconds** on both attempts (12:43:24 and 12:44:04 UTC), and the UI's generic catch showed only "Search failed".
+
+**Root cause: additive leg budgets, no global deadline.** The finder runs four legs in sequence. Each had its own budget and there was **no overall deadline**: scrape 25s + Google Maps 55s + web search 90s = **170s against a 180s `maxDuration`**, so zero slack. Two legs could also overrun their own budget:
+- the web-search deadline was only checked **between** turns (`if (Date.now() > webDeadline) break`), and
+- the forced `report_phones` call checked nothing at all.
+
+Measured against the real record with a throwaway `tsx` harness: **a single `messages.create()` with `web_search` ran past 138s without returning** (`webSearchTurns` stayed 0) for a subject the model cannot pin down (a private individual, no real business behind the name). So any contact whose website has no `tel:` link 504'd every time, and Vercel discarded everything found, including the website backfill. Same symptom as PR #462 but a different, deeper cause: #462 only added the "skip web search if the scrape hit" guard, which does nothing when the scrape misses.
+
+**Fix.**
+- One absolute `deadline` computed in the route (150s for a 180s limit) and threaded through `findPhonesForRecord` into `findPhones`. Each leg's budget = `min(legCeiling, msLeft() - reserveForLaterLegs)`; a leg that cannot fit is **skipped, not started**.
+- **`AbortSignal` on both Anthropic calls** (`client.messages.create({...}, { signal })`) — the only thing that actually stops an in-flight leg. Plus a 75s ceiling on the web search, and the forced report only when there is time for it.
+- Google-Maps leg bounded by the caller's budget instead of a fixed 55s, with the Apify actor `timeout` derived from it.
+- A blown Apify usage cap is now named ("the Apify monthly usage limit is exceeded") instead of surfacing as `google maps http 403`.
+- A miss reports **both** legs' conclusions; the web-search result used to hide the real cause.
+- Same shared deadline for `/api/enrich/find-phone/bulk` and the `phone-enrichment` cron, where a killed worker leaves jobs stuck in `processing`.
+
+Measured on the same contact: **142s → 78s, no 504.**
+
+**Progress UI (the actual request).** `POST /api/enrich/find-phone` accepts `stream: true` and returns **NDJSON** (`{type:"progress"|"result"|"error"}`); without the flag it stays a single JSON object, so the bulk/queue callers are untouched. `findPhones`/`findPhonesForRecord` take an `onProgress` callback. `PhoneNumbersPanel` replaces the bare "Searching…" pill with a stage list, a weighted progress bar and an elapsed timer; skipped legs show **why**, which is real information since each leg is bypassed once an earlier one hits. Past 45s it adds "Still going. A full search can take up to two minutes." The bar is floored by elapsed time against the server budget, so a buffering proxy degrades to a time-paced bar rather than one frozen at 0%.
+
+Also fixed: `google-maps` results were labelled "web search" in the found-numbers list (`FoundPhone.source` never got the third union member), and the "How it works" tooltip never mentioned the Google Maps leg.
+
+**Verification.** `tsc --noEmit` clean; `eslint src/` clean (1 pre-existing warning in an untouched file); `npm run build` passes. **7 new tests** in `src/lib/enrich/find-phone.test.ts` on the budget maths (legs skipped past the deadline, a cheap scrape hit short-circuiting the slow legs, the Maps budget shrinking with the deadline, nothing started that cannot finish, progress in stage order, a throwing `onProgress` not breaking the search); **734 existing tests still pass**. Ran the real finder against the actual failing record with no mocks: 78s inside a 150s budget, progress per leg. Vercel preview failed with the known `/calls/feedback` prerender error (missing Supabase env in preview) and the build log confirms TypeScript finished clean; Build & Lint was green on both commits.
+
+**Notable.** The live run confirmed the **Apify monthly usage cap is still blown**, so the Google-Maps leg does nothing until the cycle resets **2026-08-15**. That is why this contact falls through to the slow web-search path at all; once Apify is live most records should resolve in the fast leg. Not fixed here — it is a billing state, not a code bug.
+
+---
+
 ## Inbox reply fixed for threads with no linked email_queue row — 2026-08-13 — PR #660 — worktree-fix-reply-without-email-queue
 
 Jacob (from a screenshot of `/inbox`): replying to Jonathan Keogh's "Re: How are you enjoying Wrenchlane?" always failed with the toast **"Cannot reply: original outgoing email not found"**.
