@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { findPhones, type FindPhonesResult, type PhoneCandidate } from "@/lib/enrich/find-phone";
+import {
+  findPhones,
+  type FindPhonesResult,
+  type PhoneCandidate,
+  type PhoneProgressFn,
+} from "@/lib/enrich/find-phone";
 import { findWebsite } from "@/lib/enrich/find-website";
 import { rejectedPhonesFrom } from "@/lib/enrich/rejected-phones";
 
@@ -41,12 +46,28 @@ interface Args {
   companyId?: string | null;
   /** When true (default), look up + persist a website if the record has none. */
   autoFindWebsite?: boolean;
+  /** Absolute wall-clock deadline (ms epoch) for the whole run. Passed down so
+   *  every leg is budgeted and we always return instead of being killed. */
+  deadline?: number;
+  /** Progress callback, for streaming each leg to the UI. */
+  onProgress?: PhoneProgressFn;
 }
+
+/** Time reserved for the website-discovery leg before the phone search starts. */
+const WEBSITE_DISCOVERY_MAX_MS = 45_000;
 
 export async function findPhonesForRecord(
   supabase: SupabaseClient,
-  { workspaceId, contactId, companyId, autoFindWebsite = true }: Args,
+  { workspaceId, contactId, companyId, autoFindWebsite = true, deadline, onProgress }: Args,
 ): Promise<FindPhonesForRecordResult> {
+  const report: PhoneProgressFn = (e) => {
+    try {
+      onProgress?.(e);
+    } catch {
+      /* never let a dead progress consumer break the search */
+    }
+  };
+  report({ stage: "record", status: "start", detail: "Reading the contact" });
   let name: string | null = null;
   let companyName: string | null = null;
   const websites: (string | null | undefined)[] = [];
@@ -165,7 +186,19 @@ export async function findPhonesForRecord(
   // --- Website-first: if we have nothing to scrape, go find one -------------
   let websiteAdded: string | null = null;
   const haveWebsite = websites.some((w) => (w || "").trim());
-  if (autoFindWebsite && !haveWebsite) {
+  report({
+    stage: "record",
+    status: "done",
+    detail: [name, companyName].filter(Boolean).join(" · ") || "Contact loaded",
+  });
+  // Website discovery is itself slow (a reject + re-search cycle can run ~84s),
+  // so skip it when there isn't room left for the phone search afterwards.
+  const roomForWebsiteLookup =
+    !deadline || deadline - Date.now() > WEBSITE_DISCOVERY_MAX_MS + 45_000;
+  if (autoFindWebsite && !haveWebsite && !roomForWebsiteLookup) {
+    report({ stage: "website-discovery", status: "skip", detail: "Out of time to find a website" });
+  } else if (autoFindWebsite && !haveWebsite) {
+    report({ stage: "website-discovery", status: "start", detail: "No website saved, finding one" });
     const site = await findWebsite({ name, email, extraEmails, city, country, industry, category });
     // Only trust + persist a confident find; a low-confidence guess would just
     // send the scraper at the wrong domain.
@@ -187,6 +220,13 @@ export async function findPhonesForRecord(
           .eq("workspace_id", workspaceId);
       }
     }
+    report({
+      stage: "website-discovery",
+      status: "done",
+      detail: websiteAdded ? `Found ${websiteAdded}` : "No website found",
+    });
+  } else {
+    report({ stage: "website-discovery", status: "skip", detail: "Website already on file" });
   }
 
   const result = await findPhones({
@@ -200,6 +240,15 @@ export async function findPhonesForRecord(
     category,
     placeId,
     existing,
+    deadline,
+    onProgress: onProgress,
+  });
+
+  report({
+    stage: "save",
+    status: "start",
+    detail: "Saving what we learned",
+    found: result.phones.length,
   });
 
   // Backfill the company's website + Google place_id from what the Google-Maps
@@ -263,6 +312,15 @@ export async function findPhonesForRecord(
       /* tracking is best-effort — never break the finder */
     }
   }
+
+  report({
+    stage: "save",
+    status: "done",
+    detail: result.phones.length
+      ? `${result.phones.length} number${result.phones.length === 1 ? "" : "s"} to review`
+      : "Nothing to save",
+    found: result.phones.length,
+  });
 
   return { ...result, websiteAdded, companyId: resolvedCompanyId, countryCode };
 }

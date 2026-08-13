@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Star, Trash2, Plus, Loader2, Sparkles, ExternalLink, X, Check, Pencil, Tag, Info, Ban,
+  Star, Trash2, Plus, Loader2, Sparkles, ExternalLink, X, Check, Pencil, Tag, Info, Ban, Minus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
@@ -17,10 +17,70 @@ type FoundPhone = {
   number: string;
   raw: string;
   label: string | null;
-  source: 'website' | 'web-search';
+  source: 'website' | 'google-maps' | 'web-search';
   sourceUrl: string | null;
   confidence: string;
 };
+
+/** Where a found number came from, for the badge under it. */
+function sourceLabel(source: FoundPhone['source']): string {
+  if (source === 'website') return 'website';
+  if (source === 'google-maps') return 'Google Maps';
+  return 'web search';
+}
+
+/** The final `result` payload of the find-phone stream. */
+type FindPhonesResponse = {
+  found?: boolean;
+  phones?: FoundPhone[];
+  reasoning?: string | null;
+  websiteAdded?: string | null;
+};
+
+// --- Search progress ---------------------------------------------------------
+
+type SearchStage = 'record' | 'website-discovery' | 'scrape' | 'google-maps' | 'web-search' | 'save';
+type StageStatus = 'pending' | 'active' | 'done' | 'skip';
+
+/** The legs of a search, in the order the server runs them. `weight` is that
+ *  leg's share of the progress bar; `estimateMs` is how long it usually takes,
+ *  used to advance the bar smoothly while a leg is still running. */
+const STAGES: { key: SearchStage; label: string; weight: number; estimateMs: number }[] = [
+  { key: 'record', label: 'Reading the contact', weight: 5, estimateMs: 1_500 },
+  { key: 'website-discovery', label: 'Finding the website', weight: 15, estimateMs: 40_000 },
+  { key: 'scrape', label: 'Reading the website', weight: 20, estimateMs: 20_000 },
+  { key: 'google-maps', label: 'Checking Google Maps', weight: 25, estimateMs: 45_000 },
+  { key: 'web-search', label: 'Searching the web', weight: 30, estimateMs: 60_000 },
+  { key: 'save', label: 'Saving results', weight: 5, estimateMs: 2_000 },
+];
+
+type StageState = { status: StageStatus; detail: string | null; startedAt: number | null };
+
+const initialStages = (): Record<SearchStage, StageState> =>
+  STAGES.reduce(
+    (acc, s) => ({ ...acc, [s.key]: { status: 'pending', detail: null, startedAt: null } }),
+    {} as Record<SearchStage, StageState>,
+  );
+
+/**
+ * How far along the whole search is, 0-100. Finished and skipped legs contribute
+ * their full weight (a skipped leg is genuinely less work left); the running leg
+ * contributes a fraction of its own weight based on how long it has been going,
+ * capped just short of complete so the bar never claims a leg is done early.
+ */
+function progressPct(stages: Record<SearchStage, StageState>, now: number): number {
+  let pct = 0;
+  for (const s of STAGES) {
+    const st = stages[s.key];
+    if (st.status === 'done' || st.status === 'skip') {
+      pct += s.weight;
+    } else if (st.status === 'active') {
+      const elapsed = st.startedAt ? now - st.startedAt : 0;
+      pct += s.weight * Math.min(0.92, elapsed / s.estimateMs);
+    }
+  }
+  return Math.min(99, pct);
+}
 
 /** The primary pool number string + the full list, surfaced to the parent so
  *  the Call button can default to (and choose between) these. */
@@ -64,6 +124,11 @@ export function PhoneNumbersPanel({
   const [labelDraft, setLabelDraft] = useState('');
   const [finding, setFinding] = useState(false);
   const [found, setFound] = useState<FoundPhone[] | null>(null);
+  const [stages, setStages] = useState<Record<SearchStage, StageState>>(initialStages);
+  const [searchStartedAt, setSearchStartedAt] = useState<number | null>(null);
+  // Ticks while a search runs so the bar and the elapsed counter keep moving
+  // between server events (legs can be 45s apart).
+  const [clock, setClock] = useState(() => Date.now());
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
 
@@ -99,6 +164,12 @@ export function PhoneNumbersPanel({
   }, [supabase, workspaceId, scope, companyId, contactId, emit]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!finding) return;
+    const id = setInterval(() => setClock(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [finding]);
 
   // The "owner" columns to stamp on a number added through this panel.
   const ownerCols = () =>
@@ -203,32 +274,126 @@ export function PhoneNumbersPanel({
     }
   };
 
+  /** Apply one server progress event to the stage list. */
+  const applyProgress = useCallback(
+    (e: { stage: SearchStage; status: 'start' | 'done' | 'skip'; detail?: string | null }) => {
+      setStages((prev) => {
+        if (!prev[e.stage]) return prev;
+        const next = { ...prev };
+        // A leg starting means every earlier leg is settled — mark any we never
+        // heard about as done so the bar can't stall on a missed event.
+        const idx = STAGES.findIndex((s) => s.key === e.stage);
+        for (let i = 0; i < idx; i++) {
+          const k = STAGES[i].key;
+          if (next[k].status === 'pending' || next[k].status === 'active') {
+            next[k] = { ...next[k], status: 'done' };
+          }
+        }
+        if (e.status === 'start') {
+          next[e.stage] = {
+            status: 'active',
+            detail: e.detail ?? prev[e.stage].detail,
+            // Keep the original start time across the mid-leg "still working" ticks.
+            startedAt: prev[e.stage].startedAt ?? Date.now(),
+          };
+        } else {
+          next[e.stage] = {
+            status: e.status === 'skip' ? 'skip' : 'done',
+            detail: e.detail ?? prev[e.stage].detail,
+            startedAt: prev[e.stage].startedAt,
+          };
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
   const handleFind = async () => {
     if (!enableFind || !contactId || finding) return;
     setFinding(true);
-    const toastId = toast.loading('Searching for phone numbers…');
+    setFound(null);
+    setStages(initialStages());
+    setSearchStartedAt(Date.now());
+    setClock(Date.now());
     try {
       const res = await fetch('/api/enrich/find-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, contactId }),
+        // Stream so each leg reports as it happens — the whole search can take
+        // over two minutes and a bare spinner reads as "hung".
+        body: JSON.stringify({ workspaceId, contactId, stream: true }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Search failed', { id: toastId }); return; }
+      if (!res.ok || !res.body) {
+        let message = 'Search failed';
+        try {
+          const err = await res.json();
+          message = err.error || message;
+        } catch {
+          /* non-JSON error (gateway timeout) — keep the default */
+        }
+        toast.error(message);
+        return;
+      }
+
+      // NDJSON: one JSON object per line, progress events then a final result.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      // Held in an object: assigning to a plain `let` from inside handleLine
+      // makes the compiler narrow it to `never` after the read loop.
+      const outcome: { data: FindPhonesResponse | null; error: string | null } = {
+        data: null,
+        error: null,
+      };
+
+      const handleLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let event: Record<string, unknown>;
+        try {
+          event = JSON.parse(trimmed);
+        } catch {
+          return; // a partial line we'll see again on the next chunk
+        }
+        if (event.type === 'progress') {
+          applyProgress(event as unknown as Parameters<typeof applyProgress>[0]);
+        } else if (event.type === 'result') {
+          outcome.data = event.result as FindPhonesResponse;
+        } else if (event.type === 'error') {
+          outcome.error = String(event.error ?? 'Search failed');
+        }
+      };
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) handleLine(line);
+      }
+      if (buffer) handleLine(buffer);
+
+      if (outcome.error) { toast.error(outcome.error); return; }
+      const data = outcome.data;
+      if (!data) { toast.error('Search ended without a result'); return; }
+
       // If the contact had no website, the finder discovered + saved one first.
       if (data.websiteAdded) {
         toast.success(`Found website ${data.websiteAdded}`);
       }
       if (data.found && data.phones?.length) {
-        toast.success(`Found ${data.phones.length} number${data.phones.length === 1 ? '' : 's'}`, { id: toastId });
-        setFound(data.phones as FoundPhone[]);
+        toast.success(`Found ${data.phones.length} number${data.phones.length === 1 ? '' : 's'}`);
+        setFound(data.phones);
       } else {
-        toast.error(data.reasoning || 'No phone numbers found', { id: toastId });
+        toast.error(data.reasoning || 'No phone numbers found');
       }
     } catch {
-      toast.error('Search failed', { id: toastId });
+      toast.error('Search failed');
     } finally {
       setFinding(false);
+      setSearchStartedAt(null);
     }
   };
 
@@ -262,9 +427,14 @@ export function PhoneNumbersPanel({
                       homepage and contact/about pages for <code>tel:</code> links and listed numbers.
                     </li>
                     <li>
-                      <span className="font-medium text-slate-700">AI web search.</span> Looks the
-                      business up by name, town and trade across its own site and directories
-                      (hitta.se, eniro, Google Business).
+                      <span className="font-medium text-slate-700">Google Maps.</span> If the site
+                      lists nothing, looks the business up on its Google Business profile, which also
+                      backfills the website and place ID.
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-700">AI web search.</span> Last resort:
+                      looks the business up by name, town and trade across its own site and
+                      directories (hitta.se, eniro, Google Business).
                     </li>
                     <li>
                       <span className="font-medium text-slate-700">Clean up.</span> Normalises to
@@ -273,7 +443,8 @@ export function PhoneNumbersPanel({
                     </li>
                   </ol>
                   <p className="mt-2 text-[11px] text-slate-400">
-                    No third-party data brokers — just the public web.
+                    No third-party data brokers, just the public web. Each step is skipped once an
+                    earlier one finds a number, so a good website makes this fast.
                   </p>
                 </div>
               )}
@@ -292,6 +463,10 @@ export function PhoneNumbersPanel({
           </button>
         )}
       </div>
+
+      {finding && (
+        <PhoneSearchProgress stages={stages} startedAt={searchStartedAt} now={clock} />
+      )}
 
       {loading ? (
         <div className="py-3 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
@@ -424,10 +599,10 @@ export function PhoneNumbersPanel({
                       {p.sourceUrl ? (
                         <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer"
                           className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700">
-                          {p.source === 'website' ? 'website' : 'web'}<ExternalLink className="w-3 h-3" />
+                          {sourceLabel(p.source)}<ExternalLink className="w-3 h-3" />
                         </a>
                       ) : (
-                        <span>{p.source === 'website' ? 'website' : 'web search'}</span>
+                        <span>{sourceLabel(p.source)}</span>
                       )}
                     </div>
                   </div>
@@ -458,6 +633,90 @@ export function PhoneNumbersPanel({
             })}
           </ul>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Elapsed time as m:ss. */
+function elapsedLabel(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Live progress for a "Find numbers" run. The search takes up to ~2.5 minutes
+ * across four external legs, so it shows which leg is running, what it found,
+ * and how long it has been going, rather than a spinner that looks stuck.
+ */
+function PhoneSearchProgress({
+  stages,
+  startedAt,
+  now,
+}: {
+  stages: Record<SearchStage, StageState>;
+  startedAt: number | null;
+  now: number;
+}) {
+  const pct = progressPct(stages, now);
+  const elapsed = startedAt ? now - startedAt : 0;
+  // Only show legs that have actually reported, plus the one running, so the
+  // list grows as the search proceeds instead of showing six greyed-out rows.
+  const visible = STAGES.filter((s) => stages[s.key].status !== 'pending');
+  const active = STAGES.find((s) => stages[s.key].status === 'active');
+
+  return (
+    <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-xs font-medium text-slate-600">
+          {active ? active.label : 'Finishing up'}
+        </span>
+        <span className="text-[11px] tabular-nums text-slate-400">
+          {Math.round(pct)}% · {elapsedLabel(elapsed)}
+        </span>
+      </div>
+
+      <div
+        className="h-1 w-full overflow-hidden rounded-full bg-slate-200"
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Phone number search progress"
+      >
+        <div
+          className="h-full rounded-full bg-indigo-500 transition-[width] duration-300 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <ul className="mt-2 space-y-1">
+        {visible.map((s) => {
+          const st = stages[s.key];
+          return (
+            <li key={s.key} className="flex items-start gap-1.5 text-[11px] leading-4">
+              <span className="mt-0.5 shrink-0">
+                {st.status === 'active' ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                ) : st.status === 'skip' ? (
+                  <Minus className="w-3 h-3 text-slate-300" />
+                ) : (
+                  <Check className="w-3 h-3 text-emerald-500" />
+                )}
+              </span>
+              <span className={st.status === 'skip' ? 'text-slate-400' : 'text-slate-600'}>
+                <span className={st.status === 'active' ? 'font-medium' : ''}>{s.label}</span>
+                {st.detail ? <span className="text-slate-400"> · {st.detail}</span> : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {elapsed > 45_000 && (
+        <p className="mt-1.5 text-[11px] text-slate-400">
+          Still going. A full search can take up to two minutes.
+        </p>
       )}
     </div>
   );

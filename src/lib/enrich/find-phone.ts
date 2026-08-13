@@ -7,6 +7,29 @@ import { findPhonesViaGoogleMaps } from "@/lib/enrich/find-phone-gmaps";
 // Manually triggered, low volume, so Sonnet + web search is the right point.
 const MODEL = "claude-sonnet-4-6";
 
+// --- Time budget -------------------------------------------------------------
+// The route allows 180s. We aim to be done in 150 so there's room for the DB
+// writes and the response, and so a slow leg can never get the whole function
+// killed (a kill discards every number we already found).
+const DEFAULT_BUDGET_MS = 150_000;
+/** Max for the website scrape, and the reserve kept back for the legs after it. */
+const SCRAPE_MAX_MS = 25_000;
+const SCRAPE_RESERVE_MS = 70_000;
+/** Max for the Google-Maps lookup, and the reserve kept back for web search. */
+const GMAPS_MAX_MS = 55_000;
+const GMAPS_RESERVE_MS = 45_000;
+/** Kept back from the web-search leg for ranking + the response itself. */
+const RESPONSE_RESERVE_MS = 8_000;
+/** Ceiling for the web search. A real business resolves in 10-30s; a subject the
+ *  model can't pin down (a private individual with no business behind the name)
+ *  will otherwise spend every second it is given and still report nothing, so
+ *  cap it rather than make the user wait out the whole budget for a no. */
+const WEB_SEARCH_MAX_MS = 75_000;
+/** A web-search leg shorter than this can't complete a turn — skip it instead. */
+const WEB_SEARCH_MIN_MS = 20_000;
+/** The forced report_phones call needs roughly this much left to be worth trying. */
+const FORCED_REPORT_MS = 25_000;
+
 export type PhoneSource = "website" | "google-maps" | "web-search";
 
 export interface PhoneCandidate {
@@ -23,6 +46,29 @@ export interface PhoneCandidate {
   /** "high" | "medium" | "low" */
   confidence: string;
 }
+
+/** The ordered legs of a phone search, as reported to the UI. */
+export type PhoneSearchStage =
+  | "record"
+  | "website-discovery"
+  | "scrape"
+  | "google-maps"
+  | "web-search"
+  | "save";
+
+/** One progress tick. Emitted as the finder enters/leaves each leg so the caller
+ *  can stream a real "here's what I'm doing now" to the user instead of an
+ *  opaque spinner. `detail` is short, human, and safe to render as-is. */
+export interface PhoneSearchProgress {
+  stage: PhoneSearchStage;
+  status: "start" | "done" | "skip";
+  /** Short human line, e.g. "Reading qvisth.se". */
+  detail?: string | null;
+  /** How many numbers we hold in total at this point. */
+  found?: number;
+}
+
+export type PhoneProgressFn = (event: PhoneSearchProgress) => void;
 
 export interface FindPhonesInput {
   /** Person and/or company name to search by. */
@@ -44,6 +90,13 @@ export interface FindPhonesInput {
   /** Numbers already on the record — excluded from the results so we only
    *  surface NEW finds. Includes user-rejected ("not correct") numbers. */
   existing?: (string | null | undefined)[];
+  /** Absolute wall-clock deadline (ms epoch) for the WHOLE search. Every leg is
+   *  budgeted out of the time actually left, and any leg that can't fit is
+   *  skipped, so we always return results instead of being killed mid-flight by
+   *  the serverless timeout (which discards everything). */
+  deadline?: number;
+  /** Called as each leg starts/finishes, for streaming progress to the UI. */
+  onProgress?: PhoneProgressFn;
 }
 
 /** Diagnostics so a "found nothing" result is explainable instead of silent. */
@@ -60,6 +113,8 @@ export interface FindPhonesDebug {
   webPhoneCount: number;
   /** Error message from the web-search step, if it threw. */
   searchError: string | null;
+  /** Legs we had to skip or cut short because the wall-clock budget ran out. */
+  skippedForTime?: PhoneSearchStage[];
 }
 
 export interface FindPhonesResult {
@@ -83,6 +138,15 @@ function normalizeUrl(raw: string | null | undefined): string | null {
     const u = new URL(url);
     if (!u.hostname.includes(".")) return null;
     return u.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+/** Bare hostname, for progress lines the user reads ("Reading qvisth.se"). */
+function hostOf(raw: string | null | undefined): string | null {
+  try {
+    return new URL(raw || "").hostname.replace(/^www\./, "") || null;
   } catch {
     return null;
   }
@@ -272,6 +336,27 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     if (rank(c) > rank(prev)) byNumber.set(c.number, c);
   };
 
+  // --- Wall-clock budget ----------------------------------------------------
+  // Without a global deadline the three legs' own budgets (25s + 55s + 90s) add
+  // up to the entire serverless limit, and the last leg can overshoot its own —
+  // so the function got killed and every result was thrown away. Each leg now
+  // takes what's actually left, minus a reserve for the legs after it.
+  const deadline = input.deadline ?? Date.now() + DEFAULT_BUDGET_MS;
+  const msLeft = () => deadline - Date.now();
+  const skippedForTime: PhoneSearchStage[] = [];
+  const report = input.onProgress ?? (() => {});
+  const tick = (
+    stage: PhoneSearchStage,
+    status: PhoneSearchProgress["status"],
+    detail?: string | null,
+  ) => {
+    try {
+      report({ stage, status, detail: detail ?? null, found: byNumber.size });
+    } catch {
+      /* a broken progress consumer (client hung up) must never fail the search */
+    }
+  };
+
   // 1. Scrape known websites.
   const sites = Array.from(
     new Set((input.websites ?? []).map(normalizeUrl).filter((u): u is string => !!u)),
@@ -279,9 +364,14 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
   // Per-page fetch outcomes, surfaced in `reasoning` so a host that refuses our
   // server-side requests reads as "fetch blocked" instead of "no numbers".
   const fetchLog: { url: string; status: number | string }[] = [];
-  if (sites.length) {
+  const scrapeBudget = Math.min(SCRAPE_MAX_MS, msLeft() - SCRAPE_RESERVE_MS);
+  if (sites.length && scrapeBudget <= 0) {
+    skippedForTime.push("scrape");
+    tick("scrape", "skip", "Out of time to read the website");
+  } else if (sites.length) {
+    tick("scrape", "start", `Reading ${hostOf(sites[0]) ?? "the website"}`);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25_000);
+    const timer = setTimeout(() => controller.abort(), scrapeBudget);
 
     const harvest = (url: string, outcome: FetchOutcome) => {
       fetchLog.push({ url, status: outcome.status });
@@ -315,7 +405,9 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
       if (byNumber.size === 0) {
         const targets = subPaths.slice(0, 8);
         for (let i = 0; i < targets.length; i += 3) {
+          if (controller.signal.aborted) break;
           const batch = targets.slice(i, i + 3);
+          tick("scrape", "start", `Checking contact pages (${i + 1}-${Math.min(i + 3, targets.length)} of ${targets.length})`);
           const outcomes = await Promise.all(
             batch.map(async (url) => ({ url, outcome: await fetchHtml(url, controller.signal) })),
           );
@@ -325,6 +417,15 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     } finally {
       clearTimeout(timer);
     }
+    tick(
+      "scrape",
+      "done",
+      byNumber.size
+        ? `Found ${byNumber.size} on the website`
+        : "Nothing listed on the website",
+    );
+  } else {
+    tick("scrape", "skip", "No website saved to read");
   }
 
   // 1b. Google Maps (via Apify) — the fast, structured primary source. Runs only
@@ -335,20 +436,39 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
   let discoveredPlaceId: string | null = null;
   let gmapsReasoning: string | null = null;
   if (byNumber.size === 0) {
-    const gmaps = await findPhonesViaGoogleMaps({
-      name: input.name,
-      companyName: input.companyName,
-      city: input.city,
-      country: input.country,
-      countryCode: input.countryCode,
-      placeId: input.placeId,
-    });
-    if (gmaps) {
-      gmapsReasoning = gmaps.reasoning;
-      discoveredWebsite = gmaps.website;
-      discoveredPlaceId = gmaps.placeId;
-      for (const c of gmaps.candidates) add(c);
+    const gmapsBudget = Math.min(GMAPS_MAX_MS, msLeft() - GMAPS_RESERVE_MS);
+    if (gmapsBudget <= 0) {
+      skippedForTime.push("google-maps");
+      tick("google-maps", "skip", "Out of time for Google Maps");
+    } else {
+      tick("google-maps", "start", "Looking the business up on Google Maps");
+      const gmaps = await findPhonesViaGoogleMaps({
+        name: input.name,
+        companyName: input.companyName,
+        city: input.city,
+        country: input.country,
+        countryCode: input.countryCode,
+        placeId: input.placeId,
+        budgetMs: gmapsBudget,
+      });
+      if (gmaps) {
+        gmapsReasoning = gmaps.reasoning;
+        discoveredWebsite = gmaps.website;
+        discoveredPlaceId = gmaps.placeId;
+        for (const c of gmaps.candidates) add(c);
+      }
+      tick(
+        "google-maps",
+        "done",
+        gmaps
+          ? byNumber.size
+            ? `Google Maps: ${gmaps.matchedTitle ?? "matched"}`
+            : gmaps.reasoning
+          : "Google Maps lookup unavailable",
+      );
     }
+  } else {
+    tick("google-maps", "skip", "Not needed, the website had a number");
   }
 
   // 2. Web search via Claude — needs something searchable.
@@ -368,18 +488,35 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     reportCalled: false,
     webPhoneCount: 0,
     searchError: null,
+    skippedForTime,
   };
 
   const webBefore = byNumber.size;
+  // What's left for the web search, after reserving time to rank + respond, and
+  // never more than the leg's own ceiling.
+  const webBudget = Math.min(WEB_SEARCH_MAX_MS, msLeft() - RESPONSE_RESERVE_MS);
 
   // Only run the (slow) AI web-search when the website scrape came up empty.
   // If the site already gave us a number, returning it in ~2s beats spending up
   // to a minute of web search — and, critically, avoids the 180s function
   // timeout that was killing the request and discarding the scraped number.
-  if (searchSubject && apiKey && byNumber.size === 0) {
-    // Hard wall-clock budget for the web-search phase so it can never consume
-    // the whole serverless limit (scrape already used up to 25s).
-    const webDeadline = Date.now() + 90_000;
+  if (searchSubject && apiKey && byNumber.size === 0 && webBudget < WEB_SEARCH_MIN_MS) {
+    // Not enough left to complete even one search turn. Bail out cleanly rather
+    // than start work the function timeout will throw away.
+    skippedForTime.push("web-search");
+    tick("web-search", "skip", "Out of time for the web search");
+    searchReasoning =
+      "Ran out of time before the web search could run. Try again, the website and Google Maps results are saved.";
+  } else if (searchSubject && apiKey && byNumber.size === 0) {
+    tick("web-search", "start", `Searching the web for ${searchSubject}`);
+    // Hard wall-clock budget for the web-search phase, taken from the time that
+    // is actually left rather than a fixed 90s that could overrun the function.
+    const webDeadline = Date.now() + webBudget;
+    // An AbortSignal is what actually stops an in-flight turn: the old
+    // between-turns deadline check let a single long turn (plus the unguarded
+    // forced report) run past the budget and 504 the whole request.
+    const webController = new AbortController();
+    const webTimer = setTimeout(() => webController.abort(), webBudget);
     const client = new Anthropic({ apiKey });
     const location = [input.city, input.country].filter(Boolean).join(", ");
 
@@ -451,7 +588,11 @@ Rules:
       // continue. Stop once it calls report_phones or finishes its turn.
       for (let turn = 0; turn < 3 && !report; turn++) {
         if (Date.now() > webDeadline) break; // out of budget → force a report below
-        const resp = await client.messages.create({ model: MODEL, max_tokens: 1500, system, tools, messages });
+        if (turn > 0) tick("web-search", "start", `Still searching (round ${turn + 1})`);
+        const resp = await client.messages.create(
+          { model: MODEL, max_tokens: 1500, system, tools, messages },
+          { signal: webController.signal },
+        );
         debug.webSearchTurns++;
         report = findReport(resp.content);
         if (report) break;
@@ -460,31 +601,61 @@ Rules:
       }
 
       // If it never called report_phones (answered in prose, or stopped early),
-      // force the structured report so its research isn't thrown away.
-      if (!report) {
+      // force the structured report so its research isn't thrown away — but only
+      // when there's genuinely time for it. Unguarded, this second call is what
+      // pushed the request past the function timeout.
+      if (!report && msLeft() > FORCED_REPORT_MS) {
+        tick("web-search", "start", "Collecting the results");
         messages.push({
           role: "user",
           content:
             "Now call report_phones with every phone number you found in your research. " +
             "If you found none, call it with an empty phones array and say so in reasoning.",
         });
-        const forced = await client.messages.create({
-          model: MODEL,
-          max_tokens: 800,
-          system,
-          tools,
-          tool_choice: { type: "tool", name: "report_phones" },
-          messages,
-        });
+        const forced = await client.messages.create(
+          {
+            model: MODEL,
+            max_tokens: 800,
+            system,
+            tools,
+            tool_choice: { type: "tool", name: "report_phones" },
+            messages,
+          },
+          { signal: webController.signal },
+        );
         debug.webSearchTurns++;
         report = findReport(forced.content);
+      } else if (!report) {
+        skippedForTime.push("web-search");
       }
 
       if (report) ingestReport(report);
     } catch (err) {
-      debug.searchError = err instanceof Error ? err.message : "Web search failed.";
+      const aborted =
+        webController.signal.aborted || (err instanceof Error && err.name === "AbortError");
+      debug.searchError = aborted
+        ? "The web search ran out of time."
+        : err instanceof Error
+          ? err.message
+          : "Web search failed.";
+      if (aborted) skippedForTime.push("web-search");
       searchReasoning = debug.searchError;
+    } finally {
+      clearTimeout(webTimer);
     }
+    tick(
+      "web-search",
+      "done",
+      byNumber.size > webBefore
+        ? `Web search found ${byNumber.size - webBefore}`
+        : "Web search found nothing",
+    );
+  } else if (byNumber.size > 0) {
+    tick("web-search", "skip", "Not needed, already found a number");
+  } else if (!apiKey) {
+    tick("web-search", "skip", "Web search is not configured");
+  } else {
+    tick("web-search", "skip", "Nothing searchable on this record");
   }
 
   debug.webPhoneCount = Math.max(0, byNumber.size - webBefore);
@@ -515,13 +686,19 @@ Rules:
         )}) — the host may be blocking server-side requests.`
       : "";
 
+  // On a miss, say what each leg concluded. Reporting only the web-search result
+  // used to hide the real cause, e.g. that the Google-Maps leg never ran because
+  // the Apify usage cap was blown.
+  const missNotes = [searchReasoning, gmapsReasoning].filter(
+    (s): s is string => !!s && !!s.trim(),
+  );
   const reasoning = phones.length
     ? `Found ${phones.length} number${phones.length === 1 ? "" : "s"} (${phones[0].source}).`
-    : (searchReasoning ||
-        gmapsReasoning ||
-        (sites.length || searchSubject
+    : (missNotes.length
+        ? missNotes.join(" ")
+        : sites.length || searchSubject
           ? "No phone numbers could be found for this contact."
-          : "No website or name to search with.")) + fetchNote;
+          : "No website or name to search with.") + fetchNote;
 
   return {
     found: phones.length > 0,

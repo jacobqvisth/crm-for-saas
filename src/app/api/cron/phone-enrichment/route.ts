@@ -14,6 +14,10 @@ export const maxDuration = 300;
 // ~2 sequential per worker, so keep the batch at 6 to stay under maxDuration.
 const BATCH = 6;
 const CONCURRENCY = 3;
+// Shared wall-clock deadline for the run. Each search budgets its legs against
+// it, so the second wave degrades (skips its slow legs) rather than letting the
+// platform kill the worker — which would leave jobs stuck in "processing".
+const RUN_BUDGET_MS = 270_000;
 
 type Job = {
   id: string;
@@ -53,6 +57,7 @@ async function handle(request: NextRequest) {
 
   let done = 0;
   let errored = 0;
+  const deadline = Date.now() + RUN_BUDGET_MS;
 
   const runOne = async (job: Job) => {
     const attempts = (job.attempts ?? 0) + 1;
@@ -60,6 +65,7 @@ async function handle(request: NextRequest) {
       const result = await findPhonesForRecord(supabase, {
         workspaceId: job.workspace_id,
         contactId: job.contact_id,
+        deadline,
       });
       const saved = result.phones.length
         ? await saveFoundPhones(supabase, {
