@@ -41,9 +41,19 @@ export async function POST(
     workspace_id: string;
   } | null;
 
-  if (!emailQueue) {
+  // Which mailbox do we send the reply from? Prefer the sender account of the
+  // sequence email this is a reply to. But most inbound mail has no linked
+  // email_queue row at all: mailbox-sync never sets email_queue_id, and
+  // check-replies leaves it null when the thread isn't a sequence send. Those
+  // messages are still perfectly replyable — inbox_messages.gmail_account_id is
+  // NOT NULL and records the mailbox that received them, which is the correct
+  // address to answer from. Requiring email_queue here made every reply to a
+  // manually-sent thread fail with "original outgoing email not found".
+  const senderAccountId = emailQueue?.sender_account_id ?? inboxMessage.gmail_account_id;
+
+  if (!senderAccountId) {
     return NextResponse.json(
-      { error: "Cannot reply: original outgoing email not found" },
+      { error: "Cannot reply: no sending mailbox found for this message" },
       { status: 400 }
     );
   }
@@ -74,7 +84,7 @@ export async function POST(
     : `Re: ${inboxMessage.subject || ""}`;
 
   const result = await sendEmail({
-    accountId: emailQueue.sender_account_id,
+    accountId: senderAccountId,
     to: inboxMessage.from_email,
     subject: replySubject,
     htmlBody,
@@ -91,7 +101,7 @@ export async function POST(
   const { data: senderAccount } = await supabase
     .from("gmail_accounts")
     .select("email_address, display_name")
-    .eq("id", emailQueue.sender_account_id)
+    .eq("id", senderAccountId)
     .maybeSingle();
 
   // Create activity record — keep BOTH the approved English version and the
@@ -110,7 +120,8 @@ export async function POST(
       body_sent: sentBody,
       target_language: translation.targetLanguage,
       translation_model: translation.model,
-      sender_account_id: emailQueue.sender_account_id,
+      sender_account_id: senderAccountId,
+      sender_account_source: emailQueue ? "email_queue" : "inbox_mailbox",
       sender_email: senderAccount?.email_address ?? null,
       sender_name: senderAccount?.display_name ?? null,
     },
