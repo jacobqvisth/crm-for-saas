@@ -62,13 +62,23 @@ const initialStages = (): Record<SearchStage, StageState> =>
     {} as Record<SearchStage, StageState>,
   );
 
+/** The server's own budget for a search, mirrored here to pace the fallback bar. */
+const SEARCH_BUDGET_MS = 150_000;
+
 /**
  * How far along the whole search is, 0-100. Finished and skipped legs contribute
  * their full weight (a skipped leg is genuinely less work left); the running leg
  * contributes a fraction of its own weight based on how long it has been going,
  * capped just short of complete so the bar never claims a leg is done early.
+ *
+ * Floored by elapsed time against the server's budget, so the bar still moves if
+ * progress events are delayed or coalesced in transit by a buffering proxy.
  */
-function progressPct(stages: Record<SearchStage, StageState>, now: number): number {
+function progressPct(
+  stages: Record<SearchStage, StageState>,
+  now: number,
+  searchStartedAt: number | null,
+): number {
   let pct = 0;
   for (const s of STAGES) {
     const st = stages[s.key];
@@ -79,7 +89,9 @@ function progressPct(stages: Record<SearchStage, StageState>, now: number): numb
       pct += s.weight * Math.min(0.92, elapsed / s.estimateMs);
     }
   }
-  return Math.min(99, pct);
+  const totalElapsed = searchStartedAt ? now - searchStartedAt : 0;
+  const timeFloor = Math.min(90, (totalElapsed / SEARCH_BUDGET_MS) * 100);
+  return Math.min(99, Math.max(pct, timeFloor));
 }
 
 /** The primary pool number string + the full list, surfaced to the parent so
@@ -658,19 +670,18 @@ function PhoneSearchProgress({
   startedAt: number | null;
   now: number;
 }) {
-  const pct = progressPct(stages, now);
+  const pct = progressPct(stages, now, startedAt);
   const elapsed = startedAt ? now - startedAt : 0;
   // Only show legs that have actually reported, plus the one running, so the
   // list grows as the search proceeds instead of showing six greyed-out rows.
   const visible = STAGES.filter((s) => stages[s.key].status !== 'pending');
   const active = STAGES.find((s) => stages[s.key].status === 'active');
+  const heading = active ? active.label : visible.length ? 'Finishing up' : 'Starting the search';
 
   return (
     <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-xs font-medium text-slate-600">
-          {active ? active.label : 'Finishing up'}
-        </span>
+        <span className="text-xs font-medium text-slate-600">{heading}</span>
         <span className="text-[11px] tabular-nums text-slate-400">
           {Math.round(pct)}% · {elapsedLabel(elapsed)}
         </span>
