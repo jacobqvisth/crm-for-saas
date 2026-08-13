@@ -21,6 +21,15 @@ describe("voiceSafe", () => {
   it("flattens newlines in the inline variant", () => {
     expect(voiceSafeInline("line one\nline two")).toBe("line one. line two");
   });
+
+  it("preserves {{dynamic_variable}} placeholders verbatim", () => {
+    expect(voiceSafe("Hi {{contact_first_name}}! How is {{workshop_name}}?")).toBe(
+      "Hi {{contact_first_name}}! How is {{workshop_name}}?",
+    );
+    expect(voiceSafe("**Hej** {{contact_first_name}} — welcome")).toBe(
+      "Hej {{contact_first_name}}, welcome",
+    );
+  });
 });
 
 describe("pickAgentLanguage", () => {
