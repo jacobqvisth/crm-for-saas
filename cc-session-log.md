@@ -13,6 +13,28 @@ updated: 2026-05-26
 
 ---
 
+## Inbox reply fixed for threads with no linked email_queue row — 2026-08-13 — PR #660 — worktree-fix-reply-without-email-queue
+
+Jacob (from a screenshot of `/inbox`): replying to Jonathan Keogh's "Re: How are you enjoying Wrenchlane?" always failed with the toast **"Cannot reply: original outgoing email not found"**.
+
+**Root cause.** `src/app/api/inbox/[id]/reply/route.ts` resolved the sending mailbox *only* from the linked `email_queue` row and hard-failed when it was absent. That is the common case, not an edge case:
+- `cron/mailbox-sync` **never** sets `email_queue_id` on the inbound rows it inserts — it is omitted from the upsert entirely.
+- `cron/check-replies` sets `email_queue_id: threadEmail?.id ?? null`, so it is null whenever the thread is not a sequence send.
+
+Net effect: **every reply to a manually-sent or externally-originated thread was unanswerable from the CRM.** Jonathan's was a reply to the 10 Aug free-user check-in, which has no sequence queue row.
+
+**Fix (PR #660, squash `33ae7fb`, prod deploy Vercel=success for that SHA):**
+- `inbox_messages.gmail_account_id` is `NOT NULL` and records the mailbox that received the message; like `email_queue.sender_account_id` it is an FK to `gmail_accounts.id`, so it feeds `sendEmail({ accountId })` directly.
+- New `senderAccountId = emailQueue?.sender_account_id ?? inboxMessage.gmail_account_id` — prefer the sequence sender, else answer from the receiving mailbox. Guard now only trips if both are absent (message: "Cannot reply: no sending mailbox found for this message").
+- Activity metadata stamps `sender_account_source` (`email_queue` | `inbox_mailbox`) so the audit trail shows which path picked the mailbox.
+- No UI change: `inbox-client.tsx` types `email_queue` but never gates the composer on it, which is why the reply could be composed and only failed on send.
+
+**Checks:** `tsc --noEmit` exit 0, `eslint` exit 0, CI **Build & Lint green (3m14s)**. The red Vercel PREVIEW check is the known false alarm. tsc was **control-tested** (empty output can mask an OOM kill in a background session): forcing a type error made it exit 2 with 3 real errors, confirming the clean run was genuine — and confirming `senderAccountId` infers as non-nullable `string`.
+
+**Caveat / follow-up.** Run from Jacob's *personal* Claude account, where prod DB access is blocked (no Supabase MCP; psql and PostgREST both classifier-denied). So `email_queue_id IS NULL` was **inferred from the two cron sources, never measured** — the affected-message count is unknown. Worth a one-line count when someone has prod access. Behaviour to sanity-check on the first live reply: for the synced mailboxes, replies now send from whichever mailbox received the thread instead of failing.
+
+---
+
 ## User Journey canvas page + seeded current-flow board — 2026-08-11 — PR #640 — worktree-user-journey-canvas
 
 Jacob asked for a Miro-style **User Journey** page in the CRM (drag/drop images + sticky notes) and for the real current flow — landing → signup → paying customer — to be walked, screenshotted, and laid out on it.
