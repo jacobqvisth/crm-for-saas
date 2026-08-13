@@ -43,6 +43,8 @@ export type PayerOriginBucket = {
     | "outbound_call"
     | "partner"
     | "pre_ads_organic"
+    | "google_ads"
+    | "self_serve_other"
     | "ads_era_self_serve"
     | "unknown";
   label: string;
@@ -273,6 +275,7 @@ async function loadFunnelData(): Promise<FunnelData> {
     enrollmentSeqRes,
     openEventsRes,
     replyMessagesRes,
+    attributionRes,
   ] = await Promise.all([
     pageAll<WorkshopRow>(({ from, to }) =>
       supabase
@@ -369,6 +372,17 @@ async function loadFunnelData(): Promise<FunnelData> {
         .not("email_queue_id", "is", null)
         .eq("is_auto_reply", false)
         .order("id")
+        .range(from, to),
+    ),
+    // GA4 first-touch per identified user (PR #656): both sites share one GTM
+    // container, so the _ga cookie survives the wrenchlane.com ->
+    // app.wrenchlane.com hop and GA4 stamps crm_user_id as a user-scoped dim.
+    // Synced hourly into dashboard_user_attribution.
+    pageAll<{ internal_user_id: string; channel: string }>(({ from, to }) =>
+      supabase
+        .from(TABLES.userAttribution)
+        .select("internal_user_id, channel")
+        .order("internal_user_id")
         .range(from, to),
     ),
   ]);
@@ -629,7 +643,9 @@ async function loadFunnelData(): Promise<FunnelData> {
   let originCall = 0;
   let originPartner = 0;
   let originPreAds = 0;
-  let originAdsEra = 0;
+  let originGoogleAds = 0;
+  let originSelfServeOther = 0;
+  let originAdsEraUnknown = 0;
   let originUnknown = 0;
   let paidDateUnknown = 0;
   let emailedThenSignedUp = 0;
@@ -662,6 +678,29 @@ async function loadFunnelData(): Promise<FunnelData> {
     outbound_call: emptyCohort(),
     pre_ads: emptyCohort(),
     ads_era: emptyCohort(),
+    // GA4 first-touch sub-split of the ads era. Pre-ads stays ring-fenced by
+    // date regardless of GA4 (firstUser* is stamped at the first identified
+    // session, which for pre-May-25 signups can postdate signup).
+    ads_era_google: emptyCohort(),
+    ads_era_other: emptyCohort(),
+    ads_era_unknown: emptyCohort(),
+  };
+
+  // Per-workshop GA4 first-touch channel: first user with a classified
+  // channel wins; "unknown" only if no user has anything better.
+  const channelByUser = new Map<string, string>();
+  for (const row of attributionRes.data) {
+    channelByUser.set(row.internal_user_id, row.channel);
+  }
+  const ga4ChannelForWorkshop = (workshopUsers: UserRow[]): string | null => {
+    let fallback: string | null = null;
+    for (const user of workshopUsers) {
+      const channel = channelByUser.get(user.internal_user_id);
+      if (!channel) continue;
+      if (channel !== "unknown") return channel;
+      fallback = channel;
+    }
+    return fallback;
   };
 
   for (const [workshopId, workshopUsers] of usersByWorkshop) {
@@ -680,19 +719,25 @@ async function loadFunnelData(): Promise<FunnelData> {
     if (emailedBefore) emailedThenSignedUp += 1;
     if (calledBefore) calledThenSignedUp += 1;
 
-    const cohort = emailedBefore
-      ? cohorts.outbound_email
-      : calledBefore
-        ? cohorts.outbound_call
-        : signupAt < ADS_ERA_START
-          ? cohorts.pre_ads
-          : cohorts.ads_era;
-    cohort.signedUp += 1;
-    if (firstDiagnosticByWorkshop.has(workshopId)) cohort.activated += 1;
-    if (trialedWorkshops.has(workshopId)) cohort.trialed += 1;
-    if (paidWorkshopIds.has(workshopId)) {
-      cohort.charged += 1;
-      if (activeOrPastDueWorkshops.has(workshopId)) cohort.activeToday += 1;
+    const targets: JourneyCohort[] = [];
+    if (emailedBefore) targets.push(cohorts.outbound_email);
+    else if (calledBefore) targets.push(cohorts.outbound_call);
+    else if (signupAt < ADS_ERA_START) targets.push(cohorts.pre_ads);
+    else {
+      targets.push(cohorts.ads_era);
+      const channel = ga4ChannelForWorkshop(workshopUsers);
+      if (channel === "google_ads") targets.push(cohorts.ads_era_google);
+      else if (channel && channel !== "unknown") targets.push(cohorts.ads_era_other);
+      else targets.push(cohorts.ads_era_unknown);
+    }
+    for (const cohort of targets) {
+      cohort.signedUp += 1;
+      if (firstDiagnosticByWorkshop.has(workshopId)) cohort.activated += 1;
+      if (trialedWorkshops.has(workshopId)) cohort.trialed += 1;
+      if (paidWorkshopIds.has(workshopId)) {
+        cohort.charged += 1;
+        if (activeOrPastDueWorkshops.has(workshopId)) cohort.activeToday += 1;
+      }
     }
   }
 
@@ -735,13 +780,19 @@ async function loadFunnelData(): Promise<FunnelData> {
     if (emailedBeforePaid) crmEmailedBeforePaying += 1;
     if (calledBeforePaid) crmCalledBeforePaying += 1;
 
-    // Origin bucket (first touch wins, outbound beats era guesses).
+    // Origin bucket (first touch wins, outbound beats era guesses; the ads
+    // era splits by GA4 first-touch channel).
     if (emailedBeforeSignup) originEmail += 1;
     else if (calledBeforeSignup) originCall += 1;
     else if (partnerWorkshops.has(workshopId)) originPartner += 1;
     else if (!signupAt) originUnknown += 1;
     else if (signupAt < ADS_ERA_START) originPreAds += 1;
-    else originAdsEra += 1;
+    else {
+      const channel = ga4ChannelForWorkshop(workshopUsers);
+      if (channel === "google_ads") originGoogleAds += 1;
+      else if (channel && channel !== "unknown") originSelfServeOther += 1;
+      else originAdsEraUnknown += 1;
+    }
   }
 
   const originBuckets: PayerOriginBucket[] = [
@@ -770,11 +821,25 @@ async function loadFunnelData(): Promise<FunnelData> {
       description: `Signed up before ${ADS_ERA_START}, so before Google Ads existed`,
     },
     {
-      key: "ads_era_self_serve",
-      label: "Ads-era self-serve",
-      count: originAdsEra,
+      key: "google_ads",
+      label: "Google Ads (GA4 first touch)",
+      count: originGoogleAds,
       description:
-        "Signed up after Pmax launch with no outbound touch: ads, App Store, or organic (not separable until UTM forwarding lands)",
+        "Ads-era signup whose GA4 first-touch is a paid campaign (Pmax / Demand Gen)",
+    },
+    {
+      key: "self_serve_other",
+      label: "Direct, organic, referral (GA4)",
+      count: originSelfServeOther,
+      description:
+        "Ads-era signup whose GA4 first-touch is direct, organic search, email, referral, or App Store",
+    },
+    {
+      key: "ads_era_self_serve",
+      label: "Ads-era, no GA4 data",
+      count: originAdsEraUnknown,
+      description:
+        "Signed up after Pmax launch, but GA4 never saw an identified session (mobile-app-only users, consent blockers, or churned before the 2-month event window)",
     },
     {
       key: "unknown",
@@ -1059,13 +1124,13 @@ async function loadFunnelData(): Promise<FunnelData> {
       ],
     },
     {
-      key: "ads_era",
-      name: "Google Ads, App Store and organic (since May 2026)",
+      key: "ads_era_google",
+      name: "Google Ads (GA4 first touch, since May 2026)",
       description:
-        "Everything self-serve since Pmax launched. Ads-tracked signups (848 via GA4) cannot be separated from App Store and organic until UTM forwarding lands, so this journey shows the whole self-serve era.",
+        "Workshops whose GA4 first-touch is a paid campaign. Per-user attribution works because both sites share one GTM container and the app stamps each user's id into GA4 (reliable from ~June 2026; synced hourly).",
       tone: "neutral",
-      entrants: cohorts.ads_era.signedUp,
-      payers: cohorts.ads_era.charged,
+      entrants: cohorts.ads_era_google.signedUp,
+      payers: cohorts.ads_era_google.charged,
       steps: [
         {
           label: "Ad clicks",
@@ -1074,29 +1139,96 @@ async function loadFunnelData(): Promise<FunnelData> {
         },
         {
           label: "Signed up",
-          count: cohorts.ads_era.signedUp,
-          note: "848 ads-tracked (GA4) + App Store + organic",
+          count: cohorts.ads_era_google.signedUp,
+          note: "workshops, GA4 first-touch = paid",
           trigger: "landing page, $10.67 per ads signup",
         },
         {
           label: "Activated",
-          count: cohorts.ads_era.activated,
+          count: cohorts.ads_era_google.activated,
           trigger: "welcome email + first diagnostic",
         },
         {
           label: "Started a trial",
-          count: cohorts.ads_era.trialed,
+          count: cohorts.ads_era_google.trialed,
           trigger: "hit paywall or quota, opened billing",
         },
         {
           label: "Paid",
-          count: cohorts.ads_era.charged,
+          count: cohorts.ads_era_google.charged,
           trigger: "trial converts",
         },
         {
           label: "Still paying",
-          count: cohorts.ads_era.activeToday,
+          count: cohorts.ads_era_google.activeToday,
           trigger: "keeps using it",
+        },
+      ],
+    },
+    {
+      key: "ads_era_other",
+      name: "Direct, organic and referral (since May 2026)",
+      description:
+        "Ads-era workshops whose GA4 first-touch is direct, organic search, email, referral, or the App Store: the word-of-mouth engine still running underneath the ads.",
+      tone: "good",
+      entrants: cohorts.ads_era_other.signedUp,
+      payers: cohorts.ads_era_other.charged,
+      steps: [
+        {
+          label: "Signed up",
+          count: cohorts.ads_era_other.signedUp,
+          note: "workshops, own initiative",
+        },
+        {
+          label: "Activated",
+          count: cohorts.ads_era_other.activated,
+          trigger: "welcome email + first diagnostic",
+        },
+        {
+          label: "Started a trial",
+          count: cohorts.ads_era_other.trialed,
+          trigger: "hit paywall or quota, opened billing",
+        },
+        {
+          label: "Paid",
+          count: cohorts.ads_era_other.charged,
+          trigger: "trial converts",
+        },
+        {
+          label: "Still paying",
+          count: cohorts.ads_era_other.activeToday,
+          trigger: "keeps using it",
+        },
+      ],
+    },
+    {
+      key: "ads_era_unknown",
+      name: "Ads era, no GA4 data",
+      description:
+        "Signed up after Pmax launch but GA4 never saw an identified session: mobile-app-only users, cookie-consent blockers, and users who churned before the 2-month GA4 event window. Mostly App Store in practice.",
+      tone: "pending",
+      entrants: cohorts.ads_era_unknown.signedUp,
+      payers: cohorts.ads_era_unknown.charged,
+      steps: [
+        {
+          label: "Signed up",
+          count: cohorts.ads_era_unknown.signedUp,
+          note: "workshops",
+        },
+        {
+          label: "Activated",
+          count: cohorts.ads_era_unknown.activated,
+          trigger: "welcome email + first diagnostic",
+        },
+        {
+          label: "Started a trial",
+          count: cohorts.ads_era_unknown.trialed,
+          trigger: "hit paywall or quota",
+        },
+        {
+          label: "Paid",
+          count: cohorts.ads_era_unknown.charged,
+          trigger: "trial converts",
         },
       ],
     },

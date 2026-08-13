@@ -14,7 +14,9 @@ const ORIGIN_COLORS: Record<PayerOriginBucket["key"], string> = {
   outbound_call: "bg-amber-700",
   partner: "bg-violet-500",
   pre_ads_organic: "bg-emerald-500",
-  ads_era_self_serve: "bg-sky-500",
+  google_ads: "bg-sky-500",
+  self_serve_other: "bg-emerald-400",
+  ads_era_self_serve: "bg-slate-400",
   unknown: "bg-slate-400",
 };
 
@@ -454,6 +456,9 @@ export function FunnelContent({ data }: { data: FunnelData }) {
         <p className="text-[11px] text-slate-400 mt-3">
           Cohorts are first-touch: a workshop that got a cold email before
           signup counts in the cold-email journey even if it also saw an ad.
+          The ads-era strips split by GA4 per-user first-touch (both sites
+          share one GTM container, so the attribution survives the hop from
+          the marketing site into the app; trust it from ~June 2026).
           Percentages compare adjacent steps only where the unit is the same;
           arrows without a percentage cross a unit or system boundary (GA4
           clicks vs workshops, PostHog users vs workshops). The paywall-path
@@ -480,8 +485,10 @@ export function FunnelContent({ data }: { data: FunnelData }) {
           <p className="text-[11px] text-slate-400 mt-3">
             Outbound touches are matched per linked contact (send or call
             timestamped before the workshop&apos;s first signup). Ads-era
-            self-serve cannot be split into ads vs App Store vs organic until
-            UTM forwarding into signup lands.
+            buckets split by GA4 per-user first-touch
+            (dashboard_user_attribution, synced hourly): reliable from ~June
+            2026 when the user-id wiring landed. Pre-ads signups stay
+            date-bucketed regardless of GA4.
           </p>
         </SectionCard>
 
@@ -742,7 +749,8 @@ export function FunnelContent({ data }: { data: FunnelData }) {
         Generated {new Date(data.generatedAt).toLocaleString("sv-SE")} · cached
         5 minutes · counting unit is the workshop · outbound attribution is a
         lower bound (only timestamped CRM touches count; word of mouth and ad
-        clicks are invisible until UTM forwarding lands).
+        clicks now attribute via GA4 per-user first-touch, word of mouth stays
+        invisible).
       </p>
     </div>
   );
