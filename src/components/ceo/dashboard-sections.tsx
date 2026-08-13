@@ -32,6 +32,7 @@ export type DashboardSectionKey =
   | "product-analytics"
   | "plan-stats"
   | "free-users"
+  | "google-ads-users"
   | "cac-ltv"
   | "toplists"
   | "cta-clicks"
@@ -119,6 +120,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Free Users",
     description:
       "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus the full upgrade funnel — every signup starts on Free, upgrades open a 14-day card-required trial, cancels revert to Free — reconstructed from Stripe fingerprints: trials live now (rescue list), trial survival, reverted upgrades (win-back list), abandoned checkouts, payment failures, conversion by cohort and country, and the most engaged free users as an upgrade-candidate list.",
+  },
+  {
+    key: "google-ads-users",
+    label: "Google Ads Users",
+    glyph: "AD",
+    href: "/dashboard/google-ads-users",
+    title: "Google Ads Users",
+    description:
+      "Every user whose FIRST touch was a Google Ads click, identified per user by joining GA4's first-touch attribution (customUser:crm_user_id × firstUserSource, shared cookie across wrenchlane.com and app.wrenchlane.com) to app users. Their share of signups per month, which campaigns they came from, what they do in the product versus other signups (activation, diagnostics, chat, feature adoption, 30-day activity, churn), how many start trials and end up paying, the plans they pick, time to first payment, estimated MRR and revenue to date, and channel economics: spend, cost per signup, CAC per payer and an LTV scenario table. Attribution is reliable from late May 2026 onward; pre-ads signups are ring-fenced into their own cohort.",
   },
   {
     key: "cac-ltv",

@@ -40,7 +40,7 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
 // default range for the shell chrome and scope their own reads themselves.
 const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   DashboardSectionKey
->(["diagnostic-search-terms", "dtc-codes", "free-users", "cac-ltv"]);
+>(["diagnostic-search-terms", "dtc-codes", "free-users", "google-ads-users", "cac-ltv"]);
 
 // Sections that render their OWN measurement-window control in the page body.
 // They get neither the range pills nor the "All synced history" chip, because a

@@ -6,6 +6,7 @@ export const TABLES = {
   funnelSnapshots: "dashboard_funnel_snapshots",
   users: "dashboard_users",
   userLogins: "dashboard_user_logins",
+  userAttribution: "dashboard_user_attribution",
   featureUsage: "dashboard_feature_usage",
   workshops: "dashboard_workshops",
   subscriptions: "dashboard_subscriptions",

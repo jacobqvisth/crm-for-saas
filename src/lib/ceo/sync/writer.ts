@@ -10,6 +10,7 @@ import type {
   MotorUsageRow,
   RawMetricRow,
   SubscriptionRow,
+  UserAttributionRow,
   UserLoginRow,
   UserRow,
   WorkshopRow,
@@ -441,6 +442,22 @@ export async function writeUserLogins(
   return upsertChunked(supabase, TABLES.userLogins, logins, {
     onConflict: "internal_user_id,logged_in_at",
     ignoreDuplicates: true,
+  });
+}
+
+export async function writeUserAttribution(
+  supabase: SupabaseWriter,
+  rows: UserAttributionRow[],
+) {
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  // Last-write-wins on the user: firstUser* is immutable in GA4, so a
+  // changed row only ever means better data (e.g. the Google Ads campaign
+  // dimension backfilling), never a lost first touch.
+  return upsertChunked(supabase, TABLES.userAttribution, rows, {
+    onConflict: "internal_user_id",
   });
 }
 
