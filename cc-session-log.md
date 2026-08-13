@@ -6879,3 +6879,13 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - **715 tests pass, 0 failures** (63 in `cac-ltv-shared.test.ts`, +7). New tests pin the default window to 2026-05-01..2026-08-01, that it excludes the month in progress, rolls forward, crosses a year boundary, and that the clean-paid preset starts on the first day `ad_signups` exists.
 - `tsc --noEmit`, `eslint`, `npm run build` clean.
 - Driven against live prod across all presets: window, signup/aged counts, conversion, CAC and every coverage denominator correct; the unmeasurable-window warning appears only where it applies; the stale chip is gone everywhere.
+
+## Google Ads Users page + per-user GA4 attribution sync — 2026-08-13
+
+**PR #656** · branch `feature/google-ads-users-page` · merged + deployed (prod READY, sync verified live)
+
+- **New page `/dashboard/google-ads-users`** ("Google Ads Users" in the sidebar, glyph AD): every user whose first touch was a Google Ads click, analysed end-to-end. Sections: KPI header (ads users, share of ads-era signups, paying workshops from ads, attribution coverage), signups by month and origin with per-month GA4 coverage, product behaviour by cohort (activation, median time to first diagnostic, diagnostics depth, chat, active-30d, churn), feature-adoption matrix (diagnostics/chat/AI search/VRM/InfoPro/Motor), monetization funnel (trial → paid → active-now, median signup→first-payment, est. MRR + revenue-to-date in SEK list prices), plan mix ads vs other payers, campaign table, channel economics (spend USD→SEK@9.6, cost per signup, CAC per payer, LTV scenario table at 80% assumed margin), country split.
+- **Cohort model** (google-ads-users-shared.ts): `google_ads` / `ads_era_other` / `pre_ads`. Pre-ads signups are ring-fenced regardless of GA4 first-touch because attribution predating the 2026-05-25 user-ID wiring can lie. Payer rules mirror /funnel (ever_paid/first_paid_at, minus never-charged trialers).
+- **New sync source `ga4_attribution`** (hourly, pg_cron job 14 at H:11, scheduled in prod): one GA4 Data API report (customUser:crm_user_id × firstUser source/medium/campaign/channel-group/Google-Ads-campaign) → upserts new table `dashboard_user_attribution` (migration applied to prod + backfilled; first prod run: 1,602 rows read, 1,234 users written, 931 google_ads). Channel classification in `src/lib/ceo/attribution/classify.ts`.
+- Build/lint/tsc/middleware tests clean. Gotcha fixed along the way: `google_ads` spend snapshots have **no** `dimension_key='total'` row (per-campaign only) — loader sums across campaign dimensions.
+
