@@ -86,6 +86,13 @@ export const SWITCHBOARD_SPEECH_SPEED = 1.1;
  */
 export const SWITCHBOARD_TURN_TIMEOUT = 3;
 
+/**
+ * Low on purpose. The receptionist's job is to restate known facts about pricing
+ * and coverage, not to be interesting, and a workshop that is quoted a confidently
+ * invented number is a real problem rather than a charming one.
+ */
+export const SWITCHBOARD_TEMPERATURE = 0.1;
+
 /** Outcome labels for the calls table on the Phone System page. */
 export const SWITCHBOARD_OUTCOME_LABEL: Record<string, string> = {
   handled_by_agent: "Handled by the receptionist",

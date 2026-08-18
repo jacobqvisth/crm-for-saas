@@ -129,29 +129,74 @@ Deno.serve(async (req) => {
   // So we hold the audio here and feed 46elks one 20 ms frame at a time. An
   // interruption then just clears our queue, which is the difference between the
   // agent stopping now and stopping two seconds from now.
-  const FRAME_BYTES = 640; // 20 ms @ 16 kHz, 16-bit mono
-  const FRAME_MS = 20;
-  let outbound = new Uint8Array(0);
+  // 100 ms per frame, not 20. The first attempt at this sent 20 ms frames every
+  // 20 ms and the line audibly suffered: 50 websocket messages a second, each
+  // with JSON and base64 overhead, on a timer that is not precise, is a recipe for
+  // jitter. 100 ms is ten messages a second and still bounds interruption lag to
+  // about a tenth of a second, which nobody hears as slow.
+  //
+  // Frame size must stay EVEN, or a frame boundary can land mid-sample and turn
+  // 16-bit audio into static.
+  const FRAME_BYTES = 3200; // 100 ms @ 16 kHz, 16-bit mono
+  const FRAME_MS = 100;
+  // A list of chunks with a read cursor, rather than one array that gets
+  // reallocated on every append. The old version copied the whole backlog per
+  // chunk, which is quadratic and stalls the very timer that has to stay regular.
+  let queue: Uint8Array[] = [];
+  let queueHead = 0; // read offset into queue[0]
+  let queuedBytes = 0;
   let pacer: number | null = null;
 
   const enqueueAgentAudio = (b64: string) => {
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const merged = new Uint8Array(outbound.length + bytes.length);
-    merged.set(outbound, 0);
-    merged.set(bytes, outbound.length);
-    outbound = merged;
+    const raw = atob(b64);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    queue.push(bytes);
+    queuedBytes += bytes.length;
+  };
+
+  const dropQueuedAudio = (): number => {
+    const dropped = queuedBytes;
+    queue = [];
+    queueHead = 0;
+    queuedBytes = 0;
+    return dropped;
+  };
+
+  /** Pull up to `want` bytes off the queue, preserving sample alignment. */
+  const takeBytes = (want: number): Uint8Array | null => {
+    if (queuedBytes === 0) return null;
+    const take = Math.min(want, queuedBytes);
+    // Round down to a whole number of 16-bit samples.
+    const aligned = take - (take % 2);
+    if (aligned === 0) return null;
+
+    const out = new Uint8Array(aligned);
+    let written = 0;
+    while (written < aligned) {
+      const head = queue[0];
+      const available = head.length - queueHead;
+      const n = Math.min(available, aligned - written);
+      out.set(head.subarray(queueHead, queueHead + n), written);
+      written += n;
+      queueHead += n;
+      if (queueHead >= head.length) {
+        queue.shift();
+        queueHead = 0;
+      }
+    }
+    queuedBytes -= aligned;
+    return out;
   };
 
   const startPacer = () => {
     if (pacer !== null) return;
     pacer = setInterval(() => {
       if (closed || elks.readyState !== WebSocket.OPEN) return;
-      if (outbound.length === 0) return;
-      const take = Math.min(FRAME_BYTES, outbound.length);
-      const frame = outbound.subarray(0, take);
-      outbound = outbound.subarray(take);
+      const frame = takeBytes(FRAME_BYTES);
+      if (!frame) return;
       let bin = "";
-      for (const byte of frame) bin += String.fromCharCode(byte);
+      for (let i = 0; i < frame.length; i++) bin += String.fromCharCode(frame[i]);
       elks.send(JSON.stringify({ t: "audio", data: btoa(bin) }));
     }, FRAME_MS);
   };
@@ -342,8 +387,7 @@ Deno.serve(async (req) => {
             // they stop hearing it now rather than seconds from now. This is the
             // whole reason outbound audio is paced through us instead of pushed
             // straight into 46elks' playback buffer, which cannot be recalled.
-            const dropped = outbound.length;
-            outbound = new Uint8Array(0);
+            const dropped = dropQueuedAudio();
             if (dropped) console.log(`interruption: dropped ${dropped} queued bytes`);
             break;
           }

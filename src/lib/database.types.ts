@@ -5826,6 +5826,7 @@ export type Database = {
         Row: {
           answer_questions: boolean
           bridge_number: string | null
+          knowledge_md: string | null
           book_callbacks: boolean
           close_hour: number
           created_at: string
@@ -5854,6 +5855,7 @@ export type Database = {
         Insert: {
           answer_questions?: boolean
           bridge_number?: string | null
+          knowledge_md?: string | null
           book_callbacks?: boolean
           close_hour?: number
           created_at?: string
@@ -5882,6 +5884,7 @@ export type Database = {
         Update: {
           answer_questions?: boolean
           bridge_number?: string | null
+          knowledge_md?: string | null
           book_callbacks?: boolean
           close_hour?: number
           created_at?: string

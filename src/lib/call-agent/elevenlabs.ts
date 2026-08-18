@@ -62,6 +62,9 @@ export interface AgentConfigInput {
   /** Speech rate. 1.0 is the provider default; ~1.1 reads noticeably brisker
    *  without sounding sped up. */
   speed?: number;
+  /** LLM sampling temperature. Lower is better for an agent whose job is to
+   *  restate known facts rather than to be interesting. Defaults to 0.3. */
+  temperature?: number;
   /**
    * Seconds of silence before the agent decides the caller has finished. The
    * provider default of 7 is far too long on a phone call: it reads as the agent
@@ -83,7 +86,7 @@ function agentPayload(input: AgentConfigInput) {
         prompt: {
           prompt: input.prompt,
           ...(input.llm ? { llm: input.llm } : {}),
-          temperature: 0.3,
+          temperature: input.temperature ?? 0.3,
           // Webhook tools are created as standalone objects and referenced by
           // id. System tools are NOT tools in that sense: the API refuses them
           // in the tools collection ("use built_in_tools instead") and also

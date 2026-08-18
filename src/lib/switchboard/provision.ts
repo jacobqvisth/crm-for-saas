@@ -30,6 +30,7 @@ import {
 import {
   DEFAULT_SWITCHBOARD_VOICE,
   SWITCHBOARD_SPEECH_SPEED,
+  SWITCHBOARD_TEMPERATURE,
   SWITCHBOARD_TURN_TIMEOUT,
 } from "./types";
 
@@ -151,9 +152,13 @@ export async function provisionSwitchboard(
   const updates: Record<string, Json | string | null> = {};
 
   // 1) Knowledge base -------------------------------------------------------
+  // The receptionist's own document when there is one, else the shared workspace
+  // knowledge. The shared copy is written for email (URL tables, subject-line
+  // rules) so it is a poor fit for speech, but it beats no grounding at all.
   let kbDocId = row.provider_kb_doc_id;
   try {
-    const { contentMd } = await loadWrenchlaneKnowledge(supabase, row.workspace_id);
+    const own = row.knowledge_md?.trim();
+    const contentMd = own || (await loadWrenchlaneKnowledge(supabase, row.workspace_id)).contentMd;
     const newDocId = await createKnowledgeDoc(
       apiKey,
       `Wrenchlane reception knowledge ${new Date().toISOString().slice(0, 10)}`,
@@ -243,6 +248,7 @@ export async function provisionSwitchboard(
     maxDurationSeconds: row.max_call_seconds,
     speed: SWITCHBOARD_SPEECH_SPEED,
     turnTimeoutSeconds: SWITCHBOARD_TURN_TIMEOUT,
+    temperature: SWITCHBOARD_TEMPERATURE,
     toolIds,
     // end_call is what makes the transfer work: it ends the agent's leg so
     // 46elks moves on to the chained `next` action. language_detection lets one
