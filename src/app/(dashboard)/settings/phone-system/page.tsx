@@ -43,6 +43,8 @@ interface Agent {
   callerId: string | null; // null = uses shared default
   enabled: boolean;
   failoverName: string | null;
+  /** Last-resort number rung after the failover (usually the switchboard AI). */
+  fallbackNumber: string | null;
   ringSeconds: number;
   voicemail: boolean;
   /** Their own WebRTC number, i.e. they can take calls in the browser. */
@@ -117,7 +119,7 @@ async function loadData() {
     const { data: profiles } = await admin
       .from("user_profiles")
       .select(
-        "user_id, full_name, call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled, call_webrtc_number",
+        "user_id, full_name, call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_fallback_number, call_ring_seconds, call_voicemail_enabled, call_webrtc_number",
       )
       .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
     const profileById = new Map((profiles ?? []).map((p) => [p.user_id, p]));
@@ -144,6 +146,7 @@ async function loadData() {
         callerId,
         enabled: p?.call_enabled !== false,
         failoverName: nameFor(p?.call_failover_user_id),
+        fallbackNumber: p?.call_fallback_number?.trim() || null,
         ringSeconds: p?.call_ring_seconds ?? 25,
         voicemail: p?.call_voicemail_enabled !== false,
         webrtcNumber: p?.call_webrtc_number?.trim() || null,
@@ -694,6 +697,7 @@ export default async function PhoneSystemPage() {
                     <td className="px-3 py-2.5 text-xs text-slate-500">
                       ring {a.ringSeconds}s
                       {a.failoverName ? ` → ${a.failoverName}` : ""}
+                      {a.fallbackNumber ? ` → ${a.fallbackNumber}` : ""}
                       {a.voicemail ? " → voicemail" : ""}
                     </td>
                     <td className="px-3 py-2.5 text-xs">

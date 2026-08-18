@@ -80,6 +80,40 @@ describe("buildInboundActions", () => {
     expect(a.connect).toBe("+46700000001");
   });
 
+  it("chains owner → failover → fallback number → voicemail", () => {
+    const a = buildInboundActions({
+      primaryCell: "+46700000001",
+      ringSeconds: 25,
+      failoverCell: "+46700000002",
+      failoverRingSeconds: 20,
+      fallbackNumber: "+46766867161",
+      voicemailEnabled: true,
+      recordHookUrl: HOOK,
+    });
+    expect(a.connect).toBe("+46700000001");
+    expect(a.failed?.connect).toBe("+46700000002");
+    const fallback = a.failed?.failed;
+    expect(fallback?.connect).toBe("+46766867161");
+    expect(fallback?.timeout).toBe(30);
+    // the fallback leg still tails into voicemail
+    expect(fallback?.failed?.play).toBe("beep");
+    expect(a.busy?.busy?.connect).toBe("+46766867161");
+  });
+
+  it("rings the fallback number after the owner when no failover agent is set", () => {
+    const a = buildInboundActions({
+      primaryCell: "+46700000001",
+      ringSeconds: 25,
+      failoverCell: null,
+      failoverRingSeconds: 25,
+      fallbackNumber: "+46766867161",
+      voicemailEnabled: true,
+      recordHookUrl: HOOK,
+    });
+    expect(a.failed?.connect).toBe("+46766867161");
+    expect(a.failed?.failed?.play).toBe("beep");
+  });
+
   it("goes straight to voicemail when there is no failover agent", () => {
     const a = buildInboundActions({
       primaryCell: "+46700000001",

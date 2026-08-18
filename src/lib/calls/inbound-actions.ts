@@ -5,7 +5,11 @@
 // + voicemail is one JSON response, no extra webhook round-trips:
 //
 //   ring owner (timeout) → no answer → ring failover agent (timeout)
-//                                     → no answer → voicemail (beep + record)
+//                                     → no answer → ring fallback number (timeout)
+//                                                  → no answer → voicemail (beep + record)
+//
+// The fallback number is typically the AI receptionist (switchboard), which
+// always answers — so with one configured, voicemail is a rare last resort.
 //
 // recordcall records the whole call (the conversation when answered); the
 // voicemail `record` captures the message when nobody answers. Both POST to the
@@ -26,6 +30,9 @@ export interface InboundActionConfig {
   failoverCell: string | null;
   /** Seconds to ring the failover agent. */
   failoverRingSeconds: number;
+  /** Last-resort number rung when the owner AND failover both miss — typically
+   *  the switchboard AI receptionist. E.164, or null. */
+  fallbackNumber?: string | null;
   /** Take a recorded voicemail when nobody answers. */
   voicemailEnabled: boolean;
   /** Webhook 46elks POSTs the recording(s) + hangup info to (already tokenized). */
@@ -62,6 +69,24 @@ function voicemailAction(hook: string): VoiceAction {
 export function buildInboundActions(cfg: InboundActionConfig): VoiceAction {
   const vm = cfg.voicemailEnabled ? voicemailAction(cfg.recordHookUrl) : null;
 
+  // Last resort before voicemail: the fallback number (usually the AI
+  // receptionist, which answers immediately — 30s is a generous ceiling).
+  let afterFailover: VoiceAction | null;
+  if (cfg.fallbackNumber) {
+    const fallback: VoiceAction = {
+      connect: cfg.fallbackNumber,
+      timeout: 30,
+      // callerid omitted → the fallback leg sees the customer's number.
+    };
+    if (vm) {
+      fallback.failed = vm;
+      fallback.busy = vm;
+    }
+    afterFailover = fallback;
+  } else {
+    afterFailover = vm;
+  }
+
   // What happens after the owner doesn't answer.
   let afterPrimary: VoiceAction | null;
   if (cfg.failoverCell) {
@@ -70,13 +95,13 @@ export function buildInboundActions(cfg: InboundActionConfig): VoiceAction {
       timeout: cfg.failoverRingSeconds,
       // callerid omitted → the failover agent's phone shows the customer's number.
     };
-    if (vm) {
-      failover.failed = vm;
-      failover.busy = vm;
+    if (afterFailover) {
+      failover.failed = afterFailover;
+      failover.busy = afterFailover;
     }
     afterPrimary = failover;
   } else {
-    afterPrimary = vm; // may be null (no failover, no voicemail → call just ends)
+    afterPrimary = afterFailover; // may be null (nothing configured → call just ends)
   }
 
   // Ring the browser leg in parallel with the cell when a WebRTC number is

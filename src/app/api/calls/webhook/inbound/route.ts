@@ -37,12 +37,15 @@ function pick(form: FormData, ...keys: string[]): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  // Fail CLOSED: without a configured secret this endpoint would accept
+  // unauthenticated posts (and ring people's phones). Security finding H3.
   const expected = process.env.CALL_WEBHOOK_SECRET;
-  if (expected) {
-    const token = request.nextUrl.searchParams.get("token");
-    if (token !== expected) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
+  if (!expected) {
+    console.error("inbound webhook: CALL_WEBHOOK_SECRET is not set — rejecting");
+    return NextResponse.json({ error: "not configured" }, { status: 503 });
+  }
+  if (request.nextUrl.searchParams.get("token") !== expected) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   let form: FormData;
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
   const { data: profile } = await supabase
     .from("user_profiles")
     .select(
-      "user_id, call_agent_phone, call_enabled, call_ring_seconds, call_voicemail_enabled, call_failover_user_id",
+      "user_id, call_agent_phone, call_enabled, call_ring_seconds, call_voicemail_enabled, call_failover_user_id, call_fallback_number",
     )
     .eq("call_caller_id", dialed)
     .maybeSingle();
@@ -140,19 +143,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const token = process.env.CALL_WEBHOOK_SECRET ?? "";
-  const hangupWebhookUrl = `${appBaseUrl()}/api/calls/webhook/hangup${
-    token ? `?token=${encodeURIComponent(token)}` : ""
-  }`;
+  const hangupWebhookUrl = `${appBaseUrl()}/api/calls/webhook/hangup?token=${encodeURIComponent(expected)}`;
 
   // Also ring the owner's browser (WebRTC) in parallel with their cell, using
   // THEIR own WebRTC number so each agent's browser is a separate endpoint.
   // Degrades to phone-only when they have none, or no browser is listening.
   const computerNumber = await resolveWebrtcNumber(supabase, profile.user_id);
 
-  // Ring the owner (cell + browser), fail over to their backup, then voicemail —
-  // recorded + transcribed by the same pipeline as outbound. callerid is omitted
-  // so each agent's phone shows the customer's number.
+  // Ring the owner (cell + browser), fail over to their backup, then the
+  // fallback number (typically the AI receptionist), then voicemail — recorded
+  // + transcribed by the same pipeline as outbound. callerid is omitted so each
+  // leg shows the customer's number.
   return NextResponse.json(
     buildInboundActions({
       primaryCell: agentCell,
@@ -160,6 +161,7 @@ export async function POST(request: NextRequest) {
       ringSeconds: profile.call_ring_seconds ?? 25,
       failoverCell,
       failoverRingSeconds,
+      fallbackNumber: normalizePhone(profile.call_fallback_number),
       voicemailEnabled: profile.call_voicemail_enabled !== false,
       recordHookUrl: hangupWebhookUrl,
     }),
