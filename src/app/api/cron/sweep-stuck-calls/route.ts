@@ -18,6 +18,9 @@ export const maxDuration = 300;
 // Must be older than the function timeout (300s) plus margin, so we never grab a
 // call that's legitimately mid-processing.
 const STALE_AFTER_MS = 6 * 60 * 1000;
+// Comfortably past the agent's own max call duration (10 minutes), so a live call
+// is never mistaken for a stuck one.
+const ORPHAN_AFTER_MS = 20 * 60 * 1000;
 const BATCH = 5;
 const CONCURRENCY = 2;
 
@@ -84,7 +87,40 @@ async function handle(request: NextRequest) {
     }),
   );
 
-  return NextResponse.json({ swept: rows.length, processed, failed });
+  const orphaned = await failOrphanedAgentJobs(supabase);
+
+  return NextResponse.json({ swept: rows.length, processed, failed, orphaned });
+}
+
+/**
+ * Close out agent jobs whose call is long over but which never left 'calling'.
+ *
+ * Nothing used to rescue these: the collector only looked at live sessions and
+ * this sweeper only looked at call_sessions, so a job could sit at 'calling'
+ * indefinitely. Two were stranded from 2026-08-13. The collect filter now also
+ * covers 'no_recording', which fixes the common cause; this is the backstop for
+ * anything that still slips through, so a stuck job cannot block the queue
+ * (the worker dials only when no call is live).
+ */
+async function failOrphanedAgentJobs(
+  supabase: ReturnType<typeof createServiceClient>,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - ORPHAN_AFTER_MS).toISOString();
+  const { data, error } = await supabase
+    .from("call_agent_jobs")
+    .update({
+      status: "failed",
+      error: "Call never settled; swept after timeout",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("status", "calling")
+    .lt("started_at", cutoff)
+    .select("id");
+  if (error) {
+    console.error("sweep-stuck-calls: orphan sweep failed", error.message);
+    return 0;
+  }
+  return data?.length ?? 0;
 }
 
 // Vercel Cron invokes the path with GET; allow POST too for manual triggering.

@@ -44,7 +44,12 @@ async function handle(request: NextRequest) {
       .select("id, status, started_at, provider_conversation_id, agent_job_id")
       .eq("workspace_id", settings.workspace_id)
       .eq("initiated_by", "agent")
-      .in("status", ["dialing", "in_progress", "completed"])
+      // 'no_recording' belongs here: an agent call has no 46elks recording by
+      // design (the audio lives at the provider), so the hangup webhook parks the
+      // session there. Leaving it out meant a finished conversation was never
+      // collected and its job sat at 'calling' forever — two real jobs were
+      // stranded that way, with a successful 37 second transcript never imported.
+      .in("status", ["dialing", "in_progress", "completed", "no_recording"])
       .order("started_at", { ascending: true })
       .limit(10);
 
