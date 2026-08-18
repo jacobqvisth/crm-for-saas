@@ -26,6 +26,7 @@ import { SOURCE_INFO, sourceInfoFromLabel } from "./source-info-data";
 
 export type DashboardSectionKey =
   | "email-campaigns"
+  | "valdemar"
   | "usage"
   | "active-users"
   | "feature-usage"
@@ -345,6 +346,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Email Campaigns",
     description:
       "CRM outreach performance: total contacts, active sequences, emails sent, open and reply rates, pipeline value, sequence performance, and deliverability.",
+  },
+  {
+    key: "valdemar",
+    label: "Valdemar",
+    glyph: "VE",
+    href: "/dashboard/valdemar",
+    title: "Valdemar Stats",
+    description:
+      "Valdemar's personal outbound scoreboard, live from the CRM: every call (outcomes, connect rate, talk time, sentiment, transcripts) and every email (sends, opens, clicks, replies, sequences), with drill-down to each call's transcript and each email's event timeline. Rolling ranges include today.",
   },
 ];
 
