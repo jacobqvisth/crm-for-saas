@@ -17,6 +17,48 @@ function pick(form: FormData, ...keys: string[]): string | null {
   return null;
 }
 
+/**
+ * Finalise a switchboard call.
+ *
+ * The outcome is inferred from how far the call got: `connected` means a human
+ * picked up, `voicemail` means nobody did, and anything still sitting with the
+ * receptionist means it handled the call on its own. An outcome already recorded
+ * by a tool (a message taken, a booked callback) always wins.
+ */
+async function closeSwitchboardCall(
+  supabase: ReturnType<typeof createServiceClient>,
+  elksCallId: string,
+  duration: number | null,
+): Promise<void> {
+  const { data: call } = await supabase
+    .from("switchboard_calls")
+    .select("id, status, outcome")
+    .eq("elks_call_id", elksCallId)
+    .maybeSingle();
+  if (!call || call.status === "ended") return;
+
+  const inferred =
+    call.status === "connected"
+      ? "forwarded"
+      : call.status === "voicemail"
+        ? "voicemail"
+        : call.status === "forwarding"
+          ? "no_answer"
+          : "handled_by_agent";
+
+  await supabase
+    .from("switchboard_calls")
+    .update({
+      status: "ended",
+      outcome: call.outcome ?? inferred,
+      ended_at: new Date().toISOString(),
+      ...(typeof duration === "number" && !Number.isNaN(duration)
+        ? { duration_seconds: duration }
+        : {}),
+    })
+    .eq("id", call.id);
+}
+
 export async function POST(request: NextRequest) {
   // Verify shared secret when one is configured.
   const expected = process.env.CALL_WEBHOOK_SECRET;
@@ -45,11 +87,19 @@ export async function POST(request: NextRequest) {
 
   const { data: session } = await supabase
     .from("call_sessions")
-    .select("id, status, recording_url")
+    .select("id, status, recording_url, initiated_by")
     .eq("provider_call_id", callId)
     .maybeSingle();
 
   if (!session) return NextResponse.json({ ok: true });
+
+  // Switchboard calls close out their own row too, so the Phone System page can
+  // report what happened to each inbound call. Idempotent: 46elks may hit this
+  // endpoint more than once per call (recordcall, next and whenhangup all point
+  // here), so an already-ended row keeps its first outcome.
+  if (session.initiated_by === "switchboard") {
+    await closeSwitchboardCall(supabase, callId, duration);
+  }
 
   const update: Record<string, unknown> = { ended_at: new Date().toISOString() };
   if (typeof duration === "number" && !Number.isNaN(duration)) update.duration_seconds = duration;

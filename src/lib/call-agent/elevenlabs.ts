@@ -52,6 +52,13 @@ export interface AgentConfigInput {
   kbDocName?: string;
   dynamicVariableDefaults: Record<string, string>;
   maxDurationSeconds?: number;
+  /** Ids of webhook tools (created via createWebhookTool) the agent may call. */
+  toolIds?: string[];
+  /** Built-in provider tools, e.g. "end_call", "language_detection". */
+  systemTools?: string[];
+  /** Per-language greeting overrides, used with the language_detection tool so
+   *  one agent greets a Swedish caller in Swedish and an English one in English. */
+  languagePresets?: Record<string, { firstMessage: string }>;
 }
 
 function agentPayload(input: AgentConfigInput) {
@@ -68,6 +75,19 @@ function agentPayload(input: AgentConfigInput) {
           prompt: input.prompt,
           ...(input.llm ? { llm: input.llm } : {}),
           temperature: 0.3,
+          // Webhook tools are created as standalone objects and referenced by
+          // id; system tools stay inline. The live API accepts both keys on
+          // prompt, so send each only when it has content.
+          ...(input.toolIds?.length ? { tool_ids: input.toolIds } : {}),
+          ...(input.systemTools?.length
+            ? {
+                tools: input.systemTools.map((name) => ({
+                  type: "system" as const,
+                  name,
+                  description: "",
+                })),
+              }
+            : {}),
           ...(input.kbDocId
             ? {
                 knowledge_base: [
@@ -94,6 +114,18 @@ function agentPayload(input: AgentConfigInput) {
       conversation: {
         max_duration_seconds: input.maxDurationSeconds ?? 600,
       },
+      // Per-language overrides. The language_detection system tool switches
+      // between them mid-call when the caller speaks another language.
+      ...(input.languagePresets && Object.keys(input.languagePresets).length
+        ? {
+            language_presets: Object.fromEntries(
+              Object.entries(input.languagePresets).map(([lang, preset]) => [
+                lang,
+                { overrides: { agent: { first_message: preset.firstMessage } } },
+              ]),
+            ),
+          }
+        : {}),
     },
     platform_settings: {
       overrides: {
@@ -159,6 +191,94 @@ export async function deleteKnowledgeDoc(apiKey: string, docId: string): Promise
 }
 
 // ---------------------------------------------------------------------------
+// Webhook tools
+//
+// A "server tool" the agent can call mid-conversation. Created as a standalone
+// object, then attached to an agent by id (prompt.tool_ids). We authenticate by
+// putting the workspace webhook secret in a header, so the endpoint can reject
+// anything that is not the provider.
+
+export interface WebhookToolParam {
+  name: string;
+  type: "string" | "number" | "boolean";
+  description: string;
+  required?: boolean;
+}
+
+export interface WebhookToolInput {
+  name: string;
+  description: string;
+  url: string;
+  method: "GET" | "POST";
+  headers?: Record<string, string>;
+  /** Fields the model fills in and we receive as a JSON body. */
+  bodyParams?: WebhookToolParam[];
+}
+
+function toolPayload(input: WebhookToolInput) {
+  const props: Record<string, { type: string; description: string }> = {};
+  const required: string[] = [];
+  for (const p of input.bodyParams ?? []) {
+    props[p.name] = { type: p.type, description: p.description };
+    if (p.required) required.push(p.name);
+  }
+  return {
+    tool_config: {
+      type: "webhook" as const,
+      name: input.name,
+      description: input.description,
+      response_timeout_secs: 10,
+      api_schema: {
+        url: input.url,
+        method: input.method,
+        ...(input.headers ? { request_headers: input.headers } : {}),
+        ...(input.bodyParams?.length
+          ? {
+              request_body_schema: {
+                type: "object",
+                properties: props,
+                required,
+                description: `Arguments for ${input.name}`,
+              },
+            }
+          : {}),
+      },
+    },
+  };
+}
+
+export async function createWebhookTool(
+  apiKey: string,
+  input: WebhookToolInput,
+): Promise<string> {
+  const resp = await el<{ id?: string; tool_id?: string }>(
+    apiKey,
+    "POST",
+    "/v1/convai/tools",
+    toolPayload(input),
+  );
+  const id = resp.id ?? resp.tool_id;
+  if (!id) throw new Error(`tool create returned no id for ${input.name}`);
+  return id;
+}
+
+export async function updateWebhookTool(
+  apiKey: string,
+  toolId: string,
+  input: WebhookToolInput,
+): Promise<void> {
+  await el(apiKey, "PATCH", `/v1/convai/tools/${toolId}`, toolPayload(input));
+}
+
+export async function deleteTool(apiKey: string, toolId: string): Promise<void> {
+  try {
+    await el(apiKey, "DELETE", `/v1/convai/tools/${toolId}`);
+  } catch {
+    // Already gone, or still attached: not fatal for a re-sync.
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Voices
 
 export interface ProviderVoice {
@@ -176,6 +296,28 @@ export async function listVoices(apiKey: string): Promise<ProviderVoice[]> {
     "/v2/voices?page_size=100",
   );
   return resp.voices ?? [];
+}
+
+/**
+ * Copy a voice from the public shared library into this workspace so it can be
+ * used as an agent voice. Idempotent in practice: if the workspace already has
+ * a voice with this name we return the existing id instead of adding a second.
+ */
+export async function addSharedVoice(
+  apiKey: string,
+  params: { publicOwnerId: string; voiceId: string; name: string },
+): Promise<string> {
+  const existing = await listVoices(apiKey).catch(() => [] as ProviderVoice[]);
+  const already = existing.find((v) => v.name === params.name);
+  if (already) return already.voice_id;
+
+  const resp = await el<{ voice_id: string }>(
+    apiKey,
+    "POST",
+    `/v1/voices/add/${params.publicOwnerId}/${params.voiceId}`,
+    { new_name: params.name },
+  );
+  return resp.voice_id;
 }
 
 // ---------------------------------------------------------------------------

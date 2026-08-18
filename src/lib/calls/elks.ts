@@ -97,9 +97,16 @@ export async function fetchRecordingAudio(
 }
 
 export interface ElksNumber {
+  /** 46elks number id ("n…"), needed to reconfigure the number. */
+  id?: string;
   number: string;
   active: string; // "yes" | "no"
   allocated?: string;
+  /** When the current paid period ends; 46elks renews monthly. */
+  expires?: string;
+  /** Monthly cost in 1/10000 of the account currency (300000 = 30 SEK). */
+  cost?: number;
+  name?: string;
   capabilities?: string[];
   /** Inbound action: a URL (forwards to that webhook) or a JSON action string. */
   voice_start?: string;
@@ -121,4 +128,89 @@ export async function listElksNumbers(): Promise<ElksNumber[]> {
   }
   const json = (await resp.json()) as { data?: ElksNumber[] };
   return json.data ?? [];
+}
+
+/**
+ * Point a number's inbound handling at a URL (or a literal JSON action).
+ *
+ * Used to wire the switchboard number to /api/switchboard/inbound, so the växel
+ * is configured from the CRM instead of the 46elks dashboard.
+ */
+export async function setElksNumberVoiceStart(
+  numberId: string,
+  voiceStart: string,
+  name?: string,
+): Promise<void> {
+  const body = new URLSearchParams({ voice_start: voiceStart });
+  if (name) body.set("name", name);
+
+  const resp = await fetch(`${ELKS_BASE}/numbers/${numberId}`, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "(unreadable)");
+    throw new Error(`46elks number update failed (HTTP ${resp.status}): ${text}`);
+  }
+}
+
+export interface ElksAccount {
+  /** Balance in 1/10000 of the currency unit (241034 = 24.10 SEK). */
+  balance: number;
+  currency: string;
+  displayname?: string;
+  email?: string;
+}
+
+/**
+ * Account balance. Surfaced on the Phone System page because 46elks refuses new
+ * calls with a "creditslow" error when the account runs dry, and that failure is
+ * silent from the caller's side — worth showing before it bites.
+ */
+export async function getElksAccount(): Promise<ElksAccount> {
+  const resp = await fetch(`${ELKS_BASE}/me`, {
+    headers: { Authorization: authHeader() },
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "(unreadable)");
+    throw new Error(`46elks account fetch failed (HTTP ${resp.status}): ${text}`);
+  }
+  return (await resp.json()) as ElksAccount;
+}
+
+/**
+ * Allocate a new Swedish mobile number.
+ *
+ * Category "mobile" is deliberate: only +4670/+46766-style mobile numbers are
+ * reachable from the public phone network. 46elks "+4600…" numbers are virtual
+ * SIP/WebRTC endpoints, and a customer dialling one hears a wrong-number tone,
+ * so neither the switchboard nor any caller ID may use them.
+ */
+export async function allocateElksNumber(params: {
+  country: string;
+  name: string;
+  voiceStart: string;
+}): Promise<ElksNumber> {
+  const resp = await fetch(`${ELKS_BASE}/numbers`, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      country: params.country,
+      category: "mobile",
+      name: params.name,
+      voice_start: params.voiceStart,
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "(unreadable)");
+    throw new Error(`46elks number allocation failed (HTTP ${resp.status}): ${text}`);
+  }
+  return (await resp.json()) as ElksNumber;
 }
