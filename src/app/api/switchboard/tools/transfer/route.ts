@@ -78,7 +78,9 @@ export async function POST(request: NextRequest) {
     .from("switchboard_calls")
     .update({
       status: "forwarding",
-      requested_label: requested || target.label,
+      // The matched name, not the raw phrase: the model passes whole sentences
+      // ("can I speak to Hans please") and that reads badly in the call log.
+      requested_label: target.label,
       target_id: target.id,
       target_user_id: target.user_id,
       target_phone: target.phone,
