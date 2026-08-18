@@ -6967,3 +6967,13 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - **PENDING — needs Jacob (finding H3, HIGH)**: `api/calls/webhook/{hangup,inbound}` fail OPEN when `CALL_WEBHOOK_SECRET` is unset, and `hangup` resolves call_sessions globally by provider_call_id. Fail-closed fix NOT merged (would break inbound calling unless the secret is set in Vercel prod + 46elks URLs carry ?token=). Set the secret, then apply. The daily scan will flag the missing secret until then.
 - **Phase 5 backlog** (findings on the page): zod on ~50 older mutating routes, `.or()` search escaping, pull get_user_workspace_ids into a migration, workspace-check tasks FKs, @anthropic-ai/sdk major bump, dead ElevenLabs-HMAC branch in call-agent/webhook, signed click-links. External: app.wrenchlane.com missing HSTS (flag to codeoc, read-only).
 - Build/lint/tsc clean.
+
+## One-off send verification gate + code-less NDR permanence — 2026-08-18
+
+- **PR #673** (`fix/oneoff-verification-gate`), squash-merged same session. Trigger: Magnus one-off'd `bilexpert@gmail.comert` (a wl-app signup typo) and it NXDOMAIN-bounced; the contact stayed active and unsuppressed.
+- **Root causes**: (1) the verification gate lives only in the `process-emails` cron, which skips NULL-enrollment rows, so one-off compose sends bypassed it entirely; (2) Gmail's "Address not found" NDR carries no SMTP/enhanced status code in its text part, so `parseNdr` returned `permanence: unknown` and check-replies never marked the contact bounced.
+- `POST /api/contacts/[id]/send-email`: 409 on `email_status=invalid`; never-verified addresses get a structural sanity check + inline MillionVerifier verify (result stamped on the contact); vendor outage degrades to the structural check.
+- `parse-ndr.ts`: fallback permanence classification from hard-failure phrases (NXDOMAIN, address/user/domain not found, no such user, unrouteable) when no status code is present; tests modeled on the real Gmail NDR (20/20).
+- New shared `src/lib/verification/verify-email.ts` (`mapMVStatus`, `isPlausibleEmailAddress`, `verifyEmailAddress`); both existing verify routes now import `mapMVStatus` from it.
+- **Prod data**: the incident contact's email had already been hand-corrected to `bilexpert@gmail.com` (left unverified — the new gate verifies on next send). Typo sweep marked 3 more addresses invalid: `sebadersoldo@gmail.con`, `jimmy-lindqvist@hotmailm.com`, `fayadalishahin@gigmail.com` (typo-squat catch-alls). Other `.con`/`.cm`/`gmail.no` rows were already invalid via MillionVerifier.
+- Build & Lint green (the gate); Vercel preview red as always (`/calls/feedback` prerender). tsc clean, vitest 756/756.
