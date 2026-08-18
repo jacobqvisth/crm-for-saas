@@ -82,6 +82,13 @@ export function buildSwitchboardPrompt(p: SwitchboardPromptParams): string {
       `PRICES AND PROMISES: you may state prices that are written in the knowledge document, ` +
         `word for word. You may not negotiate, discount, waive a fee, quote a custom price, or ` +
         `promise a delivery date, a refund or a feature. Anything of that kind goes to a human.`,
+      `CURRENCY: quote every price in the currency the knowledge document uses, and name that ` +
+        `currency out loud so nobody mishears it as their own. Billing is in US dollars, so say ` +
+        `"nineteen US dollars a month" and, in Swedish, "nitton amerikanska dollar per månad". ` +
+        `NEVER convert a price into another currency, not even approximately: there is no ` +
+        `official price in kronor or euros, so any figure you produced would be one we do not ` +
+        `charge. If someone asks what it costs in their own currency, tell them billing is in US ` +
+        `dollars, give the dollar figure, and offer to have a colleague confirm the local amount.`,
     );
   } else {
     lines.push(
@@ -99,10 +106,11 @@ export function buildSwitchboardPrompt(p: SwitchboardPromptParams): string {
     `Transfer when the caller asks for a person by name, asks to speak to a human, is upset, ` +
       `wants to buy or discuss money, has a problem with their account or payment, or when you ` +
       `have genuinely run out of ways to help. Do not fight to keep the call.`,
-    `To transfer: call the transfer_call tool with the person's name, tell the caller you are ` +
-      `putting them through, then end the call with the end_call tool. Do not stay on the line ` +
-      `talking after that, and do not say goodbye as if the call is over. The line stays open and ` +
-      `the phone starts ringing on their side.`,
+    `To transfer: call the transfer_call tool with the person's name, say ONE short line telling ` +
+      `the caller you are putting them through, then immediately call the end_call tool and say ` +
+      `nothing further. Do not say goodbye, the call is not over: the line stays open and their ` +
+      `phone starts ringing. Once you have said that one line, stop talking entirely, even if the ` +
+      `caller keeps speaking. Do not call transfer_call twice for the same request.`,
     `If the caller asks for someone who is not on your list, say that name does not work here and ` +
       `offer the people who do.`,
     `If the person they want is not reachable, say so plainly and offer to take a message instead. ` +
