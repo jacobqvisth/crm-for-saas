@@ -5434,6 +5434,90 @@ export type Database = {
           },
         ]
       }
+      security_findings: {
+        Row: {
+          affected_path: string | null
+          category: string
+          created_at: string
+          description: string
+          discovered_at: string
+          finding_key: string
+          fixed_at: string | null
+          id: string
+          remediation: string | null
+          severity: string
+          source: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          affected_path?: string | null
+          category: string
+          created_at?: string
+          description: string
+          discovered_at?: string
+          finding_key: string
+          fixed_at?: string | null
+          id?: string
+          remediation?: string | null
+          severity: string
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          affected_path?: string | null
+          category?: string
+          created_at?: string
+          description?: string
+          discovered_at?: string
+          finding_key?: string
+          fixed_at?: string | null
+          id?: string
+          remediation?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      security_scans: {
+        Row: {
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          id: string
+          passed: boolean
+          ran_at: string
+          scan_type: string
+          severity_counts: Json
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          id?: string
+          passed?: boolean
+          ran_at?: string
+          scan_type: string
+          severity_counts?: Json
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          id?: string
+          passed?: boolean
+          ran_at?: string
+          scan_type?: string
+          severity_counts?: Json
+        }
+        Relationships: []
+      }
       snippets: {
         Row: {
           body: string

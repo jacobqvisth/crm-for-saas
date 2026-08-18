@@ -32,8 +32,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*.local
+# env files — ignore every dotenv variant, but keep the checked-in example
+.env
+.env.*
+!.env.local.example
 
 # vercel
 .vercel

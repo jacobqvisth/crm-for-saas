@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Mail, MapPin, Phone, PhoneCall, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
+import { Mail, MapPin, Phone, PhoneCall, ShieldAlert, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -47,6 +47,12 @@ const settingsItems = [
     description: 'What the AI knows about Wrenchlane when drafting inbox replies and cold emails',
     href: '/settings/ai-knowledge',
     icon: Sparkles,
+  },
+  {
+    title: 'Hacker Rating',
+    description: 'Security posture — audit findings, fixes, and automated daily vulnerability checks',
+    href: '/settings/security',
+    icon: ShieldAlert,
   },
 ];
 

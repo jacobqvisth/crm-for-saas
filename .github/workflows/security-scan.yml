@@ -1,0 +1,29 @@
+name: Security Scan
+
+# Daily static security scan (npm audit + source greps). Results are POSTed to
+# the CRM's Hacker Rating page (/settings/security). Also runnable on demand.
+on:
+  schedule:
+    - cron: "30 4 * * *" # daily 04:30 UTC (before the live-probe cron at 05:45)
+  workflow_dispatch:
+
+jobs:
+  static-scan:
+    name: Static security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run static security scan and report
+        run: node scripts/security-static-scan.mjs
+        env:
+          SECURITY_SCAN_ENDPOINT: ${{ secrets.SECURITY_SCAN_ENDPOINT }}
+          SECURITY_SCAN_SECRET: ${{ secrets.SECURITY_SCAN_SECRET }}

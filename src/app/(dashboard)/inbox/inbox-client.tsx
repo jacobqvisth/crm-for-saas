@@ -243,9 +243,15 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
         )}
 
         {bodyHtml ? (
-          <div
-            className="prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+          // Inbound email HTML is attacker-controlled (any external sender can
+          // craft it), so it is rendered inside a fully sandboxed iframe — no
+          // scripts, no same-origin access — never injected as raw inner HTML.
+          // Same safe pattern as activity-detail-modal.tsx.
+          <iframe
+            sandbox=""
+            srcDoc={bodyHtml}
+            title="Email message"
+            className="w-full min-h-[24rem] rounded-lg border border-slate-200 bg-white"
           />
         ) : (
           <p className="text-slate-400 italic">(empty)</p>
