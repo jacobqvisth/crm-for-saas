@@ -76,16 +76,19 @@ function agentPayload(input: AgentConfigInput) {
           ...(input.llm ? { llm: input.llm } : {}),
           temperature: 0.3,
           // Webhook tools are created as standalone objects and referenced by
-          // id; system tools stay inline. The live API accepts both keys on
-          // prompt, so send each only when it has content.
+          // id. System tools are NOT tools in that sense: the API refuses them
+          // in the tools collection ("use built_in_tools instead") and also
+          // refuses `tools` and `tool_ids` together, so each kind has exactly
+          // one home. built_in_tools is a name-keyed map where null = disabled.
           ...(input.toolIds?.length ? { tool_ids: input.toolIds } : {}),
           ...(input.systemTools?.length
             ? {
-                tools: input.systemTools.map((name) => ({
-                  type: "system" as const,
-                  name,
-                  description: "",
-                })),
+                built_in_tools: Object.fromEntries(
+                  input.systemTools.map((name) => [
+                    name,
+                    { name, description: "", type: "system", params: { system_tool_type: name } },
+                  ]),
+                ),
               }
             : {}),
           ...(input.kbDocId
