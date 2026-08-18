@@ -10,8 +10,16 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
 
-  // Validate URL
-  if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+  // Validate the destination is a well-formed http(s) URL. Using the URL parser
+  // (not a string prefix check) rejects javascript:, data:, and malformed input.
+  let parsed: URL;
+  try {
+    if (!url) throw new Error("missing url");
+    parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("bad protocol");
+    }
+  } catch {
     return new NextResponse("Invalid link", { status: 400 });
   }
 
@@ -25,7 +33,13 @@ export async function GET(
       .eq("tracking_id", trackingId)
       .single();
 
-    if (queueItem) {
+    // Only a real, known tracking id gets a redirect. A bogus/expired id can no
+    // longer turn this endpoint into a generic open redirect on our domain.
+    if (!queueItem) {
+      return new NextResponse("Link not found", { status: 404 });
+    }
+
+    {
       const userAgent = request.headers.get("user-agent") || null;
       const ipAddress =
         request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||

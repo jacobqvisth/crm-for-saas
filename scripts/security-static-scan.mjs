@@ -58,11 +58,12 @@ for (const f of srcFiles) {
   const c = readFileSync(f, "utf8");
   dsihCount += (c.match(/dangerouslySetInnerHTML/g) || []).length;
 }
+const DSIH_BASELINE = 4; // 2026-08-18 audit: 4 self/workspace-authored sinks; inbox uses a sandboxed iframe
 checks.push({
   name: "dangerously_set_inner_html",
-  ok: dsihCount <= 6, // audit baseline; a rise means a new unsanitized-HTML sink
-  detail: `${dsihCount} dangerouslySetInnerHTML site(s) (baseline 6). Verify any new one is sandboxed/sanitized.`,
-  severity: dsihCount > 6 ? "medium" : "info",
+  ok: dsihCount <= DSIH_BASELINE, // a rise means a new unsanitized-HTML sink to review
+  detail: `${dsihCount} dangerouslySetInnerHTML site(s) (baseline ${DSIH_BASELINE}). Verify any new one is sandboxed/sanitized.`,
+  severity: dsihCount > DSIH_BASELINE ? "medium" : "info",
 });
 
 // 3. Hardcoded secret patterns in source.
