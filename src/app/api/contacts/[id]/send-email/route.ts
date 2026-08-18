@@ -6,6 +6,10 @@ import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables } from "@/lib/sequences/variables";
 import { translateOutboundEmail } from "@/lib/inbox/translate-outbound";
 import { insertActivity } from "@/lib/activities/insert";
+import {
+  isPlausibleEmailAddress,
+  verifyEmailAddress,
+} from "@/lib/verification/verify-email";
 import type { Tables } from "@/lib/database.types";
 
 type Contact = Tables<"contacts">;
@@ -120,6 +124,59 @@ export async function POST(
       { error: `Cannot send: address is suppressed (${suppression.reason ?? "suppressed"})` },
       { status: 409 }
     );
+  }
+
+  // Verification gate. The equivalent gate for sequence mail lives in the
+  // process-emails cron — which one-off sends never pass through (the cron
+  // skips NULL-enrollment rows), so an invalid or never-verified address
+  // could be sent to blind. Known-invalid blocks outright; never-verified
+  // addresses are verified inline (one MillionVerifier call), falling back
+  // to a structural sanity check if the verifier is unavailable.
+  const emailStatus = typedContact.email_status ?? null;
+
+  if (emailStatus === "invalid") {
+    return NextResponse.json(
+      { error: `Cannot send: ${toEmail} failed email verification (invalid address)` },
+      { status: 409 }
+    );
+  }
+
+  const neverVerified =
+    emailStatus === null || ["", "unknown", "unverified"].includes(emailStatus);
+  if (neverVerified) {
+    if (!isPlausibleEmailAddress(toEmail)) {
+      await supabase
+        .from("contacts")
+        .update({
+          email_status: "invalid",
+          email_verified_at: new Date().toISOString(),
+        })
+        .eq("id", contactId);
+      return NextResponse.json(
+        { error: `Cannot send: ${toEmail} is not a valid email address (check for typos)` },
+        { status: 409 }
+      );
+    }
+
+    const verdict = await verifyEmailAddress(toEmail);
+    if (verdict.ok) {
+      await supabase
+        .from("contacts")
+        .update({
+          email_status: verdict.status,
+          email_verified_at: new Date().toISOString(),
+        })
+        .eq("id", contactId);
+      if (verdict.status === "invalid") {
+        return NextResponse.json(
+          { error: `Cannot send: ${toEmail} failed email verification (invalid address)` },
+          { status: 409 }
+        );
+      }
+    }
+    // Verifier unavailable (no key / vendor outage): the address passed the
+    // structural check, so let the interactive send proceed rather than
+    // hard-blocking on a third-party dependency.
   }
 
   // Load the company for {{company_name}} resolution.

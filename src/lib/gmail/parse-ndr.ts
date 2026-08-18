@@ -50,6 +50,19 @@ const RECIPIENT_ADDRESS_REGEX = /Recipient Address:\s*([^\s<>]+)/i;
 const REJECTING_HOST_REGEX =
   /(?:Remote-MTA:\s*dns;\s*|Reporting-MTA:\s*dns;\s*|Message rejected by[:\s]+|Generating server[:\s]+)([A-Z0-9.-]+)/i;
 
+// Phrases that mark a hard (permanent) failure even when the NDR text part
+// carries no SMTP or enhanced status code. Matched only as a fallback when
+// neither code is present.
+const PERMANENT_FAILURE_TEXT: RegExp[] = [
+  /\bNXDOMAIN\b/i,
+  /address not found/i,
+  /domain[^\n]{0,60}(?:couldn't|could not|can't|cannot) be found/i,
+  /(?:user|recipient|mailbox|address)[^\n]{0,40}(?:unknown|not found|does(?:n't| not) exist)/i,
+  /no such (?:user|recipient|mailbox|address)/i,
+  /unrouteable address/i,
+  /account (?:that you tried to reach )?(?:is disabled|does not exist)/i,
+];
+
 /**
  * Suggested Gmail search query for the NDR ingestion poller. Catches:
  * - Standard mailer-daemon / postmaster bounces
@@ -87,6 +100,13 @@ export function parseNdr(bodyText: string): ParsedNdr {
     permanence = enhancedStatus.startsWith("5") ? "permanent" : "temporary";
   } else if (smtpCode) {
     permanence = smtpCode.startsWith("5") ? "permanent" : "temporary";
+  } else if (PERMANENT_FAILURE_TEXT.some((re) => re.test(bodyText))) {
+    // Some NDRs carry no SMTP/enhanced code in their text part at all.
+    // Gmail's "Address not found" NDR is the canonical case: the readable
+    // part only says the domain couldn't be found / DNS returned NXDOMAIN.
+    // Those are hard failures — without this, permanence stayed "unknown"
+    // and the bounce never suppressed the contact.
+    permanence = "permanent";
   }
 
   return {
