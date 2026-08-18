@@ -59,6 +59,15 @@ export interface AgentConfigInput {
   /** Per-language greeting overrides, used with the language_detection tool so
    *  one agent greets a Swedish caller in Swedish and an English one in English. */
   languagePresets?: Record<string, { firstMessage: string }>;
+  /** Speech rate. 1.0 is the provider default; ~1.1 reads noticeably brisker
+   *  without sounding sped up. */
+  speed?: number;
+  /**
+   * Seconds of silence before the agent decides the caller has finished. The
+   * provider default of 7 is far too long on a phone call: it reads as the agent
+   * being slow to answer, which is a different complaint from speaking slowly.
+   */
+  turnTimeoutSeconds?: number;
 }
 
 function agentPayload(input: AgentConfigInput) {
@@ -113,10 +122,14 @@ function agentPayload(input: AgentConfigInput) {
         // Multilingual low-latency model: one agent handles sv + en with a
         // per-call language override instead of one agent per language.
         model_id: "eleven_flash_v2_5",
+        ...(input.speed !== undefined ? { speed: input.speed } : {}),
       },
       conversation: {
         max_duration_seconds: input.maxDurationSeconds ?? 600,
       },
+      ...(input.turnTimeoutSeconds !== undefined
+        ? { turn: { turn_timeout: input.turnTimeoutSeconds } }
+        : {}),
       // Per-language overrides. The language_detection system tool switches
       // between them mid-call when the caller speaks another language.
       ...(input.languagePresets && Object.keys(input.languagePresets).length

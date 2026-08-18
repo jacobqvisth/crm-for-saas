@@ -27,7 +27,11 @@ import {
   switchboardApiKey,
   type SwitchboardRow,
 } from "./settings";
-import { DEFAULT_SWITCHBOARD_VOICE } from "./types";
+import {
+  DEFAULT_SWITCHBOARD_VOICE,
+  SWITCHBOARD_SPEECH_SPEED,
+  SWITCHBOARD_TURN_TIMEOUT,
+} from "./types";
 
 type Client = SupabaseClient<Database>;
 
@@ -237,6 +241,8 @@ export async function provisionSwitchboard(
     kbDocName: "Wrenchlane reception knowledge",
     dynamicVariableDefaults: SWITCHBOARD_VARIABLE_DEFAULTS,
     maxDurationSeconds: row.max_call_seconds,
+    speed: SWITCHBOARD_SPEECH_SPEED,
+    turnTimeoutSeconds: SWITCHBOARD_TURN_TIMEOUT,
     toolIds,
     // end_call is what makes the transfer work: it ends the agent's leg so
     // 46elks moves on to the chained `next` action. language_detection lets one

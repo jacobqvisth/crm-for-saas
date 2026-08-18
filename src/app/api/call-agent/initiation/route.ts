@@ -6,6 +6,7 @@ import { DYNAMIC_VARIABLE_DEFAULTS } from "@/lib/call-agent/prompt";
 import { buildSwitchboardVariables, matchCaller } from "@/lib/switchboard/brief";
 import { buildGreeting, SWITCHBOARD_VARIABLE_DEFAULTS } from "@/lib/switchboard/prompt";
 import { loadTargets } from "@/lib/switchboard/settings";
+import { languageForCaller } from "@/lib/switchboard/types";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,10 @@ export async function POST(request: NextRequest) {
     const caller = await matchCaller(service, workspaceId, body.caller_id ?? null);
     const targets = await loadTargets(service, workspaceId);
     const variables = buildSwitchboardVariables({ row: wsSwitchboard, caller, targets });
-    const language = wsSwitchboard.languages_enabled.includes("sv") ? "sv" : "en";
+    // Open in the caller's likely language rather than always Swedish: a +46
+    // number gets Swedish, everyone else gets English. They can still switch
+    // mid-call by asking, which the language_detection tool handles.
+    const language = languageForCaller(body.caller_id ?? null, wsSwitchboard.languages_enabled);
 
     return NextResponse.json({
       type: "conversation_initiation_client_data",

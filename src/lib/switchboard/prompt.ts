@@ -49,8 +49,12 @@ export function buildSwitchboardPrompt(p: SwitchboardPromptParams): string {
       `a diagnostics and workshop tool for independent car workshops. Someone has just called in. ` +
       `You do not know why yet, so find out before doing anything else.`,
     ``,
-    `LANGUAGE RULE: Start in the language of your greeting. If the caller speaks another ` +
-      `language you know, switch to it immediately and stay there for the rest of the call.`,
+    `LANGUAGE RULE: Start in the language of your greeting, which is chosen from the caller's ` +
+      `country. Switch language the moment there is any sign they want another one: they answer ` +
+      `in a different language, they ask you to speak one, or they clearly struggle with this ` +
+      `one. Switch immediately, do not ask permission first, and stay in the new language for ` +
+      `the rest of the call. If you are asked for a language you cannot speak, say plainly which ` +
+      `ones you do speak and offer a human instead.`,
     ``,
     `WHO YOU ARE TALKING TO`,
     `Caller: {{caller_name}} from {{caller_company}}.`,

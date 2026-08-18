@@ -1,5 +1,45 @@
 import { describe, it, expect } from "vitest";
-import { isWithinOfficeHours, matchTarget } from "./types";
+import { isWithinOfficeHours, languageForCaller, matchTarget } from "./types";
+
+describe("languageForCaller", () => {
+  const both = ["sv", "en"];
+
+  it("greets a Swedish number in Swedish", () => {
+    expect(languageForCaller("+46731509080", both)).toBe("sv");
+  });
+
+  it("greets everyone else in English", () => {
+    expect(languageForCaller("+358454900136", both)).toBe("en"); // Finland
+    expect(languageForCaller("+4531234567", both)).toBe("en"); // Denmark
+    expect(languageForCaller("+14155550123", both)).toBe("en"); // US
+  });
+
+  it("defaults to English when the number is unknown or withheld", () => {
+    expect(languageForCaller(null, both)).toBe("en");
+    expect(languageForCaller("", both)).toBe("en");
+    expect(languageForCaller("anonymous", both)).toBe("en");
+  });
+
+  it("tolerates spaces and dashes in the number", () => {
+    expect(languageForCaller("+46 73 150 90 80", both)).toBe("sv");
+  });
+
+  it("does not mistake a number that merely contains 46 for Swedish", () => {
+    // Finland's +358 46… mobile prefix must not read as Sweden.
+    expect(languageForCaller("+358461234567", both)).toBe("en");
+  });
+
+  it("never returns a language the agent has no greeting for", () => {
+    // Swedish caller, but the switchboard only speaks English.
+    expect(languageForCaller("+46731509080", ["en"])).toBe("en");
+    // English caller, Swedish-only switchboard.
+    expect(languageForCaller("+14155550123", ["sv"])).toBe("sv");
+  });
+
+  it("falls back to English when nothing is configured", () => {
+    expect(languageForCaller("+46731509080", [])).toBe("en");
+  });
+});
 
 const HOURS = { open_hour: 9, close_hour: 17, open_days: [1, 2, 3, 4, 5] };
 
