@@ -22,6 +22,13 @@ export interface AgentLegParams {
   nextUrl: string;
   /** Absolute URL for the recording + hangup POST. */
   recordHookUrl: string;
+  /**
+   * A 46elks websocket number whose websocket_url points at the switchboard
+   * bridge. When set, the AI leg goes there instead of the ElevenLabs SIP
+   * endpoint, because the SIP path carries no audio. Either way the chained
+   * `next` fires when the AI leg ends, so the transfer behaves identically.
+   */
+  bridgeNumber?: string | null;
 }
 
 /**
@@ -36,7 +43,10 @@ export function buildAgentLegPayload(p: AgentLegParams): Record<string, unknown>
   return {
     recordcall: p.recordHookUrl,
     whenhangup: p.recordHookUrl,
-    connect: agentSipUri(p.switchboardNumber),
+    // The bridge when configured, else the SIP endpoint. Connecting to one of our
+    // own websocket numbers is an ordinary `connect`, so the action tree and its
+    // chained `next` are unchanged.
+    connect: p.bridgeNumber ? p.bridgeNumber : agentSipUri(p.switchboardNumber),
     next: p.nextUrl,
   };
 }

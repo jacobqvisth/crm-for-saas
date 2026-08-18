@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
       switchboardNumber: dialed,
       nextUrl,
       recordHookUrl,
+      bridgeNumber: normalizePhone(settings.bridge_number),
     }),
   );
 }
