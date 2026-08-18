@@ -63,9 +63,9 @@ export function buildTransferAction(p: TransferParams): VoiceAction | null {
 
   return buildInboundActions({
     primaryCell: primary,
-    // No parallel browser leg: the switchboard rings phones, and the shared
-    // WebRTC number can only be registered by one person at a time.
-    computerNumber: null,
+    // Ring their browser in parallel with their phone when they have their own
+    // WebRTC endpoint, so a transfer can be answered on the computer.
+    computerNumber: p.target.webrtc_number,
     ringSeconds: p.ringSeconds,
     failoverCell: p.failover?.phone ?? null,
     failoverRingSeconds: p.ringSeconds,

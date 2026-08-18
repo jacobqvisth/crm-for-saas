@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizePhone } from "@/lib/calls/phone";
 import { buildInboundActions } from "@/lib/calls/inbound-actions";
+import { resolveWebrtcNumber } from "@/lib/calls/webrtc";
 import type { TablesInsert } from "@/lib/database.types";
 
 // Inbound call handler for the dedicated agent numbers.
@@ -144,15 +145,10 @@ export async function POST(request: NextRequest) {
     token ? `?token=${encodeURIComponent(token)}` : ""
   }`;
 
-  // Also ring the owner's browser (WebRTC) in parallel with their cell, when a
-  // shared WebRTC number is configured and this owner is its registered user.
-  // The single shared number maps to one agent (ELKS_WEBRTC_OWNER_USER_ID); when
-  // unset, any owner rings it. Degrades to phone-only if no browser is listening.
-  const ownerId = process.env.ELKS_WEBRTC_OWNER_USER_ID;
-  const computerNumber =
-    !ownerId || ownerId === profile.user_id
-      ? normalizePhone(process.env.ELKS_WEBRTC_NUMBER)
-      : null;
+  // Also ring the owner's browser (WebRTC) in parallel with their cell, using
+  // THEIR own WebRTC number so each agent's browser is a separate endpoint.
+  // Degrades to phone-only when they have none, or no browser is listening.
+  const computerNumber = await resolveWebrtcNumber(supabase, profile.user_id);
 
   // Ring the owner (cell + browser), fail over to their backup, then voicemail —
   // recorded + transcribed by the same pipeline as outbound. callerid is omitted

@@ -99,3 +99,14 @@ export function normalizePhone(
 export function isDialable(raw: string | null | undefined, countryCode?: string | null): boolean {
   return normalizePhone(raw, countryCode) !== null;
 }
+
+/**
+ * SIP username for a 46elks WebRTC number: the number without the leading "+".
+ *
+ * Per their VoIP client docs the username IS the client number and the password
+ * is that number's `secret`. Getting this wrong means the browser silently fails
+ * to register, so computer calling just never rings.
+ */
+export function sipUsernameFor(number: string): string {
+  return number.replace(/^\+/, "");
+}

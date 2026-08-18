@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePhone } from "@/lib/calls/phone";
+import { encrypt } from "@/lib/encryption";
 
 // Per-user dialer config (this user's phone + caller ID + master switch + the
 // no-answer failover / voicemail behaviour for inbound calls to their number).
@@ -18,6 +19,13 @@ const Body = z.object({
   failover_user_id: z.string().uuid().nullish(),
   ring_seconds: z.number().int().min(5).max(60).optional(),
   voicemail_enabled: z.boolean().optional(),
+  // "Calls on this computer": this user's own 46elks WebRTC number and its
+  // `secret`. One number per person, because a WebRTC number is its own SIP
+  // account and holds a single registration. Send both to enable, or an empty
+  // webrtc_number to turn it off. 46elks support has to create the number;
+  // it cannot be allocated over their API.
+  webrtc_number: z.string().max(32).nullish(),
+  webrtc_secret: z.string().max(200).nullish(),
 });
 
 async function requireUser(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -69,7 +77,7 @@ export async function GET() {
   const { data: profile } = await supabase
     .from("user_profiles")
     .select(
-      "call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled",
+      "call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled, call_webrtc_number, call_webrtc_secret_encrypted",
     )
     .eq("user_id", auth.userId)
     .maybeSingle();
@@ -86,6 +94,11 @@ export async function GET() {
     members,
     // Surface the env default so the UI can show what caller ID is used when blank.
     default_caller_id: process.env.CRM_CALL_FROM_NUMBER ?? null,
+    // Browser calling: the number is safe to echo back, the secret never is.
+    webrtc_number: profile?.call_webrtc_number ?? "",
+    webrtc_configured: Boolean(
+      profile?.call_webrtc_number && profile?.call_webrtc_secret_encrypted,
+    ),
   });
 }
 
@@ -123,6 +136,31 @@ export async function POST(request: NextRequest) {
   const ringSeconds = parsed.data.ring_seconds ?? 25;
   const voicemailEnabled = parsed.data.voicemail_enabled ?? true;
 
+  // Browser-calling endpoint. Only touched when the field is present, so a save
+  // from a form that doesn't include it cannot silently wipe it.
+  const webrtcPatch: Record<string, string | null> = {};
+  if (parsed.data.webrtc_number !== undefined) {
+    const raw = parsed.data.webrtc_number?.trim() || "";
+    if (!raw) {
+      webrtcPatch.call_webrtc_number = null;
+      webrtcPatch.call_webrtc_secret_encrypted = null;
+    } else {
+      const num = normalizePhone(raw);
+      if (!num) {
+        return NextResponse.json({ error: "Invalid WebRTC number" }, { status: 400 });
+      }
+      const secret = parsed.data.webrtc_secret?.trim() || "";
+      if (!secret) {
+        return NextResponse.json(
+          { error: "The WebRTC number needs its secret from 46elks" },
+          { status: 400 },
+        );
+      }
+      webrtcPatch.call_webrtc_number = num;
+      webrtcPatch.call_webrtc_secret_encrypted = encrypt(secret);
+    }
+  }
+
   // Upsert the caller's own profile row (RLS enforces user_id = auth.uid()).
   const { error } = await supabase.from("user_profiles").upsert(
     {
@@ -133,6 +171,7 @@ export async function POST(request: NextRequest) {
       call_failover_user_id: failoverUserId,
       call_ring_seconds: ringSeconds,
       call_voicemail_enabled: voicemailEnabled,
+      ...webrtcPatch,
     },
     { onConflict: "user_id" },
   );
