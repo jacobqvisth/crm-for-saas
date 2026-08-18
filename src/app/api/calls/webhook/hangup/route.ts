@@ -60,13 +60,16 @@ async function closeSwitchboardCall(
 }
 
 export async function POST(request: NextRequest) {
-  // Verify shared secret when one is configured.
+  // Fail CLOSED: without a configured secret this endpoint would accept
+  // unauthenticated posts. Security finding H3.
   const expected = process.env.CALL_WEBHOOK_SECRET;
-  if (expected) {
-    const token = request.nextUrl.searchParams.get("token");
-    if (token !== expected) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
+  if (!expected) {
+    console.error("hangup webhook: CALL_WEBHOOK_SECRET is not set — rejecting");
+    return NextResponse.json({ error: "not configured" }, { status: 503 });
+  }
+  const token = request.nextUrl.searchParams.get("token");
+  if (token !== expected) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   let form: FormData;

@@ -17,6 +17,9 @@ const Body = z.object({
   caller_id: z.string().max(32).nullish(),
   calling_enabled: z.boolean().optional(),
   failover_user_id: z.string().uuid().nullish(),
+  // Last-resort number rung after owner + failover both miss (typically the
+  // switchboard AI receptionist), before voicemail.
+  fallback_number: z.string().max(32).nullish(),
   ring_seconds: z.number().int().min(5).max(60).optional(),
   voicemail_enabled: z.boolean().optional(),
   // "Calls on this computer": this user's own 46elks WebRTC number and its
@@ -77,7 +80,7 @@ export async function GET() {
   const { data: profile } = await supabase
     .from("user_profiles")
     .select(
-      "call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled, call_webrtc_number, call_webrtc_secret_encrypted",
+      "call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_fallback_number, call_ring_seconds, call_voicemail_enabled, call_webrtc_number, call_webrtc_secret_encrypted",
     )
     .eq("user_id", auth.userId)
     .maybeSingle();
@@ -89,6 +92,7 @@ export async function GET() {
     caller_id: profile?.call_caller_id ?? "",
     calling_enabled: profile?.call_enabled !== false,
     failover_user_id: profile?.call_failover_user_id ?? null,
+    fallback_number: profile?.call_fallback_number ?? "",
     ring_seconds: profile?.call_ring_seconds ?? 25,
     voicemail_enabled: profile?.call_voicemail_enabled !== false,
     members,
@@ -133,6 +137,11 @@ export async function POST(request: NextRequest) {
     parsed.data.failover_user_id && parsed.data.failover_user_id !== auth.userId
       ? parsed.data.failover_user_id
       : null;
+  const fallbackRaw = parsed.data.fallback_number?.trim() || "";
+  const fallbackNumber = fallbackRaw ? normalizePhone(fallbackRaw) : null;
+  if (fallbackRaw && !fallbackNumber) {
+    return NextResponse.json({ error: "Invalid fallback number" }, { status: 400 });
+  }
   const ringSeconds = parsed.data.ring_seconds ?? 25;
   const voicemailEnabled = parsed.data.voicemail_enabled ?? true;
 
@@ -169,6 +178,7 @@ export async function POST(request: NextRequest) {
       call_caller_id: callerId,
       call_enabled: callEnabled,
       call_failover_user_id: failoverUserId,
+      call_fallback_number: fallbackNumber,
       call_ring_seconds: ringSeconds,
       call_voicemail_enabled: voicemailEnabled,
       ...webrtcPatch,
@@ -184,6 +194,7 @@ export async function POST(request: NextRequest) {
     caller_id: callerId ?? "",
     calling_enabled: callEnabled,
     failover_user_id: failoverUserId,
+    fallback_number: fallbackNumber ?? "",
     ring_seconds: ringSeconds,
     voicemail_enabled: voicemailEnabled,
   });

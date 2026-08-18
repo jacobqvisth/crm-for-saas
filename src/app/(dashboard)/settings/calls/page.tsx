@@ -15,6 +15,7 @@ export default function CallSettingsPage() {
   const [enabled, setEnabled] = useState(true);
   const [defaultCallerId, setDefaultCallerId] = useState<string | null>(null);
   const [failoverUserId, setFailoverUserId] = useState<string | null>(null);
+  const [fallbackNumber, setFallbackNumber] = useState("");
   const [ringSeconds, setRingSeconds] = useState(25);
   const [voicemailEnabled, setVoicemailEnabled] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
@@ -30,6 +31,7 @@ export default function CallSettingsPage() {
       setEnabled(res.calling_enabled !== false);
       setDefaultCallerId(res.default_caller_id ?? null);
       setFailoverUserId(res.failover_user_id ?? null);
+      setFallbackNumber(res.fallback_number ?? "");
       setRingSeconds(res.ring_seconds ?? 25);
       setVoicemailEnabled(res.voicemail_enabled !== false);
       setMembers(res.members ?? []);
@@ -51,6 +53,7 @@ export default function CallSettingsPage() {
           caller_id: callerId,
           calling_enabled: enabled,
           failover_user_id: failoverUserId,
+          fallback_number: fallbackNumber,
           ring_seconds: ringSeconds,
           voicemail_enabled: voicemailEnabled,
         }),
@@ -60,6 +63,7 @@ export default function CallSettingsPage() {
       setAgentPhone(json.agent_phone ?? "");
       setCallerId(json.caller_id ?? "");
       setFailoverUserId(json.failover_user_id ?? null);
+      setFallbackNumber(json.fallback_number ?? "");
       toast.success("Call settings saved");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save settings");
@@ -205,6 +209,24 @@ export default function CallSettingsPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <label className="block text-sm font-medium text-slate-900 mb-1">
+            Last resort, ring this number
+          </label>
+          <p className="text-xs text-slate-500 mb-2">
+            Rung when neither you nor your failover answers, before voicemail.
+            Point it at the AI receptionist (+46 76 686 71 61) so a person, or
+            at least Mark, always picks up.
+          </p>
+          <input
+            type="tel"
+            value={fallbackNumber}
+            onChange={(e) => setFallbackNumber(e.target.value)}
+            placeholder="+46766867161"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-lg p-4 flex items-center justify-between">

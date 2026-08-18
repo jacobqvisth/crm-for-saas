@@ -6211,6 +6211,7 @@ export type Database = {
           call_caller_id: string | null
           call_enabled: boolean
           call_failover_user_id: string | null
+          call_fallback_number: string | null
           call_ring_seconds: number
           call_voicemail_enabled: boolean
           call_webrtc_number: string | null
@@ -6234,6 +6235,7 @@ export type Database = {
           call_caller_id?: string | null
           call_enabled?: boolean
           call_failover_user_id?: string | null
+          call_fallback_number?: string | null
           call_ring_seconds?: number
           call_voicemail_enabled?: boolean
           call_webrtc_number?: string | null
@@ -6257,6 +6259,7 @@ export type Database = {
           call_caller_id?: string | null
           call_enabled?: boolean
           call_failover_user_id?: string | null
+          call_fallback_number?: string | null
           call_ring_seconds?: number
           call_voicemail_enabled?: boolean
           call_webrtc_number?: string | null
