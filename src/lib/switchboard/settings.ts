@@ -141,14 +141,17 @@ export async function loadTargets(
 
   const userIds = rows.map((r) => r.user_id).filter((v): v is string => Boolean(v));
   const phoneByUser = new Map<string, string | null>();
+  const webrtcByUser = new Map<string, string | null>();
   if (userIds.length) {
     const { data: profiles } = await supabase
       .from("user_profiles")
-      .select("user_id, call_agent_phone, call_enabled")
+      .select("user_id, call_agent_phone, call_enabled, call_webrtc_number")
       .in("user_id", userIds);
     for (const p of profiles ?? []) {
       // A rep who switched calling off should not be rung by the switchboard.
-      phoneByUser.set(p.user_id, p.call_enabled === false ? null : p.call_agent_phone);
+      const off = p.call_enabled === false;
+      phoneByUser.set(p.user_id, off ? null : p.call_agent_phone);
+      webrtcByUser.set(p.user_id, off ? null : p.call_webrtc_number);
     }
   }
 
@@ -162,6 +165,10 @@ export async function loadTargets(
       aliases: r.aliases ?? [],
       phone: override ?? fromProfile,
       phone_from_profile: !override && Boolean(fromProfile),
+      // Only when the phone comes from their profile: an explicit override means
+      // "ring this number", not "ring this person wherever they are".
+      webrtc_number:
+        !override && r.user_id ? normalizePhone(webrtcByUser.get(r.user_id) ?? null) : null,
       failover_target_id: r.failover_target_id,
       enabled: r.enabled,
       sort_order: r.sort_order,

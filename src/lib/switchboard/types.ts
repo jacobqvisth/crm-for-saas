@@ -10,6 +10,8 @@ export interface SwitchboardTarget {
   phone: string | null;
   /** True when `phone` came from the user's profile rather than an override. */
   phone_from_profile: boolean;
+  /** Their WebRTC number, rung in parallel so a transfer can land in the browser. */
+  webrtc_number: string | null;
   failover_target_id: string | null;
   enabled: boolean;
   sort_order: number;

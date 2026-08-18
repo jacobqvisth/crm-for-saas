@@ -6210,6 +6210,8 @@ export type Database = {
           call_failover_user_id: string | null
           call_ring_seconds: number
           call_voicemail_enabled: boolean
+          call_webrtc_number: string | null
+          call_webrtc_secret_encrypted: string | null
           created_at: string
           full_name: string | null
           origin_address: string | null
@@ -6231,6 +6233,8 @@ export type Database = {
           call_failover_user_id?: string | null
           call_ring_seconds?: number
           call_voicemail_enabled?: boolean
+          call_webrtc_number?: string | null
+          call_webrtc_secret_encrypted?: string | null
           created_at?: string
           full_name?: string | null
           origin_address?: string | null
@@ -6252,6 +6256,8 @@ export type Database = {
           call_failover_user_id?: string | null
           call_ring_seconds?: number
           call_voicemail_enabled?: boolean
+          call_webrtc_number?: string | null
+          call_webrtc_secret_encrypted?: string | null
           created_at?: string
           full_name?: string | null
           origin_address?: string | null

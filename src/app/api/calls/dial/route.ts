@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { placeBridgeCall } from "@/lib/calls/elks";
 import { normalizePhone } from "@/lib/calls/phone";
+import { resolveWebrtcNumber } from "@/lib/calls/webrtc";
 import type { TablesInsert } from "@/lib/database.types";
 
 export const maxDuration = 30;
@@ -115,12 +116,14 @@ export async function POST(request: NextRequest) {
   // registered to and auto-answers. Everything downstream is identical.
   let ring: string;
   if (mode === "webrtc") {
-    const webrtcNumber = normalizePhone(process.env.ELKS_WEBRTC_NUMBER);
+    // This agent's OWN WebRTC number, so two people calling from their browsers
+    // do not share one SIP registration. See src/lib/calls/webrtc.ts.
+    const webrtcNumber = await resolveWebrtcNumber(supabase, user.id);
     if (!webrtcNumber) {
       return NextResponse.json(
         {
           error: "webrtc_unavailable",
-          message: "Computer calling isn't configured (ELKS_WEBRTC_NUMBER).",
+          message: "Calling from this computer isn't set up for your account yet.",
         },
         { status: 400 },
       );

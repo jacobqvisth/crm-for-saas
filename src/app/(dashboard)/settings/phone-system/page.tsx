@@ -45,6 +45,8 @@ interface Agent {
   failoverName: string | null;
   ringSeconds: number;
   voicemail: boolean;
+  /** Their own WebRTC number, i.e. they can take calls in the browser. */
+  webrtcNumber: string | null;
 }
 
 const KIND_BADGE: Record<NumberKind, { label: string; cls: string; Icon: typeof Smartphone }> = {
@@ -115,7 +117,7 @@ async function loadData() {
     const { data: profiles } = await admin
       .from("user_profiles")
       .select(
-        "user_id, full_name, call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled",
+        "user_id, full_name, call_agent_phone, call_caller_id, call_enabled, call_failover_user_id, call_ring_seconds, call_voicemail_enabled, call_webrtc_number",
       )
       .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
     const profileById = new Map((profiles ?? []).map((p) => [p.user_id, p]));
@@ -144,6 +146,7 @@ async function loadData() {
         failoverName: nameFor(p?.call_failover_user_id),
         ringSeconds: p?.call_ring_seconds ?? 25,
         voicemail: p?.call_voicemail_enabled !== false,
+        webrtcNumber: p?.call_webrtc_number?.trim() || null,
       });
       const key = callerId || defaultCallerId;
       if (key) {
@@ -667,6 +670,7 @@ export default async function PhoneSystemPage() {
                   <th className="px-3 py-2 font-medium">Rings this phone</th>
                   <th className="px-3 py-2 font-medium">Caller ID shown to customer</th>
                   <th className="px-3 py-2 font-medium">If no answer</th>
+                  <th className="px-3 py-2 font-medium">On this computer</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                 </tr>
               </thead>
@@ -691,6 +695,13 @@ export default async function PhoneSystemPage() {
                       ring {a.ringSeconds}s
                       {a.failoverName ? ` → ${a.failoverName}` : ""}
                       {a.voicemail ? " → voicemail" : ""}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs">
+                      {a.webrtcNumber ? (
+                        <span className="font-mono text-slate-600">{a.webrtcNumber}</span>
+                      ) : (
+                        <span className="text-slate-400">not set up</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <span
@@ -745,10 +756,15 @@ export default async function PhoneSystemPage() {
             receptionist in the same moment, the newer one wins. Fine for an internal line; if call
             volume ever makes this real, the fix is a per-call SIP identifier.
           </Limit>
-          <Limit icon="warn">
-            <strong className="text-slate-800">Talking from the computer is one person at a time.</strong>{" "}
-            There is a single WebRTC number and it can hold one browser registration, so it is tied
-            to one person. Everyone else uses the phone bridge, which has no such limit.
+          <Limit icon="info">
+            <strong className="text-slate-800">
+              Talking from the computer needs one WebRTC number per person.
+            </strong>{" "}
+            On 46elks a WebRTC number <em>is</em> its SIP account, and an account holds a single
+            registration, so two people cannot share one: their browsers would race for the incoming
+            leg. Each person therefore gets their own number, shown in the table above. 46elks
+            support has to create these, they cannot be bought through the API. Anyone without one
+            simply uses the phone bridge, which has no such limit.
           </Limit>
           <Limit icon="info">
             <strong className="text-slate-800">

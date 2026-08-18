@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveWebrtcEndpoint } from "@/lib/calls/webrtc";
 
 // Serves the 46elks WebRTC (SIP) credentials to the browser so it can register
 // as the WebRTC number and take "talk from the computer" calls.
@@ -39,21 +40,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const username = process.env.ELKS_WEBRTC_USERNAME;
-  const password = process.env.ELKS_WEBRTC_PASSWORD;
-  if (!username || !password) {
-    return NextResponse.json({ available: false });
-  }
-
-  // There is a single shared WebRTC number (one SIP registration at a time), so
-  // computer calling is scoped to one owner. When ELKS_WEBRTC_OWNER_USER_ID is
-  // set, only that agent gets it; unset = any member (single-user setups).
-  const ownerId = process.env.ELKS_WEBRTC_OWNER_USER_ID;
-  if (ownerId && ownerId !== user.id) {
-    return NextResponse.json({ available: false });
-  }
-
-  // Respect the per-user calling master switch.
+  // Respect the per-user calling master switch before anything else.
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("call_enabled")
@@ -63,11 +50,17 @@ export async function GET() {
     return NextResponse.json({ available: false });
   }
 
+  // Each person has their own WebRTC endpoint (a 46elks WebRTC number is its own
+  // SIP account, and one account holds one registration). Falls back to the
+  // shared env endpoint for its configured owner — see src/lib/calls/webrtc.ts.
+  const endpoint = await resolveWebrtcEndpoint(supabase, user.id);
+  if (!endpoint) return NextResponse.json({ available: false });
+
   return NextResponse.json({
     available: true,
     wsUri: WS_URI,
-    uri: `${username}@${SIP_HOST}`,
-    password,
+    uri: `${endpoint.username}@${SIP_HOST}`,
+    password: endpoint.password,
     iceServers: iceServers(),
   });
 }
