@@ -10,7 +10,8 @@ export type NumberKind = "mobile" | "sip" | "data";
 export type InboundRouting =
   | { type: "unconfigured" } // callback rings nothing
   | { type: "result_insurance" } // result-insurance edge fn (separate product)
-  | { type: "crm" } // this CRM's inbound webhook
+  | { type: "crm" } // this CRM's inbound webhook (rings the number's owner)
+  | { type: "switchboard" } // the AI receptionist answers, then transfers
   | { type: "sip" } // a SIP endpoint
   | { type: "forward"; to: string } // static connect to a phone
   | { type: "webhook"; host: string }; // some other webhook
@@ -40,6 +41,9 @@ export function classifyInbound(voiceStart: string | undefined | null): InboundR
   const vs = (voiceStart ?? "").trim();
   if (!vs) return { type: "unconfigured" };
   if (vs.includes("ugibcnidxrhcxflqamxs")) return { type: "result_insurance" };
+  // Check the switchboard first: its URL also contains the app host, so the
+  // broader CRM match below would otherwise swallow it.
+  if (vs.includes("/api/switchboard/inbound")) return { type: "switchboard" };
   if (vs.includes("crm-for-saas") || vs.includes("/api/calls/webhook/inbound")) {
     return { type: "crm" };
   }
@@ -60,9 +64,10 @@ export function classifyInbound(voiceStart: string | undefined | null): InboundR
 }
 
 export const INBOUND_LABEL: Record<InboundRouting["type"], string> = {
-  unconfigured: "Not handled — callback rings nothing",
+  unconfigured: "Not handled, callback rings nothing",
   result_insurance: "Result-Insurance inbound flow",
-  crm: "This CRM's inbound handler",
+  crm: "Rings the owner, then failover, then voicemail",
+  switchboard: "Switchboard: the receptionist answers",
   sip: "SIP endpoint",
   forward: "Forwards to a phone",
   webhook: "Custom webhook",

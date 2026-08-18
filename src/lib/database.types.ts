@@ -5618,6 +5618,275 @@ export type Database = {
           },
         ]
       }
+      switchboard_calls: {
+        Row: {
+          answered_at: string | null
+          call_session_id: string | null
+          caller_name: string | null
+          caller_number: string | null
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          dialed_number: string | null
+          duration_seconds: number | null
+          elks_call_id: string
+          ended_at: string | null
+          forwarded_at: string | null
+          id: string
+          message_body: string | null
+          outcome: string | null
+          provider_conversation_id: string | null
+          requested_label: string | null
+          status: string
+          summary: string | null
+          target_id: string | null
+          target_phone: string | null
+          target_user_id: string | null
+          transcript: Json | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          answered_at?: string | null
+          call_session_id?: string | null
+          caller_name?: string | null
+          caller_number?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          dialed_number?: string | null
+          duration_seconds?: number | null
+          elks_call_id: string
+          ended_at?: string | null
+          forwarded_at?: string | null
+          id?: string
+          message_body?: string | null
+          outcome?: string | null
+          provider_conversation_id?: string | null
+          requested_label?: string | null
+          status?: string
+          summary?: string | null
+          target_id?: string | null
+          target_phone?: string | null
+          target_user_id?: string | null
+          transcript?: Json | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          answered_at?: string | null
+          call_session_id?: string | null
+          caller_name?: string | null
+          caller_number?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          dialed_number?: string | null
+          duration_seconds?: number | null
+          elks_call_id?: string
+          ended_at?: string | null
+          forwarded_at?: string | null
+          id?: string
+          message_body?: string | null
+          outcome?: string | null
+          provider_conversation_id?: string | null
+          requested_label?: string | null
+          status?: string
+          summary?: string | null
+          target_id?: string | null
+          target_phone?: string | null
+          target_user_id?: string | null
+          transcript?: Json | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "switchboard_calls_call_session_id_fkey"
+            columns: ["call_session_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "switchboard_calls_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "switchboard_calls_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "switchboard_calls_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "switchboard_targets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "switchboard_calls_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      switchboard_settings: {
+        Row: {
+          answer_questions: boolean
+          book_callbacks: boolean
+          close_hour: number
+          created_at: string
+          enabled: boolean
+          greeting_note: string | null
+          languages_enabled: string[]
+          max_call_seconds: number
+          number: string | null
+          open_days: number[]
+          open_hour: number
+          persona_name: string
+          provider: string
+          provider_agent_id: string | null
+          provider_api_key_encrypted: string | null
+          provider_kb_doc_id: string | null
+          provider_phone_number_id: string | null
+          provider_tool_ids: Json
+          ring_seconds: number
+          take_messages: boolean
+          updated_at: string
+          voice_id: string | null
+          voicemail_enabled: boolean
+          webhook_secret: string | null
+          workspace_id: string
+        }
+        Insert: {
+          answer_questions?: boolean
+          book_callbacks?: boolean
+          close_hour?: number
+          created_at?: string
+          enabled?: boolean
+          greeting_note?: string | null
+          languages_enabled?: string[]
+          max_call_seconds?: number
+          number?: string | null
+          open_days?: number[]
+          open_hour?: number
+          persona_name?: string
+          provider?: string
+          provider_agent_id?: string | null
+          provider_api_key_encrypted?: string | null
+          provider_kb_doc_id?: string | null
+          provider_phone_number_id?: string | null
+          provider_tool_ids?: Json
+          ring_seconds?: number
+          take_messages?: boolean
+          updated_at?: string
+          voice_id?: string | null
+          voicemail_enabled?: boolean
+          webhook_secret?: string | null
+          workspace_id: string
+        }
+        Update: {
+          answer_questions?: boolean
+          book_callbacks?: boolean
+          close_hour?: number
+          created_at?: string
+          enabled?: boolean
+          greeting_note?: string | null
+          languages_enabled?: string[]
+          max_call_seconds?: number
+          number?: string | null
+          open_days?: number[]
+          open_hour?: number
+          persona_name?: string
+          provider?: string
+          provider_agent_id?: string | null
+          provider_api_key_encrypted?: string | null
+          provider_kb_doc_id?: string | null
+          provider_phone_number_id?: string | null
+          provider_tool_ids?: Json
+          ring_seconds?: number
+          take_messages?: boolean
+          updated_at?: string
+          voice_id?: string | null
+          voicemail_enabled?: boolean
+          webhook_secret?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "switchboard_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      switchboard_targets: {
+        Row: {
+          aliases: string[]
+          created_at: string
+          enabled: boolean
+          failover_target_id: string | null
+          id: string
+          label: string
+          phone: string | null
+          sort_order: number
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          aliases?: string[]
+          created_at?: string
+          enabled?: boolean
+          failover_target_id?: string | null
+          id?: string
+          label: string
+          phone?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          aliases?: string[]
+          created_at?: string
+          enabled?: boolean
+          failover_target_id?: string | null
+          id?: string
+          label?: string
+          phone?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "switchboard_targets_failover_target_id_fkey"
+            columns: ["failover_target_id"]
+            isOneToOne: false
+            referencedRelation: "switchboard_targets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "switchboard_targets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           company_id: string | null
