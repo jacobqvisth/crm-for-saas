@@ -6977,3 +6977,16 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - New shared `src/lib/verification/verify-email.ts` (`mapMVStatus`, `isPlausibleEmailAddress`, `verifyEmailAddress`); both existing verify routes now import `mapMVStatus` from it.
 - **Prod data**: the incident contact's email had already been hand-corrected to `bilexpert@gmail.com` (left unverified — the new gate verifies on next send). Typo sweep marked 3 more addresses invalid: `sebadersoldo@gmail.con`, `jimmy-lindqvist@hotmailm.com`, `fayadalishahin@gigmail.com` (typo-squat catch-alls). Other `.con`/`.cm`/`gmail.no` rows were already invalid via MillionVerifier.
 - Build & Lint green (the gate); Vercel preview red as always (`/calls/feedback` prerender). tsc clean, vitest 756/756.
+
+
+## Valdemar Stats page — 2026-08-18
+
+**PR #674** (`feat/valdemar-stats-page`, squash 1db3bef) — merged; prod deploy verified READY for the SHA.
+
+- **New page `/dashboard/valdemar`** ("Valdemar" section tab, glyph VE): a personal outbound scoreboard reading the live CRM tables on every load (force-dynamic, zero caching, no warehouse sync). Two client-side tabs, shareable via `?tab=emails`.
+- **Calls tab**: 8 KPIs (calls, connected + connect rate, total/avg talk time, interested, callbacks booked, no-answer/voicemails, active calling days, longest call) + 7 diagrams (calls/day with connected share, outcomes, hour-of-day, weekday, duration histogram, AI sentiment split, talk time/day) + a call log whose rows open the shared `CallDetailDrawer` (AI summary, full transcript, recording).
+- **Emails tab**: 6 KPIs (sent, open/click/reply rates, bounces/unsubs, live queue) + sends+opens/day, clicks+replies/day, engagement funnel, queue status, sends-by-hour, sequences behind the sends, mailbox usage/health cards + an email log with a per-email event-timeline modal.
+- **Identity resolved at runtime** (`user_profiles.full_name` / `gmail_accounts` ilike valdemar, then all mailboxes on his user ids) — no hardcoded UUIDs; loader handles several user ids + mailboxes per rep, so a Hans/Magnus clone is a small follow-up. Data spine: `activities type='call'` merged with `call_sessions` on `metadata.call_session_id` (sessions without an activity show as "In progress"/"No outcome logged"); emails via `email_queue.sender_account_id` + `email_events` + `inbox_messages`.
+- **Range convention deviation, on purpose**: rolling pills on this page INCLUDE today (live data; Valdemar's first calling day was today and would otherwise show zero) via a page-local resolver over the Stockholm date helpers; noted in the header subtext. Buckets collapse to ISO weeks past 92 days.
+- House rules honored: replies exclude auto-reply/`out_of_office`; queue counts are exact head-counts (not capped .select reads); every read uses `pageAll`/`chunkedIn` with a unique `.order` tiebreaker; `.select()` strings are single literals; `?tab=` added to `DashboardRoutePageProps`.
+- tsc/eslint clean locally (tsc survived the bg sandbox this time); Build & Lint green; Vercel preview fail = known missing-env prerender (/login), not the change.
