@@ -12,6 +12,8 @@ export type DashboardRoutePageProps = {
     country?: string | string[];
     /** `YYYY-MM`, used by /dashboard/monthly-review's month picker. */
     month?: string | string[];
+    /** Sub-view within a page, used by /dashboard/valdemar's Calls/Emails tabs. */
+    tab?: string | string[];
   }>;
 };
 
