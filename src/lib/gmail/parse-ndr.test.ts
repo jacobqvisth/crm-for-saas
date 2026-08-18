@@ -120,6 +120,63 @@ describe("parseNdr — temporary 4xx soft bounce", () => {
   });
 });
 
+// Gmail's "Address not found" NDR for a nonexistent domain. The readable
+// text part carries NO SMTP code and NO enhanced status — only prose plus
+// the DNS NXDOMAIN line. Real incident 2026-08-18 (bilexpert@gmail.comert):
+// permanence parsed as "unknown", so the contact was never suppressed.
+const GMAIL_NXDOMAIN_NO_CODES = `Address not found
+
+Your message wasn't delivered to bilexpert@gmail.comert because the domain gmail.comert couldn't be found. Check for typos or unnecessary spaces and try again.
+
+The response was:
+
+DNS type 'mx' lookup of gmail.comert responded with code NXDOMAIN
+
+----- Original message -----
+
+Message-ID: <CAJLSg73-nxdomain-example@mail.gmail.com>
+From: magnus <magnus@wrenchlane.com>
+To: bilexpert@gmail.comert
+Subject: Followup
+`;
+
+describe("parseNdr — Gmail NXDOMAIN NDR without status codes", () => {
+  const parsed = parseNdr(GMAIL_NXDOMAIN_NO_CODES);
+
+  it("has no SMTP or enhanced status code", () => {
+    expect(parsed.smtpCode).toBeNull();
+    expect(parsed.enhancedStatus).toBeNull();
+  });
+
+  it("still classifies as permanent via failure-text fallback", () => {
+    expect(parsed.permanence).toBe("permanent");
+  });
+
+  it("extracts the failing recipient", () => {
+    expect(parsed.recipients).toContain("bilexpert@gmail.comert");
+  });
+
+  it("extracts the original Message-ID", () => {
+    expect(parsed.originalMessageId).toBe(
+      "CAJLSg73-nxdomain-example@mail.gmail.com",
+    );
+  });
+});
+
+describe("parseNdr — permanent-text fallback stays subordinate to codes", () => {
+  it("a 4xx bounce mentioning 'mailbox full' stays temporary", () => {
+    const parsed = parseNdr(SOFT_BOUNCE_4XX);
+    expect(parsed.permanence).toBe("temporary");
+  });
+
+  it("code-less prose without hard-failure phrases stays unknown", () => {
+    const parsed = parseNdr(
+      "Delivery incomplete. There was a temporary problem delivering your message to someone@example.com. Gmail will retry.",
+    );
+    expect(parsed.permanence).toBe("unknown");
+  });
+});
+
 describe("parseNdr — defensive paths", () => {
   it("returns empty recipients for an unparseable body", () => {
     const parsed = parseNdr("just garbage no useful content");

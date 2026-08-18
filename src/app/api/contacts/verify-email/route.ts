@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveContactIdsByFilters, type ContactFilters } from "@/lib/contacts-filter";
-
-function mapMVStatus(result: string, subresult: string): string {
-  if (subresult === "catchall") return "catch_all";
-  switch (result) {
-    case "ok":
-      return "valid";
-    case "error":
-      return "invalid";
-    case "unknown":
-      return "risky";
-    default:
-      return "unknown";
-  }
-}
+import { mapMVStatus } from "@/lib/verification/verify-email";
 
 function shouldSkip(
   emailStatus: string,
