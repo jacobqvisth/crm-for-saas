@@ -342,7 +342,23 @@ export async function importSipPhoneNumber(
       // 46elks source addresses are not published; allow any source and rely
       // on the number itself being unguessable routing. Tightened later if
       // 46elks documents egress IPs.
-      media_encryption: "allowed",
+      allowed_addresses: ["0.0.0.0/0"],
+      // "disabled" because 46elks sends plain RTP: with "required" the SIP leg
+      // is refused before a conversation is even created (measured 2026-08-18).
+      // "allowed" also works at the signalling layer.
+      //
+      // NOTE this does NOT fix the outstanding audio problem. SIP signalling to
+      // ElevenLabs connects fine (the agent runs, the caller's number arrives,
+      // the initiation webhook fires, tools work) but RTP never flows in either
+      // direction: the agent hears silence and the caller hears nothing, while
+      // 46elks reports the leg "failed" with no duration even as ElevenLabs logs
+      // a 30s+ "successful" conversation. Reproduced identically on the outbound
+      // caller-ID number since 2026-08-13, so it is the 46elks<->ElevenLabs
+      // media path, not this config. Ruled out: all three encryption values,
+      // `callerid` on the connect, an explicit :5060 port, and `recordcall`.
+      // This is the "SIP bridge audio validation" the Call Agent plan flagged as
+      // unproven, whose documented fallback is a Twilio trunk.
+      media_encryption: "disabled",
     },
   });
   return resp.phone_number_id;
