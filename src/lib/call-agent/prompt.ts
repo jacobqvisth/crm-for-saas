@@ -13,6 +13,7 @@ export const DYNAMIC_VARIABLE_DEFAULTS: Record<string, string> = {
   usage_facts: "No usage data available",
   why_calling: "Routine check-in",
   call_objective: "Learn how Wrenchlane is working for them",
+  previous_calls: "No previous calls on record",
   language: "en",
 };
 
@@ -62,6 +63,12 @@ export function buildAgentPrompt(params: {
     `Context: {{why_calling}}.`,
     `Their account: plan {{plan_name}}, subscription status {{subscription_status}}.`,
     `Usage: {{usage_facts}}.`,
+    ``,
+    `PREVIOUS CALLS WITH THIS CUSTOMER`,
+    `{{previous_calls}}.`,
+    `When a previous call is relevant, refer back to it naturally, the way a colleague who ` +
+      `remembers them would ("when we spoke last week you mentioned..."). Never read a ` +
+      `summary aloud, and never claim to remember something that is not listed here.`,
     ``,
     `HOW TO BEHAVE`,
     `1. You already introduced yourself as an AI assistant and said the call is recorded. Never hide that you are an AI.`,
