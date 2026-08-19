@@ -186,6 +186,89 @@ export async function getAgent(apiKey: string, agentId: string): Promise<unknown
   }
 }
 
+/** What the provider is actually running, for display rather than provisioning. */
+export interface AgentSummary {
+  name: string | null;
+  /** The reasoning model, e.g. "gemini-2.5-flash". */
+  llm: string | null;
+  temperature: number | null;
+  voiceId: string | null;
+  /** The text-to-speech model, which is a different model from the LLM. */
+  ttsModel: string | null;
+  speed: number | null;
+  /** Seconds of silence before the agent takes its turn. */
+  turnTimeout: number | null;
+  maxDurationSeconds: number | null;
+  language: string | null;
+  languagePresets: string[];
+  /** Provider built-ins that are switched on. */
+  builtInTools: string[];
+  /** Ids of our own webhook tools attached to it. */
+  toolIds: string[];
+  knowledgeDocs: Array<{ id: string; name: string; usageMode: string | null }>;
+}
+
+/**
+ * Read back the live configuration in a shape a page can render.
+ *
+ * Worth reading from the provider rather than echoing our own settings table: if
+ * the two ever drift, the provider is what answers the phone, and a settings page
+ * that shows intentions instead of reality hides exactly that bug.
+ */
+export async function getAgentSummary(
+  apiKey: string,
+  agentId: string,
+): Promise<AgentSummary | null> {
+  const raw = (await getAgent(apiKey, agentId)) as
+    | {
+        name?: string;
+        conversation_config?: {
+          agent?: {
+            language?: string;
+            prompt?: {
+              llm?: string;
+              temperature?: number;
+              tool_ids?: string[];
+              built_in_tools?: Record<string, unknown | null>;
+              knowledge_base?: Array<{ id?: string; name?: string; usage_mode?: string }>;
+            };
+          };
+          tts?: { voice_id?: string; model_id?: string; speed?: number };
+          turn?: { turn_timeout?: number };
+          conversation?: { max_duration_seconds?: number };
+          language_presets?: Record<string, unknown>;
+        };
+      }
+    | null;
+  if (!raw) return null;
+
+  const cc = raw.conversation_config ?? {};
+  const prompt = cc.agent?.prompt ?? {};
+
+  return {
+    name: raw.name ?? null,
+    llm: prompt.llm ?? null,
+    temperature: prompt.temperature ?? null,
+    voiceId: cc.tts?.voice_id ?? null,
+    ttsModel: cc.tts?.model_id ?? null,
+    speed: cc.tts?.speed ?? null,
+    turnTimeout: cc.turn?.turn_timeout ?? null,
+    maxDurationSeconds: cc.conversation?.max_duration_seconds ?? null,
+    language: cc.agent?.language ?? null,
+    languagePresets: Object.keys(cc.language_presets ?? {}),
+    // built_in_tools is a name-keyed map where null means disabled.
+    builtInTools: Object.entries(prompt.built_in_tools ?? {})
+      .filter(([, v]) => v)
+      .map(([k]) => k),
+    toolIds: prompt.tool_ids ?? [],
+    knowledgeDocs: (prompt.knowledge_base ?? []).map((d) => ({
+      id: d.id ?? "",
+      name: d.name ?? "(unnamed)",
+      usageMode: d.usage_mode ?? null,
+    })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Knowledge base
 
