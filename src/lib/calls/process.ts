@@ -5,7 +5,7 @@ import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
 import { fetchRecordingAudio } from "./elks";
 import { transcribeAudio, formatTranscript } from "./deepgram";
 import { analyzeCall } from "./ai-summary";
-import { CALL_OUTCOME_LABEL, nextLeadStatus } from "./decision";
+import { CALL_OUTCOME_LABEL, CONNECTED_BY_DEFAULT, nextLeadStatus } from "./decision";
 
 type Client = SupabaseClient<Database>;
 
@@ -138,9 +138,14 @@ export async function processCallSession(
   // 3) Auto-log the call activity (or update the existing one on re-run).
   let activityId = session.activity_id ?? undefined;
   const direction = session.direction === "inbound" ? "inbound" : "outbound";
+  // "Connected" means a human picked up — derive it from the outcome instead
+  // of hardcoding true: an auto-logged no_answer/voicemail/wrong_number call
+  // was NOT a conversation (46elks' leg-level connected fires even when only
+  // the agent's own browser auto-answered).
+  const humanConnected = CONNECTED_BY_DEFAULT[a.suggested_outcome] ?? true;
   const metadata: Record<string, Json> = {
     outcome: a.suggested_outcome,
-    connected: true,
+    connected: humanConnected,
     direction,
     ai_generated: true,
     call_session_id: sessionId,
@@ -187,7 +192,7 @@ export async function processCallSession(
   // 4) Recency + lead status (advance only, never downgrade).
   if (contact) {
     const update: Record<string, unknown> = { last_contacted_at: new Date().toISOString() };
-    const ls = nextLeadStatus(contact.lead_status, a.suggested_outcome, true);
+    const ls = nextLeadStatus(contact.lead_status, a.suggested_outcome, humanConnected);
     if (ls) update.lead_status = ls;
     await supabase.from("contacts").update(update).eq("id", contact.id);
   }

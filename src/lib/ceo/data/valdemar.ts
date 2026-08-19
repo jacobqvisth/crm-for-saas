@@ -8,6 +8,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { chunkedIn, pageAll } from "@/lib/supabase-paging";
 import {
   CALL_OUTCOME_LABEL,
+  CONNECTED_BY_DEFAULT,
   type CallOutcome,
 } from "@/lib/calls/decision";
 import {
@@ -276,7 +277,7 @@ export async function getValdemarStatsData(
     generatedAt: now.toISOString(),
     calls: {
       kpis: [],
-      seriesLabels: ["Calls", "Connected"],
+      seriesLabels: ["Calls", "Answered"],
       byBucket: [],
       talkTimeByBucket: [],
       byHour: [],
@@ -450,14 +451,21 @@ async function loadCalls(
       companyId: activity.company_id ?? session?.company_id ?? null,
       companyName: null,
       phone: session?.to_number ?? null,
+      direction:
+        metadata.direction === "inbound" || session?.direction === "inbound"
+          ? "inbound"
+          : "outbound",
       outcome,
       outcomeLabel: outcome
         ? CALL_OUTCOME_LABEL[outcome as CallOutcome] ?? outcome
         : "Logged call",
-      connected:
-        typeof metadata.connected === "boolean"
-          ? metadata.connected
-          : Boolean(session?.connected_at),
+      // Answered = the OUTCOME implies a conversation. Never trust
+      // metadata.connected or 46elks connected_at here: both fire when only
+      // the agent's own leg (browser auto-answer) picked up.
+      answered: outcome
+        ? CONNECTED_BY_DEFAULT[outcome as CallOutcome] ?? false
+        : false,
+      editable: true,
       durationSeconds,
       sentiment:
         typeof metadata.sentiment === "string"
@@ -490,12 +498,14 @@ async function loadCalls(
       companyId: session.company_id,
       companyName: null,
       phone: session.to_number,
+      direction: session.direction === "inbound" ? "inbound" : "outbound",
       outcome: null,
       outcomeLabel:
         session.status === "dialing" || session.status === "in_progress"
           ? "In progress"
           : "No outcome logged",
-      connected: Boolean(session.connected_at),
+      answered: false,
+      editable: false,
       durationSeconds: session.duration_seconds,
       sentiment:
         typeof aiJson.sentiment === "string"
@@ -551,19 +561,14 @@ function finishCalls(
   }));
 
   const total = rows.length;
-  const connectedRows = rows.filter((r) => r.connected);
-  const connected = connectedRows.length;
-  const talkSeconds = rows.reduce(
-    (sum, r) => sum + (r.connected ? r.durationSeconds ?? 0 : 0),
+  const answeredRows = rows.filter((r) => r.answered);
+  const answered = answeredRows.length;
+  const talkSeconds = answeredRows.reduce(
+    (sum, r) => sum + (r.durationSeconds ?? 0),
     0,
   );
-  const durationsKnown = connectedRows.filter(
-    (r) => (r.durationSeconds ?? 0) > 0,
-  );
-  const avgDuration = durationsKnown.length
-    ? talkSeconds / durationsKnown.length
-    : 0;
-  const longest = rows.reduce(
+  const avgDuration = answered ? talkSeconds / answered : 0;
+  const longest = answeredRows.reduce(
     (best, r) => Math.max(best, r.durationSeconds ?? 0),
     0,
   );
@@ -576,58 +581,108 @@ function finishCalls(
   const interested = outcomeCounts.get("interested") ?? 0;
   const callbacks = outcomeCounts.get("callback_scheduled") ?? 0;
   const closed = outcomeCounts.get("closed") ?? 0;
+  const notInterested = outcomeCounts.get("not_interested") ?? 0;
+  const noAnswer = outcomeCounts.get("no_answer") ?? 0;
+  const voicemails = outcomeCounts.get("left_voicemail") ?? 0;
+  const wrongNumbers = outcomeCounts.get("wrong_number") ?? 0;
 
   const uniqueContacts = new Set(rows.map((r) => r.contactId).filter(Boolean))
     .size;
   const uniqueCompanies = new Set(rows.map((r) => r.companyId).filter(Boolean))
     .size;
 
-  const activeDays = new Set(
-    rows.map((r) => toStockholmIsoDate(new Date(r.at))),
-  ).size;
+  const SOURCE = [
+    "activities (type=call)",
+    "call_sessions (46elks)",
+  ];
+  const ANSWERED_LOGIC =
+    "Answered = the logged outcome implies a real conversation: Interested, Not interested, Callback booked, and Closed count as answered. No answer, Left voicemail, and Wrong number do not. This is deliberately NOT the phone network's \"connected\" signal — 46elks marks a call connected as soon as ANY leg picks up, including Valdemar's own browser auto-answering, which says nothing about the customer.";
 
   const kpis: ValdemarKpi[] = [
     {
       label: "Calls made",
       value: String(total),
       hint: `${uniqueContacts} contacts · ${uniqueCompanies} companies`,
+      info: {
+        title: "Calls made",
+        body: "Every call Valdemar started in the selected range (plus any inbound callback to his number). One entry per dial, so calling the same contact twice counts twice. This IS the number of calls started — there is no separate 'started' metric.",
+        sources: SOURCE,
+        logic:
+          "Logged calls (one activity row per call) merged with raw 46elks call sessions on call_session_id; sessions still ringing or without a logged outcome yet are included as 'In progress'.",
+      },
     },
     {
-      label: "Connected",
-      value: String(connected),
-      hint: `${formatPercentValue(safePercent(connected, total))} connect rate`,
+      label: "Answered",
+      value: String(answered),
+      hint: `${formatPercentValue(safePercent(answered, total))} answer rate`,
+      info: {
+        title: "Answered",
+        body: "Calls where a human actually picked up.",
+        sources: SOURCE,
+        logic: ANSWERED_LOGIC,
+      },
+    },
+    {
+      label: "No answer",
+      value: String(noAnswer),
+      hint: `${voicemails} voicemails left · ${wrongNumbers} wrong numbers`,
+      info: {
+        title: "No answer",
+        body: "Calls logged with the 'No answer' outcome. Voicemails and wrong numbers are separate outcomes and are not included in this count (they're in the hint and the Outcomes chart).",
+        sources: SOURCE,
+      },
     },
     {
       label: "Talk time",
       value: formatDurationSeconds(talkSeconds),
-      hint: `Avg ${formatDurationSeconds(avgDuration)} per connected call`,
+      hint: `Avg ${formatDurationSeconds(avgDuration)} per answered call`,
+      info: {
+        title: "Talk time",
+        body: "Total duration of ANSWERED calls only. Ring time on unanswered calls is excluded, so this approximates real conversation time.",
+        sources: SOURCE,
+        logic:
+          "Sum of the 46elks call duration for every answered call. The duration clock starts when the call is bridged, so a few seconds of greeting/transfer are included.",
+      },
     },
     {
       label: "Interested",
       value: String(interested),
-      hint: `${formatPercentValue(safePercent(interested, connected))} of connected`,
+      hint: `${formatPercentValue(safePercent(interested, answered))} of answered`,
+      info: {
+        title: "Interested",
+        body: "Calls logged with the 'Interested' outcome — a real conversation where the contact showed buying interest. Outcomes are suggested by the AI from the transcript and can be corrected per call in the call log below.",
+        sources: SOURCE,
+      },
     },
     {
       label: "Callbacks booked",
       value: String(callbacks),
       hint: closed ? `${closed} closed` : "Follow-ups scheduled",
+      info: {
+        title: "Callbacks booked",
+        body: "Calls that ended with a concrete agreement to call back at a specific time ('Callback booked' outcome). Each one also creates a follow-up task.",
+        sources: SOURCE,
+      },
     },
     {
-      label: "No answer",
-      value: String(outcomeCounts.get("no_answer") ?? 0),
-      hint: `${outcomeCounts.get("left_voicemail") ?? 0} voicemails left`,
-    },
-    {
-      label: "Active calling days",
-      value: String(activeDays),
-      hint: activeDays
-        ? `${(total / activeDays).toFixed(1)} calls per active day`
-        : "No calls in range",
+      label: "Not interested",
+      value: String(notInterested),
+      hint: `${formatPercentValue(safePercent(notInterested, answered))} of answered`,
+      info: {
+        title: "Not interested",
+        body: "Answered calls where the contact declined. Useful together with Interested to read the quality of the conversations, not just their volume.",
+        sources: SOURCE,
+      },
     },
     {
       label: "Longest call",
       value: formatDurationSeconds(longest),
-      hint: `${durationsKnown.length} calls with talk time`,
+      hint: `${answeredRows.filter((r) => (r.durationSeconds ?? 0) > 0).length} answered calls with talk time`,
+      info: {
+        title: "Longest call",
+        body: "The single longest ANSWERED call in the range — a quick proxy for the deepest conversation. Open it in the call log for the transcript.",
+        sources: SOURCE,
+      },
     },
   ];
 
@@ -642,12 +697,12 @@ function finishCalls(
     hour,
     label: `${String(hour).padStart(2, "0")}`,
     total: 0,
-    connected: 0,
+    answered: 0,
   }));
   const byWeekday: WeekdayPoint[] = WEEKDAY_LABELS.map((label) => ({
     label,
     total: 0,
-    connected: 0,
+    answered: 0,
   }));
   const durations: DurationBucket[] = DURATION_BUCKETS.map((bucket) => ({
     label: bucket.label,
@@ -660,20 +715,22 @@ function finishCalls(
     const bucketValues = perBucket.get(buckets.keyFor(at));
     if (bucketValues) {
       bucketValues[0] += 1;
-      if (row.connected) bucketValues[1] += 1;
+      if (row.answered) bucketValues[1] += 1;
     }
     const talkValues = talkPerBucket.get(buckets.keyFor(at));
-    if (talkValues && row.connected) {
+    if (talkValues && row.answered) {
       talkValues[0] += row.durationSeconds ?? 0;
     }
     const hour = getStockholmParts(at).hour;
     byHour[hour].total += 1;
-    if (row.connected) byHour[hour].connected += 1;
+    if (row.answered) byHour[hour].answered += 1;
     const weekday = stockholmWeekdayIndex(at);
     byWeekday[weekday].total += 1;
-    if (row.connected) byWeekday[weekday].connected += 1;
+    if (row.answered) byWeekday[weekday].answered += 1;
 
-    if ((row.durationSeconds ?? 0) > 0) {
+    // Conversation-length histogram: answered calls only — a duration on an
+    // unanswered call is just ring/voicemail time and would skew the shape.
+    if (row.answered && (row.durationSeconds ?? 0) > 0) {
       const seconds = row.durationSeconds ?? 0;
       const index = DURATION_BUCKETS.findIndex((b) => seconds < b.max);
       durations[index === -1 ? DURATION_BUCKETS.length - 1 : index].count += 1;
@@ -691,9 +748,7 @@ function finishCalls(
       outcome,
       label: CALL_OUTCOME_LABEL[outcome as CallOutcome] ?? outcome,
       count,
-      connected: ["interested", "not_interested", "closed", "callback_scheduled"].includes(
-        outcome,
-      ),
+      answered: CONNECTED_BY_DEFAULT[outcome as CallOutcome] ?? false,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -708,7 +763,7 @@ function finishCalls(
 
   return {
     kpis,
-    seriesLabels: ["Calls", "Connected"],
+    seriesLabels: ["Calls", "Answered"],
     byBucket: toBucketPoints(buckets, perBucket),
     talkTimeByBucket: toBucketPoints(buckets, talkPerBucket),
     byHour,
@@ -970,36 +1025,69 @@ function finishEmails(
   const repliesReceived = raw.replies.length;
   const uniqueRecipients = new Set(raw.sent.map((r) => r.to_email)).size;
 
+  const EMAIL_SOURCE = ["email_queue", "email_events", "inbox_messages"];
   const kpis: ValdemarKpi[] = [
     {
       label: "Emails sent",
       value: String(sentCount),
       hint: `${uniqueRecipients} unique recipients`,
+      info: {
+        title: "Emails sent",
+        body: "Emails actually delivered to Gmail from Valdemar's mailboxes in the range — sequence steps and one-off composes alike. Scheduled-but-not-yet-sent emails are in the 'In queue' tile instead.",
+        sources: EMAIL_SOURCE,
+      },
     },
     {
       label: "Open rate",
       value: formatPercentValue(safePercent(openedEmails.size, sentCount)),
       hint: `${openedEmails.size} opened · ${openEvents} opens total`,
+      info: {
+        title: "Open rate",
+        body: "Share of sent emails opened at least once, measured by the tracking pixel. Undercounts readers whose mail client blocks images; a single email opened five times still counts once in the rate.",
+        sources: EMAIL_SOURCE,
+      },
     },
     {
       label: "Click rate",
       value: formatPercentValue(safePercent(clickedEmails.size, sentCount)),
       hint: `${clickedEmails.size} emails clicked · ${clickEvents} clicks`,
+      info: {
+        title: "Click rate",
+        body: "Share of sent emails where the recipient clicked at least one tracked link (links are wrapped through the tracking domain).",
+        sources: EMAIL_SOURCE,
+      },
     },
     {
       label: "Replies received",
       value: String(repliesReceived),
       hint: `${formatPercentValue(safePercent(repliesReceived, sentCount))} reply rate`,
+      info: {
+        title: "Replies received",
+        body: "Human replies that landed in Valdemar's inbox during the range. Auto-replies and out-of-office messages are excluded (same rule as everywhere else in the CRM), so this reads engagement, not autoresponders.",
+        sources: EMAIL_SOURCE,
+        logic:
+          "Counted from inbox_messages on his mailboxes with is_auto_reply=false and category ≠ out_of_office; the rate divides by emails sent in the same range, so a reply to last week's email can nudge a short range above 100%.",
+      },
     },
     {
       label: "Bounces",
       value: String(bouncedEmails.size),
       hint: `${unsubscribedEmails.size} unsubscribes`,
+      info: {
+        title: "Bounces",
+        body: "Sent emails that came back undeliverable. Bounced addresses are added to the suppression list automatically so they are not emailed again.",
+        sources: EMAIL_SOURCE,
+      },
     },
     {
       label: "In queue",
       value: String(raw.pendingCount),
       hint: `${raw.failedCount} failed (all time)`,
+      info: {
+        title: "In queue",
+        body: "Emails scheduled from his mailboxes that have not gone out yet — a live number, independent of the selected time range (as is the failed count in the hint).",
+        sources: ["email_queue"],
+      },
     },
   ];
 

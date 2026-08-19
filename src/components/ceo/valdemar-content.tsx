@@ -5,10 +5,24 @@
 // dashboard sections, and drill-downs: the shared CallDetailDrawer for call
 // transcripts/recordings, a lightweight modal for per-email event timelines.
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import { Modal } from "@/components/ui/modal";
 import { CallDetailDrawer } from "@/components/calls/call-now";
+import { InfoHint } from "@/components/ceo/source-info";
+import {
+  CALL_OUTCOMES,
+  CALL_OUTCOME_LABEL,
+  type CallOutcome,
+} from "@/lib/calls/decision";
 import { formatNumber } from "@/lib/ceo/format";
 import {
   formatDurationSeconds,
@@ -16,6 +30,7 @@ import {
   type ValdemarCallRow,
   type ValdemarEmailRow,
   type ValdemarKpi,
+  type ValdemarKpiInfo,
   type ValdemarStatsData,
   type ValdemarTab,
 } from "@/lib/ceo/valdemar-shared";
@@ -58,7 +73,10 @@ function KpiGrid({ items }: { items: ValdemarKpi[] }) {
       {items.map((item) => (
         <div className="summary-card" key={item.label}>
           <strong>{item.value}</strong>
-          <span>{item.label}</span>
+          <span className="label-with-info">
+            <span>{item.label}</span>
+            {item.info ? <InfoHint info={item.info} /> : null}
+          </span>
           {item.hint ? <small>{item.hint}</small> : null}
         </div>
       ))}
@@ -71,17 +89,22 @@ function PanelHeading({
   title,
   badge,
   description,
+  info,
 }: {
   eyebrow: string;
   title: string;
   badge?: string;
   description?: string;
+  info?: ValdemarKpiInfo;
 }) {
   return (
     <div className="panel-heading">
       <div>
         <p className="eyebrow">{eyebrow}</p>
-        <h2>{title}</h2>
+        <h2 className="heading-with-info">
+          <span>{title}</span>
+          {info ? <InfoHint info={info} /> : null}
+        </h2>
         {description ? <p className="panel-description">{description}</p> : null}
       </div>
       {badge ? <span className="badge">{badge}</span> : null}
@@ -315,7 +338,12 @@ function CallsTab({
             eyebrow="Volume"
             title="Calls per day"
             badge={`${formatNumber(data.totalRows)} calls`}
-            description="Every dial, with the connected share next to it. Stockholm days."
+            description="Every call started, with the answered share next to it. Stockholm days."
+            info={{
+              title: "Calls per day",
+              body: "Blue = every call started that day (each dial counts, redials included). Green = the subset a human answered, judged by the logged outcome — not the phone network's connect signal.",
+              sources: ["activities (type=call)", "call_sessions (46elks)"],
+            }}
           />
           <BucketBars points={data.byBucket} series={data.seriesLabels} />
         </Panel>
@@ -324,6 +352,11 @@ function CallsTab({
             eyebrow="Results"
             title="Outcomes"
             description="What each logged call ended as."
+            info={{
+              title: "Outcomes",
+              body: "One outcome per logged call, suggested by the AI from the transcript and correctable in the call log below. Interested, Not interested, Callback booked, and Closed mean a human answered; No answer, Left voicemail, and Wrong number mean nobody (relevant) did.",
+              sources: ["activities (type=call)"],
+            }}
           />
           <BarList
             items={data.outcomes.map((slice) => ({
@@ -341,7 +374,11 @@ function CallsTab({
           <PanelHeading
             eyebrow="Timing"
             title="Calls by hour of day"
-            description="When the dials happen (Stockholm time). Connected share alongside."
+            description="When the calls happen (Stockholm time). Answered share alongside."
+            info={{
+              title: "Calls by hour",
+              body: "Each call bucketed by the hour it was started, Stockholm time. Quiet hours with no calls are hidden unless they fall inside 07–19. Use this to find the hours where people actually pick up.",
+            }}
           />
           <BucketBars
             points={data.byHour
@@ -349,22 +386,26 @@ function CallsTab({
               .map((point) => ({
                 key: String(point.hour),
                 label: point.label,
-                values: [point.total, point.connected],
+                values: [point.total, point.answered],
               }))}
-            series={["Calls", "Connected"]}
+            series={["Calls", "Answered"]}
           />
         </Panel>
         <Panel>
           <PanelHeading
             eyebrow="Timing"
             title="Calls by weekday"
+            info={{
+              title: "Calls by weekday",
+              body: "All calls in the range grouped by Stockholm weekday, with how many were answered. Only meaningful once the range spans more than a few days.",
+            }}
           />
           <BarList
             items={data.byWeekday.map((point) => ({
               label: point.label,
               value: point.total,
               hint: point.total
-                ? `${point.connected} connected`
+                ? `${point.answered} answered`
                 : undefined,
             }))}
             emptyTitle="No calls yet"
@@ -377,16 +418,20 @@ function CallsTab({
         <Panel>
           <PanelHeading
             eyebrow="Depth"
-            title="Call length distribution"
-            description="Calls with talk time, bucketed by duration."
+            title="Conversation length"
+            description="Answered calls bucketed by duration."
+            info={{
+              title: "Conversation length",
+              body: "Only ANSWERED calls are counted here — the duration of an unanswered call is just ring or voicemail time and would distort the shape. Longer conversations usually mean better-qualified interest.",
+            }}
           />
           <BarList
             items={data.durations.map((bucket) => ({
               label: bucket.label,
               value: bucket.count,
             }))}
-            emptyTitle="No timed calls yet"
-            emptyBody="Durations appear once calls connect."
+            emptyTitle="No answered calls yet"
+            emptyBody="Durations appear once calls get answered."
           />
         </Panel>
         <Panel>
@@ -394,6 +439,11 @@ function CallsTab({
             eyebrow="Tone"
             title="Sentiment"
             description="AI-assessed sentiment of processed calls."
+            info={{
+              title: "Sentiment",
+              body: "The AI reads each call transcript and grades the contact's tone as positive, neutral, or negative. Unprocessed calls (no recording/transcript yet) are not graded.",
+              sources: ["call_sessions.ai_json"],
+            }}
           />
           <SegmentMeter
             segments={data.sentiments.map((slice) => ({
@@ -407,6 +457,10 @@ function CallsTab({
           <PanelHeading
             eyebrow="Depth"
             title="Talk time per day"
+            info={{
+              title: "Talk time per day",
+              body: "Total conversation time per Stockholm day, summed over answered calls only.",
+            }}
           />
           <BucketBars
             points={data.talkTimeByBucket}
@@ -416,92 +470,203 @@ function CallsTab({
         </Panel>
       </section>
 
-      <section className="content-grid">
-        <Panel wide>
-          <PanelHeading
-            eyebrow="Call log"
-            title="Every call in range"
-            badge={
-              data.totalRows > data.rows.length
-                ? `Latest ${data.rows.length} of ${formatNumber(data.totalRows)}`
-                : `${formatNumber(data.totalRows)} calls`
-            }
-            description="Open a call for the AI summary, full transcript, and recording."
-          />
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Contact</th>
-                  <th>Outcome</th>
-                  <th>Duration</th>
-                  <th>Sentiment</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>{formatWhen(row.at)}</td>
-                    <td>
-                      <div className="table-primary">
-                        {row.contactId ? (
-                          <Link
-                            className="!text-blue-600 hover:!underline"
-                            href={`/contacts/${row.contactId}`}
-                          >
-                            <strong>{row.contactName}</strong>
-                          </Link>
-                        ) : (
-                          <strong>{row.contactName}</strong>
-                        )}
-                        <span>
-                          {row.companyId && row.companyName ? (
-                            <Link
-                              className="!text-slate-500 hover:!underline"
-                              href={`/companies/${row.companyId}`}
-                            >
-                              {row.companyName}
-                            </Link>
-                          ) : (
-                            row.companyName ?? row.phone ?? "–"
-                          )}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${outcomePillClass(row.outcome)}`}>
-                        {row.outcomeLabel}
-                      </span>
-                    </td>
-                    <td>
-                      {row.durationSeconds
-                        ? formatDurationSeconds(row.durationSeconds)
-                        : "–"}
-                    </td>
-                    <td>{row.sentiment ?? "–"}</td>
-                    <td>
-                      {row.sessionId ? (
-                        <button
-                          className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium !text-slate-700 hover:bg-slate-50"
-                          onClick={() => onOpenCall(row)}
-                          type="button"
-                        >
-                          {row.hasRecording || row.sessionStatus === "processed"
-                            ? "Transcript"
-                            : "Details"}
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      </section>
+      <CallLogPanel
+        rows={data.rows}
+        totalRows={data.totalRows}
+        onOpenCall={onOpenCall}
+      />
     </div>
+  );
+}
+
+// Full-width call log with an editable outcome per row — the AI's suggested
+// outcome is sometimes wrong, so any workspace member can correct it here.
+function CallLogPanel({
+  rows: initialRows,
+  totalRows,
+  onOpenCall,
+}: {
+  rows: ValdemarCallRow[];
+  totalRows: number;
+  onOpenCall: (row: ValdemarCallRow) => void;
+}) {
+  const router = useRouter();
+  const [rows, setRows] = useState(initialRows);
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  // Re-sync when the server re-renders (range switch, router.refresh()).
+  useEffect(() => {
+    setRows(initialRows);
+  }, [initialRows]);
+
+  const changeOutcome = async (row: ValdemarCallRow, outcome: CallOutcome) => {
+    if (!row.editable || outcome === row.outcome) return;
+    const previous = rows;
+    setSavingId(row.id);
+    setRows((current) =>
+      current.map((r) =>
+        r.id === row.id
+          ? { ...r, outcome, outcomeLabel: CALL_OUTCOME_LABEL[outcome] }
+          : r,
+      ),
+    );
+    try {
+      const res = await fetch("/api/calls/log", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityId: row.id, outcome }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update outcome");
+      setRows((current) =>
+        current.map((r) =>
+          r.id === row.id ? { ...r, answered: Boolean(json.answered) } : r,
+        ),
+      );
+      toast.success(`Outcome set to ${CALL_OUTCOME_LABEL[outcome]}`);
+      // Recompute the KPI tiles + charts with the corrected outcome.
+      router.refresh();
+    } catch (err) {
+      setRows(previous);
+      toast.error(err instanceof Error ? err.message : "Failed to update outcome");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <article className="panel">
+      <PanelHeading
+        eyebrow="Call log"
+        title="Every call in range"
+        badge={
+          totalRows > rows.length
+            ? `Latest ${rows.length} of ${formatNumber(totalRows)}`
+            : `${formatNumber(totalRows)} calls`
+        }
+        description="Open a call for the AI summary, full transcript, and recording. The outcome is the AI's suggestion — change it in place when it got the call wrong (the stats above recompute)."
+        info={{
+          title: "Call log",
+          body: "One row per call in the selected range, newest first. Outcome and sentiment come from the AI reading the transcript after each call; the outcome dropdown writes your correction back to the call's activity and updates whether it counts as answered. 'In progress' rows are still ringing or waiting for the recording to be processed and can't be edited yet.",
+          sources: ["activities (type=call)", "call_sessions (46elks)"],
+        }}
+      />
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Contact</th>
+              <th>Company</th>
+              <th>Number</th>
+              <th>Outcome</th>
+              <th>Duration</th>
+              <th>Sentiment</th>
+              <th>AI summary</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <div className="table-primary">
+                    <strong className="font-normal">{formatWhen(row.at)}</strong>
+                    <span>{row.direction === "inbound" ? "↙ inbound" : "↗ outbound"}</span>
+                  </div>
+                </td>
+                <td>
+                  {row.contactId ? (
+                    <Link
+                      className="!text-blue-600 hover:!underline"
+                      href={`/contacts/${row.contactId}`}
+                    >
+                      {row.contactName}
+                    </Link>
+                  ) : (
+                    row.contactName
+                  )}
+                </td>
+                <td>
+                  {row.companyId && row.companyName ? (
+                    <Link
+                      className="!text-slate-600 hover:!underline"
+                      href={`/companies/${row.companyId}`}
+                    >
+                      {row.companyName}
+                    </Link>
+                  ) : (
+                    row.companyName ?? "–"
+                  )}
+                </td>
+                <td className="whitespace-nowrap">{row.phone ?? "–"}</td>
+                <td>
+                  {row.editable ? (
+                    <select
+                      aria-label="Call outcome"
+                      className={`rounded-md border px-1.5 py-1 text-xs font-medium outline-none ${
+                        outcomePillClass(row.outcome) === "success"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          : outcomePillClass(row.outcome) === "failed"
+                            ? "border-red-200 bg-red-50 text-red-800"
+                            : outcomePillClass(row.outcome) === "running"
+                              ? "border-amber-200 bg-amber-50 text-amber-800"
+                              : "border-slate-200 bg-slate-50 text-slate-700"
+                      }`}
+                      disabled={savingId === row.id}
+                      onChange={(e) => changeOutcome(row, e.target.value as CallOutcome)}
+                      value={row.outcome ?? ""}
+                    >
+                      {!row.outcome ? <option value="">No outcome</option> : null}
+                      {CALL_OUTCOMES.map((outcome) => (
+                        <option key={outcome} value={outcome}>
+                          {CALL_OUTCOME_LABEL[outcome]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`status-pill ${outcomePillClass(row.outcome)}`}>
+                      {row.outcomeLabel}
+                    </span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap">
+                  {row.durationSeconds
+                    ? formatDurationSeconds(row.durationSeconds)
+                    : "–"}
+                </td>
+                <td>{row.sentiment ?? "–"}</td>
+                <td>
+                  {row.summary ? (
+                    <span
+                      className="block max-w-[26rem] truncate text-slate-600"
+                      title={row.summary}
+                    >
+                      {row.summary}
+                    </span>
+                  ) : (
+                    "–"
+                  )}
+                </td>
+                <td>
+                  {row.sessionId ? (
+                    <button
+                      className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium !text-slate-700 hover:bg-slate-50"
+                      onClick={() => onOpenCall(row)}
+                      type="button"
+                    >
+                      {row.hasRecording || row.sessionStatus === "processed"
+                        ? "Transcript"
+                        : "Details"}
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </article>
   );
 }
 
