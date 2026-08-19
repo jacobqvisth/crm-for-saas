@@ -296,15 +296,13 @@ export default async function PhoneSystemPage() {
   const spareMobiles = mobileNumbers.filter(
     (n) => n.assignedTo.length === 0 && !n.isDefaultCallerId && n.ownership === "unknown",
   );
+  // Still summed, never shown: the low-balance warning is the whole reason this
+  // page reads the account at all, and it needs the account-wide renewal figure to
+  // compare against. Deliberately not rendered anywhere.
   const monthlyNumberCost = numbers.reduce(
     (sum, n) => sum + (rawByNumber.get(n.number)?.cost ?? 0),
     0,
   );
-  const mobileMonthlyCost = mobileNumbers.reduce(
-    (sum, n) => sum + (rawByNumber.get(n.number)?.cost ?? 0),
-    0,
-  );
-  const infraMonthlyCost = monthlyNumberCost - mobileMonthlyCost;
   const balanceUnits = account?.balance ?? null;
   const lowBalance = balanceUnits !== null && balanceUnits < monthlyNumberCost;
 
@@ -344,8 +342,9 @@ export default async function PhoneSystemPage() {
               {money(balanceUnits, account?.currency ?? "SEK")}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              Numbers cost {money(monthlyNumberCost, account?.currency ?? "SEK")} a month.
-              {lowBalance ? " Not enough to cover the next renewal." : ""}
+              {lowBalance
+                ? "Not enough to cover the next round of number renewals."
+                : "Enough to cover the next round of number renewals."}
             </p>
           </div>
           <div className="bg-white border border-slate-200 rounded-lg p-4">
@@ -659,11 +658,6 @@ export default async function PhoneSystemPage() {
           <h2 className="text-base font-semibold text-slate-900">
             Wrenchlane numbers{mobileNumbers.length ? ` (${mobileNumbers.length})` : ""}
           </h2>
-          {!!mobileMonthlyCost && (
-            <span className="text-xs text-slate-400">
-              {money(mobileMonthlyCost, account?.currency ?? "SEK")} / month
-            </span>
-          )}
         </div>
 
         {numbersError ? (
@@ -757,11 +751,8 @@ export default async function PhoneSystemPage() {
               <>
                 {" "}
                 The account also holds {infraNumbers.length} 46elks infrastructure numbers (SIP and
-                WebSocket endpoints,{" "}
-                {infraMonthlyCost > 0
-                  ? `${money(infraMonthlyCost, account?.currency ?? "SEK")} / month`
-                  : "no monthly cost"}
-                ), hidden here because a customer dialling one just hears a wrong-number tone.
+                WebSocket endpoints), hidden here because a customer dialling one just hears a
+                wrong-number tone.
               </>
             )}
             {otherProductNumbers.length > 0 && (

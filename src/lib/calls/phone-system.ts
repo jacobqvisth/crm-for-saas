@@ -72,17 +72,25 @@ export function describeNumber(
   const roles: string[] = [];
   let keepReason: string | null = null;
 
+  let isSwitchboard = false;
   if (ctx.switchboardNumber && n.number === ctx.switchboardNumber) {
+    isSwitchboard = true;
     roles.push("the published switchboard number customers call");
+    keepReason = "Releasing it takes the switchboard offline.";
   }
   if (ctx.bridgeNumber && n.number === ctx.bridgeNumber) {
     roles.push("carries the receptionist's audio (WebSocket bridge)");
     keepReason = "The switchboard's AI leg is connected to this; calls go silent without it.";
   }
   const agentName = ctx.agentNumbers?.get(n.number);
-  if (agentName) {
+  if (agentName && !isSwitchboard) {
+    // Only say "places calls from" for an OUTBOUND agent. The switchboard number
+    // is also imported against its agent, but that agent answers on it rather than
+    // dialling out, and saying otherwise misdescribes what the number does.
     roles.push(`imported as the phone number for ${agentName}`);
     keepReason = `${agentName} places calls from this number.`;
+  } else if (agentName) {
+    roles.push(`${agentName} answers on it`);
   }
   const webrtcOwner = ctx.webrtcNumbers?.get(n.number);
   if (webrtcOwner) {
