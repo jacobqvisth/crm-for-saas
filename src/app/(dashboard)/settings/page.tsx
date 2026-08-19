@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Handshake, Mail, MapPin, Phone, PhoneCall, ShieldAlert, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
+import { Mail, MapPin, Phone, PhoneCall, ShieldAlert, ShieldCheck, ShieldOff, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -25,10 +25,10 @@ const settingsItems = [
     icon: ShieldCheck,
   },
   {
-    title: 'Partner Companies',
-    description: 'Companies you already work with — kept in the CRM but excluded from call & outreach lists',
-    href: '/settings/partners',
-    icon: Handshake,
+    title: 'Exclusion Lists',
+    description: 'Who outreach skips: partner companies, the never-call list, and internal testers',
+    href: '/settings/exclusions',
+    icon: ShieldOff,
   },
   {
     title: 'Field Visits',

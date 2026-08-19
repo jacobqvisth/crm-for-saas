@@ -24,7 +24,7 @@ export const EXCLUSION_GROUPS: {
     key: "partners",
     label: "Partner companies",
     description:
-      "Companies you already work with (KGK, Bilia, MEKO, …) — managed under Settings → Partner Companies.",
+      "Companies you already work with (KGK, Bilia, MEKO, …) — managed under Settings → Exclusion Lists.",
   },
 ];
 

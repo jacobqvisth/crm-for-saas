@@ -35,7 +35,7 @@ export type { ExclusionGroupKey, ListExclusions } from "@/lib/lists/exclusion-ty
 //                        stats only ever use this set, never the never_call one.
 //   partners          -> companies flagged is_partner (companies we already
 //                        work with — KGK, Bilia, MEKO, …). Managed on
-//                        /settings/partners; matched by company_id AND by the
+//                        /settings/exclusions; matched by company_id AND by the
 //                        partner companies' email domains.
 //   lists[]           -> subtract the members of these other lists (e.g. a
 //                        "Hans – private deals" list).
