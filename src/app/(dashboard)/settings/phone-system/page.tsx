@@ -6,8 +6,6 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
   Smartphone,
-  Server,
-  Radio,
   AlertTriangle,
   Info,
   ArrowRight,
@@ -24,7 +22,6 @@ import {
   buildNumberRows,
   INBOUND_LABEL,
   type PhoneNumberRow,
-  type NumberKind,
 } from "@/lib/calls/phone-system";
 import {
   isWithinOfficeHours,
@@ -50,12 +47,6 @@ interface Agent {
   /** Their own WebRTC number, i.e. they can take calls in the browser. */
   webrtcNumber: string | null;
 }
-
-const KIND_BADGE: Record<NumberKind, { label: string; cls: string; Icon: typeof Smartphone }> = {
-  mobile: { label: "Mobile (customer-facing)", cls: "bg-teal-50 text-teal-700 border-teal-200", Icon: Smartphone },
-  sip: { label: "SIP / virtual", cls: "bg-slate-50 text-slate-600 border-slate-200", Icon: Server },
-  data: { label: "Data / WebSocket", cls: "bg-violet-50 text-violet-700 border-violet-200", Icon: Radio },
-};
 
 function inboundCls(type: string): string {
   switch (type) {
@@ -226,14 +217,23 @@ export default async function PhoneSystemPage() {
     account,
   } = await loadData();
 
-  const mobileCount = numbers.filter((n) => n.kind === "mobile").length;
-  const spareMobiles = numbers.filter(
-    (n) => n.kind === "mobile" && n.assignedTo.length === 0 && !n.isDefaultCallerId,
+  // Only the customer-facing mobile numbers are Wrenchlane numbers; the +4600…
+  // SIP/WebSocket entries are 46elks plumbing and stay out of the table.
+  const mobileNumbers = numbers.filter((n) => n.kind === "mobile");
+  const infraNumbers = numbers.filter((n) => n.kind !== "mobile");
+  const mobileCount = mobileNumbers.length;
+  const spareMobiles = mobileNumbers.filter(
+    (n) => n.assignedTo.length === 0 && !n.isDefaultCallerId,
   );
   const monthlyNumberCost = numbers.reduce(
     (sum, n) => sum + (rawByNumber.get(n.number)?.cost ?? 0),
     0,
   );
+  const mobileMonthlyCost = mobileNumbers.reduce(
+    (sum, n) => sum + (rawByNumber.get(n.number)?.cost ?? 0),
+    0,
+  );
+  const infraMonthlyCost = monthlyNumberCost - mobileMonthlyCost;
   const balanceUnits = account?.balance ?? null;
   const lowBalance = balanceUnits !== null && balanceUnits < monthlyNumberCost;
 
@@ -552,11 +552,11 @@ export default async function PhoneSystemPage() {
       <section className="mb-10">
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="text-base font-semibold text-slate-900">
-            Numbers on the 46elks account{numbers.length ? ` (${numbers.length})` : ""}
+            Wrenchlane numbers{mobileNumbers.length ? ` (${mobileNumbers.length})` : ""}
           </h2>
-          {!!monthlyNumberCost && (
+          {!!mobileMonthlyCost && (
             <span className="text-xs text-slate-400">
-              {money(monthlyNumberCost, account?.currency ?? "SEK")} / month
+              {money(mobileMonthlyCost, account?.currency ?? "SEK")} / month
             </span>
           )}
         </div>
@@ -572,15 +572,13 @@ export default async function PhoneSystemPage() {
               <thead>
                 <tr className="bg-slate-50 text-left text-xs text-slate-500">
                   <th className="px-3 py-2 font-medium">Number</th>
-                  <th className="px-3 py-2 font-medium">Type</th>
                   <th className="px-3 py-2 font-medium">An incoming call goes to</th>
                   <th className="px-3 py-2 font-medium">Used as caller ID by</th>
                   <th className="px-3 py-2 font-medium">Renews</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {numbers.map((n) => {
-                  const badge = KIND_BADGE[n.kind];
+                {mobileNumbers.map((n) => {
                   const raw = rawByNumber.get(n.number);
                   const days = daysUntil(raw?.expires);
                   const inboundText =
@@ -604,12 +602,6 @@ export default async function PhoneSystemPage() {
                             shared default
                           </span>
                         )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`inline-flex items-center gap-1 text-[11px] border rounded px-1.5 py-0.5 ${badge.cls}`}>
-                          <badge.Icon className="w-3 h-3" />
-                          {badge.label}
-                        </span>
                       </td>
                       <td className="px-3 py-2.5">
                         <span className={`inline-block text-[11px] border rounded px-1.5 py-0.5 ${inboundCls(n.inbound.type)}`}>
@@ -638,10 +630,19 @@ export default async function PhoneSystemPage() {
 
         {!numbersError && (
           <p className="text-xs text-slate-400 mt-2">
-            Only <strong>Mobile</strong> numbers can be dialled by a customer or shown as a caller ID.
-            The <strong>+4600…</strong> numbers are 46elks infrastructure (SIP and WebSocket
-            endpoints); a customer dialling one hears a wrong-number tone, so they can never be the
-            växel or a caller ID.
+            These are the customer-facing mobile numbers: the only ones a customer can dial or see as
+            a caller ID.
+            {infraNumbers.length > 0 && (
+              <>
+                {" "}
+                The account also holds {infraNumbers.length} 46elks infrastructure numbers (SIP and
+                WebSocket endpoints,{" "}
+                {infraMonthlyCost > 0
+                  ? `${money(infraMonthlyCost, account?.currency ?? "SEK")} / month`
+                  : "no monthly cost"}
+                ), hidden here because a customer dialling one just hears a wrong-number tone.
+              </>
+            )}
             {spareMobiles.length > 0 && (
               <>
                 {" "}
