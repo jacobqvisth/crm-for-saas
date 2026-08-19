@@ -2,7 +2,13 @@ import "server-only";
 
 // Agent dial-out: unlike placeBridgeCall (which rings a human first), the
 // agent call dials the CONTACT directly and, when they answer, connects the
-// call into the ElevenLabs SIP endpoint where the assigned agent picks up.
+// call into the voice agent.
+//
+// Two connect targets exist. The 46elks WebSocket bridge number is the one
+// that works: 46elks -> ElevenLabs over SIP establishes the call but carries
+// no RTP at all (a 32 second call recorded a 44 byte WAV, header only), which
+// is why the switchboard moved to the bridge. The SIP URI remains only as a
+// fallback for a workspace with no bridge number configured.
 //
 // SIP address per ElevenLabs SIP reference: the identifier must match a
 // phone number imported with provider "sip_trunk" — we import the workspace
@@ -31,13 +37,19 @@ export interface PlaceAgentCallParams {
   contactPhone: string;
   /** Absolute URL 46elks POSTs hangup info to (duration, legs). */
   hangupWebhookUrl: string;
+  /**
+   * 46elks websocket number of the switchboard-bridge edge function. When set,
+   * the answered call is connected into the bridge (the path with working
+   * audio); when null, falls back to the legacy ElevenLabs SIP URI.
+   */
+  bridgeNumber?: string | null;
 }
 
 export async function placeAgentCall(
   params: PlaceAgentCallParams,
 ): Promise<{ callId: string; state?: string }> {
   const voiceStart = JSON.stringify({
-    connect: agentSipUri(params.from),
+    connect: params.bridgeNumber || agentSipUri(params.from),
     callerid: params.from,
   });
 

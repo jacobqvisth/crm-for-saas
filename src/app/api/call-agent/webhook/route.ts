@@ -32,20 +32,32 @@ export async function POST(request: NextRequest) {
 
   let authed = Boolean(settings);
   // HMAC check (format: "t=<unix>,v0=<hex>", HMAC-SHA256 of `${t}.${body}`).
-  if (!authed && settings?.webhook_secret) {
+  // A dashboard-registered webhook carries no ?token=, so the workspace is
+  // unknown here: try each workspace's secret (a handful of rows).
+  if (!authed) {
     const sig = request.headers.get("elevenlabs-signature");
     if (sig) {
       const parts = Object.fromEntries(sig.split(",").map((p) => p.split("=")));
       const t = parts.t;
       const v0 = parts.v0;
       if (t && v0) {
-        const expected = createHmac("sha256", settings.webhook_secret)
-          .update(`${t}.${raw}`)
-          .digest("hex");
-        try {
-          authed = timingSafeEqual(Buffer.from(expected), Buffer.from(v0));
-        } catch {
-          authed = false;
+        const { data: allSettings } = await service
+          .from("call_agent_settings")
+          .select("webhook_secret")
+          .not("webhook_secret", "is", null);
+        for (const row of allSettings ?? []) {
+          if (!row.webhook_secret) continue;
+          const expected = createHmac("sha256", row.webhook_secret)
+            .update(`${t}.${raw}`)
+            .digest("hex");
+          try {
+            if (timingSafeEqual(Buffer.from(expected), Buffer.from(v0))) {
+              authed = true;
+              break;
+            }
+          } catch {
+            // length mismatch: not this secret
+          }
         }
       }
     }
@@ -65,17 +77,33 @@ export async function POST(request: NextRequest) {
 
   const conversation = payload.data;
 
-  // Match: session already tagged with this conversation, else the most recent
-  // live agent session (single-concurrency makes this safe).
+  // One provider agent serves both directions, so this workspace-level webhook
+  // also receives the switchboard's conversations. Those are processed by the
+  // switchboard collector + recording pipeline, never by the outbound ingest —
+  // running both would double-log the call. The initiated_by filter plus the
+  // switchboard_calls check keep the two pipelines apart.
   let sessionId: string | null = null;
   const { data: tagged } = await service
     .from("call_sessions")
     .select("id")
     .eq("provider_conversation_id", conversation.conversation_id)
+    .eq("initiated_by", "agent")
     .maybeSingle();
   if (tagged) sessionId = tagged.id;
 
   if (!sessionId) {
+    const { data: switchboardCall } = await service
+      .from("switchboard_calls")
+      .select("id")
+      .eq("provider_conversation_id", conversation.conversation_id)
+      .maybeSingle();
+    if (switchboardCall) return NextResponse.json({ ok: true, switchboard: true });
+  }
+
+  if (!sessionId) {
+    // Fallback: the most recent live agent session (single-concurrency dialing
+    // makes this safe; the bridge normally tags the session long before this
+    // webhook fires, so this path is rare).
     const tenMinAgo = new Date(Date.now() - 10 * 60_000).toISOString();
     const { data: live } = await service
       .from("call_sessions")

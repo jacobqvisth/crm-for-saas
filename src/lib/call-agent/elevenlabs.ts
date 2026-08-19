@@ -149,7 +149,10 @@ function agentPayload(input: AgentConfigInput) {
     platform_settings: {
       overrides: {
         conversation_config_override: {
-          agent: { first_message: true, language: true },
+          // prompt: one provider agent serves both directions — the initiation
+          // response swaps in the outbound persona per call via a prompt
+          // override, leaving the receptionist prompt on the agent itself.
+          agent: { first_message: true, language: true, prompt: { prompt: true } },
           tts: { voice_id: true },
         },
         // Without this the workspace-level initiation webhook is never called
