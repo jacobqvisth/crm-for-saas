@@ -6990,3 +6990,13 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - **Range convention deviation, on purpose**: rolling pills on this page INCLUDE today (live data; Valdemar's first calling day was today and would otherwise show zero) via a page-local resolver over the Stockholm date helpers; noted in the header subtext. Buckets collapse to ISO weeks past 92 days.
 - House rules honored: replies exclude auto-reply/`out_of_office`; queue counts are exact head-counts (not capped .select reads); every read uses `pageAll`/`chunkedIn` with a unique `.order` tiebreaker; `.select()` strings are single literals; `?tab=` added to `DashboardRoutePageProps`.
 - tsc/eslint clean locally (tsc survived the bg sandbox this time); Build & Lint green; Vercel preview fail = known missing-env prerender (/login), not the change.
+
+
+## Inbound callback chain + fail-closed call webhooks — 2026-08-18
+
+**PR #679** (`feat/callback-chain-and-webhook-secret`, squash 0acea40) — merged.
+
+- **New `user_profiles.call_fallback_number`** (migration applied to prod via psql): a last-resort leg on inbound callbacks. Chain is now owner (cell + browser in parallel) → failover agent → fallback number → voicemail. Wired through `buildInboundActions` (30s ceiling on the leg), the inbound webhook, `/api/settings/calls`, the Call Settings form ("Last resort, ring this number"), and the Phone System chain display. Tests 8/8.
+- **Prod data set**: Valdemar's callbacks now ring Valdemar (mobile +46702625717 and browser in parallel, 25s) → Hans (+46709105182, 25s) → Mark the AI receptionist (+46766867161, 30s) → voicemail. The Hans hop worked immediately on old code; the Mark hop activates with this deploy.
+- **Security H3 closed**: `/api/calls/webhook/{inbound,hangup}` now fail CLOSED (503 when `CALL_WEBHOOK_SECRET` is unset). Discovered while verifying: the memory/finding claim that the secret was missing in Vercel prod was STALE — it has been set since ~June (tokenless probe → 403), and a 46elks audit showed every CRM-pointing `voice_start` already tokened (+46766867073 Valdemar / +46766868274 Hans / +46766869603). The gotcha behind the stale claim: from a worktree, `vercel env ls` errors as unlinked until `npx vercel link --yes --project crm-for-saas`.
+- Residual from H3 (still open on the Hacker Rating page): `hangup` resolves `call_sessions` globally by `provider_call_id`.
