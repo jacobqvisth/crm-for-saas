@@ -116,6 +116,26 @@ describe("describeNumber", () => {
     expect(describeNumber(n, {}, []).ownership).toBe("unknown");
   });
 
+  it("says the switchboard agent ANSWERS rather than places calls", () => {
+    // The switchboard number is imported against its agent too, but that agent
+    // answers on it. Describing it as "places calls from this number" misdescribes
+    // what the number does, and it is the line someone reads before deciding
+    // whether the number matters.
+    const n: ElksNumber = {
+      number: "+46766867161",
+      active: "yes",
+      voice_start: "https://crm-for-saas.vercel.app/api/switchboard/inbound?token=x",
+    };
+    const out = describeNumber(
+      n,
+      { switchboardNumber: "+46766867161", agentNumbers: new Map([["+46766867161", "Mark"]]) },
+      [],
+    );
+    expect(out.purpose).toContain("Mark answers on it");
+    expect(out.purpose).not.toContain("places calls");
+    expect(out.keepReason).toBe("Releasing it takes the switchboard offline.");
+  });
+
   it("marks the switchboard and its bridge as must-keep", () => {
     const vaxel: ElksNumber = {
       number: "+46766867161",
@@ -129,7 +149,9 @@ describe("describeNumber", () => {
       websocket_url: "wss://x.supabase.co/functions/v1/switchboard-bridge",
     };
     const ctx = { switchboardNumber: "+46766867161", bridgeNumber: "+4600700495" };
-    expect(describeNumber(vaxel, ctx, []).ownership).toBe("wrenchlane");
+    const v = describeNumber(vaxel, ctx, []);
+    expect(v.ownership).toBe("wrenchlane");
+    expect(v.keepReason).toContain("switchboard offline");
     const b = describeNumber(bridge, ctx, []);
     expect(b.ownership).toBe("wrenchlane");
     expect(b.keepReason).toContain("silent");
