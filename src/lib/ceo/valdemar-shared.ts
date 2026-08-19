@@ -6,10 +6,19 @@ import type { DashboardTimeRangeKey } from "@/lib/ceo/time-ranges";
 
 export type ValdemarTab = "calls" | "emails";
 
+/** Structurally matches ceo/source-info-data's SourceInfo so InfoHint takes it. */
+export type ValdemarKpiInfo = {
+  title: string;
+  body: string;
+  sources?: string[];
+  logic?: string;
+};
+
 export type ValdemarKpi = {
   label: string;
   value: string;
   hint?: string;
+  info?: ValdemarKpiInfo;
 };
 
 /** One chart bucket (a Stockholm civil day, or an ISO week for long ranges). */
@@ -23,7 +32,7 @@ export type OutcomeSlice = {
   outcome: string;
   label: string;
   count: number;
-  connected: boolean;
+  answered: boolean;
 };
 
 export type SentimentSlice = {
@@ -42,13 +51,13 @@ export type HourPoint = {
   hour: number;
   label: string;
   total: number;
-  connected: number;
+  answered: number;
 };
 
 export type WeekdayPoint = {
   label: string;
   total: number;
-  connected: number;
+  answered: number;
 };
 
 export type ValdemarCallRow = {
@@ -60,9 +69,14 @@ export type ValdemarCallRow = {
   companyId: string | null;
   companyName: string | null;
   phone: string | null;
+  direction: "outbound" | "inbound";
   outcome: string | null;
   outcomeLabel: string;
-  connected: boolean;
+  /** A human picked up — derived from the logged outcome, never from 46elks
+   *  leg state (the agent's own browser auto-answering is not an answer). */
+  answered: boolean;
+  /** True when the outcome row can be edited (it's a real activity row). */
+  editable: boolean;
   durationSeconds: number | null;
   sentiment: string | null;
   summary: string | null;
