@@ -53,6 +53,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/switchboard-collect",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/call-agent",
       "schedule": "*/2 * * * *"
     },

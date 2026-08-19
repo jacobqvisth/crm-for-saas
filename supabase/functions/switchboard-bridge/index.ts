@@ -351,6 +351,23 @@ Deno.serve(async (req) => {
         switch (m.type) {
           case "conversation_initiation_metadata": {
             aiReady = true;
+            // Record which provider conversation this call is, so the collector
+            // can fetch the transcript afterwards. Without this the transcript
+            // exists only at the provider and is invisible in the CRM, which is
+            // how the first thirteen switchboard calls ended up with none.
+            const convoId =
+              m.conversation_initiation_metadata_event?.conversation_id ??
+              m.conversation_id ??
+              null;
+            if (convoId && callId) {
+              db(
+                `switchboard_calls?elks_call_id=eq.${encodeURIComponent(callId)}`,
+                {
+                  method: "PATCH",
+                  body: JSON.stringify({ provider_conversation_id: convoId }),
+                },
+              ).catch((err) => console.error("could not record conversation id", err));
+            }
             // THE ordering that matters: declare formats only now. 46elks support
             // identified doing this too early as the cause of silent calls.
             if (!declared && elks.readyState === WebSocket.OPEN) {
