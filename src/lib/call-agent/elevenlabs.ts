@@ -358,7 +358,24 @@ export async function importSipPhoneNumber(
       // 46elks source addresses are not published; allow any source and rely
       // on the number itself being unguessable routing. Tightened later if
       // 46elks documents egress IPs.
-      media_encryption: "allowed",
+      allowed_addresses: ["0.0.0.0/0"],
+      // "disabled" because 46elks sends plain RTP: with "required" the SIP leg is
+      // refused before a conversation is even created (measured 2026-08-18).
+      media_encryption: "disabled",
+      //
+      // HISTORICAL NOTE, so nobody re-runs this investigation: SIP to ElevenLabs
+      // establishes signalling but carries NO audio from 46elks. A 32 second call
+      // produced a 44 byte WAV, header and no samples, while ElevenLabs happily
+      // logged and billed a "successful" conversation. Ruled out: all three
+      // media_encryption values, `callerid` on the connect, an explicit :5060
+      // port, transport=udp/tcp, `recordcall`, livekit_stack "static" (not
+      // settable), and the plan tier (identical on Free and Creator).
+      //
+      // The switchboard therefore does NOT use SIP. It bridges 46elks' WebSocket
+      // product to the ElevenLabs Agents WebSocket instead, where both sides speak
+      // pcm_16000 and audio flows fine. See supabase/functions/switchboard-bridge
+      // and switchboard_settings.bridge_number. This config only matters if
+      // something goes back to the SIP path, and then these are the right values.
     },
   });
   return resp.phone_number_id;
