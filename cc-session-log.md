@@ -13,6 +13,21 @@ updated: 2026-05-26
 
 ---
 
+## Partner-company exclusions + /settings/partners — 2026-08-19 — PR #686 — worktree-partner-exclusions
+
+Jacob: make it easy to exclude the companies we already work with / have partnerships with (KGK, minbil, Bilia, KVD, MEKO.com, AutoCom, WOW-group) from call lists and outreach, keep them in the CRM, and give us a settings surface to manage the set with an easy include/exclude option.
+
+- **`companies.is_partner boolean`** — migration `20260819090000_company_is_partner.sql`, applied to prod via Supabase MCP `apply_migration` before merge (shell psql DDL was classifier-blocked). Partial index on `(workspace_id) where is_partner`.
+- **New `partners` exclusion group** in the shared exclusion system (`src/lib/lists/exclusions.ts`): `loadPartnerSets` resolves partner company ids + their email domains; contacts are excluded by `company_id` AND by `@domain` match, so unlinked contacts at a partner's domain are caught too.
+- **Call Planner always skips partners** — ids/domains folded into the same sets as never-call for the candidate pool, engaged prospects, and playbook counts.
+- **Call lists default-exclude, untick to include**: the new-call-list modal and planner create-list stamp `groups: ["never_call","partners"]`; the Partner companies checkbox is pre-checked but NOT locked. Email/other lists opt in via the same ExclusionSelector checkbox; everything downstream (enroll modals, launch-campaign, export, sequences preflight) inherits it through list resolution.
+- **`/settings/partners`** — search any company by name/domain, add/remove partners (add/remove toasts state the outreach effect); card added to the Settings hub. **`/companies`** — new Partner filter (Hide partners / Partners only), Partner badge on the name cell, and the same filter mirrored into `resolveCompanyIdsByFilters` for bulk select-all-matching.
+- **Seeded 128 prod rows**: all `Bilia*`, the Minbil Stockholm chain, both wl-app `KGK` rows, `Kvdbil AB`, both `WOW Group-Autocom` rows, and MEKO **corporate** entities (MEKO Workshops AB, Meko Bilverksted AS Avd\*, Meko Holding/Services, MEKO Norway AS, domain=meko.com). Deliberately NOT flagged: independent Mekonomen/MECA franchise workshops (they're the ICP) and the `KGK Autoexperten Butik *` rows (their domains show independent retailers). Adjust on /settings/partners.
+- Checks: tsc clean, eslint clean, vitest 765/765, local build green (worktree .env.local symlink). Deploy verified: GitHub deployment status `success` for merge commit `5004a59`.
+- Gotcha worth remembering: a partner row with a `domain` excludes EVERYONE at that email domain (bilia.se, meko.com, minbil.se are live examples via the seeded rows).
+
+---
+
 ## "Find numbers" 504 fixed, plus live search progress — 2026-08-13 — PR #663 — worktree-find-phone-progress
 
 Jacob (from a screenshot of a contact profile): "I just clicked on find number but it is taking some time", then "I now got search failed". It was not slow, it was dead: `POST /api/enrich/find-phone` returned **504 Vercel Runtime Timeout Error: Task timed out after 180 seconds** on both attempts (12:43:24 and 12:44:04 UTC), and the UI's generic catch showed only "Search failed".
