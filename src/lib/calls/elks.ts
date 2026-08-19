@@ -110,6 +110,12 @@ export interface ElksNumber {
   capabilities?: string[];
   /** Inbound action: a URL (forwards to that webhook) or a JSON action string. */
   voice_start?: string;
+  /**
+   * Where a websocket-category number streams its audio. These numbers have no
+   * voice_start at all, so anything classifying purpose from voice_start alone
+   * reads them as unrouted.
+   */
+  websocket_url?: string;
   sms_url?: string;
 }
 
