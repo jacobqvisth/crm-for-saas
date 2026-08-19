@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Managed "never call" list (domains / emails / companies) — always applied.
-  // Partner companies (companies.is_partner, managed on /settings/partners) are
+  // Partner companies (companies.is_partner, managed on /settings/exclusions) are
   // folded into the same sets: we don't cold-call companies we already work
   // with. Un-flagging a company there puts it back in the planner.
   const { data: exclusionRows } = await supabase
