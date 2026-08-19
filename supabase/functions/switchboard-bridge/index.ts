@@ -139,6 +139,14 @@ Deno.serve(async (req) => {
   // 16-bit audio into static.
   const FRAME_BYTES = 3200; // 100 ms @ 16 kHz, 16-bit mono
   const FRAME_MS = 100;
+  // Tick faster than a frame so a tick is normally early rather than late.
+  const TICK_MS = 40;
+  // ~300 ms of cushion before the first frame. Enough to absorb timer jitter and
+  // a slow first chunk; short enough that nobody notices the delay.
+  const PREBUFFER_BYTES = FRAME_BYTES * 3;
+  // Never dump more than this in one tick, so a long stall cannot fire a burst
+  // that arrives faster than real time.
+  const MAX_CATCHUP_FRAMES = 5;
   // A list of chunks with a read cursor, rather than one array that gets
   // reallocated on every append. The old version copied the whole backlog per
   // chunk, which is quadratic and stalls the very timer that has to stay regular.
@@ -189,16 +197,57 @@ Deno.serve(async (req) => {
     return out;
   };
 
+  const sendFrame = (frame: Uint8Array) => {
+    let bin = "";
+    for (let i = 0; i < frame.length; i++) bin += String.fromCharCode(frame[i]);
+    elks.send(JSON.stringify({ t: "audio", data: btoa(bin) }));
+  };
+
+  /**
+   * Send audio on a clock, catching up when a tick runs late.
+   *
+   * One frame per timer tick sounds fine on paper and crackles in practice: the
+   * timer is not precise, and every late tick leaves a hole in the audio that the
+   * listener hears as a click. So we track how many frames SHOULD have gone by now
+   * and send the difference, which turns a late tick into a slightly bigger write
+   * instead of a gap.
+   *
+   * The timer also runs faster than a frame, so a tick is normally early rather
+   * than late, and we hold a short jitter buffer before starting so the very first
+   * words are not chasing the queue.
+   */
   const startPacer = () => {
     if (pacer !== null) return;
+    let startedAt = 0;
+    let framesSent = 0;
+
     pacer = setInterval(() => {
       if (closed || elks.readyState !== WebSocket.OPEN) return;
-      const frame = takeBytes(FRAME_BYTES);
-      if (!frame) return;
-      let bin = "";
-      for (let i = 0; i < frame.length; i++) bin += String.fromCharCode(frame[i]);
-      elks.send(JSON.stringify({ t: "audio", data: btoa(bin) }));
-    }, FRAME_MS);
+
+      // Wait for a small cushion before the first frame, else we start playing
+      // faster than the agent generates and immediately underrun.
+      if (startedAt === 0) {
+        if (queuedBytes < PREBUFFER_BYTES) return;
+        startedAt = Date.now();
+      }
+
+      const due = Math.floor((Date.now() - startedAt) / FRAME_MS) + 1;
+      let guard = 0;
+      while (framesSent < due && guard < MAX_CATCHUP_FRAMES) {
+        const frame = takeBytes(FRAME_BYTES);
+        if (!frame) break; // queue empty: nothing to catch up on
+        sendFrame(frame);
+        framesSent += 1;
+        guard += 1;
+      }
+
+      // Queue drained and the agent has stopped talking: reset so the next reply
+      // gets a fresh cushion rather than a burst to "catch up" on silence.
+      if (queuedBytes === 0) {
+        startedAt = 0;
+        framesSent = 0;
+      }
+    }, TICK_MS);
   };
 
   /**

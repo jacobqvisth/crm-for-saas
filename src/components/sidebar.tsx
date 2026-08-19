@@ -36,6 +36,7 @@ import {
   Route,
   Filter,
   Bot,
+  Headphones,
 } from "lucide-react";
 
 type NavItem = {
@@ -55,6 +56,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/routes", label: "Field routes", icon: MapIcon },
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/call-agent", label: "Call Agent", icon: Bot },
+  { href: "/receptionist", label: "Receptionist", icon: Headphones },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/roadmap", label: "Roadmap", icon: GanttChart },
