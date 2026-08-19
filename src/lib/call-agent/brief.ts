@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { scoreContact } from "@/lib/calls/scoring";
+import { buildRecentCallMemory } from "@/lib/calls/memory";
 import { pickAgentLanguage } from "./types";
 import { voiceSafeInline } from "./sanitize";
 
@@ -117,6 +118,14 @@ export async function buildCallBrief(
   if (company?.trial_ends_at) facts.push(`Trial ends/ended ${fmtDate(company.trial_ends_at)}`);
   if (company?.payment_status === "past_due") facts.push("Their last payment failed");
 
+  // Cross-call memory: the same agent answers the switchboard, so "we spoke
+  // last Tuesday" must survive in both directions. Summaries are already
+  // sanitized and trimmed by the memory module.
+  const previousCalls = await buildRecentCallMemory(supabase, {
+    contactId: contact.id,
+    companyId: contact.company_id,
+  });
+
   const variables: Record<string, string> = {
     contact_first_name: voiceSafeInline(firstName),
     workshop_name: voiceSafeInline(company?.name ?? "their workshop"),
@@ -130,6 +139,7 @@ export async function buildCallBrief(
       opts.objective ??
         "Learn how Wrenchlane is working for them and help them get more value from it",
     ),
+    previous_calls: previousCalls || "No previous calls on record",
     language,
   };
 

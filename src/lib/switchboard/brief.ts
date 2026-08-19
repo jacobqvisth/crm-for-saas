@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { normalizePhone } from "@/lib/calls/phone";
+import { buildRecentCallMemory } from "@/lib/calls/memory";
 import { isWithinOfficeHours, type SwitchboardTarget } from "./types";
 import type { SwitchboardRow } from "./settings";
 
@@ -100,9 +101,10 @@ export async function matchCaller(
 }
 
 /**
- * One short sentence of context for the receptionist. Deliberately terse: it is
- * spoken-word context, not a file to read out, and a long history line makes the
- * model recite instead of converse.
+ * Short spoken-word context for the receptionist. Deliberately terse: a long
+ * history makes the model recite instead of converse. Now carries the actual
+ * substance of recent calls — the outbound agent is the same Mark, so a
+ * customer who was called yesterday expects him to remember why.
  */
 async function buildHistoryLine(
   supabase: Client,
@@ -114,21 +116,6 @@ async function buildHistoryLine(
   const parts: string[] = [];
 
   if (contactId) {
-    const { data: lastCall } = await supabase
-      .from("call_sessions")
-      .select("created_at, direction")
-      .eq("contact_id", contactId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (lastCall) {
-      const days = Math.floor(
-        (Date.now() - new Date(lastCall.created_at).getTime()) / 86_400_000,
-      );
-      const when = days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
-      parts.push(`last spoke ${when}`);
-    }
-
     const { count } = await supabase
       .from("activities")
       .select("id", { count: "exact", head: true })
@@ -136,8 +123,18 @@ async function buildHistoryLine(
     if (count) parts.push(`${count} interactions on record`);
   }
 
+  // What the last couple of calls were actually about (any direction, any of
+  // the three callers: AI agent, switchboard, human rep). Already trimmed and
+  // sanitized for voice by the memory module.
+  const memory = await buildRecentCallMemory(supabase, {
+    contactId,
+    companyId,
+    limit: 2,
+  });
+  if (memory) parts.push(`Recent calls: ${memory}`);
+
   if (!parts.length) return "Known to us, but no interactions logged yet";
-  return parts.join(", ");
+  return parts.join(". ");
 }
 
 /**
