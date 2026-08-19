@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Mail, MapPin, Phone, PhoneCall, ShieldAlert, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
+import { Handshake, Mail, MapPin, Phone, PhoneCall, ShieldAlert, ShieldCheck, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
 
@@ -23,6 +23,12 @@ const settingsItems = [
     description: 'Manage suppression list, DNC imports, and GDPR compliance',
     href: '/settings/compliance',
     icon: ShieldCheck,
+  },
+  {
+    title: 'Partner Companies',
+    description: 'Companies you already work with — kept in the CRM but excluded from call & outreach lists',
+    href: '/settings/partners',
+    icon: Handshake,
   },
   {
     title: 'Field Visits',

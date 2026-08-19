@@ -33,6 +33,10 @@ export type { ExclusionGroupKey, ListExclusions } from "@/lib/lists/exclusion-ty
 //                        exclude, mapped onto CRM contacts via wl_user_id +
 //                        internal email domains. Kept SEPARATE from never_call:
 //                        stats only ever use this set, never the never_call one.
+//   partners          -> companies flagged is_partner (companies we already
+//                        work with — KGK, Bilia, MEKO, …). Managed on
+//                        /settings/partners; matched by company_id AND by the
+//                        partner companies' email domains.
 //   lists[]           -> subtract the members of these other lists (e.g. a
 //                        "Hans – private deals" list).
 //
@@ -96,6 +100,38 @@ export function applyNeverCallNegativeFilters<Q>(query: Q, sets: NeverCallSets):
     q = q.not("email", "ilike", `%@${domain}`);
   }
   return q as Q;
+}
+
+/**
+ * Partner companies (companies.is_partner) as contact-matchable sets: their
+ * company ids, plus their email domains so contacts that aren't linked to the
+ * company row still get caught.
+ */
+export type PartnerSets = { companyIds: string[]; domains: string[] };
+
+export async function loadPartnerSets(
+  supabase: Client,
+  workspaceId: string,
+): Promise<PartnerSets> {
+  const companyIds: string[] = [];
+  const domains = new Set<string>();
+  const PAGE = 1000;
+  for (let offset = 0; ; offset += PAGE) {
+    const { data } = await supabase
+      .from("companies")
+      .select("id, domain")
+      .eq("workspace_id", workspaceId)
+      .eq("is_partner", true)
+      .order("id")
+      .range(offset, offset + PAGE - 1);
+    const page = data ?? [];
+    for (const c of page) {
+      companyIds.push(c.id);
+      if (c.domain) domains.add(c.domain.toLowerCase());
+    }
+    if (page.length < PAGE) break;
+  }
+  return { companyIds, domains: [...domains] };
 }
 
 /** Collect workspace contact ids whose email ends in @domain (case-insensitive). */
@@ -192,6 +228,19 @@ export async function resolveExcludedContactIds(
       }
     } catch {
       // No service access / dashboard tables unavailable — skip this source.
+    }
+  }
+
+  // --- partners: companies flagged is_partner ---------------------------------
+  if (exclusions.groups.includes("partners")) {
+    const sets = await loadPartnerSets(supabase, workspaceId);
+    if (sets.companyIds.length > 0) {
+      for (const id of await idsByColumnIn(supabase, workspaceId, "company_id", sets.companyIds)) {
+        excluded.add(id);
+      }
+    }
+    for (const domain of sets.domains) {
+      for (const id of await idsByDomain(supabase, workspaceId, domain)) excluded.add(id);
     }
   }
 

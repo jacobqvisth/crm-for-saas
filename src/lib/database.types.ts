@@ -1165,6 +1165,7 @@ export type Database = {
           id: string
           industry: string | null
           instagram_url: string | null
+          is_partner: boolean
           is_sole_proprietor: boolean
           last_active_at: string | null
           last_visited_at: string | null
@@ -1247,6 +1248,7 @@ export type Database = {
           id?: string
           industry?: string | null
           instagram_url?: string | null
+          is_partner?: boolean
           is_sole_proprietor?: boolean
           last_active_at?: string | null
           last_visited_at?: string | null
@@ -1329,6 +1331,7 @@ export type Database = {
           id?: string
           industry?: string | null
           instagram_url?: string | null
+          is_partner?: boolean
           is_sole_proprietor?: boolean
           last_active_at?: string | null
           last_visited_at?: string | null

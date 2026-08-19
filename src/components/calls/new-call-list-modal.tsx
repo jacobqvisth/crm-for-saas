@@ -107,7 +107,11 @@ export function NewCallListModal({
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [previewing, setPreviewing] = useState(false);
   // Never-call is always-on for call lists; pre-checked and locked in the UI.
-  const [exclusions, setExclusions] = useState<ListExclusions>({ groups: ["never_call"], lists: [] });
+  // Partners default ON but stay uncheckable — untick to include partner companies.
+  const [exclusions, setExclusions] = useState<ListExclusions>({
+    groups: ["never_call", "partners"],
+    lists: [],
+  });
   const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {

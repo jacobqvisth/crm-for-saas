@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
 import { getPlaybook, BOUNCED_SUB_STATUSES } from "@/lib/calls/playbooks";
 import { fetchEngagedProspects } from "@/lib/calls/engaged-prospects";
-import { ALWAYS_ON_CALLING, resolveExcludedContactIds } from "@/lib/lists/exclusions";
+import {
+  ALWAYS_ON_CALLING,
+  resolveExcludedContactIds,
+  type ListExclusions,
+} from "@/lib/lists/exclusions";
 
 async function getWorkspaceId(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -104,11 +108,17 @@ export async function POST(request: NextRequest) {
     staticIds = [...new Set(body.contactIds)];
   }
 
-  // Never-call is always-on for calling. For static snapshots, strip excluded
-  // contacts up front so the stored membership is already clean; dynamic lists
-  // carry the choice in `exclusions` and re-apply it at resolution time.
+  // Never-call is always-on for calling; partners default on too (the planner
+  // already filtered both from its candidates). For static snapshots, strip
+  // excluded contacts up front so the stored membership is already clean;
+  // dynamic lists carry the choice in `exclusions` and re-apply it at
+  // resolution time.
+  const plannerDefaults: ListExclusions = {
+    groups: [...ALWAYS_ON_CALLING.groups, "partners"],
+    lists: [],
+  };
   if (!isDynamic && staticIds.length > 0) {
-    const excluded = await resolveExcludedContactIds(supabase, workspaceId, ALWAYS_ON_CALLING);
+    const excluded = await resolveExcludedContactIds(supabase, workspaceId, plannerDefaults);
     if (excluded.size > 0) staticIds = staticIds.filter((id) => !excluded.has(id));
   }
 
@@ -121,7 +131,7 @@ export async function POST(request: NextRequest) {
       description,
       is_dynamic: isDynamic,
       filters,
-      exclusions: { groups: ["never_call"], lists: [] } as unknown as Json,
+      exclusions: { groups: ["never_call", "partners"], lists: [] } as unknown as Json,
       purpose: "calling",
     })
     .select("id, name, is_dynamic")

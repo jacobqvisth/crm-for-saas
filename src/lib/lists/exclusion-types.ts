@@ -3,7 +3,7 @@
 // tables via a service client), so anything the browser needs — the shape, the
 // group metadata, and the pure parse/merge helpers — lives here instead.
 
-export type ExclusionGroupKey = "never_call" | "internal_testers";
+export type ExclusionGroupKey = "never_call" | "internal_testers" | "partners";
 
 export const EXCLUSION_GROUPS: {
   key: ExclusionGroupKey;
@@ -20,6 +20,12 @@ export const EXCLUSION_GROUPS: {
     label: "Internal test users",
     description: "Your team & internal testers (the same set excluded from statistics).",
   },
+  {
+    key: "partners",
+    label: "Partner companies",
+    description:
+      "Companies you already work with (KGK, Bilia, MEKO, …) — managed under Settings → Partner Companies.",
+  },
 ];
 
 export type ListExclusions = { groups: ExclusionGroupKey[]; lists: string[] };
@@ -27,7 +33,7 @@ export type ListExclusions = { groups: ExclusionGroupKey[]; lists: string[] };
 export const EMPTY_EXCLUSIONS: ListExclusions = { groups: [], lists: [] };
 
 function isGroupKey(v: unknown): v is ExclusionGroupKey {
-  return v === "never_call" || v === "internal_testers";
+  return v === "never_call" || v === "internal_testers" || v === "partners";
 }
 
 /** Parse the loosely-typed `contact_lists.exclusions` JSON into a safe shape. */

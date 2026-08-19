@@ -12,6 +12,7 @@ import { listReps } from "@/lib/reps/list";
 import {
   applyNeverCallNegativeFilters,
   loadNeverCallSets,
+  loadPartnerSets,
   type NeverCallSets,
 } from "@/lib/lists/exclusions";
 import {
@@ -101,6 +102,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Managed "never call" list (domains / emails / companies) — always applied.
+  // Partner companies (companies.is_partner, managed on /settings/partners) are
+  // folded into the same sets: we don't cold-call companies we already work
+  // with. Un-flagging a company there puts it back in the planner.
   const { data: exclusionRows } = await supabase
     .from("call_exclusions")
     .select("kind, value")
@@ -113,6 +117,9 @@ export async function GET(request: NextRequest) {
     else if (e.kind === "email") excludedEmails.add(e.value.toLowerCase());
     else if (e.kind === "company") excludedCompanies.add(e.value);
   }
+  const partnerSets = await loadPartnerSets(supabase, workspaceId);
+  for (const id of partnerSets.companyIds) excludedCompanies.add(id);
+  for (const domain of partnerSets.domains) excludedDomains.add(domain);
   // Same predicate as applyNeverCallNegativeFilters, evaluated on rows. Takes
   // the minimum shape so it serves both app-user candidates and prospect rows.
   const isExcluded = (c: { company_id: string | null; email: string | null }) => {
@@ -306,6 +313,12 @@ export async function GET(request: NextRequest) {
   //    never-call list is subtracted here too, so a playbook's headline count
   //    matches the worklist you get after turning it into a call list.
   const neverCallSets = await loadNeverCallSets(supabase, workspaceId);
+  // Fold partners into the count-side sets too, so a playbook's headline count
+  // matches the in-memory `isExcluded` filtering above.
+  neverCallSets.companies.push(...partnerSets.companyIds);
+  neverCallSets.domains.push(
+    ...partnerSets.domains.filter((d) => !neverCallSets.domains.includes(d)),
+  );
   const playbookResults = await Promise.all(
     PLAYBOOKS.map(async (pb) => {
       // engaged_prospect is already resolved above (the top list needs the same

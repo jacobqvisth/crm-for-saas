@@ -86,6 +86,11 @@ const HAS_ACCOUNT_OPTIONS: MultiSelectOption[] = [
   { value: 'no',  label: 'Prospect (no account)' },
 ];
 
+const PARTNER_OPTIONS: MultiSelectOption[] = [
+  { value: 'no',  label: 'Hide partners' },
+  { value: 'yes', label: 'Partners only' },
+];
+
 type LocalFilters = {
   search: string;
   country_code: string[];
@@ -95,6 +100,7 @@ type LocalFilters = {
   customer_status: string[];
   plan: string[];
   has_account: string[];
+  partner: string[];
   tags: string[];
   has_phone: boolean;
   has_domain: boolean;
@@ -109,6 +115,7 @@ const DEFAULT_FILTERS: LocalFilters = {
   customer_status: [],
   plan: [],
   has_account: [],
+  partner: [],
   tags: [],
   has_phone: false,
   has_domain: false,
@@ -271,6 +278,10 @@ export function CompaniesPageClient() {
       else if (filters.has_account[0] === 'no') query = query.is('wl_workshop_id', null);
     }
 
+    if (filters.partner.length === 1) {
+      query = query.eq('is_partner', filters.partner[0] === 'yes');
+    }
+
     if (filters.tags.length > 0) query = query.overlaps('tags', filters.tags);
 
     if (filters.has_phone) query = query.not('phone', 'is', null).neq('phone', '');
@@ -337,7 +348,7 @@ export function CompaniesPageClient() {
     workspaceId, hydrated, page, debouncedSearch,
     filters.country_code, filters.source, filters.industry,
     filters.lifecycle_stage, filters.customer_status, filters.plan, filters.has_account,
-    filters.tags, filters.has_phone, filters.has_domain, sort,
+    filters.partner, filters.tags, filters.has_phone, filters.has_domain, sort,
   ]);
 
   useEffect(() => {
@@ -481,6 +492,7 @@ export function CompaniesPageClient() {
     filters.customer_status.length > 0 ||
     filters.plan.length > 0 ||
     filters.has_account.length > 0 ||
+    filters.partner.length > 0 ||
     filters.tags.length > 0 ||
     filters.has_phone || filters.has_domain;
 
@@ -493,6 +505,10 @@ export function CompaniesPageClient() {
     filters.has_account.length === 1 && (filters.has_account[0] === 'yes' || filters.has_account[0] === 'no')
       ? filters.has_account[0]
       : undefined;
+  const partnerValue: CompanyFilters['partner'] =
+    filters.partner.length === 1 && (filters.partner[0] === 'yes' || filters.partner[0] === 'no')
+      ? filters.partner[0]
+      : undefined;
   const currentFilters: CompanyFilters = {
     search: filters.search || undefined,
     country_code:    filters.country_code.length    ? filters.country_code    : undefined,
@@ -502,6 +518,7 @@ export function CompaniesPageClient() {
     customer_status: filters.customer_status.length ? filters.customer_status : undefined,
     plan:            filters.plan.length            ? filters.plan            : undefined,
     has_account: hasAccountValue,
+    partner: partnerValue,
     tags:            filters.tags.length            ? filters.tags            : undefined,
     has_phone: filters.has_phone || undefined,
     has_domain: filters.has_domain || undefined,
@@ -663,6 +680,12 @@ export function CompaniesPageClient() {
               onChange={(v) => setFilters((f) => ({ ...f, has_account: v.slice(-1) }))}
               options={HAS_ACCOUNT_OPTIONS}
               allLabel="account types"
+            />
+            <MultiSelect
+              values={filters.partner}
+              onChange={(v) => setFilters((f) => ({ ...f, partner: v.slice(-1) }))}
+              options={PARTNER_OPTIONS}
+              allLabel="partners"
             />
             <MultiSelect
               values={filters.tags}
@@ -936,9 +959,16 @@ function renderCell(id: ColumnId, company: Company): React.ReactNode {
   switch (id) {
     case 'name':
       return (
-        <Link href={`/companies/${company.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
-          {company.name || '—'}
-        </Link>
+        <span className="inline-flex items-center gap-1.5">
+          <Link href={`/companies/${company.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
+            {company.name || '—'}
+          </Link>
+          {company.is_partner && (
+            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-sky-100 text-sky-700">
+              Partner
+            </span>
+          )}
+        </span>
       );
     case 'domain':
       return company.domain ? (
