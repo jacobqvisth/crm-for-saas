@@ -7082,3 +7082,11 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - **Verified in prod (no phone call needed):** POST initiation with a smoke-test session id returned the exact contact brief + Swedish "Det här är Mark" + full prompt override; POST without session_id returned the receptionist brief with no prompt override. Smoke row cleaned up.
 - **Remaining gate:** one real audible outbound test call (Test call on /call-agent) — read the transcript, never trust `call_successful`. Also still pending: 46elks auto top-up (account silently died at −329 SEK 2026-08-19).
 - Checks: tsc/eslint clean, vitest 40/40, esbuild on the bridge clean, Build & Lint green, Vercel prod deploy success for efc9241.
+
+## Cross-call memory for the voice agent — 2026-08-19
+
+- **PR #698** (squash d179d8d), branch `feat/mark-cross-call-memory`. Phase 3 of the one-agent plan: Mark remembers earlier calls in both directions, no new tables.
+- New `src/lib/calls/memory.ts`: last N summarized calls for a contact (company fallback) from `call_sessions.summary`, phrased as terse spoken-context lines with natural ages and who-called framing; word-boundary trimmed to 280 chars, voice-sanitized. Unit-tested (no `server-only` marker on purpose — vitest can't load it).
+- Outbound: `previous_calls` dynamic variable + prompt section (refer back naturally, never recite, never invent). Inbound: folded into the existing `caller_history` variable, so NO ElevenLabs re-provision was needed.
+- **Verified in prod:** initiation POST for a contact called earlier today returned previous_calls with the real substance of that call ("Jerry mentioned he had just purchased a Foxwell NT802..."); prompt override carries the memory section. Smoke rows cleaned up.
+- Checks: tsc/eslint clean, vitest 112/112, Build & Lint green, Vercel deploy 5985081932 success.
