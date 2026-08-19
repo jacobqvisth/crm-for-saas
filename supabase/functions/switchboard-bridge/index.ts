@@ -114,14 +114,128 @@ Deno.serve(async (req) => {
   let aiReady = false;
   let declared = false;
   let closed = false;
+  let callId: string | null = null;
+  let transferPoll: number | null = null;
   // Caller audio that arrives before the AI socket is ready. Buffered rather than
   // dropped so the first thing the caller says is not lost.
   const pending: string[] = [];
+
+  // ---- Outbound audio pacing -------------------------------------------------
+  // The agent generates far faster than real time (one chunk can be ~2 seconds of
+  // speech). Forwarding chunks straight through pushes all of that into 46elks'
+  // playback buffer, and once it is there we cannot take it back: when the caller
+  // interrupts, they keep hearing the agent for seconds.
+  //
+  // So we hold the audio here and feed 46elks one 20 ms frame at a time. An
+  // interruption then just clears our queue, which is the difference between the
+  // agent stopping now and stopping two seconds from now.
+  // 100 ms per frame, not 20. The first attempt at this sent 20 ms frames every
+  // 20 ms and the line audibly suffered: 50 websocket messages a second, each
+  // with JSON and base64 overhead, on a timer that is not precise, is a recipe for
+  // jitter. 100 ms is ten messages a second and still bounds interruption lag to
+  // about a tenth of a second, which nobody hears as slow.
+  //
+  // Frame size must stay EVEN, or a frame boundary can land mid-sample and turn
+  // 16-bit audio into static.
+  const FRAME_BYTES = 3200; // 100 ms @ 16 kHz, 16-bit mono
+  const FRAME_MS = 100;
+  // A list of chunks with a read cursor, rather than one array that gets
+  // reallocated on every append. The old version copied the whole backlog per
+  // chunk, which is quadratic and stalls the very timer that has to stay regular.
+  let queue: Uint8Array[] = [];
+  let queueHead = 0; // read offset into queue[0]
+  let queuedBytes = 0;
+  let pacer: number | null = null;
+
+  const enqueueAgentAudio = (b64: string) => {
+    const raw = atob(b64);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    queue.push(bytes);
+    queuedBytes += bytes.length;
+  };
+
+  const dropQueuedAudio = (): number => {
+    const dropped = queuedBytes;
+    queue = [];
+    queueHead = 0;
+    queuedBytes = 0;
+    return dropped;
+  };
+
+  /** Pull up to `want` bytes off the queue, preserving sample alignment. */
+  const takeBytes = (want: number): Uint8Array | null => {
+    if (queuedBytes === 0) return null;
+    const take = Math.min(want, queuedBytes);
+    // Round down to a whole number of 16-bit samples.
+    const aligned = take - (take % 2);
+    if (aligned === 0) return null;
+
+    const out = new Uint8Array(aligned);
+    let written = 0;
+    while (written < aligned) {
+      const head = queue[0];
+      const available = head.length - queueHead;
+      const n = Math.min(available, aligned - written);
+      out.set(head.subarray(queueHead, queueHead + n), written);
+      written += n;
+      queueHead += n;
+      if (queueHead >= head.length) {
+        queue.shift();
+        queueHead = 0;
+      }
+    }
+    queuedBytes -= aligned;
+    return out;
+  };
+
+  const startPacer = () => {
+    if (pacer !== null) return;
+    pacer = setInterval(() => {
+      if (closed || elks.readyState !== WebSocket.OPEN) return;
+      const frame = takeBytes(FRAME_BYTES);
+      if (!frame) return;
+      let bin = "";
+      for (let i = 0; i < frame.length; i++) bin += String.fromCharCode(frame[i]);
+      elks.send(JSON.stringify({ t: "audio", data: btoa(bin) }));
+    }, FRAME_MS);
+  };
+
+  /**
+   * Hang up the agent leg ourselves once a transfer has been recorded.
+   *
+   * The agent is told to call end_call straight after transfer_call, and it does
+   * not reliably do so: on a real call it said "Jag kopplar dig..." and then kept
+   * talking for two minutes while the caller heard nothing useful, because the leg
+   * never ended and so 46elks never fired the chained `next`.
+   *
+   * The transfer must not depend on the model remembering a second tool call, so
+   * we watch the row the tool writes and close the leg ourselves.
+   */
+  const startTransferWatch = () => {
+    if (transferPoll !== null || !callId) return;
+    transferPoll = setInterval(async () => {
+      if (closed || !callId) return;
+      try {
+        const rows = await db(
+          `switchboard_calls?select=status&elks_call_id=eq.${encodeURIComponent(callId)}`,
+        );
+        if (rows?.[0]?.status === "forwarding") {
+          console.log("transfer recorded; ending the agent leg so `next` can fire");
+          shutdown("transfer requested");
+        }
+      } catch {
+        // Transient failure: try again on the next tick.
+      }
+    }, 1500);
+  };
 
   const shutdown = (why: string) => {
     if (closed) return;
     closed = true;
     console.log(`bridge closing: ${why}`);
+    if (pacer !== null) clearInterval(pacer);
+    if (transferPoll !== null) clearInterval(transferPoll);
     try {
       if (elks.readyState === WebSocket.OPEN) elks.send(JSON.stringify({ t: "bye" }));
     } catch { /* already gone */ }
@@ -145,6 +259,7 @@ Deno.serve(async (req) => {
 
     if (msg.t === "hello") {
       const hello = msg as Hello;
+      callId = hello.callid ?? null;
       console.log(`hello callid=${hello.callid} from=${hello.from} to=${hello.to}`);
 
       const apiKey = env("ELEVENLABS_API_KEY");
@@ -248,12 +363,16 @@ Deno.serve(async (req) => {
             for (const chunk of pending.splice(0)) {
               ai!.send(JSON.stringify({ user_audio_chunk: chunk }));
             }
+            // From here on, a recorded transfer must end this leg even if the
+            // agent forgets to call end_call.
+            startTransferWatch();
             break;
           }
           case "audio": {
             const b64 = m.audio_event?.audio_base_64 ?? m.audio?.chunk;
-            if (b64 && elks.readyState === WebSocket.OPEN) {
-              elks.send(JSON.stringify({ t: "audio", data: b64 }));
+            if (b64) {
+              enqueueAgentAudio(b64);
+              startPacer();
             }
             break;
           }
@@ -264,9 +383,12 @@ Deno.serve(async (req) => {
             break;
           }
           case "interruption": {
-            // The caller talked over the agent. 46elks has no "flush playback"
-            // message, so there is nothing to forward; logged for debugging.
-            console.log("interruption");
+            // The caller talked over the agent. Drop everything still queued so
+            // they stop hearing it now rather than seconds from now. This is the
+            // whole reason outbound audio is paced through us instead of pushed
+            // straight into 46elks' playback buffer, which cannot be recalled.
+            const dropped = dropQueuedAudio();
+            if (dropped) console.log(`interruption: dropped ${dropped} queued bytes`);
             break;
           }
           case "agent_response":

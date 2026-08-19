@@ -57,17 +57,41 @@ export const SWITCHBOARD_DEFAULTS = {
 };
 
 /**
- * "Henrik - Calm and composed" from the public shared library: a standard-accent
- * middle-aged Swedish male marked for conversational use. Chosen over the more
- * popular alternatives because the others are either narration voices or carry a
- * regional accent (Scanian / Gothenburg) that reads as local rather than
- * national on a company line.
+ * "Anders - Direct, Clear and Warm" from the public shared library: a
+ * standard-accent Swedish male marked for conversational use.
+ *
+ * Replaces the original pick ("Henrik - Calm and composed"), which was chosen
+ * from metadata alone before anyone had heard it. Anders has ~4,000 clones
+ * against Henrik's ~195, and on a shared library that is the best quality signal
+ * available without listening to every option. Standard accent is deliberate: the
+ * two most-cloned Swedish male voices are Scanian, which reads as regional rather
+ * than national on a company line.
  */
 export const DEFAULT_SWITCHBOARD_VOICE = {
-  sharedVoiceId: "SrEXuatZsaPiMUKtNYnc",
-  publicOwnerId: "64cbc624eb5aab4e95a968e1f41d75402277cca6e549036ed17e56ea33bbbc9e",
-  name: "Wrenchlane Reception (Henrik)",
+  sharedVoiceId: "DSL3PSQNPbkOavwmnYl1",
+  publicOwnerId: "5bef9583ed80e9300f3cb1fbdcad0e849f658837038f9625845d8aaa06c5c8ec",
+  name: "Wrenchlane Reception (Anders)",
 };
+
+/**
+ * Speech rate. Slightly above the provider's 1.0 default: a receptionist reading
+ * at storytelling pace feels sluggish on a phone call.
+ */
+export const SWITCHBOARD_SPEECH_SPEED = 1.1;
+
+/**
+ * Seconds of silence before the agent assumes the caller has finished speaking.
+ * The provider default is 7, which on a phone call reads as the agent being slow
+ * rather than thorough. Three is responsive without cutting people off mid-thought.
+ */
+export const SWITCHBOARD_TURN_TIMEOUT = 3;
+
+/**
+ * Low on purpose. The receptionist's job is to restate known facts about pricing
+ * and coverage, not to be interesting, and a workshop that is quoted a confidently
+ * invented number is a real problem rather than a charming one.
+ */
+export const SWITCHBOARD_TEMPERATURE = 0.1;
 
 /** Outcome labels for the calls table on the Phone System page. */
 export const SWITCHBOARD_OUTCOME_LABEL: Record<string, string> = {
@@ -114,6 +138,29 @@ export function isWithinOfficeHours(
 
   if (!settings.open_days.includes(iso)) return false;
   return hour >= settings.open_hour && hour < settings.close_hour;
+}
+
+/**
+ * Which language the receptionist should open in, based on where the caller is
+ * calling from.
+ *
+ * Swedish numbers get Swedish; everyone else gets English, which is the safer
+ * default for an unknown country (a Finn or a Dane is far likelier to have
+ * English than Swedish). The caller can still switch mid-call by asking, via the
+ * provider's language-detection tool.
+ *
+ * Falls back to the first enabled language if the preferred one is not enabled,
+ * so this can never return a language the agent has no greeting for.
+ */
+export function languageForCaller(
+  callerNumber: string | null | undefined,
+  languagesEnabled: string[],
+): string {
+  const enabled = languagesEnabled.length ? languagesEnabled : ["en"];
+  const digits = (callerNumber ?? "").replace(/[^\d+]/g, "");
+  const preferred = digits.startsWith("+46") ? "sv" : "en";
+  if (enabled.includes(preferred)) return preferred;
+  return enabled[0];
 }
 
 /**
