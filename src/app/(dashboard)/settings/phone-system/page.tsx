@@ -205,7 +205,38 @@ async function loadData() {
   let account: ElksAccount | null = null;
   try {
     const raw = await listElksNumbers();
-    numbers = buildNumberRows(raw, callerIdToAgents, defaultCallerId);
+    // Everything needed to say WHY we pay for each number. Without this the table
+    // classifies on inbound routing alone, which mislabels two important cases:
+    // the outbound agent's caller ID (inbound points at another product) and the
+    // per-person WebRTC numbers (no inbound routing at all, so they read as dead
+    // despite carrying hundreds of calls).
+    const agentNumbers = new Map<string, string>();
+    if (switchboard?.number) {
+      agentNumbers.set(switchboard.number, switchboard.persona_name);
+    }
+    const { data: callAgent } = workspaceId
+      ? await admin
+          .from("call_agent_settings")
+          .select("persona_name")
+          .eq("workspace_id", workspaceId)
+          .maybeSingle()
+      : { data: null };
+    if (defaultCallerId && callAgent?.persona_name) {
+      // The outbound agent is imported against the shared default caller ID.
+      agentNumbers.set(defaultCallerId, callAgent.persona_name);
+    }
+
+    const webrtcNumbers = new Map<string, string>();
+    for (const a of agents) {
+      if (a.webrtcNumber) webrtcNumbers.set(a.webrtcNumber, a.name);
+    }
+
+    numbers = buildNumberRows(raw, callerIdToAgents, defaultCallerId, {
+      switchboardNumber: switchboard?.number ?? null,
+      bridgeNumber: switchboard?.bridge_number ?? null,
+      agentNumbers,
+      webrtcNumbers,
+    });
     rawByNumber = new Map(
       raw.map((n) => [n.number, { expires: n.expires, cost: n.cost, name: n.name }]),
     );
@@ -246,13 +277,24 @@ export default async function PhoneSystemPage() {
     account,
   } = await loadData();
 
-  // Only the customer-facing mobile numbers are Wrenchlane numbers; the +4600…
-  // SIP/WebSocket entries are 46elks plumbing and stay out of the table.
-  const mobileNumbers = numbers.filter((n) => n.kind === "mobile");
-  const infraNumbers = numbers.filter((n) => n.kind !== "mobile");
+  // The table is about numbers Wrenchlane relies on. Another product's numbers
+  // happen to sit on the same 46elks account, and listing them here made it look
+  // as though this CRM had numbers it does not use, which is how a tidy-up ends up
+  // releasing the wrong thing. They are counted in the footnote instead.
+  //
+  // "Shared" stays in: those are numbers this CRM depends on whose inbound belongs
+  // elsewhere, and that overlap is exactly what someone needs to see before
+  // touching them.
+  const ourNumbers = numbers.filter((n) => n.ownership !== "other_product");
+  const otherProductNumbers = numbers.filter((n) => n.ownership === "other_product");
+
+  const mobileNumbers = ourNumbers.filter((n) => n.kind === "mobile");
+  const infraNumbers = ourNumbers.filter((n) => n.kind !== "mobile");
   const mobileCount = mobileNumbers.length;
+  // Genuinely idle: no role at all, so nothing breaks by letting it go.
+  const releasable = ourNumbers.filter((n) => n.ownership === "unknown");
   const spareMobiles = mobileNumbers.filter(
-    (n) => n.assignedTo.length === 0 && !n.isDefaultCallerId,
+    (n) => n.assignedTo.length === 0 && !n.isDefaultCallerId && n.ownership === "unknown",
   );
   const monthlyNumberCost = numbers.reduce(
     (sum, n) => sum + (rawByNumber.get(n.number)?.cost ?? 0),
@@ -635,8 +677,8 @@ export default async function PhoneSystemPage() {
               <thead>
                 <tr className="bg-slate-50 text-left text-xs text-slate-500">
                   <th className="px-3 py-2 font-medium">Number</th>
+                  <th className="px-3 py-2 font-medium">Why we have it</th>
                   <th className="px-3 py-2 font-medium">An incoming call goes to</th>
-                  <th className="px-3 py-2 font-medium">Used as caller ID by</th>
                   <th className="px-3 py-2 font-medium">Renews</th>
                 </tr>
               </thead>
@@ -666,13 +708,29 @@ export default async function PhoneSystemPage() {
                           </span>
                         )}
                       </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-600 max-w-xs">
+                        {n.ownership === "unknown" ? (
+                          <span className="text-amber-700">
+                            Nothing uses it. {n.purpose}
+                          </span>
+                        ) : (
+                          <span>{n.purpose}</span>
+                        )}
+                        {n.keepReason && (
+                          <span className="block mt-0.5 text-[11px] text-rose-700">
+                            Do not release: {n.keepReason}
+                          </span>
+                        )}
+                        {n.ownership === "shared" && (
+                          <span className="block mt-0.5 text-[11px] text-sky-700">
+                            Shared with Result-Insurance, which handles its inbound calls.
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">
                         <span className={`inline-block text-[11px] border rounded px-1.5 py-0.5 ${inboundCls(n.inbound.type)}`}>
                           {inboundText}
                         </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500">
-                        {n.assignedTo.length ? n.assignedTo.join(", ") : <span className="text-slate-300">— spare —</span>}
                       </td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         {days === null ? (
@@ -704,6 +762,14 @@ export default async function PhoneSystemPage() {
                   ? `${money(infraMonthlyCost, account?.currency ?? "SEK")} / month`
                   : "no monthly cost"}
                 ), hidden here because a customer dialling one just hears a wrong-number tone.
+              </>
+            )}
+            {otherProductNumbers.length > 0 && (
+              <>
+                {" "}
+                A further {otherProductNumbers.length} mobile numbers on the same 46elks account
+                belong to other products (Result-Insurance and the demo app) and are not listed
+                here, because nothing in this CRM routes to them.
               </>
             )}
             {spareMobiles.length > 0 && (
