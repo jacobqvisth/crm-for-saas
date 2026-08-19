@@ -66,7 +66,10 @@ async function handle(request: NextRequest) {
               agentId: agentIds.default,
               startAfterUnix: startedUnix,
             });
-            // Oldest finished conversation not yet linked to a session.
+            // Oldest finished conversation not yet linked to a session. The
+            // provider agent is shared with the inbound switchboard, so a
+            // candidate may be an inbound call — those live in
+            // switchboard_calls and must never be claimed for an outbound job.
             for (const c of candidates.reverse()) {
               if (c.status !== "done" && c.status !== "failed") continue;
               const { data: taken } = await service
@@ -74,10 +77,15 @@ async function handle(request: NextRequest) {
                 .select("id")
                 .eq("provider_conversation_id", c.conversation_id)
                 .maybeSingle();
-              if (!taken) {
-                conversationId = c.conversation_id;
-                break;
-              }
+              if (taken) continue;
+              const { data: switchboardCall } = await service
+                .from("switchboard_calls")
+                .select("id")
+                .eq("provider_conversation_id", c.conversation_id)
+                .maybeSingle();
+              if (switchboardCall) continue;
+              conversationId = c.conversation_id;
+              break;
             }
           }
           if (conversationId) {

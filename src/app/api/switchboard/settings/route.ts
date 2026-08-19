@@ -45,6 +45,9 @@ const Body = z.object({
   voicemail_enabled: z.boolean().optional(),
   max_call_seconds: z.number().int().min(60).max(1800).optional(),
   api_key: z.string().min(10).optional(),
+  // The phone knowledge override. Null/empty reverts to the built-in seed.
+  // Takes effect at the provider on the next provision run.
+  knowledge_md: z.string().max(30000).nullish(),
 });
 
 export async function PUT(request: NextRequest) {
@@ -64,6 +67,12 @@ export async function PUT(request: NextRequest) {
   await loadSwitchboardRow(supabase, gate.workspaceId); // ensure the row exists
 
   const update: Record<string, unknown> = { ...rest };
+
+  // Whitespace-only knowledge is "no override": store NULL so the built-in
+  // seed wins again (provision.ts falls back on empty).
+  if (rest.knowledge_md !== undefined) {
+    update.knowledge_md = rest.knowledge_md?.trim() ? rest.knowledge_md : null;
+  }
 
   if (number !== undefined) {
     if (number === null || number === "") {

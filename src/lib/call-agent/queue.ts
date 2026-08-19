@@ -107,11 +107,22 @@ export async function dialJob(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const secret = await ensureWebhookSecret(service, settings);
 
+  // The 46elks websocket bridge is the audio path that actually works (the
+  // direct SIP connect carries no RTP). The bridge recognises this call as
+  // outbound by looking up call_sessions.provider_call_id, which is why the
+  // session row above is inserted before dialling.
+  const { data: bridgeRow } = await service
+    .from("switchboard_settings")
+    .select("bridge_number")
+    .eq("workspace_id", settings.workspace_id)
+    .maybeSingle();
+
   try {
     const { callId } = await placeAgentCall({
       from: callerId,
       contactPhone: phone,
       hangupWebhookUrl: `${appUrl}/api/call-agent/hangup?token=${secret}&session=${session.id}`,
+      bridgeNumber: bridgeRow?.bridge_number ?? null,
     });
     await service
       .from("call_sessions")

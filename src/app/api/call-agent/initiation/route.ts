@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Tables } from "@/lib/database.types";
 import { buildCallBrief } from "@/lib/call-agent/brief";
-import { buildLocalizedFirstMessage } from "@/lib/call-agent/prompt";
+import { buildAgentPrompt, buildLocalizedFirstMessage } from "@/lib/call-agent/prompt";
 import { DYNAMIC_VARIABLE_DEFAULTS } from "@/lib/call-agent/prompt";
 import { buildSwitchboardVariables, matchCaller } from "@/lib/switchboard/brief";
 import { buildGreeting, SWITCHBOARD_VARIABLE_DEFAULTS } from "@/lib/switchboard/prompt";
@@ -19,12 +20,44 @@ export const dynamic = "force-dynamic";
  *   • the inbound switchboard (Mark) — answered with who is calling, who is
  *     reachable right now, and whether the office is open
  *
- * Dispatch is on `agent_id` from the request body rather than on the secret,
- * since the single registered URL carries a single token.
+ * Dispatch: an explicit `session_id` (sent by the websocket bridge for calls
+ * the dial queue placed) wins outright — one provider agent now serves both
+ * directions, so the agent id alone cannot tell inbound from outbound. Without
+ * a session_id, a matching switchboard agent id means inbound, and anything
+ * else falls through to the legacy outbound time-window guess.
  *
  * PUBLIC route: authenticated by the shared secret (?token=, or the
  * x-callagent-token header configured at provisioning).
  */
+
+/**
+ * The outbound answer: brief variables plus a per-call persona. The prompt
+ * override is what turns the shared agent into the outbound caller for this
+ * one conversation — the receptionist prompt stays untouched on the agent,
+ * and the attached knowledge document applies to both modes.
+ */
+function outboundResponse(
+  settings: Tables<"call_agent_settings">,
+  brief: { variables: Record<string, string>; language: string },
+) {
+  return NextResponse.json({
+    type: "conversation_initiation_client_data",
+    dynamic_variables: brief.variables,
+    conversation_config_override: {
+      agent: {
+        language: brief.language,
+        first_message: buildLocalizedFirstMessage(settings.persona_name, brief.language),
+        prompt: {
+          prompt: buildAgentPrompt({
+            personaName: settings.persona_name,
+            knowledgeMd: "See the attached knowledge document.",
+            greetingNote: settings.greeting_note,
+          }),
+        },
+      },
+    },
+  });
+}
 export async function POST(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
   const headerToken = request.headers.get("x-callagent-token");
@@ -37,6 +70,8 @@ export async function POST(request: NextRequest) {
     agent_id?: string;
     caller_id?: string;
     called_number?: string;
+    session_id?: string;
+    direction?: string;
   };
 
   // The secret identifies the workspace. Accept either agent's secret so the
@@ -55,6 +90,55 @@ export async function POST(request: NextRequest) {
 
   const workspaceId = settings?.workspace_id ?? switchboard?.workspace_id;
   if (!workspaceId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // ---- Outbound, exact (bridge-supplied session id) -----------------------
+  // The websocket bridge recognises a dial-queue call by its pre-written
+  // call_sessions row and passes the session id here, so the brief is keyed to
+  // the right contact even if several calls overlap.
+  if (body.session_id) {
+    const { data: session } = await service
+      .from("call_sessions")
+      .select("id, workspace_id, contact_id, agent_job_id")
+      .eq("id", body.session_id)
+      .eq("initiated_by", "agent")
+      .maybeSingle();
+
+    if (session && session.workspace_id === workspaceId && session.contact_id) {
+      const wsSettings =
+        settings && settings.workspace_id === workspaceId
+          ? settings
+          : (
+              await service
+                .from("call_agent_settings")
+                .select("*")
+                .eq("workspace_id", workspaceId)
+                .maybeSingle()
+            ).data;
+
+      if (wsSettings) {
+        const { data: job } = session.agent_job_id
+          ? await service
+              .from("call_agent_jobs")
+              .select("objective")
+              .eq("id", session.agent_job_id)
+              .maybeSingle()
+          : { data: null };
+
+        const brief = await buildCallBrief(service, session.contact_id, {
+          languagesEnabled: wsSettings.languages_enabled,
+          objective: job?.objective ?? null,
+        });
+        if (!("error" in brief)) return outboundResponse(wsSettings, brief);
+      }
+    }
+
+    // A session id we cannot serve: answer with bare defaults rather than the
+    // receptionist brief — this call is definitely not an inbound caller.
+    return NextResponse.json({
+      type: "conversation_initiation_client_data",
+      dynamic_variables: { ...DYNAMIC_VARIABLE_DEFAULTS },
+    });
+  }
 
   // ---- Switchboard (inbound) --------------------------------------------
   // Resolve the switchboard for this workspace even when we authenticated with
@@ -134,14 +218,5 @@ export async function POST(request: NextRequest) {
   });
   if ("error" in brief) return NextResponse.json(defaults);
 
-  return NextResponse.json({
-    type: "conversation_initiation_client_data",
-    dynamic_variables: brief.variables,
-    conversation_config_override: {
-      agent: {
-        language: brief.language,
-        first_message: buildLocalizedFirstMessage(settings.persona_name, brief.language),
-      },
-    },
-  });
+  return outboundResponse(settings, brief);
 }

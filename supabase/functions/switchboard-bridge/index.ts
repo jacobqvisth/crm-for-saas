@@ -77,6 +77,7 @@ async function fetchBrief(
   agentId: string,
   callerId: string | null,
   calledNumber: string | null,
+  outboundSessionId: string | null,
 ): Promise<{ dynamic_variables?: Record<string, string>; conversation_config_override?: any }> {
   const appUrl = env("APP_URL")?.replace(/\/$/, "");
   const token = env("CALL_AGENT_WEBHOOK_TOKEN");
@@ -89,6 +90,11 @@ async function fetchBrief(
         agent_id: agentId,
         caller_id: callerId,
         called_number: calledNumber,
+        // Exact correlation for outbound calls: the dial queue writes the 46elks
+        // call id onto the session before the call can possibly reach us, so the
+        // brief is keyed to the right contact instead of a time-window guess.
+        session_id: outboundSessionId,
+        direction: outboundSessionId ? "outbound" : "inbound",
       }),
     });
     if (!r.ok) return {};
@@ -115,6 +121,9 @@ Deno.serve(async (req) => {
   let declared = false;
   let closed = false;
   let callId: string | null = null;
+  // Set when this call is an OUTBOUND agent call placed by the dial queue
+  // (recognised by its pre-written call_sessions row). Null = inbound caller.
+  let outboundSession: { id: string; workspaceId: string } | null = null;
   let transferPoll: number | null = null;
   // Caller audio that arrives before the AI socket is ready. Buffered rather than
   // dropped so the first thing the caller says is not lost.
@@ -314,50 +323,94 @@ Deno.serve(async (req) => {
       const apiKey = env("ELEVENLABS_API_KEY");
       if (!apiKey) return shutdown("no ELEVENLABS_API_KEY");
 
-      // Which agent answers this number.
-      let agentId: string | null = null;
+      // Direction first. An OUTBOUND agent call reaches this bridge too (the
+      // dial queue connects the answered contact here, since this is the only
+      // path with working audio), and it must not be mistaken for an inbound
+      // caller: hello.to is the bridge number in both cases. The queue writes
+      // the 46elks call id onto call_sessions before dialling, so one exact
+      // lookup tells the directions apart.
       try {
-        const rows = await db(
-          `switchboard_settings?select=provider_agent_id,enabled&bridge_number=eq.${encodeURIComponent(
-            hello.to ?? "",
-          )}`,
-        );
+        const rows = callId
+          ? await db(
+              `call_sessions?select=id,workspace_id&provider_call_id=eq.${encodeURIComponent(
+                callId,
+              )}&initiated_by=eq.agent&order=started_at.desc&limit=1`,
+            )
+          : [];
         const row = rows?.[0];
-        if (!row?.enabled) return shutdown("switchboard disabled or number unknown");
-        agentId = row.provider_agent_id;
+        if (row) {
+          outboundSession = { id: row.id, workspaceId: row.workspace_id };
+        }
       } catch (err) {
-        return shutdown(`settings lookup failed: ${err}`);
+        // Fall through as inbound; the worst case is the legacy greeting.
+        console.error("outbound session lookup failed", err);
+      }
+
+      // Which agent takes the call.
+      let agentId: string | null = null;
+      if (outboundSession) {
+        try {
+          const rows = await db(
+            `call_agent_settings?select=provider_agent_ids&workspace_id=eq.${encodeURIComponent(
+              outboundSession.workspaceId,
+            )}`,
+          );
+          agentId = rows?.[0]?.provider_agent_ids?.default ?? null;
+        } catch (err) {
+          return shutdown(`call agent settings lookup failed: ${err}`);
+        }
+      } else {
+        try {
+          const rows = await db(
+            `switchboard_settings?select=provider_agent_id,enabled&bridge_number=eq.${encodeURIComponent(
+              hello.to ?? "",
+            )}`,
+          );
+          const row = rows?.[0];
+          if (!row?.enabled) return shutdown("switchboard disabled or number unknown");
+          agentId = row.provider_agent_id;
+        } catch (err) {
+          return shutdown(`settings lookup failed: ${err}`);
+        }
       }
       if (!agentId) return shutdown("no agent provisioned");
 
-      // Record the call so the transfer tool and the `next` handler can find it.
-      // Mirrors what /api/switchboard/inbound does on the SIP path.
-      try {
-        await db("switchboard_calls?on_conflict=elks_call_id", {
-          method: "POST",
-          headers: { Prefer: "resolution=merge-duplicates" },
-          body: JSON.stringify({
-            workspace_id: (
-              await db(
-                `switchboard_settings?select=workspace_id&bridge_number=eq.${encodeURIComponent(
-                  hello.to ?? "",
-                )}`,
-              )
-            )?.[0]?.workspace_id,
-            elks_call_id: hello.callid,
-            caller_number: hello.from ?? null,
-            dialed_number: hello.to ?? null,
-            status: "with_agent",
-            answered_at: new Date().toISOString(),
-          }),
-        });
-      } catch (err) {
-        // Non-fatal: losing the row costs us reporting and the transfer lookup,
-        // but the caller should still get to talk to someone.
-        console.error("switchboard_calls upsert failed", err);
+      // Record the inbound call so the transfer tool and the `next` handler can
+      // find it. Mirrors what /api/switchboard/inbound does on the SIP path.
+      // An outbound call already has its call_sessions row and never transfers.
+      if (!outboundSession) {
+        try {
+          await db("switchboard_calls?on_conflict=elks_call_id", {
+            method: "POST",
+            headers: { Prefer: "resolution=merge-duplicates" },
+            body: JSON.stringify({
+              workspace_id: (
+                await db(
+                  `switchboard_settings?select=workspace_id&bridge_number=eq.${encodeURIComponent(
+                    hello.to ?? "",
+                  )}`,
+                )
+              )?.[0]?.workspace_id,
+              elks_call_id: hello.callid,
+              caller_number: hello.from ?? null,
+              dialed_number: hello.to ?? null,
+              status: "with_agent",
+              answered_at: new Date().toISOString(),
+            }),
+          });
+        } catch (err) {
+          // Non-fatal: losing the row costs us reporting and the transfer lookup,
+          // but the caller should still get to talk to someone.
+          console.error("switchboard_calls upsert failed", err);
+        }
       }
 
-      const brief = await fetchBrief(agentId, hello.from ?? null, hello.to ?? null);
+      const brief = await fetchBrief(
+        agentId,
+        hello.from ?? null,
+        hello.to ?? null,
+        outboundSession?.id ?? null,
+      );
 
       // Signed URL so a private agent can be reached without leaking the API key
       // into the socket URL.
@@ -408,7 +461,15 @@ Deno.serve(async (req) => {
               m.conversation_initiation_metadata_event?.conversation_id ??
               m.conversation_id ??
               null;
-            if (convoId && callId) {
+            if (convoId && outboundSession) {
+              // Outbound: tag the session immediately so the post-call webhook
+              // and the collector match on the exact conversation id instead of
+              // falling back to "most recent live session".
+              db(`call_sessions?id=eq.${encodeURIComponent(outboundSession.id)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ provider_conversation_id: convoId }),
+              }).catch((err) => console.error("could not record conversation id", err));
+            } else if (convoId && callId) {
               db(
                 `switchboard_calls?elks_call_id=eq.${encodeURIComponent(callId)}`,
                 {
@@ -416,6 +477,18 @@ Deno.serve(async (req) => {
                   body: JSON.stringify({ provider_conversation_id: convoId }),
                 },
               ).catch((err) => console.error("could not record conversation id", err));
+              // Tag the switchboard's call_sessions row too (same 46elks call
+              // id), so nothing that matches on provider_conversation_id can
+              // ever mistake this inbound conversation for an outbound one.
+              db(
+                `call_sessions?provider_call_id=eq.${encodeURIComponent(
+                  callId,
+                )}&initiated_by=eq.switchboard`,
+                {
+                  method: "PATCH",
+                  body: JSON.stringify({ provider_conversation_id: convoId }),
+                },
+              ).catch((err) => console.error("could not tag call session", err));
             }
             // THE ordering that matters: declare formats only now. 46elks support
             // identified doing this too early as the cause of silent calls.
@@ -430,8 +503,9 @@ Deno.serve(async (req) => {
               ai!.send(JSON.stringify({ user_audio_chunk: chunk }));
             }
             // From here on, a recorded transfer must end this leg even if the
-            // agent forgets to call end_call.
-            startTransferWatch();
+            // agent forgets to call end_call. Outbound calls have no transfer
+            // path (and no switchboard_calls row to watch).
+            if (!outboundSession) startTransferWatch();
             break;
           }
           case "audio": {
