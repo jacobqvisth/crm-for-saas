@@ -13,6 +13,20 @@ updated: 2026-05-26
 
 ---
 
+## Tabbed Exclusion Lists settings page — 2026-08-19 — PR #692 (after a botched empty #691) — feature/exclusion-lists-tabs
+
+Jacob (with screenshots, same session as #686): add tabs to the partner page and host all the exclusion-type lists there — the Never-call list too, and (mid-turn) the Internal testers list — "so it is easy to edit all these lists in one place". Call it Exclusion List.
+
+- `/settings/exclusions` — tabbed **Exclusion Lists** page, deep-linkable via `?tab=`:
+  - **Partner companies** — the #686 manager moved here; `/settings/partners` now redirects to it.
+  - **Never-call list** — full editor for the managed `call_exclusions` rows (domain / email / company), reusing the same `/api/calls/exclusions` endpoints as the Call Planner's inline editor. Type a domain or an email, or search a company by name, then Exclude; remove per row.
+  - **Internal testers** — the dashboard internal-test sets editable in place: Users (internal + per-user Exempt flags), Workshops, and email/username Patterns (add/remove). Backed by new `/api/settings/internal-testers`, which wraps the existing `/dashboard/settings` server actions + loaders. **Gated on CEO_ALLOWED_EMAILS** — necessary because `/settings/*` is reachable by ANY authed Google user via workspace auto-onboarding, while the original editor was protected by the `/dashboard/*` middleware. Links out to the full editor for notes/flag-by-id.
+- Settings hub card renamed **Exclusion Lists** (ShieldOff icon).
+- **Process slip worth remembering:** after merging #686 the session switched to `chore/log-pr686` for the log entry and never switched back, so the feature commit landed on the log branch while the stale `worktree-partner-exclusions` got pushed — PR **#691** squashed to an EMPTY commit on main (53b34e2, misleading #686-titled message; Vercel skipped it via ignoreCommand). Recovered by cherry-picking the real commit onto main as PR #692. Lesson: `git branch --show-current` before every commit/push in multi-PR sessions.
+- Checks: tsc clean, eslint clean, local build green; deploy of 30f81d7 verified via GitHub deployment status.
+
+---
+
 ## Partner-company exclusions + /settings/partners — 2026-08-19 — PR #686 — worktree-partner-exclusions
 
 Jacob: make it easy to exclude the companies we already work with / have partnerships with (KGK, minbil, Bilia, KVD, MEKO.com, AutoCom, WOW-group) from call lists and outreach, keep them in the CRM, and give us a settings surface to manage the set with an easy include/exclude option.
