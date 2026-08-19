@@ -1,7 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
-import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
 import {
   addSharedVoice,
   assignPhoneNumberAgent,
@@ -20,6 +19,7 @@ import {
 } from "@/lib/call-agent/elevenlabs";
 import { listElksNumbers, setElksNumberVoiceStart } from "@/lib/calls/elks";
 import { normalizePhone } from "@/lib/calls/phone";
+import { SWITCHBOARD_KNOWLEDGE } from "./knowledge";
 import { buildGreeting, buildSwitchboardPrompt, SWITCHBOARD_VARIABLE_DEFAULTS } from "./prompt";
 import {
   ensureWebhookSecret,
@@ -118,8 +118,8 @@ function toolDefinitions(appUrl: string, secret: string): WebhookToolInput[] {
 
 /**
  * Idempotently provision the switchboard:
- *   1. knowledge-base doc from workspace_ai_knowledge (so the receptionist can
- *      answer product questions itself)
+ *   1. knowledge-base doc, from the workspace override or the phone seed (so the
+ *      receptionist can answer product questions itself)
  *   2. a Swedish male voice copied out of the shared library, once
  *   3. the transfer_call + take_message webhook tools
  *   4. the receptionist agent (created once, updated on every re-provision)
@@ -152,13 +152,13 @@ export async function provisionSwitchboard(
   const updates: Record<string, Json | string | null> = {};
 
   // 1) Knowledge base -------------------------------------------------------
-  // The receptionist's own document when there is one, else the shared workspace
-  // knowledge. The shared copy is written for email (URL tables, subject-line
-  // rules) so it is a poor fit for speech, but it beats no grounding at all.
+  // A workspace override if it has one, else the reviewed phone seed. The shared
+  // workspace_ai_knowledge is deliberately NOT used: it is written for email and
+  // full of URL tables and subject-line rules, which are useless spoken aloud and
+  // would eat prompt budget on every turn.
   let kbDocId = row.provider_kb_doc_id;
   try {
-    const own = row.knowledge_md?.trim();
-    const contentMd = own || (await loadWrenchlaneKnowledge(supabase, row.workspace_id)).contentMd;
+    const contentMd = row.knowledge_md?.trim() || SWITCHBOARD_KNOWLEDGE;
     const newDocId = await createKnowledgeDoc(
       apiKey,
       `Wrenchlane reception knowledge ${new Date().toISOString().slice(0, 10)}`,

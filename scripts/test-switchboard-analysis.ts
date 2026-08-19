@@ -8,7 +8,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { getConversation } from "@/lib/call-agent/elevenlabs";
-import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
+import { SWITCHBOARD_KNOWLEDGE } from "@/lib/switchboard/knowledge";
 import { analyzeSwitchboardCall, transcriptToText } from "@/lib/switchboard/analyze";
 
 const WORKSPACE = "d946ea1f-74b4-492e-ae6a-d50f59ff04f0";
@@ -37,9 +37,7 @@ async function main() {
   const text = transcriptToText(convo.transcript);
   console.log(`transcript turns: ${convo.transcript?.length ?? 0}, ${text.length} chars\n`);
 
-  const knowledgeMd =
-    settings?.knowledge_md?.trim() ||
-    (await loadWrenchlaneKnowledge(supabase, WORKSPACE)).contentMd;
+  const knowledgeMd = settings?.knowledge_md?.trim() || SWITCHBOARD_KNOWLEDGE;
   console.log(`knowledge: ${knowledgeMd.length} chars\n`);
 
   const result = await analyzeSwitchboardCall({ transcript: text, knowledgeMd });

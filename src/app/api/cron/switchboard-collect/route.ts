@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getConversation } from "@/lib/call-agent/elevenlabs";
-import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
+import { SWITCHBOARD_KNOWLEDGE } from "@/lib/switchboard/knowledge";
 import { analyzeSwitchboardCall, transcriptToText } from "@/lib/switchboard/analyze";
 import { switchboardApiKey } from "@/lib/switchboard/settings";
 import type { Json } from "@/lib/database.types";
@@ -82,9 +82,9 @@ async function handle(request: NextRequest) {
 
       let knowledgeMd = knowledgeByWorkspace.get(call.workspace_id);
       if (knowledgeMd === undefined) {
-        knowledgeMd =
-          settings.knowledge_md?.trim() ||
-          (await loadWrenchlaneKnowledge(service, call.workspace_id)).contentMd;
+        // Same resolution as provisioning, so the analysis judges the agent
+        // against exactly the document it was given.
+        knowledgeMd = settings.knowledge_md?.trim() || SWITCHBOARD_KNOWLEDGE;
         knowledgeByWorkspace.set(call.workspace_id, knowledgeMd);
       }
 
