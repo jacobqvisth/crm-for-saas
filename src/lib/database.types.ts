@@ -5707,6 +5707,8 @@ export type Database = {
           answered_at: string | null
           call_session_id: string | null
           caller_name: string | null
+          collected_at: string | null
+          unanswered: string[] | null
           caller_number: string | null
           company_id: string | null
           contact_id: string | null
@@ -5734,6 +5736,8 @@ export type Database = {
           answered_at?: string | null
           call_session_id?: string | null
           caller_name?: string | null
+          collected_at?: string | null
+          unanswered?: string[] | null
           caller_number?: string | null
           company_id?: string | null
           contact_id?: string | null
@@ -5761,6 +5765,8 @@ export type Database = {
           answered_at?: string | null
           call_session_id?: string | null
           caller_name?: string | null
+          collected_at?: string | null
+          unanswered?: string[] | null
           caller_number?: string | null
           company_id?: string | null
           contact_id?: string | null

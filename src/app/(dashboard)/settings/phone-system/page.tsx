@@ -14,6 +14,7 @@ import {
   CalendarClock,
   Users,
   MessageSquare,
+  HelpCircle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -155,6 +156,7 @@ async function loadData() {
   let switchboard: Tables<"switchboard_settings"> | null = null;
   let targets: SwitchboardTarget[] = [];
   let recentCalls: Array<Tables<"switchboard_calls">> = [];
+  let knowledgeGaps: Array<{ question: string; count: number }> = [];
   if (workspaceId) {
     const { data } = await admin
       .from("switchboard_settings")
@@ -170,6 +172,31 @@ async function loadData() {
       .order("created_at", { ascending: false })
       .limit(10);
     recentCalls = calls ?? [];
+
+    // The knowledge backlog: what the receptionist could not answer, pulled from
+    // the last 200 calls rather than only the handful shown in the table, and
+    // counted so the questions people actually keep asking rise to the top.
+    const { data: gapRows } = await admin
+      .from("switchboard_calls")
+      .select("unanswered, created_at")
+      .eq("workspace_id", workspaceId)
+      .not("unanswered", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    const counts = new Map<string, { question: string; count: number }>();
+    for (const row of gapRows ?? []) {
+      for (const q of row.unanswered ?? []) {
+        const key = q.trim().toLowerCase();
+        if (!key) continue;
+        const existing = counts.get(key);
+        if (existing) existing.count += 1;
+        else counts.set(key, { question: q.trim(), count: 1 });
+      }
+    }
+    knowledgeGaps = [...counts.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
   }
 
   let numbers: PhoneNumberRow[] = [];
@@ -200,6 +227,7 @@ async function loadData() {
     switchboard,
     targets,
     recentCalls,
+    knowledgeGaps,
     account,
   };
 }
@@ -214,6 +242,7 @@ export default async function PhoneSystemPage() {
     switchboard,
     targets,
     recentCalls,
+    knowledgeGaps,
     account,
   } = await loadData();
 
@@ -498,6 +527,40 @@ export default async function PhoneSystemPage() {
                 rung right now.
               </p>
             </div>
+
+            {knowledgeGaps.length > 0 && (
+              <div className="bg-white border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
+                  <p className="text-xs font-medium text-slate-700">
+                    What {switchboard.persona_name} couldn&apos;t answer
+                  </p>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                  Taken from real calls, newest first. Each of these is a gap in the{" "}
+                  <Link href="/settings/ai-knowledge" className="text-teal-600 underline">
+                    knowledge
+                  </Link>{" "}
+                  he answers from. Answering one here means he answers it himself next time
+                  instead of passing the call on.
+                </p>
+                <ul className="space-y-1">
+                  {knowledgeGaps.map((gap, i) => (
+                    <li key={`${gap.question}-${i}`} className="text-xs text-slate-700 flex gap-2">
+                      <span className="text-amber-500 shrink-0">•</span>
+                      <span>
+                        {gap.question}
+                        {gap.count > 1 && (
+                          <span className="ml-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">
+                            asked {gap.count}×
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {recentCalls.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-lg p-4">
