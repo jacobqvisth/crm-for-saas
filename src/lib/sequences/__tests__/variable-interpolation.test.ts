@@ -163,6 +163,7 @@ const company: Company = {
   marketing_opt_out: false,
   nix_blocked: false,
   is_sole_proprietor: false,
+  is_partner: false,
   employee_size_band: null,
   county: null,
   primary_owner_id: null,

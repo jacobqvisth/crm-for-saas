@@ -23,6 +23,12 @@ export type CompanyFilters = {
    * undefined → no filter.
    */
   has_account?: 'yes' | 'no';
+  /**
+   * `'yes'` → only partner companies (is_partner).
+   * `'no'`  → hide partner companies.
+   * undefined → no filter.
+   */
+  partner?: 'yes' | 'no';
   /** Match companies whose `tags` array overlaps any of these (OR semantics). */
   tags?: string | string[];
   has_phone?: boolean;
@@ -79,6 +85,9 @@ export async function resolveCompanyIdsByFilters(
 
   if (filters.has_account === 'yes') query = query.not('wl_workshop_id', 'is', null);
   else if (filters.has_account === 'no') query = query.is('wl_workshop_id', null);
+
+  if (filters.partner === 'yes') query = query.eq('is_partner', true);
+  else if (filters.partner === 'no') query = query.eq('is_partner', false);
 
   const tags = toArray(filters.tags);
   if (tags.length > 0) query = query.overlaps('tags', tags);
