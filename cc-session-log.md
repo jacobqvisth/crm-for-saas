@@ -7000,3 +7000,14 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - **Prod data set**: Valdemar's callbacks now ring Valdemar (mobile +46702625717 and browser in parallel, 25s) → Hans (+46709105182, 25s) → Mark the AI receptionist (+46766867161, 30s) → voicemail. The Hans hop worked immediately on old code; the Mark hop activates with this deploy.
 - **Security H3 closed**: `/api/calls/webhook/{inbound,hangup}` now fail CLOSED (503 when `CALL_WEBHOOK_SECRET` is unset). Discovered while verifying: the memory/finding claim that the secret was missing in Vercel prod was STALE — it has been set since ~June (tokenless probe → 403), and a 46elks audit showed every CRM-pointing `voice_start` already tokened (+46766867073 Valdemar / +46766868274 Hans / +46766869603). The gotcha behind the stale claim: from a worktree, `vercel env ls` errors as unlinked until `npx vercel link --yes --project crm-for-saas`.
 - Residual from H3 (still open on the Hacker Rating page): `hangup` resolves `call_sessions` globally by `provider_call_id`.
+
+
+## Phone System page: only Wrenchlane numbers — 2026-08-19
+
+**PR #682** (`fix/phone-system-wrenchlane-numbers-only`, squash 9575fa9) — merged.
+
+- `/settings/phone-system` numbers table now lists only the customer-facing mobile (+467666…) numbers; the +4600… 46elks infrastructure entries (SIP / WebSocket endpoints) are hidden.
+- Section retitled "Wrenchlane numbers (N)"; the /month figure beside it covers just the shown numbers; the Type column is dropped (every remaining row is the same type).
+- Footnote states how many infra numbers exist and their monthly cost, so the account picture isn't lost.
+- Account health cards untouched: total number count + total monthly cost stay account-wide because the low-balance warning compares balance against ALL renewals.
+- tsc clean, lint clean (1 pre-existing warning in call-provider.tsx), local build green.
