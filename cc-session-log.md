@@ -7090,3 +7090,20 @@ Also added a `hasOwnRangeControl` flag to `DashboardShell`/`DashboardShellNav` t
 - Outbound: `previous_calls` dynamic variable + prompt section (refer back naturally, never recite, never invent). Inbound: folded into the existing `caller_history` variable, so NO ElevenLabs re-provision was needed.
 - **Verified in prod:** initiation POST for a contact called earlier today returned previous_calls with the real substance of that call ("Jerry mentioned he had just purchased a Foxwell NT802..."); prompt override carries the memory section. Smoke rows cleaned up.
 - Checks: tsc/eslint clean, vitest 112/112, Build & Lint green, Vercel deploy 5985081932 success.
+
+## Swedish å/ä/ö mangled in sent email subjects — 2026-08-21
+
+- **PR #702** (squash 2d109de), branch `worktree-fix-swedish-mime-encoding`. Reported as "some emails written in Swedish with åäö look weird when they reach contacts' Gmail inboxes".
+- **Diagnosed against real sent mail, not the queue.** `email_queue` rows are all clean UTF-8 (0 rows match `Ã|Â|â€`), so the corruption had to be happening at send time. Pulled the actual messages back out of Gmail with `messages.get?format=raw` using the sender's decrypted `access_token`:
+  - `Subject: Wrenchlane Demo - FinspÃÂ¥ng` (real customer send, 2026-08-18)
+  - `Subject: Test fÃÂ¶r hur ord med ÃÂ¥ som i ÃÂ¥ke ...` (Jacob's own test, 2026-08-20)
+- **Root cause:** `buildMimeMessage` wrote `Subject: ${params.subject}` as raw UTF-8. Mail headers are ASCII-only (RFC 5322), so Google's HTTPREST gateway reinterpreted the high bytes as latin-1 — twice. At byte level `ö` (`c3 b6`) shipped as `c3 83 c2 83 c3 82 c2 b6`. **Bodies were never affected**, because each MIME part declares `charset="UTF-8"` — which is exactly why this presented as "some emails" rather than all of them: only subjects containing å/ä/ö broke, and most sequence subjects are ASCII.
+- **Blast radius:** 15 already-sent emails carry a mangled subject (1 in June, 7 in July, 7 in August). 6 queued emails and 10 of 117 step variants have Swedish subjects and are now safe.
+- **Fix** — new `src/lib/gmail/mime-encode.ts`:
+  - `encodeHeaderValue` — RFC 2047 base64 encoded-words, chunked so a multi-byte UTF-8 sequence is never split across two words (walks back off continuation bytes), folded to respect the 75-char encoded-word cap. ASCII values pass through byte-identical, so English sends are unchanged.
+  - `encodeAddressHeader` — same treatment for the From display name (all current names are ASCII, but "Håkan Öberg" had the same bug latent), plus quoting for ASCII names containing RFC 5322 specials.
+  - `encodeBodyBase64` — **both MIME parts now declare `Content-Transfer-Encoding: base64`**. They were previously raw 8-bit UTF-8 under an implicit `7bit` default, on single unbroken lines of 1,400–1,700 chars (TipTap HTML + signature + tracking pixel) — past RFC 5322's 998-char ceiling. Verified in real sent mail: a 1,662-char body line. Any relay that folds or downgrades such a line can slice a multi-byte char in half; base64 caps every line at 76.
+- `buildMimeMessage` is now exported so the assembled message can be asserted directly. Note `src/lib/gmail/send.ts` is the **only** send path in the repo, so this covers sequences, one-off compose and inbox replies at once.
+- **Verified** on the real failing subject: header block 7-bit clean, subject round-trips exactly (`ö` back to `c3b6`), longest line 1662 → 81. Encoded form: `Subject: =?UTF-8?B?VGVzdCBmw7ZyIGh1ciBvcmQgbWVkIMOlIHNvbSBpIMOla2UsIMOkIHNvbSBp?=` + folded continuation.
+- Checks: eslint clean on all 4 files, vitest `src/lib/gmail` 53/53 (20 new — every Swedish letter, emoji/4-byte sequences, a 200-char run of `ö` to force chunk boundaries mid-sequence, the 75-char and 998-char limits, full base64url round-trip), Build & Lint green, Vercel prod deploy `dpl_8QEeh...` READY for 2d109de.
+- **Open:** one live test send to confirm the encoded subject renders in a real inbox. Sending is blocked by the tool classifier in background jobs, so this is Jacob's to run. RFC 2047 encoded-words are universally supported, so it's a formality.
