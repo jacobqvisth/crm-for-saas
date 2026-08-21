@@ -3,6 +3,11 @@ import { getGmailClient } from "./client";
 import { getValidAccessToken } from "./token-refresh";
 import { wrapLinks } from "@/lib/tracking/link-wrapper";
 import { injectTrackingPixel } from "@/lib/tracking/pixel";
+import {
+  encodeAddressHeader,
+  encodeBodyBase64,
+  encodeHeaderValue,
+} from "./mime-encode";
 
 interface SendEmailParams {
   accountId: string;
@@ -113,7 +118,8 @@ function appendSignature(htmlBody: string, signatureHtml: string): string {
   return `${htmlBody}${signatureHtml}`;
 }
 
-function buildMimeMessage(params: {
+/** Exported for tests — see `send-mime.test.ts`. */
+export function buildMimeMessage(params: {
   from: string;
   to: string;
   subject: string;
@@ -134,10 +140,13 @@ function buildMimeMessage(params: {
   // Generate text from the original (unwrapped) HTML to avoid tracking URLs in plaintext
   const textContent = params.textBody || params.htmlBody.replace(/<[^>]*>/g, "");
 
+  // Subject is RFC 2047 encoded whenever it leaves ASCII. Raw UTF-8 bytes in
+  // a header get re-read as latin-1 downstream, which is what turned every
+  // Swedish "för"/"öppen"/"Finspång" subject into "fÃÂ¶r" in the inbox.
   const headers = [
     `From: ${params.from}`,
     `To: ${params.to}`,
-    `Subject: ${params.subject}`,
+    `Subject: ${encodeHeaderValue(params.subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
@@ -162,16 +171,23 @@ function buildMimeMessage(params: {
     headers.push(`List-Unsubscribe-Post: List-Unsubscribe=One-Click`);
   }
 
+  // Both parts go out base64 with an explicit Content-Transfer-Encoding.
+  // Previously they were raw 8-bit UTF-8 under an implicit `7bit` default, on
+  // single lines of 1,400-1,700 characters — past RFC 5322's 998-character
+  // ceiling. Any relay folding or downgrading such a line can slice a
+  // multi-byte character in half. Base64 keeps every line under 76 chars.
   const body = [
     `--${boundary}`,
     `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
     ``,
-    textContent,
+    encodeBodyBase64(textContent),
     ``,
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
     ``,
-    finalHtml,
+    encodeBodyBase64(finalHtml),
     ``,
     `--${boundary}--`,
   ].join("\r\n");
@@ -229,9 +245,10 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
   const accessToken = tokenResult.accessToken;
 
-  const fromAddress = account.display_name
-    ? `${account.display_name} <${account.email_address}>`
-    : account.email_address;
+  // Same header rule as Subject: a display name like "Håkan Öberg" has to be
+  // an RFC 2047 encoded-word, and one containing specials has to be quoted.
+  // Plain ASCII names pass through unchanged.
+  const fromAddress = encodeAddressHeader(account.display_name, account.email_address);
 
   // Look up the sender's signature and append it to the body.
   // Honors the explicit includeSignature flag (default true) regardless of
