@@ -16,6 +16,9 @@ import {
   SUBSCRIPTION_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
   PAYMENT_STATUS_LABELS,
+  RECENCY_PRESET_DAYS,
+  RECENCY_PRESET_LABELS,
+  DATE_FIELDS,
 } from '@/lib/lists/filter-query';
 import { LANGUAGE_OPTIONS } from '@/lib/i18n/languages';
 
@@ -45,18 +48,26 @@ interface FilterRowProps {
 export function FilterRow({ filter, onChange, onRemove, companies, countries }: FilterRowProps) {
   const operators = OPERATORS_BY_FIELD[filter.field] || [];
 
+  // A day-count operator with no value is meaningless (and `0` would quietly
+  // match everything or nothing), so seed one month whenever we switch into
+  // one. Every other operator keeps starting empty.
+  const DEFAULT_DAYS = 30;
+  const isDayCount = (op: FilterOperator) =>
+    op === 'within_last_days' || op === 'older_than_days';
+
   const handleFieldChange = (field: FilterField) => {
     const newOps = OPERATORS_BY_FIELD[field];
-    const newFilter: ListFilter = {
-      field,
-      operator: newOps[0]?.value || 'equals',
-      value: '',
-    };
-    onChange(newFilter);
+    const operator = newOps[0]?.value || 'equals';
+    onChange({ field, operator, value: isDayCount(operator) ? DEFAULT_DAYS : '' });
   };
 
   const handleOperatorChange = (operator: FilterOperator) => {
-    onChange({ ...filter, operator });
+    const keepsValue = isDayCount(operator) === isDayCount(filter.operator);
+    onChange({
+      ...filter,
+      operator,
+      value: keepsValue ? filter.value : isDayCount(operator) ? DEFAULT_DAYS : '',
+    });
   };
 
   const needsNoValue = filter.operator === 'is_null' || filter.operator === 'is_not_null';
@@ -313,17 +324,40 @@ export function FilterRow({ filter, onChange, onRemove, companies, countries }: 
       );
     }
 
-    if (filter.field === 'created_at' || filter.field === 'last_contacted_at' || filter.field === 'last_emailed_at' || filter.field === 'signed_up_at' || filter.field === 'last_active_at') {
+    if (DATE_FIELDS.includes(filter.field)) {
       if (filter.operator === 'older_than_days' || filter.operator === 'within_last_days') {
+        // Presets cover the windows people actually ask for ("last week",
+        // "last month", "last quarter"); "Custom…" falls back to a raw day
+        // count so nothing that was expressible before is lost.
+        const days = Number(filter.value) || 0;
+        const isPreset = (RECENCY_PRESET_DAYS as readonly number[]).includes(days);
         return (
-          <input
-            type="number"
-            min={1}
-            placeholder="Number of days"
-            value={(filter.value as number) || ''}
-            onChange={(e) => onChange({ ...filter, value: parseInt(e.target.value) || 0 })}
-            className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+          <div className="flex flex-1 gap-2">
+            <select
+              value={isPreset ? String(days) : 'custom'}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange({ ...filter, value: v === 'custom' ? 0 : parseInt(v) });
+              }}
+              className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {RECENCY_PRESET_DAYS.map((d) => (
+                <option key={d} value={d}>{RECENCY_PRESET_LABELS[d]}</option>
+              ))}
+              <option value="custom">Custom…</option>
+            </select>
+            {!isPreset && (
+              <input
+                type="number"
+                min={1}
+                placeholder="Days"
+                autoFocus
+                value={days || ''}
+                onChange={(e) => onChange({ ...filter, value: parseInt(e.target.value) || 0 })}
+                className="w-28 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            )}
+          </div>
         );
       }
       return (
