@@ -171,3 +171,57 @@ describe("releaseSlug", () => {
     );
   });
 });
+
+// The 3.8 broadcast ("Your diagnosis, now easier to work through", sent
+// 2026-08-20) worded the two closing blocks differently from 3.7, and both
+// slipped past patterns written against 3.7 alone. Neither failure raised
+// anything: the article was created, staged, and looked complete, minus the
+// demo video. A second fixture makes the next rewording a red test rather than
+// something caught by eye afterwards.
+const RELEASE_EMAIL_38 = `
+<body>
+  ${IMG("01LOGO", "WrenchLane", 200)}
+  <h1 style="font-size:26px;">Your diagnosis, now easier to work through</h1>
+  <p style="margin:0 0 16px;font-size:16px;">WrenchLane 3.8 makes it easier to work through a diagnosis from start to finish.</p>
+  ${HEAD("Faster fault code lookups")}
+  ${BODY("Fault code descriptions now load faster when you enter a DTC.")}
+  ${IMG("01DTC", "The fault code lookup")}
+  ${HEAD("See WrenchLane 3.8 in action")}
+  ${BODY("Watch the short demo below.")}
+  <a href="${TRACKED_VIDEO}">${IMG("01POSTER", "Watch the WrenchLane 38 demo")}</a>
+  ${BODY("As always, many of these improvements come directly from YOUR feedback. Thanks for helping us make WrenchLane better for everyday workshop use.")}
+  <p style="font-size:16px;">Best regards,<br/>Team WrenchLane</p>
+  <img src="https://links.wrenchlane.com/e/o/tracking" alt=""/>
+</body>`;
+
+describe("release 3.8 wording", () => {
+  const parsed = parseReleaseEmail(RELEASE_EMAIL_38)!;
+
+  it("finds the video when the release number is spliced into the heading", () => {
+    const video = parsed.sections.find((s) => s.heading === "See WrenchLane 3.8 in action")!;
+    expect(video.videoId).toBe("X5mHLQFd-CE");
+    // The poster frame belongs to the embed, so it must not survive as an image.
+    expect(video.images).toHaveLength(0);
+  });
+
+  it("cuts a thank-you that thanks the reader for helping us make, not build", () => {
+    expect(JSON.stringify(parsed)).not.toContain("Thanks for helping us make");
+  });
+
+  it("cuts the feedback credit alongside it", () => {
+    expect(JSON.stringify(parsed)).not.toContain("from YOUR feedback");
+  });
+
+  it("reaches the body as an embed under an h4, with no leftover poster image", () => {
+    const hosted = new Map(
+      releaseImageUrls(parsed).map((u) => [
+        u,
+        `https://cdn.prod.website-files.com/x/${u.split("/").pop()}`,
+      ]),
+    );
+    const html = buildReleaseBodyHtml(parsed, hosted);
+    expect(html).toContain("<h4><strong>See WrenchLane 3.8 in action</strong></h4>");
+    expect(html).toContain('src="https://www.youtube.com/embed/X5mHLQFd-CE"');
+    expect(html).not.toContain("01POSTER.png");
+  });
+});

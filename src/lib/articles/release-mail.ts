@@ -49,13 +49,25 @@ const SALUTATION_PATTERNS = [/^(hi|hello|hey|hej)\b[\s,!.]*$/i, /^(hi|hello|hey|
  * Jacob asked specifically that the article not sound like a forwarded email.
  */
 const OUTRO_PATTERNS = [
-  /thank you for helping us build/i,
+  // Deliberately loose on the verb: releases have thanked readers for helping
+  // "build" and for helping "make WrenchLane better", and chasing a new verb
+  // one release at a time is how the last one slipped through.
+  /thanks?\s+(you\s+)?for helping us/i,
   /shaped by your feedback/i,
+  /from your feedback/i,
   /reply to this email/i,
 ];
 
-/** A heading whose section is the demo video rather than a screenshot. */
-const VIDEO_HEADING = /see it in action|watch the|demo/i;
+/**
+ * A heading whose section is the demo video rather than a screenshot.
+ *
+ * Matches "in action" rather than the full "see it in action", because the
+ * product name and the release number get spliced into the middle of it:
+ * 3.8 shipped with "See WrenchLane 3.8 in action". A miss here is silent.
+ * Nothing errors, the poster frame is emitted as an ordinary image, and the
+ * demo video simply never appears in the article. That is how 3.8 first went in.
+ */
+const VIDEO_HEADING = /\bin action\b|watch the|demo/i;
 
 export interface ReleaseImage {
   url: string;
