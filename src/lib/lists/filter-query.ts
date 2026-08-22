@@ -25,6 +25,8 @@ export type FilterField =
   | 'created_at'
   | 'last_contacted_at'
   | 'last_emailed_at'
+  | 'last_called_at'
+  | 'last_replied_at'
   | 'email'
   | 'email_status'
   | 'first_name'
@@ -59,8 +61,10 @@ export const FILTER_FIELDS: { value: FilterField; label: string }[] = [
   { value: 'company_id', label: 'Company' },
   { value: 'country_code', label: 'Country' },
   { value: 'created_at', label: 'Created Date' },
-  { value: 'last_emailed_at', label: 'Last Emailed (sent)' },
-  { value: 'last_contacted_at', label: 'Last Contacted (replied)' },
+  { value: 'last_called_at', label: 'Last Called' },
+  { value: 'last_emailed_at', label: 'Last Emailed (sent by us)' },
+  { value: 'last_replied_at', label: 'Last Replied (heard back)' },
+  { value: 'last_contacted_at', label: 'Last Touched (call or reply)' },
   { value: 'email', label: 'Email' },
   { value: 'first_name', label: 'First Name' },
   { value: 'last_name', label: 'Last Name' },
@@ -116,20 +120,36 @@ export const OPERATORS_BY_FIELD: Record<FilterField, { value: FilterOperator; la
     { value: 'older_than_days', label: 'more than N days ago' },
   ],
   last_contacted_at: [
+    { value: 'within_last_days', label: 'within the last' },
+    { value: 'older_than_days', label: 'not since' },
     { value: 'before', label: 'before' },
     { value: 'after', label: 'after' },
-    { value: 'within_last_days', label: 'within last N days' },
-    { value: 'older_than_days', label: 'more than N days ago' },
-    { value: 'is_null', label: 'never replied' },
-    { value: 'is_not_null', label: 'has replied' },
+    { value: 'is_null', label: 'never touched' },
+    { value: 'is_not_null', label: 'has been touched' },
   ],
   last_emailed_at: [
     { value: 'before', label: 'before' },
     { value: 'after', label: 'after' },
-    { value: 'within_last_days', label: 'within last N days' },
-    { value: 'older_than_days', label: 'more than N days ago' },
+    { value: 'within_last_days', label: 'within the last' },
+    { value: 'older_than_days', label: 'not emailed since' },
     { value: 'is_null', label: 'never emailed' },
     { value: 'is_not_null', label: 'has been emailed' },
+  ],
+  last_called_at: [
+    { value: 'within_last_days', label: 'within the last' },
+    { value: 'older_than_days', label: 'not called since' },
+    { value: 'before', label: 'before' },
+    { value: 'after', label: 'after' },
+    { value: 'is_null', label: 'never called' },
+    { value: 'is_not_null', label: 'has been called' },
+  ],
+  last_replied_at: [
+    { value: 'within_last_days', label: 'within the last' },
+    { value: 'older_than_days', label: 'not since' },
+    { value: 'before', label: 'before' },
+    { value: 'after', label: 'after' },
+    { value: 'is_null', label: 'never replied' },
+    { value: 'is_not_null', label: 'has replied' },
   ],
   email: [
     { value: 'equals', label: 'equals' },
@@ -258,6 +278,35 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   payment_failed: 'Payment failed',
 };
 
+/**
+ * Day counts offered as one-click choices on any date/recency filter, so
+ * "called in the last week / month / quarter" is a dropdown pick rather than
+ * arithmetic. A custom number is still allowed — these are only shortcuts.
+ */
+export const RECENCY_PRESET_DAYS = [1, 7, 14, 30, 60, 90, 180, 365] as const;
+
+export const RECENCY_PRESET_LABELS: Record<number, string> = {
+  1: '24 hours',
+  7: '7 days (1 week)',
+  14: '14 days (2 weeks)',
+  30: '30 days (1 month)',
+  60: '60 days (2 months)',
+  90: '90 days (3 months)',
+  180: '180 days (6 months)',
+  365: '365 days (1 year)',
+};
+
+/** Fields whose value is a date / relative day count. */
+export const DATE_FIELDS: FilterField[] = [
+  'created_at',
+  'last_called_at',
+  'last_emailed_at',
+  'last_replied_at',
+  'last_contacted_at',
+  'signed_up_at',
+  'last_active_at',
+];
+
 export const STATUS_OPTIONS = ['active', 'bounced', 'unsubscribed'] as const;
 export const LEAD_STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'customer', 'churned'] as const;
 export const EMAIL_STATUS_OPTIONS = ['valid', 'invalid', 'catch_all', 'risky', 'unknown'] as const;
@@ -282,6 +331,12 @@ export function isCompleteFilter(filter: ListFilter): boolean {
   const v = filter.value;
   if (v === null || v === undefined) return false;
   if (Array.isArray(v)) return v.length > 0;
+  // Relative-day operators need a real window. `0` is not "no filter" — it
+  // would resolve to `now`, so `older_than_days: 0` matches every contact with
+  // a value and `within_last_days: 0` matches none. Treat it as incomplete.
+  if (filter.operator === 'within_last_days' || filter.operator === 'older_than_days') {
+    return Number(v) >= 1;
+  }
   if (typeof v === 'string') return v.trim() !== '';
   return true; // numbers (incl. 0) are valid
 }
@@ -503,7 +558,9 @@ export function describeFilter(filter: ListFilter, companyName?: string): string
   }
 
   if (filter.operator === 'older_than_days' || filter.operator === 'within_last_days') {
-    return `${fieldLabel} ${opLabel} (${filter.value} days)`;
+    const days = Number(filter.value);
+    const pretty = RECENCY_PRESET_LABELS[days] ?? `${filter.value} days`;
+    return `${fieldLabel} ${opLabel} ${pretty}`;
   }
 
   if (Array.isArray(filter.value)) {

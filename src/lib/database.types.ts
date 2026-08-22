@@ -1569,8 +1569,10 @@ export type Database = {
           language: string | null
           last_active_at: string | null
           last_contacted_at: string | null
+          last_called_at: string | null
           last_emailed_at: string | null
           last_login_at: string | null
+          last_replied_at: string | null
           last_name: string | null
           last_visited_at: string | null
           lead_status: string | null
@@ -1635,8 +1637,10 @@ export type Database = {
           language?: string | null
           last_active_at?: string | null
           last_contacted_at?: string | null
+          last_called_at?: string | null
           last_emailed_at?: string | null
           last_login_at?: string | null
+          last_replied_at?: string | null
           last_name?: string | null
           last_visited_at?: string | null
           lead_status?: string | null
@@ -1701,8 +1705,10 @@ export type Database = {
           language?: string | null
           last_active_at?: string | null
           last_contacted_at?: string | null
+          last_called_at?: string | null
           last_emailed_at?: string | null
           last_login_at?: string | null
+          last_replied_at?: string | null
           last_name?: string | null
           last_visited_at?: string | null
           lead_status?: string | null
