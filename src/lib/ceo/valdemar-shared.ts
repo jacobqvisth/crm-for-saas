@@ -60,6 +60,64 @@ export type WeekdayPoint = {
   answered: number;
 };
 
+/** Where the contact stood in the product at the moment of the call. Derived
+ *  per call, so the same contact can be "no account" on Monday's call and
+ *  "free" on Friday's once they signed up in between. */
+export type CallAccountState =
+  | "no_account"
+  | "free"
+  | "trial"
+  | "paying"
+  | "churned";
+
+export const ACCOUNT_STATE_LABEL: Record<CallAccountState, string> = {
+  no_account: "No account",
+  free: "Free plan",
+  trial: "Paid trial",
+  paying: "Paying",
+  churned: "Churned",
+};
+
+export const ACCOUNT_STATE_ORDER: CallAccountState[] = [
+  "no_account",
+  "free",
+  "trial",
+  "paying",
+  "churned",
+];
+
+/** One column group in the "by account state" chart. Call-level counts. */
+export type AccountStatePoint = {
+  segment: CallAccountState;
+  label: string;
+  calls: number;
+  answered: number;
+  interested: number;
+  /** Calls followed by a signup or a paid-plan start inside the window. */
+  converted: number;
+  contacts: number;
+};
+
+/** What happened in the product after the call. */
+export type PostCallEvent = "signed_up" | "paid_start" | "charged";
+
+export type PostCallConversionRow = {
+  contactId: string;
+  contactName: string;
+  companyName: string | null;
+  segment: CallAccountState;
+  segmentLabel: string;
+  callAt: string;
+  outcome: string | null;
+  outcomeLabel: string;
+  answered: boolean;
+  /** The strongest event reached after the call (charged > paid_start > signed_up). */
+  event: PostCallEvent;
+  eventLabel: string;
+  eventAt: string;
+  daysAfterCall: number;
+};
+
 export type ValdemarCallRow = {
   id: string;
   sessionId: string | null;
@@ -82,6 +140,12 @@ export type ValdemarCallRow = {
   summary: string | null;
   hasRecording: boolean;
   sessionStatus: string | null;
+  /** App state at the moment of this call (see CallAccountState). */
+  accountState: CallAccountState;
+  accountStateLabel: string;
+  /** Post-call product event attributed to this call, if any. */
+  postCallEvent: PostCallEvent | null;
+  postCallEventLabel: string | null;
 };
 
 export type EmailEventItem = {
@@ -130,6 +194,8 @@ export type AccountCard = {
 
 export type ValdemarCallsData = {
   kpis: ValdemarKpi[];
+  /** Second KPI row, all about what happened in the product after the call. */
+  postCallKpis: ValdemarKpi[];
   seriesLabels: string[];
   byBucket: BucketPoint[];
   talkTimeByBucket: BucketPoint[];
@@ -138,6 +204,19 @@ export type ValdemarCallsData = {
   outcomes: OutcomeSlice[];
   sentiments: SentimentSlice[];
   durations: DurationBucket[];
+  /** Call volume + conversion split by app state at call time. */
+  accountStates: AccountStatePoint[];
+  /** Contacts with no account when Valdemar called them. */
+  noAccountFunnel: FunnelStep[];
+  /** Contacts already on the free plan when Valdemar called them. */
+  freeUserFunnel: FunnelStep[];
+  /** Every attributed post-call event, newest event first. */
+  conversions: PostCallConversionRow[];
+  /** How many days after a call a product event still counts as attributed. */
+  postCallWindowDays: number;
+  /** True when the app-state join produced at least one linked contact, so an
+   *  all-zero conversion panel means "no conversions" and not "no data". */
+  appStateResolved: boolean;
   rows: ValdemarCallRow[];
   totalRows: number;
 };

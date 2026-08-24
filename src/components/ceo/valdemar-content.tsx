@@ -26,7 +26,9 @@ import {
 import { formatNumber } from "@/lib/ceo/format";
 import {
   formatDurationSeconds,
+  type AccountStatePoint,
   type BucketPoint,
+  type PostCallConversionRow,
   type ValdemarCallRow,
   type ValdemarEmailRow,
   type ValdemarKpi,
@@ -66,10 +68,16 @@ function outcomePillClass(outcome: string | null): string {
   }
 }
 
-function KpiGrid({ items }: { items: ValdemarKpi[] }) {
+function KpiGrid({
+  items,
+  columns = 4,
+}: {
+  items: ValdemarKpi[];
+  columns?: 3 | 4;
+}) {
   if (items.length === 0) return null;
   return (
-    <div className="summary-grid columns-4">
+    <div className={`summary-grid columns-${columns}`}>
       {items.map((item) => (
         <div className="summary-card" key={item.label}>
           <strong>{item.value}</strong>
@@ -294,6 +302,132 @@ function FunnelList({
   );
 }
 
+/** Grouped columns, one group per app state the contact was in when called. */
+function AccountStateChart({ points }: { points: AccountStatePoint[] }) {
+  if (points.length === 0) {
+    return (
+      <EmptyState
+        title="No calls to split yet"
+        body="This chart groups the calls by whether the person already had an account, so it fills in with the first calls in range."
+      />
+    );
+  }
+  return (
+    <BucketBars
+      points={points.map((point) => ({
+        key: point.segment,
+        label: point.label,
+        values: [
+          point.calls,
+          point.answered,
+          point.interested,
+          point.converted,
+        ],
+      }))}
+      series={["Calls", "Answered", "Interested", "Converted"]}
+    />
+  );
+}
+
+const CONVERSION_EVENT_CLASS: Record<string, string> = {
+  signed_up: "running",
+  paid_start: "success",
+  charged: "success",
+};
+
+/** Every attributed post-call conversion, so the funnel numbers are clickable. */
+function ConversionsPanel({
+  rows,
+  windowDays,
+}: {
+  rows: PostCallConversionRow[];
+  windowDays: number;
+}) {
+  return (
+    <article className="panel">
+      <PanelHeading
+        eyebrow="After the call"
+        title="Who converted"
+        badge={rows.length ? `${formatNumber(rows.length)} contacts` : undefined}
+        description={`Every contact who did something in the product within ${windowDays} days of a call, with the call that came before it.`}
+        info={{
+          title: "Who converted",
+          body: "One row per contact, showing the furthest step they reached after a call: created an account, started a paid plan, or paid. The call shown is the one closest before that event. This is the audit trail behind the two funnels, so a number you doubt can be opened and checked contact by contact.",
+          sources: [
+            "activities (type=call)",
+            "contacts.signed_up_at",
+            "dashboard_subscriptions",
+          ],
+          logic: `Attribution is a simple ${windowDays}-day window after the call, with no claim of causation: a signup two days after a "not interested" call still shows up here, labelled with that outcome, and it is on you to judge it.`,
+        }}
+      />
+      {rows.length === 0 ? (
+        <EmptyState
+          title="No conversions attributed yet"
+          body={`Nobody called in this range has signed up, started a paid plan, or paid within ${windowDays} days of the call. Widen the range to look further back.`}
+        />
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Contact</th>
+                <th>Company</th>
+                <th>State when called</th>
+                <th>Call</th>
+                <th>Outcome</th>
+                <th>What happened</th>
+                <th>Lag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.contactId}-${row.event}`}>
+                  <td>
+                    <Link
+                      className="!text-blue-600 hover:!underline"
+                      href={`/contacts/${row.contactId}`}
+                    >
+                      {row.contactName}
+                    </Link>
+                  </td>
+                  <td>{row.companyName ?? "–"}</td>
+                  <td>{row.segmentLabel}</td>
+                  <td className="whitespace-nowrap">{formatWhen(row.callAt)}</td>
+                  <td>
+                    <span
+                      className={`status-pill ${outcomePillClass(row.outcome)}`}
+                    >
+                      {row.outcomeLabel}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className={`status-pill ${
+                        CONVERSION_EVENT_CLASS[row.event] ?? "skipped"
+                      }`}
+                    >
+                      {row.eventLabel}
+                    </span>
+                    <div className="text-xs text-slate-500">
+                      {formatWhen(row.eventAt)}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    {row.daysAfterCall === 0
+                      ? "same day"
+                      : `${row.daysAfterCall}d`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function Panel({
   children,
   wide = false,
@@ -368,6 +502,89 @@ function CallsTab({
           />
         </Panel>
       </section>
+
+      <KpiGrid items={data.postCallKpis} />
+
+      <section className="content-grid">
+        <Panel wide>
+          <PanelHeading
+            eyebrow="After the call"
+            title="Calls and conversion by account state"
+            badge={`${data.postCallWindowDays}-day window`}
+            description="Each call grouped by where the person stood in the product when the phone rang."
+            info={{
+              title: "Calls and conversion by account state",
+              body: "The state is read at the moment of each call, not today: a contact who signed up two days after being called counts as 'No account' on that call. 'Converted' means that call was followed by a signup, a paid-plan start, or a first payment inside the attribution window. Counted per call, so a contact called three times contributes three calls — the funnels below are the de-duplicated view.",
+              sources: [
+                "activities (type=call)",
+                "contacts.wl_user_id + signed_up_at",
+                "dashboard_users / dashboard_subscriptions",
+              ],
+              logic:
+                "No account = the contact has no linked app user, or signed up after the call. Free plan = had an account, no live paid plan. Paid trial = a paid plan was picked and the trial was still running at the call. Paying = already charged. Churned = was charged at some point and had cancelled before the call.",
+            }}
+          />
+          <AccountStateChart points={data.accountStates} />
+        </Panel>
+        <Panel>
+          <PanelHeading
+            eyebrow="After the call"
+            title="No account when called"
+            description="Did the cold ones sign up?"
+            info={{
+              title: "No-account funnel",
+              body: "Contacts who had no Wrenchlane account when Valdemar called them. Counted per contact, filed under the state he found them in on his first call in range. The chain runs through Interested on purpose: the last three steps are the interested contacts who then signed up, picked a paid plan, and paid. A signup after a call logged as anything else is not in this funnel but IS in the 'Accounts created' tile above.",
+              sources: ["contacts.signed_up_at", "dashboard_subscriptions"],
+              logic: `Created an account = contacts.signed_up_at is later than the call and within ${data.postCallWindowDays} days of it. The account only becomes visible once the CRM links the new app user to the contact, which runs hourly on an email match, so someone signing up with a different address than the one we called will not appear.`,
+            }}
+          />
+          <FunnelList steps={data.noAccountFunnel} />
+        </Panel>
+      </section>
+
+      <section className="content-grid">
+        <Panel wide>
+          <PanelHeading
+            eyebrow="After the call"
+            title="Free-plan users when called"
+            description="Did the free users start paying?"
+            info={{
+              title: "Free-user funnel",
+              body: "Contacts who already had an account on the free plan when Valdemar called. 'Started a paid plan' includes a trial on a paid plan, because that is the upgrade decision; 'First payment' is the money actually leaving the card. The gap between those two rows is the trial cohort still to be won or lost.",
+              sources: ["contacts.user_plan_type", "dashboard_subscriptions"],
+              logic:
+                "A paid start is dated from the Stripe customer appearing on a paid-plan subscription (the checkout moment in this product) or from the first charge. A selected plan_key on its own is never counted as paid: it is written during the trial and would count people who were never charged.",
+            }}
+          />
+          <FunnelList steps={data.freeUserFunnel} />
+        </Panel>
+        <Panel>
+          <PanelHeading
+            eyebrow="After the call"
+            title="Contacts per state"
+            description="How the called contacts split, de-duplicated."
+            info={{
+              title: "Contacts per state",
+              body: "The same split as the chart above but counting contacts instead of calls, with the answered and converted share of each group. Use it to see which group Valdemar is actually spending his dials on.",
+            }}
+          />
+          <BarList
+            items={data.accountStates.map((point) => ({
+              label: point.label,
+              value: point.contacts,
+              valueLabel: formatNumber(point.contacts),
+              hint: `${point.calls} calls · ${point.answered} answered · ${point.converted} converted`,
+            }))}
+            emptyTitle="No calls yet"
+            emptyBody="The split appears with the first calls in range."
+          />
+        </Panel>
+      </section>
+
+      <ConversionsPanel
+        rows={data.conversions}
+        windowDays={data.postCallWindowDays}
+      />
 
       <section className="content-grid">
         <Panel wide>
@@ -576,16 +793,24 @@ function CallLogPanel({
                   </div>
                 </td>
                 <td>
-                  {row.contactId ? (
-                    <Link
-                      className="!text-blue-600 hover:!underline"
-                      href={`/contacts/${row.contactId}`}
-                    >
-                      {row.contactName}
-                    </Link>
-                  ) : (
-                    row.contactName
-                  )}
+                  <div className="table-primary">
+                    {row.contactId ? (
+                      <Link
+                        className="!text-blue-600 hover:!underline"
+                        href={`/contacts/${row.contactId}`}
+                      >
+                        {row.contactName}
+                      </Link>
+                    ) : (
+                      <strong className="font-normal">{row.contactName}</strong>
+                    )}
+                    <span>
+                      {row.accountStateLabel}
+                      {row.postCallEventLabel
+                        ? ` → ${row.postCallEventLabel}`
+                        : ""}
+                    </span>
+                  </div>
                 </td>
                 <td>
                   {row.companyId && row.companyName ? (

@@ -26,9 +26,15 @@ import {
   type DashboardTimeRangeKey,
 } from "@/lib/ceo/time-ranges";
 import {
+  ACCOUNT_STATE_LABEL,
+  ACCOUNT_STATE_ORDER,
   formatDurationSeconds,
   type AccountCard,
+  type AccountStatePoint,
   type BucketPoint,
+  type CallAccountState,
+  type PostCallConversionRow,
+  type PostCallEvent,
   type DurationBucket,
   type EmailEventItem,
   type FunnelStep,
@@ -49,6 +55,13 @@ export const VALDEMAR_DEFAULT_RANGE_KEY: DashboardTimeRangeKey = "last_7_days";
 
 const CALL_ROW_LIMIT = 200;
 const EMAIL_ROW_LIMIT = 150;
+
+// How long after a call a product event (signup, paid start, first charge)
+// still counts as attributed to that call. Anything later is treated as
+// unrelated: 30 days is long enough to cover "I'll look at it next week"
+// without crediting a call for a signup two months out.
+const POST_CALL_WINDOW_DAYS = 30;
+const POST_CALL_WINDOW_MS = POST_CALL_WINDOW_DAYS * 86_400_000;
 
 export function normalizeValdemarRangeKey(
   value: string | string[] | undefined,
@@ -277,6 +290,7 @@ export async function getValdemarStatsData(
     generatedAt: now.toISOString(),
     calls: {
       kpis: [],
+      postCallKpis: [],
       seriesLabels: ["Calls", "Answered"],
       byBucket: [],
       talkTimeByBucket: [],
@@ -285,6 +299,12 @@ export async function getValdemarStatsData(
       outcomes: [],
       sentiments: [],
       durations: [],
+      accountStates: [],
+      noAccountFunnel: [],
+      freeUserFunnel: [],
+      conversions: [],
+      postCallWindowDays: POST_CALL_WINDOW_DAYS,
+      appStateResolved: false,
       rows: [],
       totalRows: 0,
     },
@@ -311,14 +331,18 @@ export async function getValdemarStatsData(
     loadEmails(admin, identity, range.start, range.end),
   ]);
 
-  const nameMaps = await loadNames(admin, [
-    ...calls.contactIds,
-    ...emails.contactIds,
-  ], calls.companyIds);
+  const [nameMaps, appState] = await Promise.all([
+    loadNames(
+      admin,
+      [...calls.contactIds, ...emails.contactIds],
+      calls.companyIds,
+    ),
+    loadAppState(admin, calls.contactIds),
+  ]);
 
   return {
     ...empty,
-    calls: finishCalls(calls, nameMaps, range.start, range.end),
+    calls: finishCalls(calls, nameMaps, appState, range.start, range.end),
     emails: finishEmails(emails, nameMaps, identity, range.start, range.end),
   };
 }
@@ -354,8 +378,15 @@ type CallActivityRow = {
   created_at: string | null;
 };
 
+// The app-state fields are derived in finishCalls (they need the product-table
+// join), so the raw loader builds rows without them.
+type RawCallRow = Omit<
+  ValdemarCallRow,
+  "accountState" | "accountStateLabel" | "postCallEvent" | "postCallEventLabel"
+>;
+
 type CallsRaw = {
-  rows: ValdemarCallRow[];
+  rows: RawCallRow[];
   contactIds: string[];
   companyIds: string[];
 };
@@ -423,7 +454,7 @@ async function loadCalls(
 
   const sessionById = new Map(sessions.map((s) => [s.id, s]));
   const consumedSessionIds = new Set<string>();
-  const rows: ValdemarCallRow[] = [];
+  const rows: RawCallRow[] = [];
 
   for (const activity of activities) {
     const metadata = asRecord(activity.metadata);
@@ -545,20 +576,36 @@ const DURATION_BUCKETS: { label: string; max: number }[] = [
 function finishCalls(
   raw: CallsRaw,
   names: NameMaps,
+  appState: AppStateMaps,
   start: Date | null,
   end: Date,
 ): ValdemarCallsData {
-  const rows = raw.rows.map((row) => ({
-    ...row,
-    contactName: row.contactId
-      ? names.contactName.get(row.contactId) ?? "Unknown contact"
-      : "Unknown contact",
-    companyName: row.companyId
-      ? names.companyName.get(row.companyId) ?? null
-      : null,
-    phone: row.phone ??
-      (row.contactId ? names.contactPhone.get(row.contactId) ?? null : null),
-  }));
+  const rows: ValdemarCallRow[] = raw.rows.map((row) => {
+    const state = row.contactId
+      ? appState.byContact.get(row.contactId)
+      : undefined;
+    const callAt = parseTime(row.at) ?? 0;
+    const segment = accountStateAt(state, callAt);
+    const strongest = strongestEvent(postCallEvents(state, callAt));
+    return {
+      ...row,
+      contactName: row.contactId
+        ? names.contactName.get(row.contactId) ?? "Unknown contact"
+        : "Unknown contact",
+      companyName: row.companyId
+        ? names.companyName.get(row.companyId) ?? null
+        : null,
+      phone:
+        row.phone ??
+        (row.contactId ? names.contactPhone.get(row.contactId) ?? null : null),
+      accountState: segment,
+      accountStateLabel: ACCOUNT_STATE_LABEL[segment],
+      postCallEvent: strongest?.event ?? null,
+      postCallEventLabel: strongest
+        ? POST_CALL_EVENT_LABEL[strongest.event]
+        : null,
+    };
+  });
 
   const total = rows.length;
   const answeredRows = rows.filter((r) => r.answered);
@@ -761,8 +808,290 @@ function finishCalls(
     }))
     .sort((a, b) => b.count - a.count);
 
+  // ---- post-call conversion ------------------------------------------------
+  //
+  // Two questions, both about what the product did after the phone call:
+  //   1. of the people with NO account, how many signed up (and then paid)?
+  //   2. of the people already on the FREE plan, how many started a paid plan?
+  //
+  // The segment chart is call-level (every dial gets counted where it belongs),
+  // while the funnels are contact-level — calling the same workshop three times
+  // must not turn one signup into three. A contact is filed under the state it
+  // was in at its FIRST call in range, which is the state Valdemar found.
+
+  const INTERESTED_OUTCOMES = new Set(["interested", "closed"]);
+
+  const segmentPoints = new Map<CallAccountState, AccountStatePoint>(
+    ACCOUNT_STATE_ORDER.map((segment) => [
+      segment,
+      {
+        segment,
+        label: ACCOUNT_STATE_LABEL[segment],
+        calls: 0,
+        answered: 0,
+        interested: 0,
+        converted: 0,
+        contacts: 0,
+      },
+    ]),
+  );
+  const segmentContacts = new Map<CallAccountState, Set<string>>(
+    ACCOUNT_STATE_ORDER.map((segment) => [segment, new Set<string>()]),
+  );
+
+  type ContactProgress = {
+    segment: CallAccountState;
+    firstCallAt: number;
+    answered: boolean;
+    interested: boolean;
+    signedUp: boolean;
+    paidStart: boolean;
+    charged: boolean;
+  };
+  const progressByContact = new Map<string, ContactProgress>();
+
+  const EVENT_RANK: Record<PostCallEvent, number> = {
+    signed_up: 1,
+    paid_start: 2,
+    charged: 3,
+  };
+  const conversionByContact = new Map<string, PostCallConversionRow>();
+
+  for (const row of rows) {
+    const callAt = parseTime(row.at) ?? 0;
+    const state = row.contactId
+      ? appState.byContact.get(row.contactId)
+      : undefined;
+    const events = postCallEvents(state, callAt);
+    const isInterested = row.outcome
+      ? INTERESTED_OUTCOMES.has(row.outcome)
+      : false;
+    const converted =
+      events.signedUp !== null ||
+      events.paidStart !== null ||
+      events.charged !== null;
+
+    const point = segmentPoints.get(row.accountState);
+    if (point) {
+      point.calls += 1;
+      if (row.answered) point.answered += 1;
+      if (isInterested) point.interested += 1;
+      if (converted) point.converted += 1;
+    }
+    if (row.contactId) {
+      segmentContacts.get(row.accountState)?.add(row.contactId);
+    }
+
+    if (!row.contactId) continue;
+
+    const previous = progressByContact.get(row.contactId);
+    const next: ContactProgress = previous ?? {
+      segment: row.accountState,
+      firstCallAt: callAt,
+      answered: false,
+      interested: false,
+      signedUp: false,
+      paidStart: false,
+      charged: false,
+    };
+    // Rows arrive newest-first, so anything we meet later in the loop is an
+    // earlier call and wins the "state Valdemar found" tie-break.
+    if (previous && callAt <= previous.firstCallAt) {
+      next.segment = row.accountState;
+      next.firstCallAt = callAt;
+    }
+    next.answered = next.answered || row.answered;
+    next.interested = next.interested || isInterested;
+    next.signedUp = next.signedUp || events.signedUp !== null;
+    next.paidStart = next.paidStart || events.paidStart !== null;
+    next.charged = next.charged || events.charged !== null;
+    progressByContact.set(row.contactId, next);
+
+    const strongest = strongestEvent(events);
+    if (strongest) {
+      const candidate: PostCallConversionRow = {
+        contactId: row.contactId,
+        contactName: row.contactName,
+        companyName: row.companyName,
+        segment: row.accountState,
+        segmentLabel: row.accountStateLabel,
+        callAt: row.at,
+        outcome: row.outcome,
+        outcomeLabel: row.outcomeLabel,
+        answered: row.answered,
+        event: strongest.event,
+        eventLabel: POST_CALL_EVENT_LABEL[strongest.event],
+        eventAt: new Date(strongest.at).toISOString(),
+        daysAfterCall: Math.max(
+          0,
+          Math.round((strongest.at - callAt) / 86_400_000),
+        ),
+      };
+      const held = conversionByContact.get(row.contactId);
+      // One row per contact: keep the furthest event, and for the same event
+      // the call that sits closest before it.
+      const better =
+        !held ||
+        EVENT_RANK[candidate.event] > EVENT_RANK[held.event] ||
+        (candidate.event === held.event &&
+          candidate.daysAfterCall < held.daysAfterCall);
+      if (better) conversionByContact.set(row.contactId, candidate);
+    }
+  }
+
+  for (const [segment, contactSet] of segmentContacts) {
+    const point = segmentPoints.get(segment);
+    if (point) point.contacts = contactSet.size;
+  }
+
+  const progress = [...progressByContact.values()];
+  const bySegment = (segment: CallAccountState) =>
+    progress.filter((entry) => entry.segment === segment);
+
+  const noAccount = bySegment("no_account");
+  const noAccountInterested = noAccount.filter((entry) => entry.interested);
+  const noAccountFunnel: FunnelStep[] = [
+    funnelStep("called", "Contacts called", noAccount.length, null),
+    funnelStep(
+      "answered",
+      "Answered",
+      noAccount.filter((entry) => entry.answered).length,
+      noAccount.length,
+    ),
+    funnelStep(
+      "interested",
+      "Interested",
+      noAccountInterested.length,
+      noAccount.filter((entry) => entry.answered).length,
+    ),
+    funnelStep(
+      "signed_up",
+      "Created an account",
+      noAccountInterested.filter((entry) => entry.signedUp).length,
+      noAccountInterested.length,
+    ),
+    funnelStep(
+      "paid_start",
+      "Started a paid plan",
+      noAccountInterested.filter((entry) => entry.signedUp && entry.paidStart)
+        .length,
+      noAccountInterested.filter((entry) => entry.signedUp).length,
+    ),
+    funnelStep(
+      "charged",
+      "First payment",
+      noAccountInterested.filter((entry) => entry.signedUp && entry.charged)
+        .length,
+      noAccountInterested.filter((entry) => entry.signedUp && entry.paidStart)
+        .length,
+    ),
+  ];
+
+  const freeUsers = bySegment("free");
+  const freeAnswered = freeUsers.filter((entry) => entry.answered);
+  const freeInterested = freeUsers.filter((entry) => entry.interested);
+  const freeUserFunnel: FunnelStep[] = [
+    funnelStep("called", "Contacts called", freeUsers.length, null),
+    funnelStep("answered", "Answered", freeAnswered.length, freeUsers.length),
+    funnelStep(
+      "interested",
+      "Interested",
+      freeInterested.length,
+      freeAnswered.length,
+    ),
+    funnelStep(
+      "paid_start",
+      "Started a paid plan",
+      freeInterested.filter((entry) => entry.paidStart).length,
+      freeInterested.length,
+    ),
+    funnelStep(
+      "charged",
+      "First payment",
+      freeInterested.filter((entry) => entry.charged).length,
+      freeInterested.filter((entry) => entry.paidStart).length,
+    ),
+  ];
+
+  // Unrestricted totals for the tiles: these count conversions after ANY call,
+  // including calls Valdemar logged as "no answer" or "not interested". The
+  // funnels above deliberately chain through Interested, so the tiles are where
+  // an off-script signup still shows up.
+  const accountsCreated = noAccount.filter((entry) => entry.signedUp).length;
+  const paidStartsFromFree = freeUsers.filter((entry) => entry.paidStart).length;
+  const firstPayments = progress.filter((entry) => entry.charged).length;
+  const answeredContacts = progress.filter((entry) => entry.answered);
+  const answeredConverted = answeredContacts.filter(
+    (entry) => entry.signedUp || entry.paidStart || entry.charged,
+  ).length;
+
+  const POST_CALL_SOURCE = [
+    "activities (type=call)",
+    "contacts.wl_user_id + signed_up_at",
+    "dashboard_users / dashboard_subscriptions",
+  ];
+  const ATTRIBUTION_LOGIC = `A product event counts as "after the call" when it happened later than the call and within ${POST_CALL_WINDOW_DAYS} days of it. Events can land after the end of the selected range: the CALL has to be in range, the signup or payment does not. Signup date is contacts.signed_up_at; a paid start is the Stripe customer appearing on a paid-plan subscription (that is the checkout moment in this product) or a first charge; a first payment is dashboard_subscriptions.metadata.first_paid_at. plan_key alone is never treated as paid, because it is written at checkout during the trial and includes people who were never charged.`;
+
+  const postCallKpis: ValdemarKpi[] = [
+    {
+      label: "Accounts created",
+      value: String(accountsCreated),
+      hint: `of ${noAccount.length} contacts called without an account`,
+      info: {
+        title: "Accounts created after a call",
+        body: "Contacts who had no Wrenchlane account when Valdemar called and created one afterwards. Counted per contact, not per call, and counted whatever the logged outcome was.",
+        sources: POST_CALL_SOURCE,
+        logic: `${ATTRIBUTION_LOGIC} A contact only appears here once the CRM has linked the new app user to the contact row, which happens on the hourly Customer.io email match — a person who signs up with a different email address than the one we called stays invisible.`,
+      },
+    },
+    {
+      label: "Free to paid starts",
+      value: String(paidStartsFromFree),
+      hint: `of ${freeUsers.length} free-plan contacts called`,
+      info: {
+        title: "Free to paid starts after a call",
+        body: "Contacts who were on the free plan when Valdemar called and picked a paid plan afterwards. A trial on a paid plan counts: that is the upgrade decision, even before the first invoice clears. Brand-new signups who go straight onto a paid trial are NOT in this tile (they had no account, so they belong to the no-account funnel), which is why this can read 0 while that funnel shows paid starts.",
+        sources: POST_CALL_SOURCE,
+        logic: `${ATTRIBUTION_LOGIC} The blind spot is a repeat checkout: someone who trialled and cancelled long ago reuses the same Stripe customer, so a second checkout carries the OLD customer date and is only caught once it produces a charge.`,
+      },
+    },
+    {
+      label: "First payments",
+      value: String(firstPayments),
+      hint: `real charges within ${POST_CALL_WINDOW_DAYS} days of a call`,
+      info: {
+        title: "First payments after a call",
+        body: "Contacts whose workshop was charged for the first time after the call. This is the only revenue-hard number on the page: it comes from the Stripe sync, not from a selected plan.",
+        sources: POST_CALL_SOURCE,
+        logic: ATTRIBUTION_LOGIC,
+      },
+    },
+    {
+      label: "Answered to conversion",
+      value: formatPercentValue(
+        safePercent(answeredConverted, answeredContacts.length),
+      ),
+      hint: `${answeredConverted} of ${answeredContacts.length} answered contacts`,
+      info: {
+        title: "Answered to conversion",
+        body: "Of the contacts who actually picked up, the share that then did something in the product: created an account, started a paid plan, or paid. The single number for whether the conversations move people.",
+        sources: POST_CALL_SOURCE,
+        logic: ATTRIBUTION_LOGIC,
+      },
+    },
+  ];
+
+  const conversions = [...conversionByContact.values()].sort((a, b) =>
+    a.eventAt < b.eventAt ? 1 : -1,
+  );
+
+  const accountStates = ACCOUNT_STATE_ORDER.map(
+    (segment) => segmentPoints.get(segment)!,
+  ).filter((point) => point.calls > 0);
+
   return {
     kpis,
+    postCallKpis,
     seriesLabels: ["Calls", "Answered"],
     byBucket: toBucketPoints(buckets, perBucket),
     talkTimeByBucket: toBucketPoints(buckets, talkPerBucket),
@@ -771,6 +1100,12 @@ function finishCalls(
     outcomes,
     sentiments,
     durations,
+    accountStates,
+    noAccountFunnel,
+    freeUserFunnel,
+    conversions,
+    postCallWindowDays: POST_CALL_WINDOW_DAYS,
+    appStateResolved: appState.resolved,
     rows: rows.slice(0, CALL_ROW_LIMIT),
     totalRows: total,
   };
@@ -1287,4 +1622,352 @@ async function loadNames(
   }
 
   return { contactName, contactPhone, companyName };
+}
+
+// ---------------------------------------------------------------------------
+// App state (did the person have an account / a paid plan, and when?)
+// ---------------------------------------------------------------------------
+//
+// The call log alone can't answer "did this call produce a customer" — that
+// answer lives in the product tables. The chain is:
+//
+//   contacts.wl_user_id          -> dashboard_users.internal_user_id
+//   dashboard_users.workshop_id  -> dashboard_subscriptions.workshop_id
+//
+// Only three dates matter, and they're all we can trust:
+//   signed_up_at                     when the account was created
+//   metadata.customer_created_at     when the Stripe customer appeared, i.e.
+//                                    when a paid plan was picked (checkout)
+//   metadata.first_paid_at           whether and when money actually moved
+//
+// The two are deliberately kept apart. A dashboard_subscriptions row only
+// proves a paid plan was CHOSEN, never that it was charged: the row is written
+// at checkout, during the trial (42 of 126 "paid" workshops had never been
+// charged on 2026-08-12). So "started a paid plan" and "first payment" are
+// separate steps in the funnels, and only first_paid_at counts as revenue.
+//
+// NOTE on plan_key: dashboard_workshops.plan_key holds plan NAMES
+// (small_monthly, ...) but dashboard_subscriptions.plan_key holds Stripe PRICE
+// IDS, so PAID_PLANS (a set of names) must not be matched against it. Every
+// price on this Stripe account is a paid price (mrr_amount_cents is 475 at the
+// lowest, never 0), and free users have no subscription row at all, so the
+// existence of the row with a non-zero mrr IS the paid-plan signal.
+
+/** Everything we know about one contact's product life, as epoch millis. */
+type ContactAppState = {
+  linked: boolean;
+  signedUpAt: number | null;
+  /** Earliest evidence that a PAID plan was started (checkout or charge). */
+  paidStartAt: number | null;
+  /** Every paid-start timestamp found, so "started after the call" still
+   *  catches a second checkout that follows an earlier cancel. */
+  paidStarts: number[];
+  firstPaidAt: number | null;
+  trialEndAt: number | null;
+  canceledAt: number | null;
+  /** Current snapshot from the core_app export. Undated, so it is only a
+   *  last-resort tiebreak when Stripe gave us nothing at all. */
+  planType: string | null;
+  hasSubscriptionRow: boolean;
+};
+
+type AppStateMaps = {
+  byContact: Map<string, ContactAppState>;
+  /** False when nothing resolved, so the UI can tell "no conversions" apart
+   *  from "the app join returned nothing". */
+  resolved: boolean;
+};
+
+function parseTime(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? null : time;
+}
+
+function minTime(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.min(a, b);
+}
+
+function maxTime(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
+type ContactAppRow = {
+  id: string;
+  wl_user_id: string | null;
+  signed_up_at: string | null;
+  user_plan_type: string | null;
+};
+
+type DashboardUserRow = {
+  internal_user_id: string | null;
+  workshop_id: string | null;
+};
+
+type DashboardSubscriptionRow = {
+  workshop_id: string | null;
+  status: string | null;
+  plan_key: string | null;
+  mrr_amount_cents: number | null;
+  trial_end: string | null;
+  current_period_start: string | null;
+  canceled_at: string | null;
+  metadata: unknown;
+};
+
+async function loadAppState(
+  admin: ReturnType<typeof createServiceClient>,
+  contactIds: string[],
+): Promise<AppStateMaps> {
+  const uniqueContactIds = [...new Set(contactIds)];
+  const byContact = new Map<string, ContactAppState>();
+  if (uniqueContactIds.length === 0) {
+    return { byContact, resolved: false };
+  }
+
+  const contactsResult = await chunkedIn<ContactAppRow>(
+    (chunk, { from, to }) =>
+      admin
+        .from("contacts")
+        .select("id, wl_user_id, signed_up_at, user_plan_type")
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: ContactAppRow[] | null;
+        error: { message: string } | null;
+      }>,
+    uniqueContactIds,
+  );
+
+  const contacts = contactsResult.data ?? [];
+  for (const contact of contacts) {
+    byContact.set(contact.id, {
+      linked: Boolean(contact.wl_user_id),
+      signedUpAt: parseTime(contact.signed_up_at),
+      paidStartAt: null,
+      paidStarts: [],
+      firstPaidAt: null,
+      trialEndAt: null,
+      canceledAt: null,
+      planType: contact.user_plan_type,
+      hasSubscriptionRow: false,
+    });
+  }
+
+  const userIds = [
+    ...new Set(
+      contacts.map((c) => c.wl_user_id).filter((v): v is string => Boolean(v)),
+    ),
+  ];
+  if (userIds.length === 0) {
+    return { byContact, resolved: contacts.length > 0 };
+  }
+
+  // dashboard_users.internal_user_id is TEXT while contacts.wl_user_id is a
+  // uuid, so the ids travel as strings.
+  const usersResult = await chunkedIn<DashboardUserRow>(
+    (chunk, { from, to }) =>
+      admin
+        .from("dashboard_users")
+        .select("internal_user_id, workshop_id")
+        .in("internal_user_id", chunk)
+        .order("internal_user_id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: DashboardUserRow[] | null;
+        error: { message: string } | null;
+      }>,
+    userIds,
+  );
+
+  const workshopByUser = new Map<string, string>();
+  for (const user of usersResult.data ?? []) {
+    if (!user.internal_user_id || !user.workshop_id) continue;
+    workshopByUser.set(user.internal_user_id, user.workshop_id);
+  }
+
+  const workshopIds = [...new Set(workshopByUser.values())];
+  const subsByWorkshop = new Map<string, DashboardSubscriptionRow[]>();
+  if (workshopIds.length > 0) {
+    const subsResult = await chunkedIn<DashboardSubscriptionRow>(
+      (chunk, { from, to }) =>
+        admin
+          .from("dashboard_subscriptions")
+          .select(
+            "workshop_id, status, plan_key, mrr_amount_cents, trial_end, current_period_start, canceled_at, metadata",
+          )
+          .in("workshop_id", chunk)
+          .order("workshop_id", { ascending: true })
+          .order("stripe_subscription_id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: DashboardSubscriptionRow[] | null;
+          error: { message: string } | null;
+        }>,
+      workshopIds,
+    );
+    for (const sub of subsResult.data ?? []) {
+      if (!sub.workshop_id) continue;
+      const list = subsByWorkshop.get(sub.workshop_id);
+      if (list) list.push(sub);
+      else subsByWorkshop.set(sub.workshop_id, [sub]);
+    }
+  }
+
+  for (const contact of contacts) {
+    const state = byContact.get(contact.id);
+    if (!state || !contact.wl_user_id) continue;
+    const workshopId = workshopByUser.get(contact.wl_user_id);
+    if (!workshopId) continue;
+    for (const sub of subsByWorkshop.get(workshopId) ?? []) {
+      state.hasSubscriptionRow = true;
+      const meta = asRecord(sub.metadata);
+      const firstPaidAt = parseTime(
+        typeof meta.first_paid_at === "string" ? meta.first_paid_at : null,
+      );
+      const customerCreatedAt = parseTime(
+        typeof meta.customer_created_at === "string"
+          ? meta.customer_created_at
+          : null,
+      );
+      // See the plan_key note above: the row's own existence on a non-zero
+      // price is the paid-plan signal, not a name match.
+      const onPaidPlan =
+        sub.plan_key != null &&
+        (sub.mrr_amount_cents == null || sub.mrr_amount_cents > 0);
+      const periodStart = parseTime(sub.current_period_start);
+
+      // A "paid start" is any dated evidence that this workshop picked a paid
+      // plan: the Stripe customer appearing on a paid-plan subscription (that
+      // IS the checkout in this product — the customer is created the moment
+      // the plan is chosen), the first charge, or the first non-trial billing
+      // period. Trial-only checkouts count: that is the upgrade intent we want
+      // to see after a call, it just hasn't produced revenue yet.
+      const candidates: (number | null)[] = [
+        onPaidPlan ? customerCreatedAt : null,
+        firstPaidAt,
+        sub.status !== "trialing" && onPaidPlan ? periodStart : null,
+      ];
+      for (const candidate of candidates) {
+        if (candidate === null) continue;
+        state.paidStarts.push(candidate);
+        state.paidStartAt = minTime(state.paidStartAt, candidate);
+      }
+      state.firstPaidAt = minTime(state.firstPaidAt, firstPaidAt);
+      state.trialEndAt = maxTime(state.trialEndAt, parseTime(sub.trial_end));
+      state.canceledAt = maxTime(state.canceledAt, parseTime(sub.canceled_at));
+    }
+  }
+
+  return { byContact, resolved: contacts.length > 0 };
+}
+
+/**
+ * Where the contact stood when this specific call was made.
+ *
+ * Only dated evidence is used, so the answer is about the moment of the call
+ * and not about today: a contact who signed up two days after the call is
+ * "No account" on that call's row, which is exactly what makes the post-call
+ * funnels readable.
+ */
+function accountStateAt(
+  state: ContactAppState | undefined,
+  callAt: number,
+): CallAccountState {
+  if (!state || !state.linked) return "no_account";
+  if (state.signedUpAt === null || state.signedUpAt > callAt) {
+    return "no_account";
+  }
+  const chargedBefore =
+    state.firstPaidAt !== null && state.firstPaidAt <= callAt;
+  const canceledBefore =
+    state.canceledAt !== null && state.canceledAt <= callAt;
+  if (chargedBefore) return canceledBefore ? "churned" : "paying";
+
+  // No money yet. A paid-plan checkout before the call with the trial still
+  // running at the call is a live trial; a trial that already lapsed (or was
+  // cancelled) leaves them on the free plan.
+  const checkoutBefore =
+    state.paidStartAt !== null && state.paidStartAt <= callAt;
+  const trialLive = state.trialEndAt !== null && state.trialEndAt > callAt;
+  if (checkoutBefore && trialLive && !canceledBefore) return "trial";
+
+  // Last resort: the Stripe sync never matched this workshop (no subscription
+  // row at all) but the product's own export says they are on a paid plan. One
+  // such contact in the Valdemar set on 2026-08-24. The snapshot carries no
+  // date so it can't be attributed to anything, but it is still wrong to file
+  // a paid workshop under "free plan" and inflate that funnel's denominator.
+  if (
+    !state.hasSubscriptionRow &&
+    state.planType != null &&
+    state.planType !== "free"
+  ) {
+    return "paying";
+  }
+  return "free";
+}
+
+const POST_CALL_EVENT_LABEL: Record<PostCallEvent, string> = {
+  signed_up: "Created an account",
+  paid_start: "Started a paid plan",
+  charged: "First payment",
+};
+
+type PostCallEvents = {
+  signedUp: number | null;
+  paidStart: number | null;
+  charged: number | null;
+};
+
+/** Product events that happened AFTER this call, inside the attribution window. */
+function postCallEvents(
+  state: ContactAppState | undefined,
+  callAt: number,
+): PostCallEvents {
+  const inWindow = (time: number | null): number | null =>
+    time !== null && time > callAt && time - callAt <= POST_CALL_WINDOW_MS
+      ? time
+      : null;
+  if (!state) return { signedUp: null, paidStart: null, charged: null };
+  const paidStart =
+    state.paidStarts
+      .map(inWindow)
+      .filter((time): time is number => time !== null)
+      .sort((a, b) => a - b)[0] ?? null;
+  return {
+    signedUp: inWindow(state.signedUpAt),
+    paidStart,
+    charged: inWindow(state.firstPaidAt),
+  };
+}
+
+/** The furthest the contact got after the call: charged > paid start > signup. */
+function strongestEvent(
+  events: PostCallEvents,
+): { event: PostCallEvent; at: number } | null {
+  if (events.charged !== null) return { event: "charged", at: events.charged };
+  if (events.paidStart !== null) {
+    return { event: "paid_start", at: events.paidStart };
+  }
+  if (events.signedUp !== null) {
+    return { event: "signed_up", at: events.signedUp };
+  }
+  return null;
+}
+
+function funnelStep(
+  key: string,
+  label: string,
+  value: number,
+  previous: number | null,
+): FunnelStep {
+  return {
+    key,
+    label,
+    value,
+    rateFromPrevious:
+      previous === null ? null : previous > 0 ? (value / previous) * 100 : 0,
+  };
 }
