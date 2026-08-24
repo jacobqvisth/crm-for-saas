@@ -40,7 +40,14 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
 // default range for the shell chrome and scope their own reads themselves.
 const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   DashboardSectionKey
->(["diagnostic-search-terms", "dtc-codes", "free-users", "google-ads-users", "cac-ltv"]);
+>([
+  "diagnostic-search-terms",
+  "dtc-codes",
+  "free-users",
+  "google-ads-users",
+  "cac-ltv",
+  "campaigns",
+]);
 
 // Sections that render their OWN measurement-window control in the page body.
 // They get neither the range pills nor the "All synced history" chip, because a
@@ -49,7 +56,7 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
 // "All synced history" above it is simply wrong.
 const OWN_RANGE_CONTROL_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   DashboardSectionKey
->(["cac-ltv"]);
+>(["cac-ltv", "campaigns"]);
 
 type DashboardShellProps = {
   // Full warehouse read — only pass this when the page CONTENT actually uses
