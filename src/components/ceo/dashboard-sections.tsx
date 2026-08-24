@@ -34,6 +34,7 @@ export type DashboardSectionKey =
   | "plan-stats"
   | "free-users"
   | "google-ads-users"
+  | "campaigns"
   | "cac-ltv"
   | "toplists"
   | "cta-clicks"
@@ -130,6 +131,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Google Ads Users",
     description:
       "Every user whose FIRST touch was a Google Ads click, identified per user by joining GA4's first-touch attribution (customUser:crm_user_id × firstUserSource, shared cookie across wrenchlane.com and app.wrenchlane.com) to app users. Their share of signups per month, which campaigns they came from, what they do in the product versus other signups (activation, diagnostics, chat, feature adoption, 30-day activity, churn), how many start trials and end up paying, the plans they pick, time to first payment, estimated MRR and revenue to date, and channel economics: spend, cost per signup, CAC per payer and an LTV scenario table. Attribution is reliable from late May 2026 onward; pre-ads signups are ring-fenced into their own cohort.",
+  },
+  {
+    key: "campaigns",
+    label: "Campaigns",
+    glyph: "CA",
+    href: "/dashboard/campaigns",
+    title: "Campaigns",
+    description:
+      "Every Google Ads campaign on one page: what each one is for, who it targets, which landing page it sends people to, how it bids, and why it exists — joined to what it actually spent and delivered. Includes a plain-English comparison of how Performance Max, Demand Gen and Search differ in what we control versus what Google controls, since comparing them on cost per click alone is misleading. Spend, clicks and impressions come from GA4's linked-Ads dimensions (there is no Google Ads API token on this account), which means paused campaigns show no data at all and money is converted from GA4's USD to SEK at a fixed rate. Per-campaign user counts are GA4 first-touch and lifetime, so they sit against all-time spend only.",
   },
   {
     key: "cac-ltv",

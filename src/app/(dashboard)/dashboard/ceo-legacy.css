@@ -2255,3 +2255,53 @@ a {
   fill: var(--accent-soft);
   stroke: none;
 }
+
+/* ---------------------------------------------------------------------------
+   /dashboard/campaigns — status badges and compact lists.
+   The base .badge is deliberately neutral; these tint it so a reader can scan
+   a portfolio of campaigns and see live vs paused vs retired at a glance.
+   --------------------------------------------------------------------------- */
+
+.badge-live {
+  border-color: #aee0c0;
+  background: #edf9f2;
+  color: #16794a;
+}
+
+.badge-paused {
+  border-color: #f2d8a8;
+  background: #fdf6e9;
+  color: #96650d;
+}
+
+.badge-planned {
+  border-color: #c3d4f0;
+  background: #eef3fd;
+  color: #2a4f8f;
+}
+
+.badge-retired {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--muted-2);
+}
+
+/* Bullet lists inside table cells: no default indent, tight leading, so a
+   multi-row comparison table stays readable. */
+.tight-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.tight-list li + li {
+  margin-top: 2px;
+}
+
+/* The campaign-type comparison table carries a lot of prose per cell. Let it
+   breathe rather than compressing every column to one line. */
+.campaign-type-table td {
+  vertical-align: top;
+  min-width: 150px;
+}
