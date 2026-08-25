@@ -89,21 +89,27 @@ const NOTE =
   "trials are flagged and excluded from the rates, never silently dropped.";
 
 const WINDOW_NOTE =
-  "The trial WINDOW needs a start date, and Stripe's exact trial_start was not stored in the " +
-  "warehouse until the sync change that shipped with this page. Until that sync has run, a " +
-  "historical trial falls back to the Stripe customer creation date when that lands within 40 " +
-  "days of trial_end, and otherwise to the product default of 14 days before it. That matters " +
-  "because a Stripe customer is routinely created at an abandoned checkout weeks before any trial " +
-  "opens: 142 of 335 rows had a gap over 40 days, so treating that gap as the trial window would " +
-  "count activity from long before the trial began. Every window on this page reports which " +
-  "source it used, and clicking Update runs the Stripe sync and makes them all exact.";
+  "The trial WINDOW needs a start date. Stripe's exact trial_start is now stored by the sync, but " +
+  "it was not until the change that shipped with this page, so a row the sync has not touched " +
+  "falls back to the Stripe customer creation date when that lands within 40 days of trial_end, " +
+  "and otherwise to the product default of 14 days before it. The 40-day guard matters because a " +
+  "Stripe customer is routinely created at an abandoned checkout weeks before any trial opens — " +
+  "142 of 335 rows had a gap that wide — so treating that gap as the window counted activity from " +
+  "long before the trial began. Every window here reports which source it used, and the table on " +
+  "the Cohorts tab shows the split; if any of it still reads 'assumed', clicking Update runs the " +
+  "Stripe sync and makes those exact. Backfilling the exact dates moved in-window usage from " +
+  "roughly a quarter of trials to nearly two fifths, which is the size of error an estimated " +
+  "window can introduce.";
 
 const CAUSALITY_NOTE =
-  "Usage and conversion move together here, but the arrow is not obvious. A converted trial has " +
-  "months of paying life after it, so counting 'diagnoses ever' against conversion measures the " +
-  "subscription, not the trial. The cut that is anchored strictly inside the trial window is the " +
-  "only one that can inform anything, and it says something uncomfortable: most converted trials " +
-  "were never used at all before the card was charged.";
+  "Do not read usage as the cause of conversion. A converted trial has months of paying life " +
+  "after it, so counting 'diagnoses ever' against conversion measures the subscription rather " +
+  "than the trial. Anchored strictly inside the trial window, over exact Stripe dates, the " +
+  "relationship disappears: the never-used bucket converts about as well as the heaviest one, " +
+  "and the cohort that converted used the product LESS during its trial than the cohort that " +
+  "expired unpaid. Most converted trials were never used at all before the card was charged. " +
+  "That is the shape of a card-required auto-charging trial — the charge is the default, so what " +
+  "the trial end actually measures is whether somebody remembered to cancel.";
 
 type TrialDbRow = {
   stripe_subscription_id: string;
@@ -858,7 +864,7 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
       description:
         "Diagnoses run by anyone at the workshop between the trial opening and closing. This is the only usage cut that can inform anything: counting diagnoses over all time would mostly count the paying months that follow a conversion.",
       caveat:
-        "Two things to hold at once. The zero bucket carrying most of the conversions is the finding, not a bug: with a card required up front, a trial that is never opened still charges when it ends. But the zero bucket is also inflated by the window dating — a trial whose start was assumed is measured over a guessed fortnight, and real activity outside that guess lands in 'never used it' by mistake. See the window table on the Cohorts tab for how many trials that affects, and read this cut as a floor until the Stripe sync has run.",
+        "Read down this column and there is no ladder: measured over exact Stripe trial windows, the never-used bucket converts about as well as the heaviest one, and the buckets in between do not order themselves. Trial usage does not predict whether the card gets charged. That is what a card-required auto-charging trial produces — the charge is the default, so the thing being measured at the end is whether somebody remembered to cancel, not whether they got value. It also runs the other way from the obvious guess: the cohort that converted used the product LESS during its trial than the cohort that expired unpaid, which is what you would expect if engaged workshops evaluate properly and decline while disengaged ones simply forget. If any row of the window table on the Cohorts tab still says 'assumed', treat this cut as a floor until the Stripe sync has run.",
       bucket: (trial) => {
         const n = trial.diagnosticsDuringTrial;
         if (n === 0) return { key: "0", label: "Never used it" };
