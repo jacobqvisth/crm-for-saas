@@ -23,6 +23,7 @@ import {
   writeFunnelPoints,
   writeMetricPoints,
   writeRawRows,
+  writePromoGrants,
   writeSubscriptions,
   writeUserAttribution,
   writeUserLogins,
@@ -84,6 +85,7 @@ export async function runSourceSync(
       (await writeFeatureUsage(writer, result.featureUsage ?? [])) +
       (await writeWorkshops(writer, result.workshops ?? [])) +
       (await writeSubscriptions(writer, result.subscriptions ?? [])) +
+      (await writePromoGrants(writer, result.promoGrants ?? [])) +
       (await writeDiagnostics(writer, result.diagnostics ?? [])) +
       (await writeDiagnosticChats(writer, result.diagnosticChats ?? [])) +
       (await writeMotorUsage(writer, result.motorUsage ?? [])) +

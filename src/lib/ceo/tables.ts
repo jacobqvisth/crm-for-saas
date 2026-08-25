@@ -10,6 +10,7 @@ export const TABLES = {
   featureUsage: "dashboard_feature_usage",
   workshops: "dashboard_workshops",
   subscriptions: "dashboard_subscriptions",
+  promoGrants: "dashboard_promo_grants",
   diagnostics: "dashboard_diagnostics",
   diagnosticChats: "dashboard_diagnostic_chats",
   motorUsage: "dashboard_motor_usage",

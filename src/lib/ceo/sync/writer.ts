@@ -8,6 +8,7 @@ import type {
   FunnelPoint,
   MetricPoint,
   MotorUsageRow,
+  PromoGrantRow,
   RawMetricRow,
   SubscriptionRow,
   UserAttributionRow,
@@ -538,6 +539,28 @@ export async function writeMotorUsage(
 
   return upsertChunked(supabase, TABLES.motorUsage, deduped, {
     onConflict: "motor_usage_id",
+  });
+}
+
+/**
+ * Promo grants are rebuilt from scratch on every Stripe sync (the aggregates
+ * are derived from the full invoice + subscription history), so the upsert is
+ * a plain overwrite keyed on the deterministic grant_id. Grants are never
+ * deleted here: a coupon removed in Stripe leaves the historical invoice
+ * evidence intact, and that history is the point of the table.
+ */
+export async function writePromoGrants(
+  supabase: SupabaseWriter,
+  rows: PromoGrantRow[],
+) {
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const deduped = dedupeByKey(rows, "grant_id");
+
+  return upsertChunked(supabase, TABLES.promoGrants, deduped, {
+    onConflict: "grant_id",
   });
 }
 

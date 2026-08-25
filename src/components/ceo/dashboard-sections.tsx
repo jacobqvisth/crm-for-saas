@@ -33,6 +33,7 @@ export type DashboardSectionKey =
   | "product-analytics"
   | "plan-stats"
   | "free-users"
+  | "promo-users"
   | "google-ads-users"
   | "campaigns"
   | "cac-ltv"
@@ -122,6 +123,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Free Users",
     description:
       "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus the full upgrade funnel — every signup starts on Free, upgrades open a 14-day card-required trial, cancels revert to Free — reconstructed from Stripe fingerprints: trials live now (rescue list), trial survival, reverted upgrades (win-back list), abandoned checkouts, payment failures, conversion by cohort and country, and the most engaged free users as an upgrade-candidate list.",
+  },
+  {
+    key: "promo-users",
+    label: "Promo Users",
+    glyph: "PM",
+    href: "/dashboard/promo-users",
+    title: "Promo Users",
+    description:
+      "Every user ever given a coupon or promotion code, and what happened next. One row per (customer, coupon), built from Stripe's own discount records: which code, what terms, whether the discount is still live, and exactly how much was given up per currency. Then the two halves that were never joined before — outreach from the CRM (calls placed and connected, sequence emails sent, replies, logged activities) against product usage from the app (diagnoses, diagnostic chats, feature events, logins, active days). Includes the engagement ladder from never-logged-in to repeat user, and an outreach-coverage split showing which discounted workshops nobody ever followed up. Internal and partner comps are flagged rather than dropped.",
   },
   {
     key: "google-ads-users",
