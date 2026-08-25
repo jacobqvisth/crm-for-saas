@@ -14,7 +14,7 @@ import { useWorkspace } from '@/lib/hooks/use-workspace';
 import { LeadStatusBadge, ContactStatusBadge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { EnrollInSequenceModal } from '@/components/contacts/enroll-in-sequence-modal';
-import { AddToCallListModal } from '@/components/contacts/add-to-call-list-modal';
+import { AddToListModal } from '@/components/contacts/add-to-list-modal';
 import { ComposeEmailModal } from '@/components/contacts/compose-email-modal';
 import { ActivityDetailModal } from '@/components/contacts/activity-detail-modal';
 import { CallNowButton, CallDetailDrawer } from '@/components/calls/call-now';
@@ -146,7 +146,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
   const [hasMoreActivities, setHasMoreActivities] = useState(false);
   const [activitiesPage, setActivitiesPage] = useState(0);
   const [contactLists, setContactLists] = useState<{ id: string; name: string; purpose: string | null }[]>([]);
-  const [showAddToCallList, setShowAddToCallList] = useState(false);
+  const [showAddToList, setShowAddToList] = useState(false);
   const [sequences, setSequences] = useState<{ id: string; name: string; status: string; current_step: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editField, setEditField] = useState<string | null>(null);
@@ -1232,11 +1232,11 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-slate-700">Lists</h3>
               <button
-                onClick={() => setShowAddToCallList(true)}
+                onClick={() => setShowAddToList(true)}
                 className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
               >
                 <Plus className="w-3 h-3" />
-                Add to call list
+                Add
               </button>
             </div>
             {contactLists.length === 0 ? (
@@ -1318,12 +1318,13 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
         }}
       />
 
-      {/* Add to Call List Modal */}
-      <AddToCallListModal
-        open={showAddToCallList}
-        onClose={() => setShowAddToCallList(false)}
+      {/* Add to List Modal — normal contact list or call list */}
+      <AddToListModal
+        open={showAddToList}
+        onClose={() => setShowAddToList(false)}
         contactId={contactId}
         contactName={fullName}
+        existingListIds={contactLists.map(l => l.id)}
         onAdded={() => {
           // Reload the Lists section
           (async () => {
