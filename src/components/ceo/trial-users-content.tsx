@@ -75,16 +75,16 @@ const USAGE_INFO: SourceInfo = {
     "dashboard_feature_usage · dashboard_user_logins (active days)",
   ],
   logic:
-    "Usage is rolled up across every app user at the workshop, because the trial belongs to the workshop while the diagnoses belong to individual techs. Feature counters only exist from 2026-06-11 onward, so an older workshop's feature total understates its lifetime usage.",
+    "Usage is rolled up across every app user at the workshop, because the trial belongs to the workshop while the diagnoses belong to individual techs. Feature counters only exist from 2026-06-11 onward, so an older workshop's feature total understates its lifetime usage. Measured this way over exact Stripe dates, in-window usage does NOT predict conversion — the never-used bucket converts about as well as the heaviest one, and converters used the product less during their trial than trials that expired unpaid. Do not treat a usage number here as a buying signal.",
 };
 
 const RISK_INFO: SourceInfo = {
-  title: "How the rescue ranking is built",
+  title: "How the ranking is built, and what it is actually ranking",
   body:
     "A blunt additive score, not a model: no diagnosis yet adds 40, barely used adds 15, never called or emailed adds 20, three days or fewer left adds 25 (under a week adds 15), and nothing at all in the last seven days adds 15. Capped at 100.",
   sources: ["trial_subscriptions() joined to the per-user activity rollup"],
   logic:
-    "It is a queue, not a prediction. The point is that a trial with no usage and no contact and two days left should be at the top of somebody's call list this morning, and the score just puts it there.",
+    "It ranks UNENGAGED AND UNATTENDED, not 'about to lapse' — and that distinction matters, because in-window usage turns out not to predict conversion at all. An unused trial converts about as often as a heavily used one, since the card is charged by default. So the reason to work this list is not that these trials will fail to convert; several will convert without anyone touching the product. It is that revenue collected from a workshop that never used the tool does not stick: of the converted workshops that never ran a diagnosis before their trial closed, only about half have used it since and a fifth have already cancelled. Calling them is about making the payment survive, not about rescuing the payment.",
 };
 
 const OUTREACH_INFO: SourceInfo = {
@@ -1049,7 +1049,8 @@ export function TrialUsersContent({
                   converted ? converted.pctUsedDuringTrial : null,
                 )}
                 label="Converters who used it in the window"
-                hint={`against ${pctLabel(expired ? expired.pctUsedDuringTrial : null)} of trials that never paid`}
+                hint={`against ${pctLabel(expired ? expired.pctUsedDuringTrial : null)} of trials that never paid — the wrong way round, and the point: engaged workshops evaluate and decline, disengaged ones forget to cancel`}
+                info={USAGE_INFO}
               />
               <SummaryCard
                 value={
@@ -1105,10 +1106,14 @@ export function TrialUsersContent({
                 <InfoHint info={RISK_INFO} />
               </h2>
               <p className="panel-description">
-                Ranked by how likely they look to lapse, highest first, then by
-                how little time is left. This is the call list: a trial with no
-                usage, no outreach and two days left is the one to phone this
-                morning.
+                Ranked most unengaged-and-unattended first, then by how little
+                time is left. This is the call list, but not for the obvious
+                reason: an unused trial converts about as often as a heavily
+                used one, because the card is charged by default. The reason to
+                work it is that a payment from a workshop that never used the
+                tool does not survive — so the goal of the call is to get them
+                running a diagnosis before the charge lands, not to save the
+                charge itself.
               </p>
             </div>
           </div>
