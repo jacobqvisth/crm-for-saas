@@ -189,7 +189,7 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     rationale:
       "Small is the most-picked paid tier, so it gets the widest keyword coverage of the three, including competitor alternative terms that pair with the /compare and /vs pages.",
     caveat:
-      "Two things to watch. Competitor names are used as keywords only, never in the ad text, because using a rival trademark in copy is against Google policy. And like the One campaign it is serving only a handful of impressions a day with no clicks, which points at the max CPC rather than the keywords.",
+      "Three things to watch. Competitor names are used as keywords only, never in the ad text, because using a rival trademark in copy is against Google policy. Like the One campaign it is serving only a handful of impressions a day with no clicks, which points at the max CPC rather than the keywords. And the alternatives ad group sends every competitor query to this generic Small page, even though 15 dedicated comparison pages are already live at /en/vs. Routing each rival to its own page is the cheapest improvement available, see the Info tab.",
   },
   {
     name: "WL Plan | Large",
