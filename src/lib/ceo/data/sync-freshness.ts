@@ -40,6 +40,32 @@ async function getCoreAppLastSyncedAtUncached(): Promise<string | null> {
   return (data?.last_success_at as string | undefined) ?? null;
 }
 
+/**
+ * Same single-row lookup as above for the Stripe source. Promo grants and
+ * subscription state are written by the Stripe sync, not the core_app one, so a
+ * page about discounts must show the Stripe stamp — showing core_app's would
+ * claim freshness the promo numbers do not have.
+ */
+export const getStripeLastSyncedAt = unstable_cache(
+  getStripeLastSyncedAtUncached,
+  ["ceo-stripe-last-synced"],
+  CEO_CACHE_OPTIONS,
+);
+
+async function getStripeLastSyncedAtUncached(): Promise<string | null> {
+  if (!hasSupabaseConfig()) return null;
+  const supabase = createSupabaseServiceClient();
+  if (!supabase) return null;
+
+  const { data } = await supabase
+    .from(TABLES.sourceAccounts)
+    .select("last_success_at")
+    .eq("source_key", "stripe")
+    .maybeSingle();
+
+  return (data?.last_success_at as string | undefined) ?? null;
+}
+
 export function formatStockholmTime(iso: string | null): string {
   if (!iso) return "never";
   const date = new Date(iso);

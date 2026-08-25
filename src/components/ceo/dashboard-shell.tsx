@@ -44,6 +44,7 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "diagnostic-search-terms",
   "dtc-codes",
   "free-users",
+  "promo-users",
   "google-ads-users",
   "cac-ltv",
   "campaigns",

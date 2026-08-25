@@ -8,6 +8,7 @@ import {
 } from "./user-stats-lookup";
 import type {
   MetricPoint,
+  PromoGrantRow,
   SourceConnector,
   SourceSyncWindow,
   SubscriptionRow,
@@ -71,7 +72,10 @@ export async function listSubscriptions(stripe: Stripe) {
       // (it errors: "cannot expand more than 4 levels"). We don't need the
       // product expanded — plan_key stays the price id and the dashboard maps
       // price ids → plan tiers (PRICE_ID_TO_PLAN_KEY in calculations.ts).
-      expand: ["data.customer"],
+      //
+      // data.discounts must be expanded or `subscription.discounts` comes back
+      // as bare ids and the coupon behind a promo grant is unknowable.
+      expand: ["data.customer", "data.discounts"],
     });
 
     subscriptions.push(...page.data);
@@ -87,10 +91,41 @@ export async function listSubscriptions(stripe: Stripe) {
  * them. We only treat an invoice as evidence of payment when money actually
  * moved (amount_paid > 0) — $0 trial invoices don't count.
  */
+/**
+ * Structural shape of a Stripe discount as it appears on a subscription or an
+ * invoice. Declared locally rather than leaning on `Stripe.Discount` for the
+ * same reason as InvoiceLike: the field moves around between API versions
+ * (`discount` singular pre-2025, `discounts` array after), and `promotion_code`
+ * is a bare id unless it was expanded.
+ */
+type DiscountLike = {
+  id?: string | null;
+  coupon?: {
+    id?: string | null;
+    name?: string | null;
+    percent_off?: number | null;
+    amount_off?: number | null;
+    currency?: string | null;
+    duration?: string | null;
+    duration_in_months?: number | null;
+  } | null;
+  promotion_code?: string | { id?: string | null; code?: string | null } | null;
+  start?: number | null;
+  end?: number | null;
+};
+
 type InvoiceLike = {
   amount_paid?: number | null;
   status?: string | null;
   created?: number | null;
+  currency?: string | null;
+  customer?: string | { id?: string | null; email?: string | null } | null;
+  customer_email?: string | null;
+  discounts?: Array<string | DiscountLike> | null;
+  total_discount_amounts?: Array<{
+    amount?: number | null;
+    discount?: string | DiscountLike | null;
+  }> | null;
   status_transitions?: { paid_at?: number | null } | null;
   subscription?: string | { id?: string } | null;
   parent?: {
@@ -152,15 +187,25 @@ export function buildPaidInvoiceMap(
   return firstPaidAt;
 }
 
-async function listPaidInvoices(stripe: Stripe) {
+/**
+ * Every invoice, not just the paid ones, with discounts expanded.
+ *
+ * This used to filter `status: "paid"` because its only consumer was
+ * buildPaidInvoiceMap. Promo grants need the discount history too, including
+ * invoices that were fully discounted to nothing (a 100%-off coupon produces a
+ * paid invoice with amount_paid = 0) and drafts/voids that still record which
+ * code was attached. buildPaidInvoiceMap does its own status + amount_paid
+ * filtering, so widening the read cannot change what it returns.
+ */
+async function listInvoices(stripe: Stripe) {
   const invoices: Stripe.Invoice[] = [];
   let startingAfter: string | undefined;
 
   do {
     const page = await stripe.invoices.list({
-      status: "paid",
       limit: 100,
       starting_after: startingAfter,
+      expand: ["data.discounts"],
     });
 
     invoices.push(...page.data);
@@ -168,6 +213,242 @@ async function listPaidInvoices(stripe: Stripe) {
   } while (startingAfter);
 
   return invoices;
+}
+
+async function listPromotionCodes(stripe: Stripe) {
+  const codes: Stripe.PromotionCode[] = [];
+  let startingAfter: string | undefined;
+
+  do {
+    const page = await stripe.promotionCodes.list({
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    codes.push(...page.data);
+    startingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+  } while (startingAfter);
+
+  return codes;
+}
+
+export type PromoIdentity = {
+  email: string | null;
+  workshopId: string | null;
+  internalUserId: string | null;
+};
+
+export type SubscriptionDiscount = {
+  subscriptionId: string;
+  status: string;
+  customerId: string | null;
+  currency: string | null;
+  discount: DiscountLike;
+};
+
+function discountObject(
+  value: string | DiscountLike | null | undefined,
+  byId: Map<string, DiscountLike>,
+): DiscountLike | null {
+  if (!value) return null;
+  if (typeof value === "string") return byId.get(value) ?? null;
+  return value;
+}
+
+function promotionCodeOf(
+  discount: DiscountLike,
+  names: Map<string, string>,
+): { id: string | null; code: string | null } {
+  const raw = discount.promotion_code;
+  if (!raw) return { id: null, code: null };
+
+  if (typeof raw === "string") {
+    return { id: raw, code: names.get(raw) ?? null };
+  }
+
+  return {
+    id: raw.id ?? null,
+    code: raw.code ?? (raw.id ? names.get(raw.id) ?? null : null),
+  };
+}
+
+/**
+ * Collapse Stripe's discount records into one row per (customer, coupon).
+ *
+ * Pure so it can be unit-tested: the caller does the API paging and the
+ * customer→workshop/user matching, this only does the folding.
+ *
+ * Money notes: `total_discount_cents` is summed from the per-discount amounts
+ * Stripe already attributes on each invoice, so it is exact. `total_paid_cents`
+ * is attributed to the FIRST coupon on an invoice only — an invoice carrying two
+ * coupons has no non-arbitrary split, and attributing the full amount to both
+ * would double-count real revenue. Every amount stays in the grant's own
+ * currency; callers must group by `currency` before summing.
+ */
+export function buildPromoGrants(params: {
+  subscriptionDiscounts: SubscriptionDiscount[];
+  invoices: InvoiceLike[];
+  promotionCodeNames: Map<string, string>;
+  identityByCustomer: Map<string, PromoIdentity>;
+}): PromoGrantRow[] {
+  const {
+    subscriptionDiscounts,
+    invoices,
+    promotionCodeNames,
+    identityByCustomer,
+  } = params;
+
+  type Accumulator = PromoGrantRow & { codes: Set<string> };
+  const grants = new Map<string, Accumulator>();
+
+  const ensure = (
+    customerId: string | null,
+    coupon: DiscountLike["coupon"],
+    fallbackEmail: string | null,
+  ) => {
+    const couponId = coupon?.id ?? null;
+    if (!couponId) return null;
+
+    const key = `${customerId ?? "unknown"}:${couponId}`;
+    const existing = grants.get(key);
+    if (existing) return existing;
+
+    const identity = customerId ? identityByCustomer.get(customerId) : undefined;
+    const created: Accumulator = {
+      grant_id: key,
+      stripe_customer_id: customerId,
+      customer_email: identity?.email ?? fallbackEmail,
+      workshop_id: identity?.workshopId ?? null,
+      internal_user_id: identity?.internalUserId ?? null,
+      promotion_code: null,
+      promotion_code_id: null,
+      coupon_id: couponId,
+      coupon_name: coupon?.name ?? null,
+      percent_off: coupon?.percent_off ?? null,
+      amount_off_cents: coupon?.amount_off ?? null,
+      duration: coupon?.duration ?? null,
+      duration_in_months: coupon?.duration_in_months ?? null,
+      source: "invoice",
+      active_on_subscription: false,
+      stripe_subscription_id: null,
+      subscription_status: null,
+      first_applied_at: null,
+      last_applied_at: null,
+      invoice_count: 0,
+      total_discount_cents: 0,
+      total_paid_cents: 0,
+      currency: coupon?.currency ? coupon.currency.toUpperCase() : null,
+      metadata: {},
+      codes: new Set<string>(),
+    };
+
+    grants.set(key, created);
+    return created;
+  };
+
+  const stampDate = (grant: Accumulator, iso: string | null) => {
+    if (!iso) return;
+    if (!grant.first_applied_at || iso < grant.first_applied_at) {
+      grant.first_applied_at = iso;
+    }
+    if (!grant.last_applied_at || iso > grant.last_applied_at) {
+      grant.last_applied_at = iso;
+    }
+  };
+
+  const applyCode = (grant: Accumulator, discount: DiscountLike) => {
+    const { id, code } = promotionCodeOf(discount, promotionCodeNames);
+    if (code) grant.codes.add(code);
+    if (!grant.promotion_code && code) {
+      grant.promotion_code = code;
+      grant.promotion_code_id = id;
+    }
+  };
+
+  // ---- live state: discounts attached to a subscription right now ----------
+  for (const entry of subscriptionDiscounts) {
+    const grant = ensure(entry.customerId, entry.discount.coupon, null);
+    if (!grant) continue;
+
+    grant.source = "subscription";
+    grant.active_on_subscription = true;
+    grant.stripe_subscription_id = entry.subscriptionId;
+    grant.subscription_status = entry.status;
+    if (!grant.currency && entry.currency) {
+      grant.currency = entry.currency.toUpperCase();
+    }
+    applyCode(grant, entry.discount);
+    stampDate(grant, unixToIso(entry.discount.start));
+  }
+
+  // ---- billed history: what the discounts actually cost --------------------
+  for (const invoice of invoices) {
+    const byId = new Map<string, DiscountLike>();
+    for (const raw of invoice.discounts ?? []) {
+      if (typeof raw === "object" && raw?.id) byId.set(raw.id, raw);
+    }
+
+    const amounts = invoice.total_discount_amounts ?? [];
+    const resolved: Array<{ discount: DiscountLike; amount: number }> = [];
+
+    for (const entry of amounts) {
+      const discount = discountObject(entry.discount, byId);
+      if (discount) {
+        resolved.push({ discount, amount: Number(entry.amount ?? 0) });
+      }
+    }
+
+    // An invoice can carry a discount with no attributed amount (a 100%-off
+    // coupon on an already-zero invoice, or a discount that did not bite in
+    // this period). It still evidences the grant, so register it at 0.
+    if (resolved.length === 0) {
+      for (const raw of invoice.discounts ?? []) {
+        const discount = discountObject(raw, byId);
+        if (discount) resolved.push({ discount, amount: 0 });
+      }
+    }
+
+    if (resolved.length === 0) continue;
+
+    const customerId =
+      typeof invoice.customer === "string"
+        ? invoice.customer
+        : (invoice.customer?.id ?? null);
+    const invoiceEmail =
+      invoice.customer_email ??
+      (typeof invoice.customer === "object"
+        ? (invoice.customer?.email ?? null)
+        : null);
+    const createdIso = unixToIso(invoice.created);
+    let paidAttributed = false;
+
+    for (const { discount, amount } of resolved) {
+      const grant = ensure(customerId, discount.coupon, invoiceEmail);
+      if (!grant) continue;
+
+      grant.source = grant.active_on_subscription ? "both" : "invoice";
+      if (!grant.customer_email && invoiceEmail) {
+        grant.customer_email = invoiceEmail;
+      }
+      if (invoice.currency) grant.currency = invoice.currency.toUpperCase();
+      grant.invoice_count += 1;
+      grant.total_discount_cents += amount;
+      if (!paidAttributed) {
+        grant.total_paid_cents += Number(invoice.amount_paid ?? 0);
+        paidAttributed = true;
+      }
+      applyCode(grant, discount);
+      stampDate(grant, createdIso);
+    }
+  }
+
+  return [...grants.values()].map(({ codes, ...grant }) => ({
+    ...grant,
+    metadata: {
+      ...grant.metadata,
+      promotion_codes: [...codes].sort(),
+    },
+  }));
 }
 
 function customerWorkshopId(
@@ -210,14 +491,22 @@ export const stripeConnector: SourceConnector = {
     requireSourceEnv("Stripe", ["STRIPE_SECRET_KEY"]);
 
     const stripe = new Stripe(getEnv("STRIPE_SECRET_KEY")!);
-    const [subscriptions, userStatsLookup, paidInvoices] = await Promise.all([
-      listSubscriptions(stripe),
-      loadUserStatsEmailLookupFromS3(),
-      listPaidInvoices(stripe),
-    ]);
+    const [subscriptions, userStatsLookup, invoices, promotionCodes] =
+      await Promise.all([
+        listSubscriptions(stripe),
+        loadUserStatsEmailLookupFromS3(),
+        listInvoices(stripe),
+        listPromotionCodes(stripe),
+      ]);
     // subscription id → first real payment timestamp. Used to split churn
     // into "paid churn" (made a payment at least once) vs trial-only churn.
-    const firstPaidBySubscription = buildPaidInvoiceMap(paidInvoices);
+    const firstPaidBySubscription = buildPaidInvoiceMap(invoices);
+    // Promotion code id → the human code people actually typed (WRENCHLANE90).
+    // A discount only carries the id, and the same code string is reused across
+    // several coupons over time, so the mapping has to come from the codes list.
+    const promotionCodeNames = new Map(
+      promotionCodes.map((code) => [code.id, code.code]),
+    );
     const stripeCustomerIdsByEmail = new Map<string, Set<string>>();
 
     for (const subscription of subscriptions) {
@@ -433,11 +722,61 @@ export const stripeConnector: SourceConnector = {
       },
     );
 
+    // Promo grants reuse the customer→workshop/user matching that the
+    // subscription rows above already resolved, so a discounted customer lands
+    // on the same workshop the rest of the dashboard knows them by.
+    const identityByCustomer = new Map<string, PromoIdentity>();
+    for (const row of subscriptionRows) {
+      if (!row.stripe_customer_id) continue;
+
+      const previous = identityByCustomer.get(row.stripe_customer_id);
+      const email = (row.metadata.customer_email as string | null) ?? null;
+      const internalUserId =
+        (row.metadata.matched_internal_user_id as string | null) ?? null;
+
+      identityByCustomer.set(row.stripe_customer_id, {
+        email: email ?? previous?.email ?? null,
+        workshopId: row.workshop_id ?? previous?.workshopId ?? null,
+        internalUserId: internalUserId ?? previous?.internalUserId ?? null,
+      });
+    }
+
+    const subscriptionDiscounts: SubscriptionDiscount[] = [];
+    for (const subscription of subscriptions) {
+      const raw =
+        (subscription as unknown as {
+          discounts?: Array<string | DiscountLike> | null;
+        }).discounts ?? [];
+
+      for (const discount of raw) {
+        if (typeof discount !== "object" || !discount?.coupon) continue;
+
+        subscriptionDiscounts.push({
+          subscriptionId: subscription.id,
+          status: subscription.status,
+          customerId:
+            typeof subscription.customer === "string"
+              ? subscription.customer
+              : subscription.customer.id,
+          currency: subscription.currency,
+          discount,
+        });
+      }
+    }
+
+    const promoGrants = buildPromoGrants({
+      subscriptionDiscounts,
+      invoices,
+      promotionCodeNames,
+      identityByCustomer,
+    });
+
     return {
       sourceKey: "stripe",
       rowsRead: subscriptions.length,
       metrics,
       subscriptions: subscriptionRows,
+      promoGrants,
       rawRows: subscriptions.map((subscription) => ({
         sourceKey: "stripe",
         externalId: subscription.id,
@@ -449,6 +788,10 @@ export const stripeConnector: SourceConnector = {
         active: active.length,
         currency,
         paid_subscriptions: firstPaidBySubscription.size,
+        promo_grants: promoGrants.length,
+        promo_customers: new Set(
+          promoGrants.map((grant) => grant.stripe_customer_id),
+        ).size,
         matched_by_core_stripe_customer_id: matchedByCoreStripeCustomerId,
         matched_by_core_stripe_subscription_id:
           matchedByCoreStripeSubscriptionId,

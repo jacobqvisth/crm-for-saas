@@ -44,6 +44,39 @@ export type SubscriptionRow = {
   metadata: Record<string, unknown>;
 };
 
+/**
+ * One Stripe coupon / promotion-code grant, at the grain of
+ * (customer, coupon, promotion code). See the dashboard_promo_grants
+ * migration for why that is the grain and why money must never be summed
+ * across rows without grouping by `currency`.
+ */
+export type PromoGrantRow = {
+  grant_id: string;
+  stripe_customer_id: string | null;
+  customer_email: string | null;
+  workshop_id: string | null;
+  internal_user_id: string | null;
+  promotion_code: string | null;
+  promotion_code_id: string | null;
+  coupon_id: string;
+  coupon_name: string | null;
+  percent_off: number | null;
+  amount_off_cents: number | null;
+  duration: string | null;
+  duration_in_months: number | null;
+  source: "subscription" | "invoice" | "both";
+  active_on_subscription: boolean;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+  first_applied_at: string | null;
+  last_applied_at: string | null;
+  invoice_count: number;
+  total_discount_cents: number;
+  total_paid_cents: number;
+  currency: string | null;
+  metadata: Record<string, unknown>;
+};
+
 export type UserRow = {
   internal_user_id: string;
   workshop_id: string | null;
@@ -168,6 +201,7 @@ export type SourceSyncResult = {
   funnel?: FunnelPoint[];
   rawRows?: RawMetricRow[];
   subscriptions?: SubscriptionRow[];
+  promoGrants?: PromoGrantRow[];
   users?: UserRow[];
   userLogins?: UserLoginRow[];
   userAttribution?: UserAttributionRow[];
