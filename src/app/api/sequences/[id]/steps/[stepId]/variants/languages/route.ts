@@ -92,5 +92,6 @@ export async function POST(
     created: result.created,
     skipped: result.skipped,
     failed: result.failed,
+    warnings: result.warnings,
   });
 }

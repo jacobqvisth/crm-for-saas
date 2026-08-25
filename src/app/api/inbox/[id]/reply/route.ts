@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/gmail/send";
 import { translateOutboundReply } from "@/lib/inbox/translate-outbound";
 import { insertActivity } from "@/lib/activities/insert";
+import {
+  hasReplyPrefix,
+  threadedReplySubject,
+} from "@/lib/sequences/reply-subject";
 
 export async function POST(
   request: NextRequest,
@@ -79,9 +83,11 @@ export async function POST(
 
   const sentBody = translation.translated;
   const htmlBody = `<p>${sentBody.replace(/\n/g, "<br>")}</p>`;
-  const replySubject = inboxMessage.subject?.startsWith("Re:")
-    ? inboxMessage.subject
-    : `Re: ${inboxMessage.subject || ""}`;
+  // Exactly one reply marker, and recognise the ones non-English clients
+  // write, so replying to a Swedish "SV: ..." does not produce "Re: SV: ...".
+  const replySubject = hasReplyPrefix(inboxMessage.subject ?? "")
+    ? (inboxMessage.subject ?? "")
+    : (threadedReplySubject("", inboxMessage.subject) ?? "");
 
   const result = await sendEmail({
     accountId: senderAccountId,
