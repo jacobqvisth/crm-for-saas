@@ -30,6 +30,10 @@ import {
   FUNNEL_MECHANICS,
   IMPROVEMENT_PLAN,
   PLAN_FACTS,
+  PMAX_BASELINE,
+  PMAX_POWER_TABLE,
+  PMAX_RECOMMENDATION,
+  PMAX_SPLIT_VERDICT,
   WHY_TARGETING_IS_IMPRECISE,
   WHY_THIS_WORKS,
   type InfoPoint,
@@ -680,6 +684,81 @@ function InfoTab() {
             </tbody>
           </table>
         </div>
+      </article>
+
+      {/* ---- pmax per plan? ------------------------------------------------------ */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">A question that keeps coming up</p>
+            <h3>
+              Should we run a Performance Max campaign per plan, each on its own
+              landing page, so we can compare them?
+            </h3>
+          </div>
+        </div>
+        <p className="panel-description">
+          Short answer: pointing different audiences at different pages is a
+          good idea, but separate campaigns are the wrong mechanism for it, and
+          separate campaigns cannot answer the comparison question at all.
+        </p>
+        <PointList points={PMAX_SPLIT_VERDICT} />
+      </article>
+
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">How much traffic a real test needs</p>
+            <h3>What this account can actually measure</h3>
+          </div>
+        </div>
+        <p className="panel-description">
+          Performance Max has delivered{" "}
+          {formatNumber(PMAX_BASELINE.clicks)} clicks and{" "}
+          {formatNumber(PMAX_BASELINE.signups)} signups, a{" "}
+          {PMAX_BASELINE.signupRatePct}% click-to-signup rate, at roughly{" "}
+          {PMAX_BASELINE.clicksPerDay} clicks a day. At that rate, here is how
+          long it takes to tell a real difference from noise, at 80% power and
+          95% confidence.
+        </p>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Difference you want to detect</th>
+                <th>Clicks needed per variant</th>
+                <th>2 variants</th>
+                <th>4 variants</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PMAX_POWER_TABLE.map((row) => (
+                <tr key={row.effect}>
+                  <td>{row.effect}</td>
+                  <td>{row.clicksPerVariant}</td>
+                  <td>{row.twoVariants}</td>
+                  <td>{row.fourVariants}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="panel-description">
+          The four-variant column assumes the whole Performance Max budget is
+          pointed at the test and still ignores the stricter threshold four
+          simultaneous comparisons require. Treat it as a floor, not an
+          estimate.
+        </p>
+      </article>
+
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Recommendation</p>
+            <h3>What to do instead</h3>
+          </div>
+        </div>
+        <PointList points={PMAX_RECOMMENDATION} />
       </article>
 
       {/* ---- the plan ------------------------------------------------------------ */}

@@ -277,3 +277,105 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     ],
   },
 ];
+
+/* ---------------------------------------------------------------------------
+   "Should we run a Performance Max campaign per plan, each pointed at a
+   different landing page, so we can compare them?"
+
+   A reasonable question with a mostly-no answer, written down here so it does
+   not have to be re-argued from scratch every time it comes up.
+   --------------------------------------------------------------------------- */
+
+/** Measured from dashboard_metric_snapshots and dashboard_user_attribution. */
+export const PMAX_BASELINE = {
+  clicks: 38535,
+  signups: 976,
+  /** 976 / 38,535 */
+  signupRatePct: 2.53,
+  /** 38,535 clicks over roughly 99 serving days. */
+  clicksPerDay: 389,
+  signupsPerMonth: 250,
+  /** What GA4 reports as "conversions" for this campaign. */
+  ga4KeyEvents: 134158,
+  keyEventsPerClick: 3.48,
+};
+
+export const PMAX_SPLIT_VERDICT: InfoPoint[] = [
+  {
+    heading: "Asset groups already give you a landing page per audience",
+    body: "A Performance Max campaign can hold several asset groups, and each one carries its own final URL, its own creative and its own audience signal. Pointing different audiences at different plan pages does not need separate campaigns. It needs one campaign with four asset groups, which costs nothing and fragments nothing.",
+  },
+  {
+    heading: "Separate campaigns split the learning, not just the budget",
+    body: "Each Performance Max campaign needs roughly 20 to 30 conversions a month of its own before bidding leaves the learning phase. The common guidance is one or two campaigns at 30 to 50 conversions a month, and only segment past 100. Four campaigns would each be learning from a quarter of the signal.",
+  },
+  {
+    heading: "They would also bid against each other",
+    body: "Two Performance Max campaigns eligible for the same auction cannibalise one another. You would not get four independent tests, you would get four campaigns competing for the same inventory with your own money on both sides.",
+  },
+  {
+    heading: "And it would not actually be a landing page test",
+    body: "This is the decisive objection. Four campaigns would differ in creative, audience signal, budget pacing and bidding state as well as in landing page. Any difference in results could come from any of those. You would be comparing four different systems and crediting the one variable you happened to care about.",
+  },
+  {
+    heading: "A real test randomises people, not campaigns",
+    body: "To learn whether the wording on a page changes behaviour, hold everything before the click constant and split visitors at the page itself: one ad destination, with a server-side or edge split assigning each visitor to a variant. Then both variants see the same traffic mix from the same campaign on the same day, and the only thing that differs is the thing being tested.",
+  },
+];
+
+export type PowerRow = {
+  effect: string;
+  clicksPerVariant: string;
+  twoVariants: string;
+  fourVariants: string;
+};
+
+/**
+ * Sample sizes for a click-to-signup test at the measured 2.53% baseline,
+ * 80% power, 95% confidence, using n = 16 p(1-p) / delta^2 per arm. Durations
+ * assume Performance Max keeps delivering about 389 clicks a day and that the
+ * whole campaign is pointed at the test.
+ */
+export const PMAX_POWER_TABLE: PowerRow[] = [
+  {
+    effect: "Large, 2.5% to 3.8% (+50%)",
+    clicksPerVariant: "~3,100",
+    twoVariants: "about 2 weeks",
+    fourVariants: "about 1 month",
+  },
+  {
+    effect: "Moderate, 2.5% to 3.2% (+25%)",
+    clicksPerVariant: "~11,000",
+    twoVariants: "about 8 weeks",
+    fourVariants: "about 4 months",
+  },
+  {
+    effect: "Small, 2.5% to 3.0% (+20%)",
+    clicksPerVariant: "~17,100",
+    twoVariants: "about 3 months",
+    fourVariants: "about 6 months",
+  },
+];
+
+export const PMAX_RECOMMENDATION: InfoPoint[] = [
+  {
+    heading: "Fix what bidding optimises for, before testing anything",
+    body: "Performance Max reports 134,158 GA4 key events against 976 actual signups, which is 3.48 so-called conversions for every single click. Whatever conversion action this account optimises toward, it is not signups. A better landing page cannot show up in a number that is already measuring the wrong thing, so this outranks everything else on this page.",
+  },
+  {
+    heading: "Add asset groups to the campaign you already have",
+    body: "One asset group per plan inside the existing Performance Max campaign, each with its own final URL and audience signal. That gives per-asset-group reporting and different pages for different audiences, with no budget fragmentation and no self-competition. It is the version of the idea that works.",
+  },
+  {
+    heading: "Test two pages at a time, never four",
+    body: "At the measured 2.53% signup rate a two-way test can detect a large difference in about a fortnight, but needs three months for a small one. A four-way test roughly doubles that and needs a stricter significance threshold on top, because more comparisons mean more chances to be fooled by noise.",
+  },
+  {
+    heading: "Expect to detect only big differences",
+    body: "This account's traffic can reliably tell a rewrite that changes behaviour by half from one that changes nothing. It cannot resolve a ten percent improvement in any useful timeframe. That is an argument for testing genuinely different propositions rather than button colours.",
+  },
+  {
+    heading: "A second campaign is justified by a different goal, not a different page",
+    body: "Splitting by language, market or budget ownership is a real reason to run another Performance Max campaign, because those genuinely need separate control. Splitting purely to compare landing pages is not, because asset groups already do that job and do it better.",
+  },
+];
