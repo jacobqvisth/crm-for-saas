@@ -5342,6 +5342,10 @@ export type Database = {
           sequence_id: string
           step_order: number
           subject_override: string | null
+          task_description: string | null
+          task_due_days: number | null
+          task_priority: string | null
+          task_title: string | null
           template_id: string | null
           type: string | null
         }
@@ -5359,6 +5363,10 @@ export type Database = {
           sequence_id: string
           step_order: number
           subject_override?: string | null
+          task_description?: string | null
+          task_due_days?: number | null
+          task_priority?: string | null
+          task_title?: string | null
           template_id?: string | null
           type?: string | null
         }
@@ -5376,6 +5384,10 @@ export type Database = {
           sequence_id?: string
           step_order?: number
           subject_override?: string | null
+          task_description?: string | null
+          task_due_days?: number | null
+          task_priority?: string | null
+          task_title?: string | null
           template_id?: string | null
           type?: string | null
         }
@@ -5999,6 +6011,7 @@ export type Database = {
           enrollment_id: string | null
           id: string
           priority: string
+          sequence_step_id: string | null
           snoozed_until: string | null
           title: string
           type: string
@@ -6017,6 +6030,7 @@ export type Database = {
           enrollment_id?: string | null
           id?: string
           priority?: string
+          sequence_step_id?: string | null
           snoozed_until?: string | null
           title: string
           type?: string
@@ -6035,6 +6049,7 @@ export type Database = {
           enrollment_id?: string | null
           id?: string
           priority?: string
+          sequence_step_id?: string | null
           snoozed_until?: string | null
           title?: string
           type?: string
@@ -6061,6 +6076,13 @@ export type Database = {
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_sequence_step_id_fkey"
+            columns: ["sequence_step_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_steps"
             referencedColumns: ["id"]
           },
           {

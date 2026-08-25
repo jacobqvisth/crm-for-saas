@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { Mail, Clock, GitBranch, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { Mail, Clock, GitBranch, Phone, CheckSquare, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { EmailStepEditor } from "./email-step-editor";
 import { DelayStepEditor } from "./delay-step-editor";
 import { ConditionStepEditor } from "./condition-step-editor";
+import { TaskStepEditor } from "./task-step-editor";
 import type { Tables } from "@/lib/database.types";
 
 type Step = Tables<"sequence_steps">;
@@ -31,6 +32,20 @@ const STEP_CONFIG = {
     bgColor: "bg-purple-100",
     textColor: "text-purple-600",
     borderColor: "border-purple-200",
+  },
+  call: {
+    icon: Phone,
+    label: "Follow-up call",
+    bgColor: "bg-emerald-100",
+    textColor: "text-emerald-600",
+    borderColor: "border-emerald-200",
+  },
+  task: {
+    icon: CheckSquare,
+    label: "Task",
+    bgColor: "bg-sky-100",
+    textColor: "text-sky-600",
+    borderColor: "border-sky-200",
   },
 };
 
@@ -66,6 +81,13 @@ export function StepCard({ step, totalSteps, stepNumber, sequenceName, isFirstEm
     }
     if (step.type === "condition") {
       return `If previous email was ${step.condition_type || "opened"}`;
+    }
+    if (step.type === "call" || step.type === "task") {
+      const label =
+        step.task_title?.trim() ||
+        (step.type === "call" ? "Follow-up call" : "Follow up with the contact");
+      const due = step.task_due_days ?? 0;
+      return due > 0 ? `${label} — due in ${due} day${due !== 1 ? "s" : ""}` : label;
     }
     return "";
   };
@@ -131,6 +153,12 @@ export function StepCard({ step, totalSteps, stepNumber, sequenceName, isFirstEm
             <ConditionStepEditor
               step={step}
               totalSteps={totalSteps}
+              onUpdate={(updates) => onUpdate(step.id, updates)}
+            />
+          )}
+          {(step.type === "call" || step.type === "task") && (
+            <TaskStepEditor
+              step={step}
               onUpdate={(updates) => onUpdate(step.id, updates)}
             />
           )}

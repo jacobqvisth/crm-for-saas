@@ -163,6 +163,10 @@ export async function POST(request: NextRequest) {
         condition_type: s.condition_type,
         condition_branch_yes: s.condition_branch_yes,
         condition_branch_no: s.condition_branch_no,
+        task_title: s.task_title,
+        task_description: s.task_description,
+        task_priority: s.task_priority,
+        task_due_days: s.task_due_days,
       };
 
       if (s.type !== "email") {
