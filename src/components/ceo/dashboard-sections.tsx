@@ -33,6 +33,7 @@ export type DashboardSectionKey =
   | "product-analytics"
   | "plan-stats"
   | "free-users"
+  | "trial-users"
   | "promo-users"
   | "google-ads-users"
   | "campaigns"
@@ -123,6 +124,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Free Users",
     description:
       "The freemium base analysed end-to-end: how many free users actually use the product and how often (7/30-day activity, active-day frequency, feature mix, activation and repeat usage), plus the full upgrade funnel — every signup starts on Free, upgrades open a 14-day card-required trial, cancels revert to Free — reconstructed from Stripe fingerprints: trials live now (rescue list), trial survival, reverted upgrades (win-back list), abandoned checkouts, payment failures, conversion by cohort and country, and the most engaged free users as an upgrade-candidate list.",
+  },
+  {
+    key: "trial-users",
+    label: "Trial Users",
+    glyph: "TR",
+    href: "/dashboard/trial-users",
+    title: "Trial Users",
+    description:
+      "Everyone who ever opened a One / Small / Large free trial, and whether it turned into money. Eight tabs. Overview: every trial ever started with its outcome broken into nine mutually exclusive buckets (still running, converted and still paying, converted then cancelled, cancelled during the trial, ran out never charged, trial ended and payment failed), the weekly flow of trials started against first payments, MRR won, lost and still at risk per currency, and an explicit list of what the page cannot see. What converts: ten conversion cuts sharing one denominator rule — live trials never enter the rate — by usage strictly inside the trial window, country, plan tier, billing interval, currency, trial length, the month the trial opened, whether we called or emailed during it, whether a discount was attached, and how many techs the workshop had. Live trials: every trial running right now, ranked as a call list by a rescue score built from no-usage, no-outreach, days-left and silence. Users: every app user in a trial workshop with diagnoses before, inside and after the window, day of first use, chats, features, logins, active days, calls, emails, opens, clicks and replies. Timeline: one user's whole history in a single stream — signup, trial opening and closing, first payment, every call with the rep, every email with the sending mailbox, replies, every diagnosis with the car and what they typed. Outreach: the full call and email logs positioned relative to the trial window. Product use: what trial users typed, the cars, the DTCs, the symptoms. Cohorts: converted, expired, live and never-trialed compared on activation, repeat use, intensity and retention, plus the funnel. Converted means money actually moved (metadata.ever_paid), never plan_key or trial_end, which are stamped at checkout. Grains are kept apart deliberately: conversion per trial, behaviour per app user, outreach per contact.",
   },
   {
     key: "promo-users",

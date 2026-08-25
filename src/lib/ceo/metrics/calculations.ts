@@ -6,6 +6,10 @@ import {
   formatNumber,
   formatPercent,
 } from "@/lib/ceo/format";
+import {
+  PLAN_KEY_LABELS,
+  PRICE_ID_TO_PLAN_KEY,
+} from "@/lib/ceo/plan-prices";
 import { SOURCE_KEYS, SOURCE_LABELS, type SourceKey } from "@/lib/ceo/sources";
 import {
   DEFAULT_TIME_RANGE_KEY,
@@ -1403,31 +1407,6 @@ export function calculateDashboardData({
     insights,
   };
 }
-
-// Known Stripe price ids → core-app plan tier. Stripe has legacy duplicate
-// prices per tier, so we map them all to one canonical key. New subscriptions
-// resolve their human name from the expanded product (see stripe.ts planName),
-// so this only needs to cover the historical price-id rows.
-const PRICE_ID_TO_PLAN_KEY: Record<string, string> = {
-  price_1TToj1ACX27zeuSMhRcYIAxa: "one_monthly",
-  price_1SG4zaACX27zeuSMaMCnWgPE: "small_monthly",
-  price_1R3mE9ACX27zeuSMo0cj8JVt: "small_monthly",
-  price_1SG50OACX27zeuSMQL37gjYY: "small_yearly",
-  price_1RYNy4ACX27zeuSMeDeO98Sp: "small_yearly",
-  price_1SG526ACX27zeuSM2slFf17x: "large_monthly",
-  price_1R3mE2ACX27zeuSMzci4kmXy: "large_monthly",
-  price_1RYNzfACX27zeuSM5DA97UTO: "large_yearly",
-};
-
-const PLAN_KEY_LABELS: Record<string, string> = {
-  free: "Free",
-  one_monthly: "One · Monthly",
-  one_yearly: "One · Yearly",
-  small_monthly: "Small · Monthly",
-  small_yearly: "Small · Yearly",
-  large_monthly: "Large · Monthly",
-  large_yearly: "Large · Yearly",
-};
 
 function planKeyLabel(planKey: string): string {
   if (PLAN_KEY_LABELS[planKey]) return PLAN_KEY_LABELS[planKey];
