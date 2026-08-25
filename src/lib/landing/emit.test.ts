@@ -153,6 +153,65 @@ describe("the emitted bundle", () => {
     expect(page?.companions[0]?.lift).toBe(9.4);
   });
 
+  it("never links a companion that has no page", () => {
+    // Co-occurrence is computed over every code we have seen, including the
+    // manufacturer-specific ones that deliberately never get a page. Before
+    // this was guarded, the exclusion rule leaked back out as broken links.
+    const bundle = bundleFrom(
+      [
+        codeRow({ base: "P0299", name: "Turbo underboost", entries: 55 }),
+        codeRow({ base: "P1258", scope: "manufacturer", entries: 6 }),
+      ],
+      [
+        {
+          a: "P0299",
+          b: "P1258",
+          aName: null,
+          bName: null,
+          together: 4,
+          aTotal: 55,
+          bTotal: 6,
+          lift: 8.1,
+          confidence: 0.6,
+          sameFamily: false,
+        },
+      ],
+    );
+    const page = bundle.pages.find((row) => row.code === "P0299");
+    const companion = page?.companions.find((c) => c.code === "P1258");
+    // The association is real and stays. Only the link is withheld.
+    expect(companion).toBeDefined();
+    expect(companion?.hasPage).toBe(false);
+    expect(companion?.scope).toBe("manufacturer");
+    expect(validateBundle(bundle)).toEqual([]);
+  });
+
+  it("catches a companion that wrongly claims a page", () => {
+    const bundle = bundleFrom(
+      [
+        codeRow({ base: "P0299", name: "Turbo underboost", entries: 55 }),
+        codeRow({ base: "P1258", scope: "manufacturer", entries: 6 }),
+      ],
+      [
+        {
+          a: "P0299",
+          b: "P1258",
+          aName: null,
+          bName: null,
+          together: 4,
+          aTotal: 55,
+          bTotal: 6,
+          lift: 8.1,
+          confidence: 0.6,
+          sameFamily: false,
+        },
+      ],
+    );
+    bundle.pages.find((row) => row.code === "P0299")!.companions[0].hasPage =
+      true;
+    expect(validateBundle(bundle).join(" ")).toContain("which has no page");
+  });
+
   it("lists manufacturer codes on the family hub instead of dropping them", () => {
     // They get no page, but pretending we have never seen them would be its
     // own kind of dishonest.

@@ -28,6 +28,7 @@ import type { DtcAnalysis, DtcCodeRow } from "@/lib/ceo/dtc/analyse";
 import { DTC_SYSTEMS, classifyFamily, ftbName } from "@/lib/ceo/dtc/taxonomy";
 import type { LandingCandidate, LandingTier } from "./types";
 import type { LandingPlan } from "./plan";
+import { baseCodeScope } from "@/lib/ceo/dtc/parse";
 import { codeSlug, faultCodePath, textSlug } from "./slugs";
 
 export type CompanionFact = {
@@ -38,6 +39,19 @@ export type CompanionFact = {
   /** How much more often than chance. 1.0 means no association. */
   lift: number;
   sameFamily: boolean;
+  /**
+   * Whether this companion has a page of its own.
+   *
+   * Co-occurrence is computed over every code we have seen, which includes the
+   * manufacturer-specific ones we deliberately never give a page and the
+   * one-sighting codes that sit below the floor. The association is real and
+   * worth showing either way, so the fact stays; only the link is conditional.
+   * Without this the exclusion rule leaks straight back out as a few dozen
+   * links to pages that were deliberately not built.
+   */
+  hasPage: boolean;
+  /** Manufacturer-specific companions get a note instead of a link. */
+  scope: "generic" | "manufacturer";
 };
 
 export type FaultCodePage = {
@@ -83,6 +97,14 @@ export type FamilyHubPage = {
    * and what they mean depends on the marque.
    */
   manufacturerCodes: string[];
+  /**
+   * How many manufacturer-specific codes this family really has.
+   *
+   * The list above is capped so the hub does not turn into a wall of codes. A
+   * cap that is not stated reads as a complete list, so the total travels with
+   * it and the page says how many it is not showing.
+   */
+  manufacturerCodesTotal: number;
   meta: { title: string; description: string };
 };
 
@@ -108,6 +130,9 @@ export type FaultCodeBundle = {
  * description get trimmed, and then on a word boundary rather than mid-word.
  * The code itself is never touched: it is the entire reason the page ranks.
  */
+/** How many manufacturer-specific codes a family hub lists before it stops. */
+export const MANUFACTURER_LIST_CAP = 40;
+
 const TITLE_LIMIT = 88;
 const BRAND_SUFFIX = " | Wrenchlane";
 
@@ -158,6 +183,7 @@ function metaFor(row: LandingCandidate, seen: DtcCodeRow | undefined) {
 function companionsFor(
   analysis: DtcAnalysis,
   code: string,
+  built: Set<string>,
 ): CompanionFact[] {
   return analysis.pairs
     .filter((pair) => pair.a === code || pair.b === code)
@@ -165,12 +191,15 @@ function companionsFor(
     .slice(0, 6)
     .map((pair) => {
       const isA = pair.a === code;
+      const other = isA ? pair.b : pair.a;
       return {
-        code: isA ? pair.b : pair.a,
+        code: other,
         name: isA ? pair.bName : pair.aName,
         together: pair.together,
         lift: Math.round(pair.lift * 10) / 10,
         sameFamily: pair.sameFamily,
+        hasPage: built.has(other),
+        scope: baseCodeScope(other),
       };
     });
 }
@@ -196,6 +225,11 @@ export function buildFaultCodeBundle(
     list.push(row);
     byFamily.set(row.familyKey, list);
   }
+
+  // Which codes actually get a page. Needed before any page renders, because a
+  // page cannot know from its own row whether the codes it co-occurs with were
+  // built.
+  const built = new Set(buildable.map((row) => row.code));
 
   const pages: FaultCodePage[] = buildable.map((row) => {
     const seen = seenByCode.get(row.code);
@@ -229,7 +263,7 @@ export function buildFaultCodeBundle(
         firstSeen: seen?.firstSeen ?? null,
         lastSeen: seen?.lastSeen ?? null,
       },
-      companions: companionsFor(analysis, row.code),
+      companions: companionsFor(analysis, row.code, built),
       related: siblings.map((other) => ({
         code: other.code,
         name: other.name,
@@ -242,12 +276,11 @@ export function buildFaultCodeBundle(
   const families: FamilyHubPage[] = plan.families.map((family) => {
     const members = (byFamily.get(family.key) ?? []).slice();
     const spec = classifyFamily(members[0]?.code ?? "");
-    const manufacturerCodes = plan.candidates
-      .filter(
-        (row) => row.tier === "excluded" && row.familyKey === family.key,
-      )
-      .sort((left, right) => right.sessions - left.sessions)
-      .slice(0, 40)
+    const excludedInFamily = plan.candidates
+      .filter((row) => row.tier === "excluded" && row.familyKey === family.key)
+      .sort((left, right) => right.sessions - left.sessions);
+    const manufacturerCodes = excludedInFamily
+      .slice(0, MANUFACTURER_LIST_CAP)
       .map((row) => row.code);
 
     return {
@@ -264,6 +297,7 @@ export function buildFaultCodeBundle(
         path: row.path,
       })),
       manufacturerCodes,
+      manufacturerCodesTotal: excludedInFamily.length,
       meta: {
         title: fitTitle(`${family.label} fault codes`),
         description: `Every ${family.label.toLowerCase()} code we have seen in real diagnostics, ranked by how often it turns up. ${family.pages} documented, plus the manufacturer-specific codes that belong to the same group.`.slice(
@@ -314,6 +348,18 @@ export function validateBundle(bundle: FaultCodeBundle): string[] {
     }
     if (/[—–]/.test(page.meta.title) || /[—–]/.test(page.meta.description)) {
       problems.push(`${page.code} meta contains a long dash`);
+    }
+  }
+
+  // A companion that claims a page must have one. This is the check that would
+  // have caught the exclusion rule leaking back out as broken links.
+  for (const page of bundle.pages) {
+    for (const companion of page.companions) {
+      if (companion.hasPage && !seenSlugs.has(codeSlug(companion.code))) {
+        problems.push(
+          `${page.code} links to companion ${companion.code}, which has no page`,
+        );
+      }
     }
   }
 
