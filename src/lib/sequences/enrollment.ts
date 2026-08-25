@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getNextSender } from "@/lib/gmail/sender-rotation";
 import { resolveVariables, ensureUnsubscribeLink } from "./variables";
-import { getNextSendTime, calculateStepScheduleTime } from "./scheduler";
+import { calculateStepScheduleTime } from "./scheduler";
+import { walkFromStep } from "./step-walk";
+import { createStepTasks } from "./step-tasks";
 import {
   createBatchVariantPicker,
   fetchVariantsByStepId,
@@ -89,14 +91,13 @@ export async function enrollContacts(
     .eq("sequence_id", sequenceId);
   const enrolledContactIds = new Set((existingEnrollments || []).map((e) => e.contact_id));
 
-  // Get the first step
+  // Get every step — the opening of the sequence may be several non-email
+  // steps (delays, calls, tasks) before the first email.
   const { data: steps } = await supabase
     .from("sequence_steps")
     .select("*")
     .eq("sequence_id", sequenceId)
     .order("step_order", { ascending: true });
-
-  const firstStep = steps?.[0];
 
   // Get contacts. PostgREST puts the IN list in the URL, so a single .in() with
   // ~1000+ UUIDs blows past the URL length limit and the request fails with
@@ -299,92 +300,88 @@ export async function enrollContacts(
       continue;
     }
 
-    // Schedule the first step if it's an email
+    // Resolve the opening of the sequence: the first email to queue, plus any
+    // follow-up call / task steps that come before it.
     // For draft/paused sequences, queue as "pending" — emails won't send until sequence is activated
     const emailStatus = (["draft", "paused"].includes(sequence.status ?? "") ? "pending" : "scheduled") as "scheduled" | "pending";
 
-    if (firstStep && firstStep.type === "email" && enrollment) {
-      const scheduledFor = getNextSendTime(settings);
+    if (enrollment) {
+      const walk = walkFromStep(steps ?? [], 0);
+      const company = (contact as Record<string, unknown>).companies as never;
 
-      const template = firstStep.template_id
-        ? templateById.get(firstStep.template_id) ?? null
-        : null;
-      const picked = variantPicker.pickForStep(firstStep, template, languageCtx);
-      let subject = picked.subject;
-      let bodyHtml = picked.bodyHtml;
-
-      const company = (contact as Record<string, unknown>).companies as typeof contact.company_id extends string ? { name: string } : null;
-      const trackingId = crypto.randomUUID();
-
-      // Resolve variables
-      subject = resolveVariables(subject, contact, company as never, trackingId);
-      bodyHtml = resolveVariables(bodyHtml, contact, company as never, trackingId);
-      bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
-
-      const { error: queueError } = await supabase.from("email_queue").insert({
-        workspace_id: workspaceId,
-        enrollment_id: enrollment.id,
-        step_id: firstStep.id,
-        contact_id: contact.id,
-        sender_account_id: assignedSenderId,
-        to_email: contact.email,
-        subject,
-        body_html: bodyHtml,
-        status: emailStatus,
-        scheduled_for: scheduledFor.toISOString(),
-        tracking_id: trackingId,
-        variant_id: picked.variantId,
-      });
-      if (queueError) {
-        await supabase.from("sequence_enrollments").delete().eq("id", enrollment.id);
-        result.skipped++;
-        result.reasons.push(`${contact.email}: Failed to queue first email — ${queueError.message}`);
-        continue;
+      if (walk.currentStep !== 0 || walk.completed) {
+        await supabase
+          .from("sequence_enrollments")
+          .update(
+            walk.completed
+              ? {
+                  current_step: walk.currentStep,
+                  status: "completed",
+                  completed_at: new Date().toISOString(),
+                }
+              : { current_step: walk.currentStep },
+          )
+          .eq("id", enrollment.id);
       }
-    } else if (firstStep && firstStep.type === "delay" && enrollment) {
-      // For delay steps, calculate when the delay ends and schedule the next step
-      const delayEnd = calculateStepScheduleTime(
-        settings,
-        firstStep.delay_days || 0,
-        firstStep.delay_hours || 0
-      );
 
-      // Find next step after delay
-      const nextStep = steps?.find((s) => s.step_order === firstStep.step_order + 1);
-      if (nextStep && nextStep.type === "email") {
-        const template = nextStep.template_id
-          ? templateById.get(nextStep.template_id) ?? null
+      if (walk.emailStep) {
+        const emailStep = walk.emailStep;
+        const scheduledFor = calculateStepScheduleTime(
+          settings,
+          walk.delayDays,
+          walk.delayHours,
+        );
+
+        const template = emailStep.template_id
+          ? templateById.get(emailStep.template_id) ?? null
           : null;
-        const picked = variantPicker.pickForStep(nextStep, template, languageCtx);
+        const picked = variantPicker.pickForStep(emailStep, template, languageCtx);
         let subject = picked.subject;
         let bodyHtml = picked.bodyHtml;
 
-        const company = (contact as Record<string, unknown>).companies as never;
         const trackingId = crypto.randomUUID();
 
+        // Resolve variables
         subject = resolveVariables(subject, contact, company, trackingId);
         bodyHtml = resolveVariables(bodyHtml, contact, company, trackingId);
         bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
 
-        const { error: delayQueueError } = await supabase.from("email_queue").insert({
+        const { error: queueError } = await supabase.from("email_queue").insert({
           workspace_id: workspaceId,
           enrollment_id: enrollment.id,
-          step_id: nextStep.id,
+          step_id: emailStep.id,
           contact_id: contact.id,
           sender_account_id: assignedSenderId,
           to_email: contact.email,
           subject,
           body_html: bodyHtml,
           status: emailStatus,
-          scheduled_for: delayEnd.toISOString(),
+          scheduled_for: scheduledFor.toISOString(),
           tracking_id: trackingId,
           variant_id: picked.variantId,
         });
-        if (delayQueueError) {
+        if (queueError) {
+          // Bail before creating any task, so a rolled-back enrollment can't
+          // leave an orphaned call in someone's queue.
           await supabase.from("sequence_enrollments").delete().eq("id", enrollment.id);
           result.skipped++;
-          result.reasons.push(`${contact.email}: Failed to queue first email — ${delayQueueError.message}`);
+          result.reasons.push(`${contact.email}: Failed to queue first email — ${queueError.message}`);
           continue;
+        }
+      }
+
+      if (walk.taskSteps.length > 0) {
+        const { error: taskError } = await createStepTasks(supabase, {
+          taskSteps: walk.taskSteps,
+          workspaceId,
+          enrollmentId: enrollment.id,
+          contact,
+          company,
+        });
+        if (taskError) {
+          result.reasons.push(
+            `${contact.email}: enrolled, but failed to create sequence task — ${taskError}`,
+          );
         }
       }
     }

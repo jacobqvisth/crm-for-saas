@@ -10,11 +10,19 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { Plus, Mail, Clock, GitBranch } from "lucide-react";
+import { Plus, Mail, Clock, GitBranch, Phone, CheckSquare } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 
 type Step = Tables<"sequence_steps">;
+
+const STEP_LABELS: Record<string, string> = {
+  email: "Email",
+  delay: "Delay",
+  condition: "Condition",
+  call: "Follow-up call",
+  task: "Task",
+};
 
 interface AddStepButtonProps {
   index: number;
@@ -36,7 +44,7 @@ function AddStepButton({ index, addMenuIndex, setAddMenuIndex, addStep }: AddSte
             <Plus className="w-3.5 h-3.5" />
           </button>
           {addMenuIndex === index && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
               <button
                 onClick={() => addStep("email", index)}
                 className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
@@ -54,6 +62,18 @@ function AddStepButton({ index, addMenuIndex, setAddMenuIndex, addStep }: AddSte
                 className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
               >
                 <GitBranch className="w-3.5 h-3.5 text-purple-500" /> Condition
+              </button>
+              <button
+                onClick={() => addStep("call", index)}
+                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <Phone className="w-3.5 h-3.5 text-emerald-500" /> Follow-up call
+              </button>
+              <button
+                onClick={() => addStep("task", index)}
+                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-sky-500" /> Create task
               </button>
             </div>
           )}
@@ -138,12 +158,20 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
       delay_days: type === "delay" ? 3 : null,
       delay_hours: type === "delay" ? 0 : null,
       condition_type: type === "condition" ? ("opened" as const) : null,
+      // Call/task steps carry their own offset ("due in N days") rather than
+      // needing a Delay step in front, which would push the next email too.
+      task_due_days: type === "call" || type === "task" ? 0 : null,
+      task_priority: type === "call" || type === "task" ? "medium" : null,
     });
 
     if (error) {
       toast.error("Failed to add step");
     } else {
-      toast.success(autoDelay ? "Email step added (3-day delay inserted before it)" : `${type} step added`);
+      toast.success(
+        autoDelay
+          ? "Email step added (3-day delay inserted before it)"
+          : `${STEP_LABELS[type ?? "email"] ?? type} step added`
+      );
       loadSteps();
     }
     setAddMenuIndex(null);

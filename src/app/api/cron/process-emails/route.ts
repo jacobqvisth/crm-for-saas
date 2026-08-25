@@ -17,6 +17,8 @@ import {
   bumpVariantSendCount,
 } from "@/lib/sequences/variants";
 import { defaultLanguage } from "@/lib/sequences/language";
+import { walkFromStep } from "@/lib/sequences/step-walk";
+import { createStepTasks } from "@/lib/sequences/step-tasks";
 import { insertActivity } from "@/lib/activities/insert";
 import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
 
@@ -613,205 +615,159 @@ export async function POST(request: NextRequest) {
           { context: "process-emails/sent" },
         );
 
-        // Advance enrollment
+        // Advance enrollment.
+        //
+        // Whatever follows the step just sent — any run of delays, follow-up
+        // calls and tasks before the next email — is resolved in one walk, so
+        // the cron doesn't need a branch per step shape.
         const currentStep = enrollment.current_step ?? 0;
         const nextStepOrder = currentStep + 1;
 
-        await supabase
-          .from("sequence_enrollments")
-          .update({ current_step: nextStepOrder })
-          .eq("id", enrollment.id);
+        const sequence = enrollment.sequences as unknown as { settings: SequenceSettings };
+        const settings = sequence?.settings;
 
-        // Schedule next step
-        const { data: nextStep } = await supabase
+        const { data: laterSteps } = await supabase
           .from("sequence_steps")
           .select("*")
           .eq("sequence_id", enrollment.sequence_id)
-          .eq("step_order", nextStepOrder)
-          .single();
+          .gte("step_order", nextStepOrder)
+          .order("step_order", { ascending: true });
 
-        if (nextStep) {
-          const sequence = enrollment.sequences as unknown as { settings: SequenceSettings };
-          const settings = sequence?.settings;
+        const walk = walkFromStep(laterSteps ?? [], nextStepOrder);
 
-          // The language pinned when this contact enrolled. Every step of the
-          // sequence uses it, so a mid-campaign change to contacts.language
-          // can't switch someone's language between emails.
-          const languageCtx = {
-            language: (enrollment as unknown as { language: string | null })
-              .language,
-            defaultLanguage: defaultLanguage(settings),
-          };
+        await supabase
+          .from("sequence_enrollments")
+          .update(
+            walk.completed
+              ? {
+                  current_step: walk.currentStep,
+                  status: "completed",
+                  completed_at: new Date().toISOString(),
+                }
+              : { current_step: walk.currentStep },
+          )
+          .eq("id", enrollment.id);
 
-          // Resolve the sender to use for subsequent emails.
-          // Prefer the enrollment's pinned sender; fall back to getNextSender() if it's gone inactive.
-          const enrollmentSenderId = (enrollment as unknown as { sender_account_id: string | null }).sender_account_id;
-          let nextEmailSenderId = enrollmentSenderId || senderAccountId;
+        if (walk.taskSteps.length > 0 || (walk.emailStep && settings)) {
+          // One contact fetch covers both the task titles and the next email's
+          // variables.
+          const { data: contact } = await supabase
+            .from("contacts")
+            .select("*, companies(*)")
+            .eq("id", item.contact_id)
+            .single();
+          const company = contact
+            ? ((contact as Record<string, unknown>).companies as never)
+            : null;
 
-          if (nextEmailSenderId !== senderAccountId) {
-            // Pinned sender differs from current — verify it's still active
-            const { data: pinnedAccount } = await supabase
-              .from("gmail_accounts")
-              .select("status")
-              .eq("id", nextEmailSenderId)
-              .single();
-
-            if (!pinnedAccount || pinnedAccount.status !== "active") {
-              // Pinned sender went inactive — re-pin to a new available sender
-              // Respect the sequence's rotation pool if one is configured.
-              const rotationPool = settings?.rotation_account_ids;
-              const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
-              const fallback = await getNextSender(
-                account.workspace_id,
-                hasPool ? rotationPool : undefined
+          if (contact && walk.taskSteps.length > 0) {
+            const { error: taskError } = await createStepTasks(supabase, {
+              taskSteps: walk.taskSteps,
+              workspaceId: item.workspace_id,
+              enrollmentId: enrollment.id,
+              contact,
+              company,
+            });
+            if (taskError) {
+              console.error(
+                `[process-emails] failed to create sequence tasks for enrollment ${enrollment.id}: ${taskError}`,
               );
-              if (fallback) {
-                nextEmailSenderId = fallback.id;
-                await supabase
-                  .from("sequence_enrollments")
-                  .update({ sender_account_id: fallback.id })
-                  .eq("id", enrollment.id);
-              } else {
-                nextEmailSenderId = senderAccountId;
-              }
             }
           }
 
-          if (nextStep.type === "email" && settings) {
-            // Get contact and company for variable resolution
-            const { data: contact } = await supabase
-              .from("contacts")
-              .select("*, companies(*)")
-              .eq("id", item.contact_id)
-              .single();
+          if (contact && walk.emailStep && settings) {
+            const nextStep = walk.emailStep;
 
-            if (contact) {
-              let template: { subject: string; body_html: string } | null = null;
-              if (nextStep.template_id) {
-                const { data: tplRow } = await supabase
-                  .from("email_templates")
-                  .select("*")
-                  .eq("id", nextStep.template_id)
-                  .single();
-                if (tplRow) template = tplRow;
-              }
+            // The language pinned when this contact enrolled. Every step of the
+            // sequence uses it, so a mid-campaign change to contacts.language
+            // can't switch someone's language between emails.
+            const languageCtx = {
+              language: (enrollment as unknown as { language: string | null })
+                .language,
+              defaultLanguage: defaultLanguage(settings),
+            };
 
-              const variants = await fetchVariantsForStep(supabase, nextStep.id);
-              const picked = pickVariant(nextStep, variants, template, languageCtx);
-              let subject = picked.subject;
-              let bodyHtml = picked.bodyHtml;
+            // Resolve the sender to use for subsequent emails.
+            // Prefer the enrollment's pinned sender; fall back to getNextSender() if it's gone inactive.
+            const enrollmentSenderId = (enrollment as unknown as { sender_account_id: string | null }).sender_account_id;
+            let nextEmailSenderId = enrollmentSenderId || senderAccountId;
 
-              const company = (contact as Record<string, unknown>).companies as never;
-              const trackingId = crypto.randomUUID();
-
-              subject = resolveVariables(subject, contact, company, trackingId);
-              bodyHtml = resolveVariables(bodyHtml, contact, company, trackingId);
-              bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
-
-              const scheduledFor = getNextSendTime(settings);
-
-              await supabase.from("email_queue").insert({
-                workspace_id: item.workspace_id,
-                enrollment_id: enrollment.id,
-                step_id: nextStep.id,
-                contact_id: item.contact_id,
-                sender_account_id: nextEmailSenderId,
-                to_email: item.to_email,
-                subject,
-                body_html: bodyHtml,
-                status: "scheduled" as const,
-                scheduled_for: scheduledFor.toISOString(),
-                tracking_id: trackingId,
-                variant_id: picked.variantId,
-              });
-
-              if (picked.variantId) {
-                await bumpVariantSendCount(supabase, picked.variantId);
-              }
-            }
-          } else if (nextStep.type === "delay" && settings) {
-            // Calculate when delay ends, then look at the step after
-            const delayEnd = calculateStepScheduleTime(
-              settings,
-              nextStep.delay_days || 0,
-              nextStep.delay_hours || 0
-            );
-
-            // Advance past the delay step
-            await supabase
-              .from("sequence_enrollments")
-              .update({ current_step: nextStepOrder + 1 })
-              .eq("id", enrollment.id);
-
-            // Find the step after the delay
-            const { data: stepAfterDelay } = await supabase
-              .from("sequence_steps")
-              .select("*")
-              .eq("sequence_id", enrollment.sequence_id)
-              .eq("step_order", nextStepOrder + 1)
-              .single();
-
-            if (stepAfterDelay && stepAfterDelay.type === "email") {
-              const { data: contact } = await supabase
-                .from("contacts")
-                .select("*, companies(*)")
-                .eq("id", item.contact_id)
+            if (nextEmailSenderId !== senderAccountId) {
+              // Pinned sender differs from current — verify it's still active
+              const { data: pinnedAccount } = await supabase
+                .from("gmail_accounts")
+                .select("status")
+                .eq("id", nextEmailSenderId)
                 .single();
 
-              if (contact) {
-                let template: { subject: string; body_html: string } | null = null;
-                if (stepAfterDelay.template_id) {
-                  const { data: tplRow } = await supabase
-                    .from("email_templates")
-                    .select("*")
-                    .eq("id", stepAfterDelay.template_id)
-                    .single();
-                  if (tplRow) template = tplRow;
-                }
-
-                const variants = await fetchVariantsForStep(supabase, stepAfterDelay.id);
-                const picked = pickVariant(stepAfterDelay, variants, template, languageCtx);
-                let subject = picked.subject;
-                let bodyHtml = picked.bodyHtml;
-
-                const company = (contact as Record<string, unknown>).companies as never;
-                const trackingId = crypto.randomUUID();
-
-                subject = resolveVariables(subject, contact, company, trackingId);
-                bodyHtml = resolveVariables(bodyHtml, contact, company, trackingId);
-                bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
-
-                await supabase.from("email_queue").insert({
-                  workspace_id: item.workspace_id,
-                  enrollment_id: enrollment.id,
-                  step_id: stepAfterDelay.id,
-                  contact_id: item.contact_id,
-                  sender_account_id: nextEmailSenderId,
-                  to_email: item.to_email,
-                  subject,
-                  body_html: bodyHtml,
-                  status: "scheduled" as const,
-                  scheduled_for: delayEnd.toISOString(),
-                  tracking_id: trackingId,
-                  variant_id: picked.variantId,
-                });
-
-                if (picked.variantId) {
-                  await bumpVariantSendCount(supabase, picked.variantId);
+              if (!pinnedAccount || pinnedAccount.status !== "active") {
+                // Pinned sender went inactive — re-pin to a new available sender
+                // Respect the sequence's rotation pool if one is configured.
+                const rotationPool = settings?.rotation_account_ids;
+                const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
+                const fallback = await getNextSender(
+                  account.workspace_id,
+                  hasPool ? rotationPool : undefined
+                );
+                if (fallback) {
+                  nextEmailSenderId = fallback.id;
+                  await supabase
+                    .from("sequence_enrollments")
+                    .update({ sender_account_id: fallback.id })
+                    .eq("id", enrollment.id);
+                } else {
+                  nextEmailSenderId = senderAccountId;
                 }
               }
             }
+
+            let template: { subject: string; body_html: string } | null = null;
+            if (nextStep.template_id) {
+              const { data: tplRow } = await supabase
+                .from("email_templates")
+                .select("*")
+                .eq("id", nextStep.template_id)
+                .single();
+              if (tplRow) template = tplRow;
+            }
+
+            const variants = await fetchVariantsForStep(supabase, nextStep.id);
+            const picked = pickVariant(nextStep, variants, template, languageCtx);
+            let subject = picked.subject;
+            let bodyHtml = picked.bodyHtml;
+
+            const trackingId = crypto.randomUUID();
+
+            subject = resolveVariables(subject, contact, company, trackingId);
+            bodyHtml = resolveVariables(bodyHtml, contact, company, trackingId);
+            bodyHtml = ensureUnsubscribeLink(bodyHtml, trackingId);
+
+            // With no delay between the two steps this is getNextSendTime().
+            const scheduledFor = calculateStepScheduleTime(
+              settings,
+              walk.delayDays,
+              walk.delayHours,
+            );
+
+            await supabase.from("email_queue").insert({
+              workspace_id: item.workspace_id,
+              enrollment_id: enrollment.id,
+              step_id: nextStep.id,
+              contact_id: item.contact_id,
+              sender_account_id: nextEmailSenderId,
+              to_email: item.to_email,
+              subject,
+              body_html: bodyHtml,
+              status: "scheduled" as const,
+              scheduled_for: scheduledFor.toISOString(),
+              tracking_id: trackingId,
+              variant_id: picked.variantId,
+            });
+
+            if (picked.variantId) {
+              await bumpVariantSendCount(supabase, picked.variantId);
+            }
           }
-          // Condition steps would be handled similarly (check events, branch)
-        } else {
-          // No more steps — mark enrollment as completed
-          await supabase
-            .from("sequence_enrollments")
-            .update({
-              status: "completed",
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", enrollment.id);
         }
 
         processed++;

@@ -17,6 +17,8 @@ import {
   Mail,
   Clock,
   GitBranch,
+  Phone,
+  CheckSquare,
   UserPlus,
   BarChart2,
   Play,
@@ -47,6 +49,16 @@ const STEP_ICONS = {
   email: Mail,
   delay: Clock,
   condition: GitBranch,
+  call: Phone,
+  task: CheckSquare,
+};
+
+const STEP_BADGE_CLASSES: Record<string, string> = {
+  email: "bg-indigo-100 text-indigo-600",
+  delay: "bg-amber-100 text-amber-600",
+  condition: "bg-purple-100 text-purple-600",
+  call: "bg-emerald-100 text-emerald-600",
+  task: "bg-sky-100 text-sky-600",
 };
 
 export default function SequenceDetailPage() {
@@ -429,11 +441,8 @@ export default function SequenceDetailPage() {
                     <div className="flex items-start gap-4">
                       <div className="flex flex-col items-center">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          step.type === "email"
-                            ? "bg-indigo-100 text-indigo-600"
-                            : step.type === "delay"
-                            ? "bg-amber-100 text-amber-600"
-                            : "bg-purple-100 text-purple-600"
+                          STEP_BADGE_CLASSES[step.type ?? "email"] ??
+                          "bg-slate-100 text-slate-600"
                         }`}>
                           <Icon className="w-5 h-5" />
                         </div>
@@ -479,6 +488,18 @@ export default function SequenceDetailPage() {
                             {step.type === "condition" && (
                               <p className="text-sm text-slate-700 mt-0.5">
                                 If previous email was {step.condition_type}
+                              </p>
+                            )}
+                            {(step.type === "call" || step.type === "task") && (
+                              <p className="text-sm text-slate-700 mt-0.5">
+                                {step.task_title?.trim() ||
+                                  (step.type === "call"
+                                    ? "Follow-up call"
+                                    : "Follow up with the contact")}
+                                {(step.task_due_days ?? 0) > 0 &&
+                                  ` — due in ${step.task_due_days} day${
+                                    step.task_due_days !== 1 ? "s" : ""
+                                  }`}
                               </p>
                             )}
                           </div>
