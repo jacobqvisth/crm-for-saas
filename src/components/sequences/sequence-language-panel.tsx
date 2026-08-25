@@ -66,6 +66,7 @@ export function SequenceLanguagePanel({
         createdTotal?: number;
         failedTotal?: number;
         stepsWithoutCopy?: number;
+        warnings?: string[];
       };
       if (!res.ok) {
         toast.error(data.error ?? "Could not translate");
@@ -86,6 +87,11 @@ export function SequenceLanguagePanel({
       }
       if (data.failedTotal) {
         toast.error(`${data.failedTotal} translation(s) failed`);
+      }
+      // Written but worth a look, most often a subject that stayed in the
+      // source language. One toast per step so the step number is visible.
+      for (const warning of data.warnings ?? []) {
+        toast(warning, { icon: "\u26a0\ufe0f", duration: 8000 });
       }
       await load();
       onGenerated?.();

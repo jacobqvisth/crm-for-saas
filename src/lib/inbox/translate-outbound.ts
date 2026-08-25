@@ -87,8 +87,78 @@ Rules:
 - ${NO_LONG_DASH_INSTRUCTION}
 - Return ONLY minified JSON: {"subject":"...","bodyHtml":"..."}. No markdown fences, no commentary.`;
 
+const SUBJECT_ONLY_SYSTEM_PROMPT = `You translate the subject line of a B2B outreach email for a SaaS called Wrenchlane.
+
+Rules:
+- Return the subject translated into the requested language, nothing else.
+- Do not translate the product name "Wrenchlane". Everything around it MUST be translated.
+- Preserve merge placeholders like {{first_name}} exactly as-is.
+- ${NO_LONG_DASH_INSTRUCTION}
+- Return ONLY the translated subject line. No quotes, no JSON, no commentary.`;
+
+/**
+ * Same text once case and surrounding whitespace stop mattering.
+ *
+ * Used to catch the one failure this translation makes silently: the body
+ * comes back in the target language while the subject is handed straight
+ * back untouched.
+ */
+export function sameSubjectText(a: string, b: string): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/**
+ * Second pass over just the subject line.
+ *
+ * The combined subject + body call occasionally returns a subject that looks
+ * enough like a brand tagline ("Wrenchlane - Faster diagnostics") that the
+ * model leaves it alone. Asking for the subject on its own, with no body to
+ * distract from it, fixes it. Returns null when the retry itself fails, so
+ * the caller keeps the first pass rather than losing the translation.
+ */
+async function retranslateSubject(
+  client: Anthropic,
+  subject: string,
+  sourceLabel: string,
+  targetLabel: string,
+  targetLanguage: string,
+): Promise<string | null> {
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 256,
+      system: SUBJECT_ONLY_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `Translate this ${sourceLabel} email subject line to ${targetLabel} (ISO code: ${targetLanguage}). It came back untranslated on the first attempt, so translate it now.\n\n${subject}`,
+        },
+      ],
+    });
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const cleaned = stripLongDashes(text.trim().replace(/^["']|["']$/g, ""));
+    return cleaned || null;
+  } catch {
+    return null;
+  }
+}
+
 export type OutboundEmailTranslationResult =
-  | { ok: true; subject: string; bodyHtml: string; targetLanguage: string; model: string }
+  | {
+      ok: true;
+      subject: string;
+      bodyHtml: string;
+      targetLanguage: string;
+      model: string;
+      /**
+       * The subject survived two passes unchanged. Sometimes correct (a
+       * subject that is only the product name), usually not. Callers surface
+       * it so a human decides rather than shipping an English subject line
+       * on a Czech email.
+       */
+      subjectUntranslated?: boolean;
+    }
   | { ok: false; reason: string };
 
 /**
@@ -161,10 +231,30 @@ export async function translateOutboundEmail(input: {
     return { ok: false, reason: "model returned invalid JSON" };
   }
 
-  const outSubject = typeof parsed.subject === "string" ? parsed.subject : "";
+  let outSubject = typeof parsed.subject === "string" ? parsed.subject : "";
   const outBody = typeof parsed.bodyHtml === "string" ? parsed.bodyHtml : "";
   if (!outSubject.trim() && !outBody.trim()) {
     return { ok: false, reason: "empty translation from model" };
+  }
+
+  // The body translates and the subject slips through in the source language.
+  // Nothing downstream compares the two, so an English subject line rides out
+  // on a Czech email until a human notices. Retry the subject alone, and if it
+  // still comes back identical, say so rather than pretending it translated.
+  let subjectUntranslated = false;
+  if (subject.trim() && sameSubjectText(subject, outSubject)) {
+    const retried = await retranslateSubject(
+      client,
+      subject,
+      sourceLabel,
+      label,
+      targetLanguage,
+    );
+    if (retried && !sameSubjectText(subject, retried)) {
+      outSubject = retried;
+    } else {
+      subjectUntranslated = true;
+    }
   }
 
   return {
@@ -173,5 +263,6 @@ export async function translateOutboundEmail(input: {
     bodyHtml: stripLongDashes(outBody),
     targetLanguage,
     model: MODEL,
+    subjectUntranslated,
   };
 }

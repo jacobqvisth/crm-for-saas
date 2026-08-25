@@ -22,6 +22,12 @@ export type StepLanguageResult = {
   created: string[];
   skipped: string[];
   failed: { language: string; reason: string }[];
+  /**
+   * Translations that landed but need a human eye, most often a subject line
+   * that came back in the source language. Written, not discarded: the body
+   * is still good, and an operator can fix the one line.
+   */
+  warnings: string[];
   /** Set when the step could not be processed at all (e.g. no copy yet). */
   error?: string;
 };
@@ -58,6 +64,7 @@ export async function generateLanguageVariantsForStep(
     created: [],
     skipped: [],
     failed: [],
+    warnings: [],
   };
 
   const sourceLanguage = defaultLanguage(settings);
@@ -136,6 +143,12 @@ export async function generateLanguageVariantsForStep(
     if (!result.ok) {
       base.failed.push({ language, reason: result.reason });
       continue;
+    }
+
+    if (result.subjectUntranslated) {
+      base.warnings.push(
+        `${languageLabel(language)}: subject line came back in ${languageLabel(sourceLanguage)}. Check it before sending.`,
+      );
     }
 
     if (already) {

@@ -578,6 +578,7 @@ export function EmailStepEditor({
         created?: string[];
         skipped?: string[];
         failed?: { language: string; reason: string }[];
+        warnings?: string[];
       };
       if (!res.ok) {
         toast.error(data.error ?? "Could not generate translations");
@@ -598,6 +599,11 @@ export function EmailStepEditor({
         toast.error(
           `Failed: ${failed.map((f) => languageLabel(f.language)).join(", ")}`,
         );
+      }
+      // A translation that landed but kept its source-language subject. Loud
+      // enough to act on, not an error: the copy is written either way.
+      for (const warning of data.warnings ?? []) {
+        toast(warning, { icon: "\u26a0\ufe0f", duration: 8000 });
       }
     } catch {
       toast.error("Could not generate translations");

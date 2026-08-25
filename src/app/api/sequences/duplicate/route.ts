@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
+import { sameSubjectText } from "@/lib/inbox/translate-outbound";
 
 type DuplicateRequest = {
   sourceSequenceId: string;
@@ -25,13 +26,57 @@ Rules:
 - ${NO_LONG_DASH_INSTRUCTION}
 - Return ONLY valid JSON: {"subject": "...", "body": "..."} — no markdown fences, no commentary.`;
 
+const SUBJECT_ONLY_PROMPT = `You translate the subject line of a sales email for a B2B SaaS called Wrenchlane.
+Rules:
+- Return the subject translated into the requested language, nothing else.
+- Do not translate the product name "Wrenchlane". Everything around it MUST be translated.
+- PRESERVE placeholders like {{first_name}} exactly.
+- ${NO_LONG_DASH_INSTRUCTION}
+- Return ONLY the translated subject line. No quotes, no JSON, no commentary.`;
+
+/**
+ * Second pass over the subject alone.
+ *
+ * The combined subject + body call sometimes reads a subject like
+ * "WrenchLane - Faster diagnostics" as a brand tagline and hands it back
+ * untouched while translating the body perfectly. Asking for the subject on
+ * its own, with no body beside it, gets a real translation. Returns null if
+ * the retry itself fails, so the caller keeps the first pass.
+ */
+async function retranslateSubject(
+  client: Anthropic,
+  subject: string,
+  targetLanguageLabel: string,
+  targetLanguage: string
+): Promise<string | null> {
+  try {
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256,
+      system: SUBJECT_ONLY_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `Translate this email subject line to ${targetLanguageLabel} (locale code: ${targetLanguage}). It came back untranslated on the first attempt, so translate it now.\n\n${subject}`,
+        },
+      ],
+    });
+    const text =
+      response.content[0].type === "text" ? response.content[0].text : "";
+    const cleaned = stripLongDashes(text.trim().replace(/^["']|["']$/g, ""));
+    return cleaned || null;
+  } catch {
+    return null;
+  }
+}
+
 async function translateStep(
   client: Anthropic,
   subject: string,
   body: string,
   targetLanguageLabel: string,
   targetLanguage: string
-): Promise<{ subject: string; body: string }> {
+): Promise<{ subject: string; body: string; subjectUntranslated: boolean }> {
   const userMessage = `Translate the following email to ${targetLanguageLabel} (locale code: ${targetLanguage}).
 
 Subject: ${subject}
@@ -55,9 +100,30 @@ ${body}`;
     .trim();
 
   const parsed = JSON.parse(cleaned) as { subject: string; body: string };
+  let outSubject = stripLongDashes(parsed.subject ?? "");
+
+  // Catch the silent half-translation: body in the target language, subject
+  // handed straight back. Retry the subject alone, then report it if it still
+  // will not move, rather than shipping an English subject on a Czech email.
+  let subjectUntranslated = false;
+  if (subject.trim() && sameSubjectText(subject, outSubject)) {
+    const retried = await retranslateSubject(
+      client,
+      subject,
+      targetLanguageLabel,
+      targetLanguage
+    );
+    if (retried && !sameSubjectText(subject, retried)) {
+      outSubject = retried;
+    } else {
+      subjectUntranslated = true;
+    }
+  }
+
   return {
-    subject: stripLongDashes(parsed.subject),
+    subject: outSubject,
     body: stripLongDashes(parsed.body),
+    subjectUntranslated,
   };
 }
 
@@ -193,6 +259,11 @@ export async function POST(request: NextRequest) {
           targetLanguageLabel,
           targetLanguage
         );
+        if (translated.subjectUntranslated) {
+          warnings.push(
+            `Step ${s.step_order} kept its original subject line, the model would not translate it. Fix it by hand before sending.`
+          );
+        }
         return {
           ...base,
           subject_override: translated.subject,
