@@ -1422,28 +1422,31 @@ export function TrialUsersContent({
               </div>
             </div>
           </article>
-          <div className="panel-grid">
+          <article className="content-grid">
             <TermTable
-              caption="The free-text problem description, as typed."
+              caption="Free text a tech typed when starting a diagnosis. The full taxonomy lives on the Diagnostic Search Terms page; this is the raw verbatim, trial users only."
               terms={data.searchTerms}
-              title="What they typed"
+              title="What they searched for"
             />
             <TermTable
-              caption="Car makes on the diagnoses they ran."
+              caption="Car makes behind trial users' diagnoses."
               terms={data.carMakes}
-              title="Cars"
+              title="Cars they worked on"
             />
+          </article>
+
+          <article className="content-grid">
             <TermTable
-              caption="Fault codes entered."
+              caption="Fault codes entered by trial users."
               terms={data.dtcs}
-              title="DTCs"
+              title="DTC codes"
             />
             <TermTable
-              caption="Symptoms picked."
+              caption="Symptoms recorded on trial users' diagnoses."
               terms={data.symptoms}
               title="Symptoms"
             />
-          </div>
+          </article>
         </>
       ) : null}
 
