@@ -17,6 +17,10 @@ import {
   bumpVariantSendCount,
 } from "@/lib/sequences/variants";
 import { defaultLanguage } from "@/lib/sequences/language";
+import {
+  hasReplyPrefix,
+  threadedReplySubject,
+} from "@/lib/sequences/reply-subject";
 import { insertActivity } from "@/lib/activities/insert";
 import type { SequenceSettings, WorkspaceSendingSettings } from "@/lib/database.types";
 
@@ -505,15 +509,22 @@ export async function POST(request: NextRequest) {
         if (previousEmail?.gmail_message_id) {
           replyToMessageId = previousEmail.gmail_message_id;
           replyToThreadId = previousEmail.gmail_thread_id ?? undefined;
-          // Ensure subject starts with "Re: " for threading
-          if (!item.subject.toLowerCase().startsWith("re: ")) {
-            const baseSubject = previousEmail.subject || item.subject;
-            const newSubject = `Re: ${baseSubject}`;
-            await supabase
-              .from("email_queue")
-              .update({ subject: newSubject })
-              .eq("id", item.id);
-            item.subject = newSubject;
+          // Ensure the subject reads as a reply, with exactly one "Re: ".
+          // Follow-up steps usually have no subject of their own and inherit
+          // the previous send's, which already carries a "Re: " from the step
+          // before it, so prefixing blindly stacks one marker per step.
+          if (!hasReplyPrefix(item.subject)) {
+            const newSubject = threadedReplySubject(
+              item.subject,
+              previousEmail.subject,
+            );
+            if (newSubject) {
+              await supabase
+                .from("email_queue")
+                .update({ subject: newSubject })
+                .eq("id", item.id);
+              item.subject = newSubject;
+            }
           }
         }
       }
