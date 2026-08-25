@@ -280,6 +280,25 @@ export type ConversionCut = {
   caveat?: string;
 };
 
+/**
+ * How many trials each window-dating method produced, and how many of them
+ * show any usage inside the window it produced.
+ *
+ * This exists because the two are not independent. A trial whose window was
+ * ASSUMED (trial_end minus 14 days) is being measured over a guessed fortnight,
+ * so real activity outside that guess is invisible: at launch the assumed group
+ * showed usage at a fraction of the rate of the dated group. That gap is mostly
+ * an artefact of the guess, not a fact about those workshops, so any usage
+ * number on this page is a FLOOR until the Stripe sync has run once.
+ */
+export type WindowSourceStat = {
+  source: TrialStartSource;
+  label: string;
+  trials: number;
+  withUsage: number;
+  pctWithUsage: number | null;
+};
+
 export type OutcomeBucket = {
   key: TrialOutcome;
   label: string;
@@ -448,6 +467,7 @@ export type TrialUsersData = {
   kpis: TrialUsersKpis;
   money: MoneyTotal[];
   outcomes: OutcomeBucket[];
+  windowSources: WindowSourceStat[];
   cohorts: CohortStats[];
   cuts: ConversionCut[];
   trials: TrialRow[];

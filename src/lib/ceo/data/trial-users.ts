@@ -42,6 +42,8 @@ import {
   type TrialUserRow,
   type TrialUsersData,
   type WeeklyPoint,
+  type WindowSourceStat,
+  TRIAL_START_SOURCE_LABELS,
 } from "@/lib/ceo/trial-users-shared";
 import { chunkedIn, pageAll } from "@/lib/supabase-paging";
 
@@ -302,6 +304,7 @@ function emptyData(error: string | null = null): TrialUsersData {
     },
     money: [],
     outcomes: [],
+    windowSources: [],
     cohorts: [],
     cuts: [],
     trials: [],
@@ -771,6 +774,34 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
     })
     .filter((bucket) => bucket.trials > 0);
 
+  // ---- how the windows were dated, and what that does to usage ------------
+  //
+  // Reported together on purpose. A trial whose window was ASSUMED is measured
+  // over a guessed fortnight, so any real activity outside the guess is
+  // invisible, and at launch the assumed group showed usage at roughly a fifth
+  // of the dated group's rate. Most of that gap is the guess, not the
+  // workshops, which makes every usage number on this page a floor.
+  const windowSources: WindowSourceStat[] = (
+    ["stripe", "customer", "assumed"] as const
+  )
+    .map((source) => {
+      const matching = external.filter(
+        (trial) => trial.trialStartSource === source,
+      );
+      const withUsage = matching.filter(
+        (trial) => trial.diagnosticsDuringTrial > 0,
+      ).length;
+      return {
+        source,
+        label: TRIAL_START_SOURCE_LABELS[source],
+        trials: matching.length,
+        withUsage,
+        pctWithUsage:
+          matching.length === 0 ? null : (withUsage / matching.length) * 100,
+      } satisfies WindowSourceStat;
+    })
+    .filter((row) => row.trials > 0);
+
   // ---- money, per currency ------------------------------------------------
   const moneyByCurrency = new Map<string, MoneyTotal>();
   for (const trial of external) {
@@ -827,7 +858,7 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
       description:
         "Diagnoses run by anyone at the workshop between the trial opening and closing. This is the only usage cut that can inform anything: counting diagnoses over all time would mostly count the paying months that follow a conversion.",
       caveat:
-        "The zero bucket carries most of the conversions, which is the finding, not a bug: with a card required up front, a trial that is never opened still charges when it ends.",
+        "Two things to hold at once. The zero bucket carrying most of the conversions is the finding, not a bug: with a card required up front, a trial that is never opened still charges when it ends. But the zero bucket is also inflated by the window dating — a trial whose start was assumed is measured over a guessed fortnight, and real activity outside that guess lands in 'never used it' by mistake. See the window table on the Cohorts tab for how many trials that affects, and read this cut as a floor until the Stripe sync has run.",
       bucket: (trial) => {
         const n = trial.diagnosticsDuringTrial;
         if (n === 0) return { key: "0", label: "Never used it" };
@@ -923,6 +954,8 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
       label: "By whether we called or emailed during the trial",
       description:
         "Outreach landing inside the trial window, deduped per CRM contact. Reps pick who to call, so this measures who got attention as much as what attention does.",
+      caveat:
+        "The honest reading of this table is the size of the 'Neither' row, not the rates beside it. Almost every trial runs with no contact at all during its window, so the contacted buckets are far too small to compare — the finding is that the trial funnel is essentially unworked, not that outreach does or does not help.",
       bucket: (trial) => {
         const called = trial.callsDuringTrial > 0;
         const emailed = trial.emailsDuringTrial > 0;
@@ -1609,6 +1642,7 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
     kpis,
     money,
     outcomes,
+    windowSources,
     cohorts,
     cuts,
     trials,

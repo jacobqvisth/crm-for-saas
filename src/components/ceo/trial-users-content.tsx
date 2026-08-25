@@ -6,7 +6,6 @@ import {
   COHORT_LABELS,
   COHORT_ORDER,
   OUTCOME_LABELS,
-  TRIAL_START_SOURCE_LABELS,
   TRIAL_TABS,
   type CohortKey,
   type CohortStats,
@@ -1573,19 +1572,39 @@ export function TrialUsersContent({
                 </h2>
               </div>
             </div>
-            <Bars
-              rows={(
-                ["stripe", "customer", "assumed"] as const
-              ).map((source) => ({
-                key: source,
-                label: TRIAL_START_SOURCE_LABELS[source],
-                count: data.trials.filter(
-                  (trial) => trial.trialStartSource === source,
-                ).length,
-              }))}
-              suffix="trials"
-              total={data.trials.length}
-            />
+            <p className="panel-description">
+              These two columns are not independent, which is the point of
+              showing them together. A trial whose window was assumed is being
+              measured over a guessed fortnight, so real activity outside that
+              guess is invisible — which is why its usage rate sits so far below
+              the dated group&apos;s. Most of that gap is the guess, not the
+              workshops, so treat every usage number on this page as a floor
+              until the Stripe sync has run once.
+            </p>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>How the window was dated</th>
+                    <th>Trials</th>
+                    <th>Share of trials</th>
+                    <th>Show usage in that window</th>
+                    <th>Usage rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.windowSources.map((row) => (
+                    <tr key={row.source}>
+                      <td className="table-primary">{row.label}</td>
+                      <td>{formatNumber(row.trials)}</td>
+                      <td>{pct(row.trials, data.kpis.trials)}</td>
+                      <td>{formatNumber(row.withUsage)}</td>
+                      <td>{pctLabel(row.pctWithUsage, 1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </article>
         </>
       ) : null}
