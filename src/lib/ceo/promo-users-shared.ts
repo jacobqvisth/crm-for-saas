@@ -30,18 +30,54 @@ export type PromoInfo = {
 };
 
 /**
- * Three cohorts, not two. Comparing promo users against "everyone else" mostly
- * measures "sold-to customer vs random free signup", because almost all
- * non-promo users are free signups who never went through checkout. The
- * paid-no-promo cohort is the honest comparison: same commercial motion, no
- * discount.
+ * Five cohorts, two of which are deliberate SUBSETS of the others, so these
+ * must never be summed.
+ *
+ * The original design had a cohort called "paid_no_promo" defined as
+ * `ever_paid OR trial_end IS NOT NULL OR plan_key <> 'free'`. That is "reached
+ * checkout", NOT "paid": of its 125 users only 37 were ever charged, so the
+ * table showed a column labelled "Paid, no promo" whose own "ever paid" cell
+ * read 30%. This is the documented plan_key trial trap — plan_key and trial_end
+ * are stamped at checkout, before any money moves.
+ *
+ * So `checkout_no_promo` is now named for what it is, and the genuinely
+ * comparable pair `promo_charged` vs `charged_no_promo` (everyone charged on
+ * both sides) carries the like-for-like read.
  */
-export type CohortKey = "promo" | "paid_no_promo" | "free_no_promo";
+export type CohortKey =
+  | "promo"
+  | "promo_charged"
+  | "charged_no_promo"
+  | "checkout_no_promo"
+  | "free_no_promo";
 
 export const COHORT_LABELS: Record<CohortKey, string> = {
   promo: "Got a promo",
-  paid_no_promo: "Paid, no promo",
-  free_no_promo: "Free, no promo",
+  promo_charged: "Promo, charged",
+  charged_no_promo: "Paid, no promo",
+  checkout_no_promo: "Reached checkout, no promo",
+  free_no_promo: "Free, never checked out",
+};
+
+/** Columns of the main comparison table, widest denominators last. */
+export const MAIN_COHORTS: ReadonlyArray<CohortKey> = [
+  "promo",
+  "charged_no_promo",
+  "checkout_no_promo",
+  "free_no_promo",
+];
+
+/** The two cohorts that are apples-to-apples: everybody in them was charged. */
+export const LIKE_FOR_LIKE: ReadonlyArray<CohortKey> = [
+  "promo_charged",
+  "charged_no_promo",
+];
+
+/** How the checkout cohort splits, so its sub-100% "ever paid" is explainable. */
+export type CheckoutComposition = {
+  charged: number;
+  trialOnly: number;
+  cardedNeverCharged: number;
 };
 
 export type CohortStats = {
@@ -301,6 +337,7 @@ export type PromoUsersData = {
   kpis: PromoUsersKpis;
   money: PromoMoneyTotal[];
   cohorts: CohortStats[];
+  checkoutComposition: CheckoutComposition | null;
   users: PromoUserRow[];
   grants: PromoGrantRowView[];
   codes: PromoCodeRow[];
