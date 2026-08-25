@@ -8,11 +8,13 @@ import {
 } from "@/lib/ceo/internal-test/loader";
 import {
   COHORT_LABELS,
+  MAIN_COHORTS,
   couponTerms,
   daysBetween,
   median,
   type BeforeAfterRow,
   type CallLogRow,
+  type CheckoutComposition,
   type CohortKey,
   type CohortStats,
   type EmailLogRow,
@@ -75,9 +77,14 @@ const CAUSALITY_NOTE =
   "This page shows association, not causation. Promo recipients were not randomly chosen: " +
   "they are workshops that were actively sold to and that reached checkout, so a naive " +
   "comparison against all other users mostly measures 'engaged customer vs random free " +
-  "signup'. The 'Paid, no promo' cohort is the fair contrast — same commercial motion, no " +
-  "discount. Even there, 'ever paid' is partly mechanical: a discounted subscription still " +
-  "issues invoices, and several coupons were applied to customers who were already paying.";
+  "signup'. Two cohorts are named for exactly what they are: 'Reached checkout, no promo' " +
+  "includes trials that never paid (which is why its own 'ever paid' cell is well under " +
+  "100%), while 'Paid, no promo' is only users who were actually charged. The like-for-like " +
+  "read is 'Promo, charged' against 'Paid, no promo' — everybody on both sides paid — and " +
+  "there activation, repeat use and 30-day retention come out the same, with only volume " +
+  "differing. Volume itself partly reflects tenure: discounted customers have been around " +
+  "longer, and diagnoses per ACTIVE DAY is flat, so they have more days rather than busier " +
+  "ones.";
 
 type AnalysisRow = {
   internal_user_id: string;
@@ -264,6 +271,7 @@ function emptyData(error: string | null = null): PromoUsersData {
     },
     money: [],
     cohorts: [],
+    checkoutComposition: null,
     users: [],
     grants: [],
     codes: [],
@@ -382,6 +390,7 @@ async function getPromoUsersDataUncached(): Promise<PromoUsersData> {
     weeklyResult,
     relativeResult,
     cohortResult,
+    compositionResult,
   ] = await Promise.all([
       // Defaults to promo users only (~53 rows). Never call it with
       // promo_only=false from here: that returns every app user and PostgREST
@@ -399,6 +408,7 @@ async function getPromoUsersDataUncached(): Promise<PromoUsersData> {
       supabase.rpc("promo_weekly_activity", { weeks: 26 }),
       supabase.rpc("promo_relative_activity", { span: 8 }),
       supabase.rpc("promo_cohort_stats"),
+      supabase.rpc("promo_checkout_composition"),
     ]);
 
   if (analysisResult.error) {
@@ -422,12 +432,34 @@ async function getPromoUsersDataUncached(): Promise<PromoUsersData> {
 
   // ---- cohorts, straight from Postgres ------------------------------------
   const cohortRows = (cohortResult.data ?? []) as CohortDbRow[];
-  const cohortOrder: CohortKey[] = ["promo", "paid_no_promo", "free_no_promo"];
   const cohortByKey = new Map(cohortRows.map((row) => [row.cohort, row]));
+  // Every cohort the function returns, in a stable order. Two of them
+  // (promo_charged, charged_no_promo) are SUBSETS of the wider cohorts, so
+  // nothing downstream may sum these rows.
+  const cohortOrder: CohortKey[] = [
+    "promo",
+    "promo_charged",
+    "charged_no_promo",
+    "checkout_no_promo",
+    "free_no_promo",
+  ];
   const cohorts: CohortStats[] = cohortOrder
     .map((key) => cohortByKey.get(key))
     .filter((row): row is CohortDbRow => Boolean(row))
     .map(toCohortStats);
+
+  const compositionRow = ((compositionResult.data ?? []) as Array<{
+    charged: number;
+    trial_only: number;
+    carded_never_charged: number;
+  }>)[0];
+  const checkoutComposition: CheckoutComposition | null = compositionRow
+    ? {
+        charged: Number(compositionRow.charged ?? 0),
+        trialOnly: Number(compositionRow.trial_only ?? 0),
+        cardedNeverCharged: Number(compositionRow.carded_never_charged ?? 0),
+      }
+    : null;
 
   // ---- promo users (all, internal flagged) --------------------------------
   const promoAnalysis = analysis.filter((row) => row.is_promo);
@@ -1158,7 +1190,9 @@ async function getPromoUsersDataUncached(): Promise<PromoUsersData> {
   const funnel: FunnelStage[] = funnelDefs.map((def) => {
     const counts = {} as Record<CohortKey, number>;
     const pct = {} as Record<CohortKey, number>;
-    for (const key of cohortOrder) {
+    // MAIN_COHORTS only: including a subset cohort here would draw the same
+    // users twice in one funnel.
+    for (const key of MAIN_COHORTS) {
       const row = cohortByKey.get(key);
       const total = Number(row?.users ?? 0);
       const n = row ? def.pick(row) : 0;
@@ -1303,6 +1337,7 @@ async function getPromoUsersDataUncached(): Promise<PromoUsersData> {
     kpis,
     money,
     cohorts,
+    checkoutComposition,
     users,
     grants: grantViews,
     codes,

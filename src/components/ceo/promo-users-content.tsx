@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { formatNumber } from "@/lib/ceo/format";
 import {
   COHORT_LABELS,
+  LIKE_FOR_LIKE,
+  MAIN_COHORTS,
   PROMO_TABS,
   type CohortKey,
   type CohortStats,
@@ -21,7 +23,9 @@ type PromoUsersContentProps = {
 
 const COHORT_COLORS: Record<CohortKey, string> = {
   promo: "#7c5cff",
-  paid_no_promo: "#25b3a3",
+  promo_charged: "#a78bfa",
+  charged_no_promo: "#25b3a3",
+  checkout_no_promo: "#4b9fd8",
   free_no_promo: "#8b93a7",
 };
 
@@ -41,9 +45,21 @@ const CAUSALITY_INFO: SourceInfo = {
   title: "Why this is association, not proof",
   body:
     "Promo recipients were not randomly chosen. They are workshops that were actively sold to and that reached checkout, so comparing them against ALL other users mostly measures 'engaged customer vs random free signup' rather than the effect of a discount.",
-  sources: ["promo_user_analysis() cohorts"],
+  sources: ["promo_cohort_stats()"],
   logic:
-    "The 'Paid, no promo' cohort is the fair contrast: same commercial motion, no discount. Even there, 'ever paid' is partly mechanical, since a discounted subscription still issues invoices and several coupons were applied to customers who were already paying.",
+    "Read 'Promo, charged' against 'Paid, no promo' for the like-for-like answer: everybody on both sides was actually charged. There, activation, repeat use and 30-day retention come out the same and only volume differs. Volume itself partly reflects tenure, because diagnoses per ACTIVE DAY is flat between them: discounted customers have more active days, not busier ones.",
+};
+
+const CHECKOUT_INFO: SourceInfo = {
+  title: "Why 'Reached checkout' is not the same as 'Paid'",
+  body:
+    "This cohort is everyone who got as far as checkout without a discount: it includes trials that were never charged, which is why its own 'ever paid' cell sits well under 100%. plan_key and trial_end are both stamped at checkout, before any money moves, so treating them as evidence of payment is the standard trap here.",
+  sources: [
+    "dashboard_subscriptions.metadata.ever_paid (money actually moved)",
+    "trial_end / plan_key (stamped at checkout)",
+  ],
+  logic:
+    "'Paid, no promo' is the strict subset that was actually charged. Because it is a subset, the two columns must never be added together.",
 };
 
 const ACTIVITY_INFO: SourceInfo = {
@@ -287,57 +303,109 @@ function TermTable({
   );
 }
 
+type Metric = {
+  label: string;
+  hint?: string;
+  /** Numeric so ratios are computed from values, never parsed back out of text. */
+  pick: (c: CohortStats) => number;
+  format: (value: number) => string;
+};
+
+/**
+ * Metrics are (pick, format) pairs rather than pre-formatted strings. The first
+ * version derived its ratio column by stripping non-digits out of the rendered
+ * text, which produced nonsense for counts (a "0.4x" ratio of user-counts) and
+ * would silently break on any format change.
+ */
+const METRICS: Metric[] = [
+  { label: "Users", pick: (c) => c.users, format: (v) => formatNumber(v) },
+  {
+    label: "Workshops",
+    pick: (c) => c.workshops,
+    format: (v) => formatNumber(v),
+  },
+  {
+    label: "Ran a diagnosis",
+    hint: "Activation. The share who used the core feature at least once.",
+    pick: (c) => c.pctActivated,
+    format: (v) => pctLabel(v),
+  },
+  {
+    label: "Came back (2+)",
+    hint: "Repeat usage.",
+    pick: (c) => c.pctRepeat,
+    format: (v) => pctLabel(v),
+  },
+  {
+    label: "Heavy use (10+)",
+    pick: (c) => c.pctPower,
+    format: (v) => pctLabel(v),
+  },
+  {
+    label: "Diagnoses per user (avg)",
+    pick: (c) => c.avgDiagnostics,
+    format: (v) => num(v, 2),
+  },
+  {
+    label: "Diagnoses per user (median)",
+    hint: "The median is the honest middle: averages here are dragged up by a handful of very heavy users.",
+    pick: (c) => c.medianDiagnostics,
+    format: (v) => num(v, 1),
+  },
+  {
+    label: "Busiest single user",
+    pick: (c) => c.maxDiagnostics,
+    format: (v) => formatNumber(v),
+  },
+  {
+    label: "Active days per user (avg)",
+    pick: (c) => c.avgActiveDays,
+    format: (v) => num(v),
+  },
+  {
+    label: "Diagnoses per active day",
+    hint: "Intensity while actually present, which strips out how long they have been a customer. This one being flat is why the volume gap reads as tenure rather than enthusiasm.",
+    pick: (c) => c.diagnosticsPerActiveDay,
+    format: (v) => num(v, 2),
+  },
+  {
+    label: "Active in last 30d",
+    pick: (c) => c.pctActive30d,
+    format: (v) => pctLabel(v),
+  },
+  {
+    label: "Chats per user (avg)",
+    pick: (c) => c.avgChats,
+    format: (v) => num(v, 2),
+  },
+  {
+    label: "Feature events per user (avg)",
+    hint: "Only counts from 2026-06-11 onward.",
+    pick: (c) => c.avgFeatureEvents,
+    format: (v) => num(v, 1),
+  },
+  {
+    label: "Ever paid real money",
+    hint: "Money actually moved, from dashboard_subscriptions.metadata.ever_paid. It is under 100% for 'Reached checkout' because that cohort includes trials that were never charged.",
+    pick: (c) => c.pctEverPaid,
+    format: (v) => pctLabel(v),
+  },
+];
+
+function MetricLabel({ metric }: { metric: Metric }) {
+  if (!metric.hint) return <>{metric.label}</>;
+  return (
+    <span className="label-with-info">
+      <span>{metric.label}</span>
+      <InfoHint info={{ title: metric.label, body: metric.hint }} />
+    </span>
+  );
+}
+
 function CohortTable({ cohorts }: { cohorts: CohortStats[] }) {
-  const metrics: Array<{
-    label: string;
-    hint?: string;
-    value: (c: CohortStats) => string;
-  }> = [
-    { label: "Users", value: (c) => formatNumber(c.users) },
-    { label: "Workshops", value: (c) => formatNumber(c.workshops) },
-    {
-      label: "Ran a diagnosis",
-      hint: "Activation. The share who used the core feature at least once.",
-      value: (c) => pctLabel(c.pctActivated),
-    },
-    {
-      label: "Came back (2+)",
-      hint: "Repeat usage.",
-      value: (c) => pctLabel(c.pctRepeat),
-    },
-    {
-      label: "Heavy use (10+)",
-      value: (c) => pctLabel(c.pctPower),
-    },
-    {
-      label: "Diagnoses per user (avg)",
-      value: (c) => num(c.avgDiagnostics, 2),
-    },
-    {
-      label: "Diagnoses per user (median)",
-      hint: "The median is the honest middle: averages here are dragged up by a handful of very heavy users.",
-      value: (c) => num(c.medianDiagnostics, 1),
-    },
-    { label: "Busiest single user", value: (c) => formatNumber(c.maxDiagnostics) },
-    { label: "Active days per user (avg)", value: (c) => num(c.avgActiveDays) },
-    {
-      label: "Diagnoses per active day",
-      hint: "Intensity while actually present, which strips out how long they have been a customer.",
-      value: (c) => num(c.diagnosticsPerActiveDay, 2),
-    },
-    { label: "Active in last 30d", value: (c) => pctLabel(c.pctActive30d) },
-    { label: "Chats per user (avg)", value: (c) => num(c.avgChats, 2) },
-    {
-      label: "Feature events per user (avg)",
-      hint: "Only counts from 2026-06-11 onward.",
-      value: (c) => num(c.avgFeatureEvents, 1),
-    },
-    {
-      label: "Ever paid real money",
-      hint: "Partly mechanical for the promo cohort: a discounted subscription still issues invoices.",
-      value: (c) => pctLabel(c.pctEverPaid),
-    },
-  ];
+  const columns = MAIN_COHORTS.map((key) =>
+    cohorts.find((cohort) => cohort.key === key),
+  ).filter((cohort): cohort is CohortStats => Boolean(cohort));
 
   return (
     <div className="table-wrap">
@@ -345,44 +413,85 @@ function CohortTable({ cohorts }: { cohorts: CohortStats[] }) {
         <thead>
           <tr>
             <th>Metric</th>
-            {cohorts.map((cohort) => (
-              <th key={cohort.key}>{cohort.label}</th>
+            {columns.map((cohort) => (
+              <th key={cohort.key}>
+                {cohort.key === "checkout_no_promo" ? (
+                  <span className="label-with-info">
+                    <span>{cohort.label}</span>
+                    <InfoHint info={CHECKOUT_INFO} />
+                  </span>
+                ) : (
+                  cohort.label
+                )}
+                <br />
+                <small>{formatNumber(cohort.users)} users</small>
+              </th>
             ))}
+          </tr>
+        </thead>
+        <tbody>
+          {METRICS.map((metric) => (
+            <tr key={metric.label}>
+              <td className="table-primary">
+                <MetricLabel metric={metric} />
+              </td>
+              {columns.map((cohort) => (
+                <td key={cohort.key}>{metric.format(metric.pick(cohort))}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * The comparison that actually isolates the discount: everyone on both sides
+ * was charged, so neither column is diluted by never-charged trials.
+ */
+function LikeForLikeTable({ cohorts }: { cohorts: CohortStats[] }) {
+  const [promo, paid] = LIKE_FOR_LIKE.map((key) =>
+    cohorts.find((cohort) => cohort.key === key),
+  );
+  if (!promo || !paid) return null;
+
+  return (
+    <div className="table-wrap">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>
+              {promo.label}
+              <br />
+              <small>{formatNumber(promo.users)} users</small>
+            </th>
+            <th>
+              {paid.label}
+              <br />
+              <small>{formatNumber(paid.users)} users</small>
+            </th>
             <th>Promo vs paid</th>
           </tr>
         </thead>
         <tbody>
-          {metrics.map((metric) => {
-            const promo = cohorts.find((c) => c.key === "promo");
-            const paid = cohorts.find((c) => c.key === "paid_no_promo");
-            return (
-              <tr key={metric.label}>
-                <td className="table-primary">
-                  {metric.hint ? (
-                    <span className="label-with-info">
-                      <span>{metric.label}</span>
-                      <InfoHint
-                        info={{ title: metric.label, body: metric.hint }}
-                      />
-                    </span>
-                  ) : (
-                    metric.label
-                  )}
-                </td>
-                {cohorts.map((cohort) => (
-                  <td key={cohort.key}>{metric.value(cohort)}</td>
-                ))}
-                <td>
-                  {promo && paid
-                    ? ratio(
-                        Number(metric.value(promo).replace(/[^0-9.]/g, "")),
-                        Number(metric.value(paid).replace(/[^0-9.]/g, "")),
-                      )
-                    : "—"}
-                </td>
-              </tr>
-            );
-          })}
+          {METRICS.filter((metric) => metric.label !== "Ever paid real money").map(
+            (metric) => {
+              const a = metric.pick(promo);
+              const b = metric.pick(paid);
+              return (
+                <tr key={metric.label}>
+                  <td className="table-primary">
+                    <MetricLabel metric={metric} />
+                  </td>
+                  <td>{metric.format(a)}</td>
+                  <td>{metric.format(b)}</td>
+                  <td>{ratio(a, b)}</td>
+                </tr>
+              );
+            },
+          )}
         </tbody>
       </table>
     </div>
@@ -484,7 +593,12 @@ export function PromoUsersContent({
   };
 
   const promo = data.cohorts.find((c) => c.key === "promo");
-  const paid = data.cohorts.find((c) => c.key === "paid_no_promo");
+  // `paid` is the strict charged cohort, which is the only fair comparison for
+  // the promo cohort. `checkout` is the wider "reached checkout" group whose
+  // ever-paid share is deliberately below 100%.
+  const promoCharged = data.cohorts.find((c) => c.key === "promo_charged");
+  const paid = data.cohorts.find((c) => c.key === "charged_no_promo");
+  const checkout = data.cohorts.find((c) => c.key === "checkout_no_promo");
   const free = data.cohorts.find((c) => c.key === "free_no_promo");
   const primaryMoney = data.money[0] ?? null;
 
@@ -623,22 +737,31 @@ export function PromoUsersContent({
                 </h2>
               </div>
             </div>
-            {promo && paid && free ? (
-              <div className="summary-grid columns-3">
+            {promoCharged && paid ? (
+              <div className="summary-grid columns-4">
                 <SummaryCard
-                  value={`${pctLabel(promo.pctActivated)} vs ${pctLabel(paid.pctActivated)}`}
-                  label="Activation, promo vs paid-no-promo"
-                  hint="Discounting does NOT get more people to try the product"
+                  value={`${pctLabel(promoCharged.pctActivated)} vs ${pctLabel(paid.pctActivated)}`}
+                  label="Activation, charged promo vs charged no-promo"
+                  hint="No lift. Discounting does not get more paying customers to try the product"
+                  info={CAUSALITY_INFO}
                 />
                 <SummaryCard
-                  value={ratio(promo.avgDiagnostics, paid.avgDiagnostics)}
-                  label="Diagnoses per user vs paid-no-promo"
-                  hint={`${num(promo.avgDiagnostics, 1)} vs ${num(paid.avgDiagnostics, 1)} on average`}
+                  value={`${pctLabel(promoCharged.pctRepeat)} vs ${pctLabel(paid.pctRepeat)}`}
+                  label="Repeat use (2+)"
+                  hint="Also flat once both sides actually paid"
                 />
                 <SummaryCard
-                  value={`${pctLabel(promo.pctRepeat)} vs ${pctLabel(paid.pctRepeat)}`}
-                  label="Repeat usage vs paid-no-promo"
-                  hint="Where the discounted cohort really separates"
+                  value={`${pctLabel(promoCharged.pctActive30d)} vs ${pctLabel(paid.pctActive30d)}`}
+                  label="Still active (30d)"
+                  hint="Flat as well, so no retention effect either"
+                />
+                <SummaryCard
+                  value={ratio(
+                    promoCharged.avgDiagnostics,
+                    paid.avgDiagnostics,
+                  )}
+                  label="Diagnoses per user"
+                  hint={`${num(promoCharged.avgDiagnostics, 1)} vs ${num(paid.avgDiagnostics, 1)}. Volume is the only real gap, and per ACTIVE DAY it is ${num(promoCharged.diagnosticsPerActiveDay, 2)} vs ${num(paid.diagnosticsPerActiveDay, 2)}`}
                 />
               </div>
             ) : null}
@@ -659,7 +782,7 @@ export function PromoUsersContent({
                   {
                     key: "controlPerUser",
                     label: "Everyone else: diagnoses per active user",
-                    color: COHORT_COLORS.free_no_promo,
+                    color: COHORT_COLORS.checkout_no_promo,
                   },
                 ]}
                 subtitle="Per active user, so the two cohorts are comparable despite very different sizes"
@@ -747,14 +870,54 @@ export function PromoUsersContent({
                   <InfoHint info={CAUSALITY_INFO} />
                 </h2>
                 <p className="panel-description">
-                  Read the middle column, not the right one. Free-no-promo users
-                  mostly never reached checkout, so promo versus free measures
-                  the sales motion, not the discount. Paid-no-promo went through
-                  the same motion without a discount.
+                  Free users mostly never reached checkout, so promo versus free
+                  measures the sales motion rather than the discount. Compare
+                  against the paid columns instead. Note that &quot;Paid&quot;
+                  is a strict subset of &quot;Reached checkout&quot;, so those
+                  two columns must never be added together.
                 </p>
               </div>
             </div>
             <CohortTable cohorts={data.cohorts} />
+            {data.checkoutComposition ? (
+              <p className="panel-description">
+                Why &quot;Reached checkout, no promo&quot; is not the same as
+                paying: of its{" "}
+                {formatNumber(
+                  data.checkoutComposition.charged +
+                    data.checkoutComposition.trialOnly +
+                    data.checkoutComposition.cardedNeverCharged,
+                )}{" "}
+                users, {formatNumber(data.checkoutComposition.charged)} were
+                actually charged,{" "}
+                {formatNumber(data.checkoutComposition.trialOnly)} started a
+                trial and never paid, and{" "}
+                {formatNumber(data.checkoutComposition.cardedNeverCharged)}{" "}
+                carded at checkout without a trial and were never charged.
+                Both <code>plan_key</code> and <code>trial_end</code> are
+                stamped at checkout, before any money moves.
+              </p>
+            ) : null}
+          </article>
+
+          <article className="panel panel-wide">
+            <div className="panel-heading">
+              <div>
+                <h2 className="heading-with-info">
+                  <span>Like for like: everyone here paid</span>
+                  <InfoHint info={CAUSALITY_INFO} />
+                </h2>
+                <p className="panel-description">
+                  The cleanest read on the page. Both columns are customers who
+                  were actually charged, so neither is diluted by trials that
+                  never paid. Activation, repeat use and 30-day retention come
+                  out the same; only volume differs, and diagnoses per active
+                  day being flat says that is mostly tenure rather than
+                  enthusiasm.
+                </p>
+              </div>
+            </div>
+            <LikeForLikeTable cohorts={data.cohorts} />
           </article>
 
           {data.relative.length > 0 ? (
@@ -778,7 +941,7 @@ export function PromoUsersContent({
                   {
                     key: "users",
                     label: "Active users",
-                    color: COHORT_COLORS.paid_no_promo,
+                    color: COHORT_COLORS.charged_no_promo,
                   },
                 ]}
                 subtitle="Week 0 is the week the discount was applied"
@@ -1139,27 +1302,27 @@ export function PromoUsersContent({
                 </h2>
               </div>
             </div>
-            {promo && paid && free ? (
+            {promo && checkout && free ? (
               <div className="summary-grid columns-4">
                 <SummaryCard
                   value={formatNumber(promo.totalDiagnostics)}
                   label="Diagnoses by promo users"
-                  hint={`${pct(promo.totalDiagnostics, promo.totalDiagnostics + paid.totalDiagnostics + free.totalDiagnostics)} of all diagnoses, from ${pct(promo.users, promo.users + paid.users + free.users)} of users`}
+                  hint={`${pct(promo.totalDiagnostics, promo.totalDiagnostics + checkout.totalDiagnostics + free.totalDiagnostics)} of all diagnoses, from ${pct(promo.users, promo.users + checkout.users + free.users)} of users`}
                 />
                 <SummaryCard
                   value={num(promo.diagnosticsPerActiveDay, 2)}
                   label="Diagnoses per active day"
-                  hint={`paid-no-promo ${num(paid.diagnosticsPerActiveDay, 2)} · free ${num(free.diagnosticsPerActiveDay, 2)}`}
+                  hint={`checkout ${num(checkout.diagnosticsPerActiveDay, 2)} · free ${num(free.diagnosticsPerActiveDay, 2)}. Flat, so promo users have more days rather than busier ones`}
                 />
                 <SummaryCard
                   value={num(promo.avgActiveDays)}
                   label="Active days per promo user"
-                  hint={`paid-no-promo ${num(paid.avgActiveDays)} · free ${num(free.avgActiveDays)}`}
+                  hint={`checkout ${num(checkout.avgActiveDays)} · free ${num(free.avgActiveDays)}`}
                 />
                 <SummaryCard
                   value={num(promo.avgChats, 2)}
                   label="Chats per promo user"
-                  hint={`paid-no-promo ${num(paid.avgChats, 2)} · free ${num(free.avgChats, 2)}`}
+                  hint={`checkout ${num(checkout.avgChats, 2)} · free ${num(free.avgChats, 2)}`}
                 />
               </div>
             ) : null}
@@ -1221,7 +1384,7 @@ export function PromoUsersContent({
                   </span>
                 </div>
                 <div className="funnel-track">
-                  {(["promo", "paid_no_promo", "free_no_promo"] as CohortKey[]).map(
+                  {MAIN_COHORTS.map(
                     (key) => (
                       <div
                         className="funnel-bar"
@@ -1236,22 +1399,20 @@ export function PromoUsersContent({
                   )}
                 </div>
                 <div className="funnel-rate">
-                  {(["promo", "paid_no_promo", "free_no_promo"] as CohortKey[])
-                    .map((key) => pctLabel(stage.pct[key]))
-                    .join(" / ")}
+                  {MAIN_COHORTS.map((key) => pctLabel(stage.pct[key] ?? 0)).join(
+                    " / ",
+                  )}
                 </div>
               </div>
             ))}
           </div>
           <div className="chart-legend">
-            {(["promo", "paid_no_promo", "free_no_promo"] as CohortKey[]).map(
-              (key) => (
-                <span key={key}>
-                  <i style={{ background: COHORT_COLORS[key] }} />
-                  {COHORT_LABELS[key]}
-                </span>
-              ),
-            )}
+            {MAIN_COHORTS.map((key) => (
+              <span key={key}>
+                <i style={{ background: COHORT_COLORS[key] }} />
+                {COHORT_LABELS[key]}
+              </span>
+            ))}
           </div>
 
           <div className="table-wrap">
@@ -1259,8 +1420,8 @@ export function PromoUsersContent({
               <thead>
                 <tr>
                   <th>Stage</th>
-                  {data.cohorts.map((cohort) => (
-                    <th key={cohort.key}>{cohort.label}</th>
+                  {MAIN_COHORTS.map((key) => (
+                    <th key={key}>{COHORT_LABELS[key]}</th>
                   ))}
                 </tr>
               </thead>
@@ -1268,10 +1429,10 @@ export function PromoUsersContent({
                 {data.funnel.map((stage) => (
                   <tr key={stage.key}>
                     <td className="table-primary">{stage.label}</td>
-                    {data.cohorts.map((cohort) => (
-                      <td key={cohort.key}>
-                        {formatNumber(stage.counts[cohort.key])} ·{" "}
-                        {pctLabel(stage.pct[cohort.key])}
+                    {MAIN_COHORTS.map((key) => (
+                      <td key={key}>
+                        {formatNumber(stage.counts[key] ?? 0)} ·{" "}
+                        {pctLabel(stage.pct[key] ?? 0)}
                       </td>
                     ))}
                   </tr>
