@@ -297,6 +297,8 @@ function emptyData(error: string | null = null): TrialUsersData {
       unmatchedTrials: 0,
       internalTrials: 0,
       estimatedWindows: 0,
+      totalCalls: 0,
+      totalEmails: 0,
     },
     money: [],
     outcomes: [],
@@ -1275,10 +1277,16 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
     list.push(row);
     diagnosticsByUser.set(row.internal_user_id, list);
   }
+  // Indexed by id rather than scanned: `calls`/`emails` run to thousands of
+  // rows for a few hundred contacts, and a .find() per source row would make
+  // this quadratic on the email side for no reason.
+  const callById = new Map(calls.map((call) => [call.id, call]));
+  const emailById = new Map(emails.map((mail) => [mail.id, mail]));
+
   const callsByContact = new Map<string, CallLogRow[]>();
   for (const row of callRows.data) {
     if (!row.contact_id) continue;
-    const view = calls.find((call) => call.id === row.id);
+    const view = callById.get(row.id);
     if (!view) continue;
     const list = callsByContact.get(row.contact_id) ?? [];
     list.push(view);
@@ -1287,7 +1295,7 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
   const emailsByContact = new Map<string, EmailLogRow[]>();
   for (const row of emailRows.data) {
     if (!row.contact_id) continue;
-    const view = emails.find((mail) => mail.id === row.id);
+    const view = emailById.get(row.id);
     if (!view) continue;
     const list = emailsByContact.get(row.contact_id) ?? [];
     list.push(view);
@@ -1593,6 +1601,8 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
     estimatedWindows: trials.filter(
       (trial) => trial.trialStartSource !== "stripe",
     ).length,
+    totalCalls: calls.length,
+    totalEmails: emails.length,
   };
 
   return {

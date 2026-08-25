@@ -435,6 +435,13 @@ export type TrialUsersKpis = {
   unmatchedTrials: number;
   internalTrials: number;
   estimatedWindows: number;
+  /**
+   * Totals BEFORE the outreach tab's row cap. The logs render the most recent
+   * slice, and a table that shows 400 of 3,000 rows without saying so reads as
+   * "this is everything", so the page states both numbers.
+   */
+  totalCalls: number;
+  totalEmails: number;
 };
 
 export type TrialUsersData = {

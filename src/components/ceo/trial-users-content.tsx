@@ -1282,6 +1282,13 @@ export function TrialUsersContent({
                   end&quot; means it came before the trial closed, so a value
                   near zero is a last-minute call.
                 </p>
+                {data.kpis.totalCalls > data.calls.length ? (
+                  <p className="panel-description">
+                    Showing the {formatNumber(data.calls.length)} most recent of{" "}
+                    {formatNumber(data.kpis.totalCalls)} calls. The counts on
+                    every other tab are computed over all of them.
+                  </p>
+                ) : null}
               </div>
             </div>
             {data.calls.length === 0 ? (
@@ -1339,6 +1346,13 @@ export function TrialUsersContent({
                   The sending mailbox, the sequence it belonged to, and whether
                   it was opened, clicked or replied to.
                 </p>
+                {data.kpis.totalEmails > data.emails.length ? (
+                  <p className="panel-description">
+                    Showing the {formatNumber(data.emails.length)} most recent
+                    of {formatNumber(data.kpis.totalEmails)} emails. The counts
+                    on every other tab are computed over all of them.
+                  </p>
+                ) : null}
               </div>
             </div>
             {data.emails.length === 0 ? (
