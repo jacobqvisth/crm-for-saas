@@ -24,6 +24,16 @@ import {
   keywordText,
   matchTypeOf,
 } from "@/lib/ceo/campaigns-creative";
+import {
+  BROAD_THEN_NARROW,
+  FUNNEL_MAP,
+  FUNNEL_MECHANICS,
+  IMPROVEMENT_PLAN,
+  PLAN_FACTS,
+  WHY_TARGETING_IS_IMPRECISE,
+  WHY_THIS_WORKS,
+  type InfoPoint,
+} from "@/lib/ceo/campaigns-info";
 import { InfoHint, type SourceInfo } from "./source-info";
 
 type CampaignsContentProps = {
@@ -496,6 +506,220 @@ function CampaignTab({ detail }: { detail: CampaignDetail }) {
           </ul>
         </article>
       ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- info tab */
+
+function PointList({ points }: { points: InfoPoint[] }) {
+  return (
+    <dl className="definition-list">
+      {points.map((p) => (
+        <div className="definition-item" key={p.heading}>
+          <dt>{p.heading}</dt>
+          <dd>{p.body}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function InfoTab() {
+  return (
+    <div className="section-stack">
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Start here</p>
+            <h2>How the plans work, and what advertising can and cannot do about them</h2>
+          </div>
+        </div>
+        <p className="panel-description">
+          Four plans, four landing pages, and a set of campaigns built to send
+          each audience to the page written for it. That structure is sound, but
+          it promises more precision than the Google auction can actually
+          deliver, and it is worth understanding exactly where the limit sits
+          before spending more against it.
+        </p>
+      </article>
+
+      {/* ---- the plans ---------------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">The product</p>
+            <h3>The four plans</h3>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table campaign-type-table">
+            <thead>
+              <tr>
+                <th>Plan</th>
+                <th>Price</th>
+                <th>Built for</th>
+                <th>Page</th>
+                <th>How reachable it is with ads</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PLAN_FACTS.map((p) => (
+                <tr key={p.plan}>
+                  <td>
+                    <strong>{p.plan}</strong>
+                  </td>
+                  <td>{p.price}</td>
+                  <td>{p.builtFor}</td>
+                  <td>
+                    <small>{p.landingPage}</small>
+                  </td>
+                  <td>{p.reachability}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">The mechanic that shapes everything</p>
+            <h3>Nobody buys a plan from an ad</h3>
+          </div>
+        </div>
+        <PointList points={FUNNEL_MECHANICS} />
+      </article>
+
+      {/* ---- why it works -------------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">The case for the current setup</p>
+            <h3>Why this structure is a good one</h3>
+          </div>
+        </div>
+        <PointList points={WHY_THIS_WORKS} />
+      </article>
+
+      {/* ---- the limits ----------------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">The honest part</p>
+            <h3>Why we cannot precisely reach One, Small or Large buyers</h3>
+          </div>
+        </div>
+        <p className="panel-description">
+          This is not a configuration problem that better targeting settings
+          would fix. It is structural, and six separate things cause it.
+        </p>
+        <PointList points={WHY_TARGETING_IS_IMPRECISE} />
+      </article>
+
+      {/* ---- broad then narrow ----------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Strategy</p>
+            <h3>Why going broad first, then narrowing, usually wins</h3>
+          </div>
+        </div>
+        <PointList points={BROAD_THEN_NARROW} />
+      </article>
+
+      {/* ---- funnel map -------------------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Coverage</p>
+            <h3>The funnel, and which stages we actually cover</h3>
+          </div>
+        </div>
+        <p className="panel-description">
+          Campaigns are organised by plan today. Organising by what the person
+          is trying to do is a better fit, because that is what they type into
+          the search box.
+        </p>
+        <div className="table-wrap">
+          <table className="data-table campaign-type-table">
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Where their head is</th>
+                <th>Campaign type</th>
+                <th>Page it should land on</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FUNNEL_MAP.map((row) => (
+                <tr key={row.stage}>
+                  <td>
+                    <strong>{row.stage}</strong>
+                  </td>
+                  <td>{row.question}</td>
+                  <td>{row.campaignType}</td>
+                  <td>{row.page}</td>
+                  <td>
+                    <span
+                      className={
+                        row.status === "Running"
+                          ? "badge badge-live"
+                          : row.status === "Not built"
+                            ? "badge badge-planned"
+                            : "badge badge-paused"
+                      }
+                    >
+                      {row.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      {/* ---- the plan ------------------------------------------------------------ */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">What to build next</p>
+            <h2>The improvement plan</h2>
+          </div>
+        </div>
+        <p className="panel-description">
+          Ordered so each phase unblocks the next. Phase 0 is not optional:
+          nothing else changes anything while the live campaigns cannot win an
+          auction.
+        </p>
+      </article>
+
+      {IMPROVEMENT_PLAN.map((phase) => (
+        <article className="panel panel-wide" key={phase.phase}>
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">{phase.phase}</p>
+              <h3>{phase.title}</h3>
+            </div>
+            <span className="badge">{phase.effort} effort</span>
+          </div>
+          <p className="panel-description">{phase.why}</p>
+          {phase.blocked ? (
+            <p className="panel-description">
+              <strong>Constraint. </strong>
+              {phase.blocked}
+            </p>
+          ) : null}
+          <ul className="tight-list">
+            {phase.actions.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </article>
+      ))}
     </div>
   );
 }
@@ -1002,9 +1226,18 @@ export function CampaignsContent({ data }: CampaignsContentProps) {
             </span>
           </button>
         ))}
+        <button
+          type="button"
+          className={tab === "info" ? "campaign-tab is-active" : "campaign-tab"}
+          onClick={() => setTab("info")}
+        >
+          Info
+        </button>
       </nav>
 
-      {active ? (
+      {tab === "info" ? (
+        <InfoTab />
+      ) : active ? (
         <CampaignTab detail={active} />
       ) : (
         <OverviewTab data={data} onOpenCampaign={setTab} />
