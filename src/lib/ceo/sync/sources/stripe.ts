@@ -98,16 +98,30 @@ export async function listSubscriptions(stripe: Stripe) {
  * (`discount` singular pre-2025, `discounts` array after), and `promotion_code`
  * is a bare id unless it was expanded.
  */
+type CouponLike = {
+  id?: string | null;
+  name?: string | null;
+  percent_off?: number | null;
+  amount_off?: number | null;
+  currency?: string | null;
+  duration?: string | null;
+  duration_in_months?: number | null;
+};
+
 type DiscountLike = {
   id?: string | null;
-  coupon?: {
-    id?: string | null;
-    name?: string | null;
-    percent_off?: number | null;
-    amount_off?: number | null;
-    currency?: string | null;
-    duration?: string | null;
-    duration_in_months?: number | null;
+  /**
+   * Pre-2026 API versions nest the whole coupon here. The SDK's pinned version
+   * (2026-04-22.dahlia) does NOT: it moved the reference to `source.coupon` as
+   * a bare id and stopped inlining the terms altogether. Both shapes are
+   * accepted so the connector survives an API-version bump in either
+   * direction — and this is exactly the bug that made the first run of this
+   * code write zero grants while reporting success.
+   */
+  coupon?: string | CouponLike | null;
+  source?: {
+    coupon?: string | CouponLike | null;
+    type?: string | null;
   } | null;
   promotion_code?: string | { id?: string | null; code?: string | null } | null;
   start?: number | null;
@@ -215,6 +229,28 @@ async function listInvoices(stripe: Stripe) {
   return invoices;
 }
 
+/**
+ * Coupon terms (percent off, duration) are no longer inlined on a discount as
+ * of API version 2026-04-22.dahlia, so they have to be looked up by id. There
+ * are a few dozen coupons on the account, so one list call covers everything.
+ */
+async function listCoupons(stripe: Stripe) {
+  const coupons: Stripe.Coupon[] = [];
+  let startingAfter: string | undefined;
+
+  do {
+    const page = await stripe.coupons.list({
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    coupons.push(...page.data);
+    startingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+  } while (startingAfter);
+
+  return coupons;
+}
+
 async function listPromotionCodes(stripe: Stripe) {
   const codes: Stripe.PromotionCode[] = [];
   let startingAfter: string | undefined;
@@ -255,6 +291,44 @@ function discountObject(
   return value;
 }
 
+/** The coupon id behind a discount, across both API shapes. */
+function couponIdOf(discount: DiscountLike): string | null {
+  const candidates: Array<string | CouponLike | null | undefined> = [
+    discount.source?.coupon,
+    discount.coupon,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate) return candidate;
+    if (candidate && typeof candidate === "object" && candidate.id) {
+      return candidate.id;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Coupon terms for a discount: inline when the API version still provides them,
+ * otherwise looked up by id from the coupons list.
+ */
+function couponTermsOf(
+  discount: DiscountLike,
+  couponId: string,
+  couponsById: Map<string, CouponLike>,
+): CouponLike {
+  const inline = [discount.source?.coupon, discount.coupon].find(
+    (candidate): candidate is CouponLike =>
+      Boolean(candidate) && typeof candidate === "object",
+  );
+
+  if (inline && (inline.percent_off != null || inline.amount_off != null)) {
+    return inline;
+  }
+
+  return couponsById.get(couponId) ?? inline ?? { id: couponId };
+}
+
 function promotionCodeOf(
   discount: DiscountLike,
   names: Map<string, string>,
@@ -290,12 +364,14 @@ export function buildPromoGrants(params: {
   invoices: InvoiceLike[];
   promotionCodeNames: Map<string, string>;
   identityByCustomer: Map<string, PromoIdentity>;
+  couponsById?: Map<string, CouponLike>;
 }): PromoGrantRow[] {
   const {
     subscriptionDiscounts,
     invoices,
     promotionCodeNames,
     identityByCustomer,
+    couponsById = new Map<string, CouponLike>(),
   } = params;
 
   type Accumulator = PromoGrantRow & { codes: Set<string> };
@@ -303,11 +379,13 @@ export function buildPromoGrants(params: {
 
   const ensure = (
     customerId: string | null,
-    coupon: DiscountLike["coupon"],
+    discount: DiscountLike,
     fallbackEmail: string | null,
   ) => {
-    const couponId = coupon?.id ?? null;
+    const couponId = couponIdOf(discount);
     if (!couponId) return null;
+
+    const coupon = couponTermsOf(discount, couponId, couponsById);
 
     const key = `${customerId ?? "unknown"}:${couponId}`;
     const existing = grants.get(key);
@@ -367,7 +445,7 @@ export function buildPromoGrants(params: {
 
   // ---- live state: discounts attached to a subscription right now ----------
   for (const entry of subscriptionDiscounts) {
-    const grant = ensure(entry.customerId, entry.discount.coupon, null);
+    const grant = ensure(entry.customerId, entry.discount, null);
     if (!grant) continue;
 
     grant.source = "subscription";
@@ -423,7 +501,7 @@ export function buildPromoGrants(params: {
     let paidAttributed = false;
 
     for (const { discount, amount } of resolved) {
-      const grant = ensure(customerId, discount.coupon, invoiceEmail);
+      const grant = ensure(customerId, discount, invoiceEmail);
       if (!grant) continue;
 
       grant.source = grant.active_on_subscription ? "both" : "invoice";
@@ -491,12 +569,13 @@ export const stripeConnector: SourceConnector = {
     requireSourceEnv("Stripe", ["STRIPE_SECRET_KEY"]);
 
     const stripe = new Stripe(getEnv("STRIPE_SECRET_KEY")!);
-    const [subscriptions, userStatsLookup, invoices, promotionCodes] =
+    const [subscriptions, userStatsLookup, invoices, promotionCodes, coupons] =
       await Promise.all([
         listSubscriptions(stripe),
         loadUserStatsEmailLookupFromS3(),
         listInvoices(stripe),
         listPromotionCodes(stripe),
+        listCoupons(stripe),
       ]);
     // subscription id → first real payment timestamp. Used to split churn
     // into "paid churn" (made a payment at least once) vs trial-only churn.
@@ -506,6 +585,11 @@ export const stripeConnector: SourceConnector = {
     // several coupons over time, so the mapping has to come from the codes list.
     const promotionCodeNames = new Map(
       promotionCodes.map((code) => [code.id, code.code]),
+    );
+    // Coupon id → terms. Required, not an optimisation: the pinned API version
+    // does not inline percent_off/duration on a discount any more.
+    const couponsById = new Map<string, CouponLike>(
+      coupons.map((coupon) => [coupon.id, coupon]),
     );
     const stripeCustomerIdsByEmail = new Map<string, Set<string>>();
 
@@ -749,7 +833,8 @@ export const stripeConnector: SourceConnector = {
         }).discounts ?? [];
 
       for (const discount of raw) {
-        if (typeof discount !== "object" || !discount?.coupon) continue;
+        if (typeof discount !== "object" || !discount) continue;
+        if (!couponIdOf(discount)) continue;
 
         subscriptionDiscounts.push({
           subscriptionId: subscription.id,
@@ -769,6 +854,7 @@ export const stripeConnector: SourceConnector = {
       invoices,
       promotionCodeNames,
       identityByCustomer,
+      couponsById,
     });
 
     return {
