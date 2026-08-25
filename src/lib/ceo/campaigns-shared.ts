@@ -172,7 +172,7 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     rationale:
       "First of the plan-targeted campaigns. Single-vehicle intent goes to the One page and its 19 USD price, instead of a generic page that has to sell four plans at once.",
     caveat:
-      "Serving, but only barely: a couple of impressions a day and no clicks yet. That is the signature of a max CPC set too low to win auctions, which is the first thing to check before concluding the keywords are wrong.",
+      "Enabled 2026-08-24 at 96 SEK/day with a 35 SEK max CPC, ads approved, keywords approved. Two impressions and no clicks so far. Read from the account directly on 2026-08-25: nothing is misconfigured, the campaign has simply only been live about a day and the expanded keyword set only a few hours. Judge it on impressions after a week, not on clicks today.",
   },
   {
     name: "WL Plan | Small",
@@ -189,12 +189,13 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     rationale:
       "Small is the most-picked paid tier, so it gets the widest keyword coverage of the three, including competitor alternative terms that pair with the /compare and /vs pages.",
     caveat:
-      "Three things to watch. Competitor names are used as keywords only, never in the ad text, because using a rival trademark in copy is against Google policy. Like the One campaign it is serving only a handful of impressions a day with no clicks, which points at the max CPC rather than the keywords. And the alternatives ad group sends every competitor query to this generic Small page, even though 15 dedicated comparison pages are already live at /en/vs. Routing each rival to its own page is the cheapest improvement available, see the Info tab.",
+      "The keyword set has been expanded to 22 across two ad groups and now includes real-volume terms like \"car diagnostic software\" and \"auto repair software\". Everything is approved and the bid is 35 SEK, but only three impressions have landed and the one search term that has ever matched is \"mitchell 1 alternative\". Quality Score reads 5 where it is scored at all, which is low and normal for a campaign this new. Separately: the alternatives ad group still sends every competitor query to this generic Small page, even though 15 dedicated comparison pages are live at /en/vs. Routing each rival to its own page is the cheapest improvement available.",
   },
   {
     name: "WL Plan | Large",
     type: "search",
-    status: "paused",
+    // Enabled 2026-08-24, confirmed via the Google Ads API on 2026-08-25.
+    status: "live",
     purpose: "acquisition",
     audience:
       "Workshops running three to ten technicians who need shared access across a team.",
@@ -204,6 +205,8 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     geo: "US, UK, Sweden. English",
     rationale:
       "Highest revenue per customer at 195 USD a month, so it can carry a much higher cost per click than the other two before it stops making sense.",
+    caveat:
+      "Live since 2026-08-24 with 16 keywords at a 35 SEK bid, and zero impressions so far, not even the one or two the other two have picked up. Its keywords are the most invented of the three (\"repair information for multiple technicians\", \"workshop software for teams\"), which are phrases describing the product rather than phrases anybody types. This is the campaign most likely to need its keyword list rewritten from search data rather than from the plan description.",
   },
   {
     name: "WL Plan | Upsell Free Users",
@@ -219,7 +222,7 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     rationale:
       "The only campaign pointed at people who already have an account. Roughly 1,560 free users have signed up and never paid, and activation is the biggest leak in the funnel, so re-reaching them is cheaper than buying a new signup.",
     caveat:
-      "Search-with-audience only serves when those users happen to search, so volume is inherently low. Higher-volume Display or Demand Gen remarketing needs uploaded image assets.",
+      "Still does not exist. Confirmed against the ad account on 2026-08-25: there is no campaign by this name. The blocker it was waiting on has cleared though. The WL Free Users audience now reports 500 matched members for Search, comfortably over the 100 minimum, so it can serve as soon as it is built. Note that Search-with-audience only shows when those users happen to search, so volume will be low by nature; higher-volume Display or Demand Gen remarketing would need uploaded image assets.",
   },
   {
     name: "us-generic",
