@@ -72,6 +72,10 @@ type ThreadItem =
       to_email: string;
       timestamp: string | null;
       gmail_message_id: string | null;
+      /** English source of a reply that shipped translated, when the two differ. */
+      body_en_html?: string | null;
+      /** Language the message was actually sent in, when it was translated. */
+      sent_language?: string | null;
     }
   | {
       type: "incoming";
@@ -197,10 +201,23 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
 
   const isIncoming = item.type === "incoming";
 
+  // A reply we sent in the prospect's language keeps the English it was written
+  // in, so the thread stays readable to whoever composed it. Default view is the
+  // body that actually shipped, matching what the recipient received.
+  const outgoingTranslated =
+    item.type === "outgoing" && !!item.body_en_html;
+  const [showOutgoingEnglish, setShowOutgoingEnglish] = useState(false);
+  const sentLanguage = item.type === "outgoing" ? item.sent_language ?? null : null;
+  const sentLanguageLabel = sentLanguage
+    ? `Sent in ${languageLabel(sentLanguage)}`
+    : "Sent in the recipient's language";
+
   // Pick which body to render.
   const bodyHtml = hasTranslation && !showOriginal
     ? item.body_translated_en
-    : item.body_html;
+    : outgoingTranslated && showOutgoingEnglish
+      ? item.body_en_html
+      : item.body_html;
 
   return (
     <div className={`max-w-2xl ${item.type === "outgoing" ? "ml-auto" : ""}`}>
@@ -238,6 +255,22 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
               className="text-indigo-600 hover:text-indigo-700 font-medium"
             >
               {showOriginal ? "Show English" : "Show original"}
+            </button>
+          </div>
+        )}
+
+        {outgoingTranslated && (
+          <div className="flex items-center justify-between gap-2 mb-3 px-2.5 py-1.5 rounded-md bg-indigo-50/70 border border-indigo-100 text-xs">
+            <span className="flex items-center gap-1.5 text-indigo-700">
+              <Languages className="w-3.5 h-3.5" />
+              {showOutgoingEnglish ? "Your English draft" : sentLanguageLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowOutgoingEnglish((v) => !v)}
+              className="text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              {showOutgoingEnglish ? "Show sent version" : "Show English"}
             </button>
           </div>
         )}
@@ -815,12 +848,15 @@ export function InboxClient() {
       // Refetch so the thread leaves "Needs reply"/"Started replying" (and
       // shows under "Recently answered") per the active tab.
       void fetchMessages();
+      // Reload the open thread so the reply we just sent appears in the history
+      // straight away, instead of only after the message is reselected.
+      void loadThread(selectedId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send reply");
     } finally {
       setReplySending(false);
     }
-  }, [selectedId, replyBody, fetchMessages]);
+  }, [selectedId, replyBody, fetchMessages, loadThread]);
 
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
