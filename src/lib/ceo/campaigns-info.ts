@@ -169,7 +169,7 @@ export const FUNNEL_MAP: FunnelStage[] = [
     question: "Has a fault code or a symptom, right now",
     campaignType: "Search on codes and symptoms, Dynamic Search Ads",
     page: "Fault-code and article pages",
-    status: "Sized and queued, not built",
+    status: "Built, awaiting the cutover",
   },
   {
     stage: "Evaluation",
@@ -274,13 +274,14 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     title: "Problem-first pages, the real volume play",
     why: "Mechanics search fault codes and symptoms, not pricing tiers. Every code query today has no honest destination on the site, so the most specific page we own for the highest-intent visitor this business can get is the homepage.",
     effort: "High",
-    state: "Needs a decision",
+    state: "Built",
     progress:
-      "Designed, sized and queued. The Landing Pages page computes the whole programme from the diagnostics this product has already run: roughly 480 pages, of which about 420 are per-code and the rest are family, system and make hubs. Codes are tiered by whether we can say something true about them, then ordered by demand, workshop spread and how often the code arrives with no description at all. What is left is one decision, which target the pages are built on, and then the build itself.",
+      "Built. 896 pages are live in the Astro repo: 417 code pages, 30 family hubs and a cluster root, emitted for en-us and en-gb, taking the site from 365 pages to 1,261. Every page leads with what the code means, then carries evidence no competitor has, how often we see it, at how many workshops, on which marque, and what it travels with. astro check is clean and no built page contains a broken internal link. The Landing Pages page sizes and ranks the whole programme from live diagnostics.",
     blocked:
-      "Where the pages physically live is unresolved. wrenchlane.com is Webflow, where several hundred CMS items is close to the worst shape for the tool and the template is Designer work outside the sanctioned carve-out. The Astro repo generates the whole cluster from one route but ships nothing until the DNS cutover.",
+      "It ships to wrenchlane.com only at the DNS cutover, which is still awaiting Phase 6 review. A flagship batch in Webflow is the separate piece that would get a live indexation signal sooner.",
     actions: [
-      "Pick the build target. The recommendation on the Landing Pages page is Astro, on the grounds that this cluster is the first thing the new site can do that the old one structurally cannot.",
+      "Done: built in Astro, on the grounds that this cluster is the first thing the new site can do that the old one structurally cannot. It is reviewable now on the public test URL.",
+      "Remaining: eight flagship codes as draft items in Webflow, so the live domain gets an indexation signal before the cutover.",
       "Correct the premise this phase was originally written on: the 802 codes are a single Mercedes service manual, not an SEO inventory. The real universe is about 1,070 codes seen in real diagnostics or nameable from the generic dictionary.",
       "Exclude manufacturer-specific codes from standalone pages entirely. They are the largest single group at roughly 460, and one page cannot honestly serve the same code across marques, so they roll up into make hubs.",
       "Publish in demand order and in batches, not all at once, and let the flagship tier index before releasing the next one.",

@@ -80,22 +80,29 @@ export const DOORWAY_DEFENCES: InfoPoint[] = [
  * needs a human, because both answers are defensible and they are not
  * reversible against each other cheaply.
  */
+/**
+ * Where the pages live. Decided 2026-08-25: both, in sequence.
+ */
 export const WHERE_TO_BUILD: InfoPoint[] = [
   {
-    heading: "Webflow ships today and is the wrong tool for this shape",
-    body: "wrenchlane.com is Webflow, so a CMS collection there is live and indexing immediately, which is a real advantage. Against it: several hundred items is close to what a CMS is worst at, every page is an API call to create and another to update, item limits are a plan question rather than an engineering one, and the template itself is Designer work that sits outside the CMS-publishing carve-out. The comparison cluster was fifteen items and that was comfortable. This is thirty times that.",
+    heading: "Decided: Astro for the cluster, Webflow for a live indexation test",
+    body: "The full cluster is built in the Astro repo, where several hundred pages is one route over one data file rather than several hundred CMS records. A small flagship batch goes into Webflow separately, so the live domain gets a real indexation signal months before the DNS cutover. The cost of doing both is the template twice and a re-export at cutover, paid knowingly.",
   },
   {
-    heading: "Astro generates the whole cluster from one file",
-    body: "The wrenchlane-site repo builds every page from data at compile time, so four hundred pages is one route and one data source rather than four hundred records. It gives exact control over canonical tags, structured data and the internal-link graph between codes, families and makes, which is most of what makes a cluster of this kind rank. There are no item limits and no per-page API calls.",
+    heading: "Built: 896 pages in the Astro repo",
+    body: "417 code pages, 30 family hubs and a cluster root, emitted for en-us and en-gb. The site goes from 365 pages to 1,261. astro check is clean and a scan of every link on every built page finds no broken internal links. It ships to wrenchlane.com at cutover and is reviewable now on the public test URL, which is the Phase 6 review the cutover has been waiting on.",
   },
   {
-    heading: "The catch is that Astro ships nothing until the cutover",
-    body: "wrenchlane.com is still entirely Webflow. The Astro site is content-complete and parked behind a review and a two-record DNS change. Pages built there are real, previewable and indexed nowhere until that happens.",
+    heading: "Why a CMS was the wrong home for the bulk of it",
+    body: "Several hundred items is close to what a CMS is worst at: every page is an API call to create and another to update, item limits become a plan question rather than an engineering one, and the internal-link graph between codes, families and makes has to be maintained by hand. Astro rebuilds all of it from the data file in about five seconds.",
   },
   {
-    heading: "Recommendation: build it in Astro, and let it argue for the cutover",
-    body: "This cluster is the first thing the new site can do that the old one structurally cannot, which makes it the strongest argument the migration has had. It is also fully reviewable before it goes anywhere, on a public test URL, which is exactly the Phase 6 review the cutover is waiting on. Building it in Webflow instead would mean doing the work twice, since the Webflow to MDX export already ran once.",
+    heading: "Still to do on the Webflow side",
+    body: "A Fault Codes collection, a template page, and the eight flagship codes as draft items. That is Designer work on the live site, so it is a scoped piece of its own rather than something to fold into a build, and the items stay drafts until reviewed.",
+  },
+  {
+    heading: "The cluster is now the strongest argument for finishing the cutover",
+    body: "It is the first thing the new site can do that the old one structurally cannot. Every week before cutover is a week those 896 pages are indexed nowhere.",
   },
 ];
 
@@ -143,9 +150,10 @@ export const ROLLOUT: RolloutPhase[] = [
     title: "Ship the flagship codes and watch them index",
     why: "A small first batch is the cheapest possible test of whether the cluster earns impressions at all, and it is what makes the larger batches safe to release.",
     effort: "Medium",
-    state: "Needs a decision",
+    state: "Built",
     actions: [
-      "Build the fault-code route and template on the target the previous decision picks.",
+      "Done: the fault-code route, templates and all 896 pages are built in the Astro repo and reviewable on the public test URL.",
+      "Remaining: the eight flagship codes as draft items in Webflow, so the live domain gets an indexation signal before cutover.",
       "Publish the flagship tier only, each page reviewed by a human first.",
       "Submit the folder to Search Console and wait for indexation rather than for traffic.",
       "Point a Search campaign on those exact codes at them, and turn on Dynamic Search Ads scoped to the folder once there is a folder to scope to.",
@@ -156,9 +164,10 @@ export const ROLLOUT: RolloutPhase[] = [
     title: "Release the named tier by family",
     why: "Three hundred pages is too many to review one at a time and too few to release unreviewed. Family is the natural batch, because a wrong claim about a subsystem is then caught once instead of repeatedly.",
     effort: "High",
-    state: "Needs a decision",
+    state: "Built",
     actions: [
-      "Generate per family, review per family, publish per family.",
+      "Done: generation is per family already, and every page carries its family hub, so review can run family by family against the built site.",
+      "Remaining: make hubs. Most manufacturer-specific codes classify into buckets that are not among the 30 built families, so they currently appear on no hub at all.",
       "Build the family hubs in the same pass, so every page has somewhere to send a reader whose exact code is not documented.",
       "Add the make hubs, which is where the manufacturer-specific codes finally become answerable.",
       "Hold the structural tier until the named tier has measurable indexation.",
