@@ -792,6 +792,14 @@ export const stripeConnector: SourceConnector = {
           canceled_at: unixToIso(subscription.canceled_at),
           metadata: {
             ...subscription.metadata,
+            // When the trial actually opened. Without it the only date near a
+            // trial is the Stripe CUSTOMER creation date, and a customer is
+            // routinely created at an abandoned checkout weeks before the
+            // trial starts: 142 of 335 trial rows had a customer-to-trial-end
+            // gap over 40 days, so "usage during the trial" measured against
+            // that gap was counting activity from well before the trial began.
+            trial_start: unixToIso(subscription.trial_start),
+            subscription_created_at: unixToIso(subscription.created),
             customer_created_at: customerCreatedAt(customer),
             customer_email: email,
             customer_metadata_workshop_id: customerMetadataWorkshopId,
