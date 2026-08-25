@@ -160,7 +160,8 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
   {
     name: "WL Plan | One",
     type: "search",
-    status: "paused",
+    // Enabled 2026-08-24. Confirmed live by GA4 impressions, not by hand.
+    status: "live",
     purpose: "acquisition",
     audience:
       "Someone looking after a single vehicle. Solo mechanic or serious owner-operator.",
@@ -170,11 +171,14 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     geo: "US, UK, Sweden. English",
     rationale:
       "First of the plan-targeted campaigns. Single-vehicle intent goes to the One page and its 19 USD price, instead of a generic page that has to sell four plans at once.",
+    caveat:
+      "Serving, but only barely: a couple of impressions a day and no clicks yet. That is the signature of a max CPC set too low to win auctions, which is the first thing to check before concluding the keywords are wrong.",
   },
   {
     name: "WL Plan | Small",
     type: "search",
-    status: "paused",
+    // Enabled 2026-08-24. Confirmed live by GA4 impressions, not by hand.
+    status: "live",
     purpose: "acquisition",
     audience:
       "Independent workshops with one or two mechanics. Includes a second ad group for people searching for alternatives to competing repair-data tools.",
@@ -185,7 +189,7 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     rationale:
       "Small is the most-picked paid tier, so it gets the widest keyword coverage of the three, including competitor alternative terms that pair with the /compare and /vs pages.",
     caveat:
-      "Competitor names are used as keywords only. Using a rival trademark in the ad text itself is against Google policy, so none of the copy does.",
+      "Two things to watch. Competitor names are used as keywords only, never in the ad text, because using a rival trademark in copy is against Google policy. And like the One campaign it is serving only a handful of impressions a day with no clicks, which points at the max CPC rather than the keywords.",
   },
   {
     name: "WL Plan | Large",
@@ -287,6 +291,55 @@ export type SpendTrendPoint = {
   totalSek: number;
 };
 
+/** One day of performance for a single campaign. */
+export type DailyPoint = {
+  date: string;
+  spendSek: number;
+  clicks: number;
+  impressions: number;
+};
+
+/** One month of performance for a single campaign. */
+export type MonthlyPoint = {
+  month: string;
+  spendSek: number;
+  clicks: number;
+  impressions: number;
+  /** Users whose GA4 first touch was this campaign, in this month. */
+  users: number;
+};
+
+/**
+ * Everything the per-campaign tab needs. Built for every catalogued campaign
+ * that is not retired, whether or not GA4 has any data for it: a paused
+ * campaign still has structure, creative and keywords worth showing.
+ */
+export type CampaignDetail = {
+  catalog: CatalogCampaign;
+  performance: CampaignPerformance | null;
+  daily: DailyPoint[];
+  monthly: MonthlyPoint[];
+  /** Share of all Google Ads spend, all time. */
+  spendSharePct: number | null;
+  /**
+   * Set when GA4 contradicts the hand-maintained status: the catalog says
+   * paused or not-yet-built, but the campaign served impressions recently.
+   * Status is edited by hand and therefore goes stale the moment someone
+   * enables a campaign in the Google Ads UI, so the page detects that rather
+   * than trusting itself.
+   */
+  statusDiscrepancy: string | null;
+  /**
+   * Live but almost invisible: serving impressions yet winning no clicks.
+   * On this account that nearly always means the max CPC is below what the
+   * auction costs, not that the keywords are wrong.
+   */
+  lowDeliveryWarning: string | null;
+};
+
+/** Impressions in the last N days is what counts as "recently serving". */
+export const RECENT_SERVING_DAYS = 7;
+
 export type CampaignsKpis = {
   totalSpendSek: number;
   totalClicks: number;
@@ -317,7 +370,18 @@ export type CampaignsData = {
     totalAttributedUsers: number;
     googleAdsSharePct: number;
   } | null;
+  /**
+   * One entry per non-retired catalogued campaign, in tab order. Retired
+   * campaigns keep their rows in the overview tables (deleting them would
+   * misstate spend history) but get no tab of their own.
+   */
+  details: CampaignDetail[];
 };
+
+/** Campaigns that get their own tab: everything except retired. */
+export function isTabbed(campaign: CatalogCampaign): boolean {
+  return campaign.status !== "retired";
+}
 
 /** Campaign names GA4 emits that are not real campaigns. */
 export const NON_CAMPAIGN_NAMES = new Set([

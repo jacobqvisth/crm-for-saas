@@ -20,11 +20,16 @@ import {
   CAMPAIGN_CATALOG,
   USD_TO_SEK,
   findCatalogEntry,
+  RECENT_SERVING_DAYS,
+  isTabbed,
   normalizeCampaignName,
+  type CampaignDetail,
   type CampaignPerformance,
   type CampaignsData,
   type CampaignsKpis,
   type CatalogCampaign,
+  type DailyPoint,
+  type MonthlyPoint,
   type SpendTrendPoint,
   type WindowedPerformance,
 } from "@/lib/ceo/campaigns-shared";
@@ -43,6 +48,14 @@ type AttributionRow = {
   internal_user_id: string | null;
   channel: string | null;
   google_ads_campaign: string | null;
+};
+
+// dashboard_user_attribution has no signup date, only synced_at (when the row
+// was written, which is meaningless as a cohort). To place a user in the month
+// they actually arrived we have to join to dashboard_users.signed_up_at.
+type UserSignupRow = {
+  internal_user_id: string | null;
+  signed_up_at: string | null;
 };
 
 type Totals = {
@@ -151,6 +164,57 @@ function buildWindow(
   };
 }
 
+/** Daily series for one campaign, ascending by date, zero-days omitted. */
+function buildDaily(rows: SnapshotRow[], campaign: string): DailyPoint[] {
+  const byDay = new Map<string, Totals>();
+  for (const row of rows) {
+    if (campaignNameOf(row) !== campaign) continue;
+    const day = row.period_start.slice(0, 10);
+    let totals = byDay.get(day);
+    if (!totals) {
+      totals = emptyTotals();
+      byDay.set(day, totals);
+    }
+    accumulate(totals, row);
+  }
+  return [...byDay.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, t]) => ({
+      date,
+      spendSek: t.spendUsd * USD_TO_SEK,
+      clicks: t.clicks,
+      impressions: t.impressions,
+    }));
+}
+
+/** Monthly series for one campaign, with the users it acquired that month. */
+function buildMonthly(
+  rows: SnapshotRow[],
+  campaign: string,
+  usersByCampaignMonth: Map<string, number>,
+): MonthlyPoint[] {
+  const byMonth = new Map<string, Totals>();
+  for (const row of rows) {
+    if (campaignNameOf(row) !== campaign) continue;
+    const month = row.period_start.slice(0, 7);
+    let totals = byMonth.get(month);
+    if (!totals) {
+      totals = emptyTotals();
+      byMonth.set(month, totals);
+    }
+    accumulate(totals, row);
+  }
+  return [...byMonth.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, t]) => ({
+      month,
+      spendSek: t.spendUsd * USD_TO_SEK,
+      clicks: t.clicks,
+      impressions: t.impressions,
+      users: usersByCampaignMonth.get(`${campaign.toLowerCase()}|${month}`) ?? 0,
+    }));
+}
+
 function buildTrend(rows: SnapshotRow[]): SpendTrendPoint[] {
   const byMonth = new Map<string, Map<string, number>>();
   for (const row of rows) {
@@ -204,6 +268,15 @@ function emptyData(): CampaignsData {
     trend: [],
     noDataCampaigns: CAMPAIGN_CATALOG,
     attribution: null,
+    details: CAMPAIGN_CATALOG.filter(isTabbed).map((catalog) => ({
+      catalog,
+      performance: null,
+      daily: [],
+      monthly: [],
+      spendSharePct: null,
+      statusDiscrepancy: null,
+      lowDeliveryWarning: null,
+    })),
   };
 }
 
@@ -211,7 +284,7 @@ async function getCampaignsDataUncached(): Promise<CampaignsData> {
   const supabase = createSupabaseServiceClient();
   if (!supabase) return emptyData();
 
-  const [snapshotsRes, attributionRes] = await Promise.all([
+  const [snapshotsRes, attributionRes, usersRes] = await Promise.all([
     pageAll<SnapshotRow>(({ from, to }) =>
       supabase
         .from(TABLES.metricSnapshots)
@@ -233,6 +306,13 @@ async function getCampaignsDataUncached(): Promise<CampaignsData> {
         .order("internal_user_id")
         .range(from, to),
     ),
+    pageAll<UserSignupRow>(({ from, to }) =>
+      supabase
+        .from(TABLES.users)
+        .select("internal_user_id, signed_up_at")
+        .order("internal_user_id")
+        .range(from, to),
+    ),
   ]);
 
   if (snapshotsRes.error) {
@@ -246,13 +326,36 @@ async function getCampaignsDataUncached(): Promise<CampaignsData> {
   // Users whose GA4 first touch was a given campaign. Lifetime by nature:
   // first touch belongs to the user, not to a reporting window.
   let usersByCampaign: Map<string, number> | null = null;
+  // Keyed "campaign|YYYY-MM", so a campaign tab can chart users arriving over
+  // time rather than only a lifetime total.
+  const usersByCampaignMonth = new Map<string, number>();
+
   if (!attributionRes.error) {
+    const signupMonth = new Map<string, string>();
+    if (!usersRes.error) {
+      for (const row of usersRes.data ?? []) {
+        if (!row.internal_user_id || !row.signed_up_at) continue;
+        signupMonth.set(row.internal_user_id, row.signed_up_at.slice(0, 7));
+      }
+    }
+
     usersByCampaign = new Map<string, number>();
     for (const row of attributionRes.data ?? []) {
       const campaign = row.google_ads_campaign?.trim();
       if (!campaign) continue;
       const key = campaign.toLowerCase();
       usersByCampaign.set(key, (usersByCampaign.get(key) ?? 0) + 1);
+
+      const month = row.internal_user_id
+        ? signupMonth.get(row.internal_user_id)
+        : undefined;
+      if (month) {
+        const monthKey = `${key}|${month}`;
+        usersByCampaignMonth.set(
+          monthKey,
+          (usersByCampaignMonth.get(monthKey) ?? 0) + 1,
+        );
+      }
     }
   }
 
@@ -319,6 +422,82 @@ async function getCampaignsDataUncached(): Promise<CampaignsData> {
     }
   }
 
+  // One detail entry per non-retired catalogued campaign, in catalog order.
+  // Built even when GA4 has nothing for it: a paused campaign still has
+  // structure, creative and keywords worth showing on its tab.
+  const perfByName = new Map<string, CampaignPerformance>();
+  for (const row of allTime) perfByName.set(row.name.toLowerCase(), row);
+
+  const details: CampaignDetail[] = CAMPAIGN_CATALOG.filter(isTabbed).map(
+    (catalog) => {
+      const names = [catalog.name, ...(catalog.aliases ?? [])];
+      let performance: CampaignPerformance | null = null;
+      let matchedName: string | null = null;
+      for (const n of names) {
+        const hit = perfByName.get(n.toLowerCase());
+        if (hit) {
+          performance = hit;
+          matchedName = hit.name;
+          break;
+        }
+      }
+      const daily = matchedName ? buildDaily(rows, matchedName) : [];
+
+      // Did it serve in the last week? Measured against the newest day in the
+      // dataset, not today, so a stalled sync does not read as a stopped
+      // campaign.
+      let recentImpressions = 0;
+      let recentClicks = 0;
+      if (latestDay) {
+        const cutoff = new Date(`${latestDay}T00:00:00Z`);
+        cutoff.setUTCDate(cutoff.getUTCDate() - (RECENT_SERVING_DAYS - 1));
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        for (const point of daily) {
+          if (point.date >= cutoffStr) {
+            recentImpressions += point.impressions;
+            recentClicks += point.clicks;
+          }
+        }
+      }
+
+      let statusDiscrepancy: string | null = null;
+      if (
+        recentImpressions > 0 &&
+        (catalog.status === "paused" || catalog.status === "planned")
+      ) {
+        statusDiscrepancy =
+          `The catalog says "${catalog.status}", but GA4 recorded ` +
+          `${recentImpressions} impressions in the last ${RECENT_SERVING_DAYS} days. ` +
+          `Someone enabled this in Google Ads. Update the catalog.`;
+      }
+
+      let lowDeliveryWarning: string | null = null;
+      if (recentImpressions > 0 && recentClicks === 0) {
+        lowDeliveryWarning =
+          `Serving but winning nothing: ${recentImpressions} impressions and ` +
+          `0 clicks in the last ${RECENT_SERVING_DAYS} days. On this account ` +
+          `that points at the max CPC being below the auction price, not at ` +
+          `the keywords. The retired us-generic Search campaign paid about ` +
+          `46 SEK per click.`;
+      }
+
+      return {
+        catalog,
+        performance,
+        daily,
+        monthly: matchedName
+          ? buildMonthly(rows, matchedName, usersByCampaignMonth)
+          : [],
+        spendSharePct:
+          performance && totalSpendSek > 0
+            ? (performance.spendSek / totalSpendSek) * 100
+            : null,
+        statusDiscrepancy,
+        lowDeliveryWarning,
+      };
+    },
+  );
+
   return {
     kpis,
     allTime,
@@ -326,6 +505,7 @@ async function getCampaignsDataUncached(): Promise<CampaignsData> {
     trend: buildTrend(rows),
     noDataCampaigns,
     attribution,
+    details,
   };
 }
 
