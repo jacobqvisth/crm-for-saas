@@ -3,6 +3,7 @@ import {
   COMPETITOR_TARGETS,
   competitorAdGroupName,
   competitorKeywords,
+  UNMATCHED_COMPETITOR_TERMS,
   unfedCompetitors,
 } from "./ad-targets";
 import { planCompetitorSync, type ObservedAdGroup } from "./ads-sync";
@@ -40,8 +41,21 @@ describe("competitor registry", () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it("counts eleven pages with no ads pointing at them", () => {
-    expect(unfedCompetitors()).toHaveLength(11);
+  it("counts ten pages with no ads pointing at them", () => {
+    // Five rivals are bought by the Small plan alternatives ad group and all
+    // five land on the generic plan page. Read from the account, not from the
+    // hand-maintained ad-copy mirror, which lists only four.
+    expect(unfedCompetitors()).toHaveLength(10);
+    expect(COMPETITOR_TARGETS.filter((t) => t.currentlyBid)).toHaveLength(5);
+  });
+
+  it("records competitor keywords that have no page to send them to", () => {
+    // A reconciler that only reports what it can fix hides what it cannot.
+    expect(UNMATCHED_COMPETITOR_TERMS).toContain("shopkey");
+    const paths = COMPETITOR_TARGETS.map((t) => t.path).join(" ");
+    for (const term of UNMATCHED_COMPETITOR_TERMS) {
+      expect(paths).not.toContain(term);
+    }
   });
 
   it("bids the rival name exact and the intent variants phrase", () => {

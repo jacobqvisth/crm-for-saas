@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatNumber, formatPercent } from "@/lib/ceo/format";
 import {
   COMPETITOR_TARGETS,
+  UNMATCHED_COMPETITOR_TERMS,
   unfedCompetitors,
 } from "@/lib/landing/ad-targets";
 import { AD_SURFACE_MAP, buildGaps, routingFixes } from "@/lib/landing/kinds";
@@ -218,7 +219,7 @@ export function LandingPagesContent({
           <div>
             <p className="eyebrow">Free win</p>
             <h2>
-              Fifteen comparison pages, four fed, and all four sent to the wrong
+              Fifteen comparison pages, five fed, and all five sent to the wrong
               place
             </h2>
           </div>
@@ -295,9 +296,23 @@ export function LandingPagesContent({
         <p className="panel-description">
           Retargeting an ad group that already exists is a correction, and the
           reconciler will do it. Creating a new ad group commits budget nobody
-          has agreed to, so those eleven stay a plan for a human to approve.
-          Nothing writes without an explicit confirmation string.
+          has agreed to, so those {formatNumber(unfedCompetitors().length)} stay
+          a plan for a human to approve. A dry run still goes to Google with{" "}
+          <code>validateOnly</code> set, so the plan is what Google confirms it
+          would accept rather than what we think it should accept. Nothing
+          writes without an explicit confirmation string.
         </p>
+        {UNMATCHED_COMPETITOR_TERMS.length > 0 ? (
+          <p className="panel-description">
+            <strong>No page to send it to. </strong>
+            The ad group also buys{" "}
+            {UNMATCHED_COMPETITOR_TERMS.join(", ")}, which has no comparison
+            page at all. ShopKey is Mitchell 1&apos;s other product, so it is
+            either a page worth writing or a keyword worth dropping. The
+            reconciler reports it rather than quietly ignoring the one thing it
+            cannot fix.
+          </p>
+        ) : null}
         {!adsApiConfigured ? (
           <p className="panel-description">
             <strong>Blocked. </strong>

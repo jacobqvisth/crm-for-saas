@@ -118,7 +118,7 @@ export const ROLLOUT: RolloutPhase[] = [
     state: "Ready to run",
     actions: [
       "Split the alternatives ad group into one ad group per competitor.",
-      "Point each at its own /vs page, and extend to the eleven rival pages that currently have no ads pointing at them.",
+      "Point each at its own /vs page, and extend to the ten rival pages that currently have no ads pointing at them.",
       "Keep rival trademarks in keywords only, never in ad text.",
       "Check the Expanded Final URL assets report and decide whether final URL expansion stays on, because until that is settled Google is picking landing pages nobody chose.",
     ],

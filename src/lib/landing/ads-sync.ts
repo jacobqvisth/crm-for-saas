@@ -296,13 +296,6 @@ export async function applyCompetitorSync(
       continue;
     }
 
-    if (dryRun) {
-      performed.push(
-        `Would point ${action.adGroupName} at ${action.to} (currently ${action.from}).`,
-      );
-      continue;
-    }
-
     // Final URLs live on the ad, so retargeting rewrites every ad in the group.
     const ads = await googleAdsSearch<{
       adGroupAd?: { resourceName?: string };
@@ -325,13 +318,27 @@ export async function applyCompetitorSync(
       continue;
     }
 
+    // A dry run still goes to Google, with validateOnly set.
+    //
+    // Checking locally that we built a sensible-looking operation only proves
+    // we think it is sensible. validateOnly makes the server run the same
+    // validation it would run on a real write and reject anything it would
+    // have rejected, without persisting. That turns "this should work" into
+    // "Google has confirmed it would accept this", which is the whole point of
+    // looking before writing.
+    //
+    // A validate-only pass returns an empty response body on success, so an
+    // empty result here means it passed, not that nothing ran.
     await googleAdsRequest(
       access,
       `customers/${access.customerId}/adGroupAds:mutate`,
-      { operations, partialFailure: false },
+      { operations, partialFailure: false, validateOnly: dryRun },
     );
+
     performed.push(
-      `Pointed ${action.adGroupName} at ${action.to} across ${operations.length} ad(s).`,
+      dryRun
+        ? `Validated: pointing ${action.adGroupName} at ${action.to} across ${operations.length} ad(s) would be accepted. Currently ${action.from}.`
+        : `Pointed ${action.adGroupName} at ${action.to} across ${operations.length} ad(s).`,
     );
   }
 

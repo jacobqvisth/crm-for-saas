@@ -115,8 +115,10 @@ describe("creative lines up with the catalog", () => {
   });
 
   it("counts keywords across ad groups", () => {
-    // Small has two ad groups of five.
-    expect(keywordCount("WL Plan | Small")).toBe(10);
+    // Small has two ad groups: five on the plan terms, nine on the competitor
+    // terms. The alternatives group grew when four keywords that were live in
+    // the account but missing from this mirror were added back.
+    expect(keywordCount("WL Plan | Small")).toBe(14);
     expect(keywordCount("WL Plan | One")).toBe(5);
   });
 });

@@ -17,7 +17,17 @@ import { SyncSkippedError } from "./errors";
  *   - a customer ID       the account being queried, digits only, no dashes
  */
 
-export const GOOGLE_ADS_API_VERSION = "v21";
+/**
+ * v25, because that is the version actually verified against this account.
+ *
+ * This client was written against v21 and, until the developer token exists in
+ * an environment, has never made a live call. The audit scripts in
+ * `~/Documents/First Vault/google-ads-campaigns/` did make live calls, on v25,
+ * with HTTP 200. Google supports each version for roughly a year, so v21 is at
+ * or past end of life and pinning it would mean the first real request this
+ * client ever makes is against a version that may already be gone.
+ */
+export const GOOGLE_ADS_API_VERSION = "v25";
 export const GOOGLE_ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 
 /** Strip the dashes Google Ads shows in the UI. The API wants bare digits. */
@@ -220,18 +230,26 @@ export async function googleAdsRequest<T>(
 export async function googleAdsSearch<T>(
   access: GoogleAdsAccess,
   query: string,
-  pageSize = 10000,
+  pageSize?: number,
 ): Promise<T[]> {
   const rows: T[] = [];
   let pageToken: string | undefined;
 
   do {
+    // `pageSize` is deliberately omitted unless a caller asks for one.
+    //
+    // Sending it at all returns PAGE_SIZE_NOT_SUPPORTED on current API
+    // versions, verified against this account. This used to default to 10000,
+    // which would have made every call fail the moment a developer token was
+    // added, and failed in a way that reads like a permissions problem rather
+    // than a malformed request. Paging still works: the server picks its own
+    // size and we follow nextPageToken to the end either way.
     const payload = await googleAdsRequest<{
       results?: T[];
       nextPageToken?: string;
     }>(access, `customers/${access.customerId}/googleAds:search`, {
       query,
-      pageSize,
+      ...(pageSize ? { pageSize } : {}),
       ...(pageToken ? { pageToken } : {}),
     });
 

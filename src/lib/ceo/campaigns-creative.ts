@@ -110,12 +110,20 @@ export const CAMPAIGN_CREATIVE: Record<string, CatalogAdGroup[]> = {
     },
     {
       name: "Small | alternatives",
+      // The four below the first group were read from the live account and were
+      // missing from this mirror, which made the routing gap look smaller than
+      // it is: six rival names are bought here, not four. `shopkey alternative`
+      // is the odd one out, because ShopKey has no comparison page at all.
       keywords: [
         "[alldata alternative]",
         "[autodata alternative]",
         "[mitchell 1 alternative]",
         "[haynespro alternative]",
         '"alternative to alldata"',
+        "[prodemand alternative]",
+        "[identifix alternative]",
+        "[shopkey alternative]",
+        "[alldata competitor]",
       ],
       headlines: [
         "A Faster Repair Data Tool",

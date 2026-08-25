@@ -35,10 +35,26 @@ export type CompetitorTarget = {
 /**
  * All fifteen live comparison pages.
  *
- * `currentlyBid` marks the four that the Small plan campaign's alternatives ad
- * group already buys and misroutes. The other eleven are pages that have been
- * published and indexed and have never had a single ad pointed at them.
+ * `currentlyBid` marks the five that the Small plan campaign's `alternatives`
+ * ad group already buys and misroutes. Read from the live account, not from
+ * `campaigns-creative.ts`, which mirrors ad copy by hand and lists only four:
+ * the real keyword set also carries `prodemand alternative`, `identifix
+ * alternative`, `shopkey alternative` and `alldata competitor`. The other ten
+ * pages are published, indexed, and have never had an ad pointed at them.
+ *
+ * Every one of the five lands on https://wrenchlane.com/en/small.
  */
+
+/**
+ * Keywords the alternatives ad group buys that have no comparison page at all.
+ *
+ * ShopKey is Mitchell 1's other product. It gets the same generic destination
+ * as the rest, and unlike them there is not even a right page to send it to, so
+ * it is either a page worth writing or a keyword worth dropping. Recorded here
+ * rather than silently ignored, because a reconciler that only reports what it
+ * can fix hides the things it cannot.
+ */
+export const UNMATCHED_COMPETITOR_TERMS: readonly string[] = ["shopkey"];
 export const COMPETITOR_TARGETS: readonly CompetitorTarget[] = [
   {
     key: "alldata",
@@ -77,10 +93,10 @@ export const COMPETITOR_TARGETS: readonly CompetitorTarget[] = [
   },
   {
     key: "identifix",
-    name: "Identifix",
+    name: "Identifix Direct-Hit",
     path: "/en/vs/identifix",
     terms: ["identifix", "identifix alternative"],
-    currentlyBid: false,
+    currentlyBid: true,
   },
   {
     key: "snap-on-suretrack",

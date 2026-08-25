@@ -242,16 +242,16 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
   {
     phase: "Phase 1",
     title: "Send competitor traffic to the competitor pages",
-    why: "There are 15 published comparison pages at /en/vs, one per rival, in both languages. The alternatives ad group bids on four of those rival names and sends every one of them to the generic Small plan page instead.",
+    why: "There are 15 published comparison pages at /en/vs, one per rival, in both languages. The alternatives ad group bids on five of those rival names, plus ShopKey which has no page at all, and sends every one of them to the generic Small plan page instead.",
     effort: "Low",
     state: "Built",
     progress:
-      "Automated. A reconciler on the Landing Pages page reads what every ad group actually buys, compares it against all fifteen verified comparison-page URLs, and reports the difference. It matches on keywords rather than ad-group names, because the account names its groups by plan and the plan axis is exactly what is wrong here. Retargeting an ad group that already exists is a correction and it will make it; creating the eleven missing ad groups commits budget nobody has agreed to, so those stay a plan for a human. It needs GOOGLE_ADS_DEVELOPER_TOKEN in the environment before it can run.",
+      "Automated. A reconciler on the Landing Pages page reads what every ad group actually buys, compares it against all fifteen verified comparison-page URLs, and reports the difference. It matches on keywords rather than ad-group names, because the account names its groups by plan and the plan axis is exactly what is wrong here. Retargeting an ad group that already exists is a correction and it will make it; creating the ten missing ad groups commits budget nobody has agreed to, so those stay a plan for a human. It needs GOOGLE_ADS_DEVELOPER_TOKEN in the environment before it can run.",
     actions: [
       "Split the alternatives ad group into one ad group per competitor.",
       "Point each at its own /en/vs page: ALLDATA, Autodata, Mitchell 1 ProDemand, HaynesPro, Bosch ESI[tronic], Snap-on SureTrack, Identifix, Autel MaxiSYS and the rest.",
       "Keep rival trademarks in keywords only, never in ad text, which is Google policy.",
-      "Extend beyond the four currently bid on: eleven more comparison pages already exist and have no ads pointing at them.",
+      "Extend beyond the five currently bid on: ten more comparison pages already exist and have no ads pointing at them.",
     ],
   },
   {
@@ -444,8 +444,8 @@ export const MORE_PAGES_ANSWER: InfoPoint[] = [
     body: "The product holds 802 manufacturer fault codes and a large article library, and none of it has a public page built for search. Mechanics type codes and symptoms, not plan names. This is the one page type that would reach demand that currently has nowhere to land.",
   },
   {
-    heading: "Eleven comparison pages already exist with no ads pointing at them",
-    body: "Fifteen competitor pages are live at /en/vs and only four rival names are bid on, all of them routed to the generic Small page. Before building anything new, the cheapest win is pointing traffic at pages that were already built and are already indexed.",
+    heading: "Ten comparison pages already exist with no ads pointing at them",
+    body: "Fifteen competitor pages are live at /en/vs and only five rival names are bid on, all of them routed to the generic Small page. Before building anything new, the cheapest win is pointing traffic at pages that were already built and are already indexed.",
   },
   {
     heading: "One genuinely new page worth building: a plan qualifier",
