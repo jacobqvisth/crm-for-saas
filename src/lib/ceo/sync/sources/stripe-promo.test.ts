@@ -297,3 +297,157 @@ describe("buildPromoGrants", () => {
     expect(grants).toHaveLength(0);
   });
 });
+
+// The SDK pins API version 2026-04-22.dahlia, which STOPPED nesting the coupon
+// on a discount: the reference moved to `source.coupon` as a bare id and the
+// terms (percent_off, duration) are no longer inlined at all. The first
+// deployed version of buildPromoGrants only understood the older nested shape,
+// so it wrote ZERO grants while the sync still reported success — the failure
+// was silent because "no discounts found" and "shape not understood" look
+// identical from the outside. These cases pin the shape the SDK actually
+// returns.
+describe("buildPromoGrants, API version 2026-04-22.dahlia shape", () => {
+  const COUPONS = new Map([
+    [
+      "fu7CjSyU",
+      {
+        id: "fu7CjSyU",
+        name: "90% discount",
+        percent_off: 90,
+        duration: "repeating",
+        duration_in_months: 14,
+      },
+    ],
+  ]);
+
+  it("reads the coupon id from source.coupon and terms from the coupon list", () => {
+    const grants = buildPromoGrants({
+      subscriptionDiscounts: [],
+      invoices: [
+        {
+          customer: "cus_a",
+          currency: "usd",
+          created: 1_758_868_444,
+          amount_paid: 790,
+          discounts: [
+            {
+              id: "di_1",
+              source: { coupon: "fu7CjSyU", type: "coupon" },
+              promotion_code: "promo_1",
+            },
+          ],
+          total_discount_amounts: [{ amount: 7110, discount: "di_1" }],
+        },
+      ],
+      promotionCodeNames: new Map([["promo_1", "WRENCHLANE90"]]),
+      identityByCustomer: identity,
+      couponsById: COUPONS,
+    });
+
+    expect(grants).toHaveLength(1);
+    expect(grants[0].coupon_id).toBe("fu7CjSyU");
+    expect(grants[0].percent_off).toBe(90);
+    expect(grants[0].duration).toBe("repeating");
+    expect(grants[0].duration_in_months).toBe(14);
+    expect(grants[0].promotion_code).toBe("WRENCHLANE90");
+    expect(grants[0].total_discount_cents).toBe(7110);
+  });
+
+  it("marks a live subscription discount active in the new shape", () => {
+    const grants = buildPromoGrants({
+      subscriptionDiscounts: [
+        {
+          subscriptionId: "sub_a",
+          status: "trialing",
+          customerId: "cus_a",
+          currency: "eur",
+          discount: {
+            id: "di_1",
+            source: { coupon: "fu7CjSyU", type: "coupon" },
+            start: 1_787_146_069,
+          },
+        },
+      ],
+      invoices: [],
+      promotionCodeNames: new Map(),
+      identityByCustomer: identity,
+      couponsById: COUPONS,
+    });
+
+    expect(grants).toHaveLength(1);
+    expect(grants[0].active_on_subscription).toBe(true);
+    expect(grants[0].source).toBe("subscription");
+    expect(grants[0].subscription_status).toBe("trialing");
+    expect(grants[0].percent_off).toBe(90);
+  });
+
+  it("still records the grant when the coupon is not in the coupon list", () => {
+    // A deleted coupon still has to surface: the grant is real, only its terms
+    // are unknown, and dropping it would hide a discount that was given.
+    const grants = buildPromoGrants({
+      subscriptionDiscounts: [],
+      invoices: [
+        {
+          customer: "cus_a",
+          created: 1,
+          discounts: [{ id: "di_1", source: { coupon: "cpn_gone" } }],
+          total_discount_amounts: [{ amount: 500, discount: "di_1" }],
+        },
+      ],
+      promotionCodeNames: new Map(),
+      identityByCustomer: identity,
+      couponsById: COUPONS,
+    });
+
+    expect(grants).toHaveLength(1);
+    expect(grants[0].coupon_id).toBe("cpn_gone");
+    expect(grants[0].percent_off).toBeNull();
+    expect(grants[0].total_discount_cents).toBe(500);
+  });
+
+  it("prefers inline terms when a future version inlines them again", () => {
+    const grants = buildPromoGrants({
+      subscriptionDiscounts: [],
+      invoices: [
+        {
+          customer: "cus_a",
+          created: 1,
+          discounts: [
+            {
+              id: "di_1",
+              source: {
+                coupon: { id: "fu7CjSyU", percent_off: 50, duration: "once" },
+              },
+            },
+          ],
+          total_discount_amounts: [{ amount: 100, discount: "di_1" }],
+        },
+      ],
+      promotionCodeNames: new Map(),
+      identityByCustomer: identity,
+      couponsById: COUPONS,
+    });
+
+    expect(grants[0].percent_off).toBe(50);
+    expect(grants[0].duration).toBe("once");
+  });
+
+  it("skips a discount that references no coupon at all", () => {
+    const grants = buildPromoGrants({
+      subscriptionDiscounts: [],
+      invoices: [
+        {
+          customer: "cus_a",
+          created: 1,
+          discounts: [{ id: "di_1", source: { type: "coupon" } }],
+          total_discount_amounts: [{ amount: 100, discount: "di_1" }],
+        },
+      ],
+      promotionCodeNames: new Map(),
+      identityByCustomer: identity,
+      couponsById: COUPONS,
+    });
+
+    expect(grants).toHaveLength(0);
+  });
+});
