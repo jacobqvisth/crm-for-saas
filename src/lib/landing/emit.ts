@@ -94,6 +94,37 @@ export type FaultCodeBundle = {
 };
 
 /**
+ * Fit a title into the space a search result actually gives it.
+ *
+ * Google shows roughly 60 characters and truncates the rest with an ellipsis,
+ * so anything past that is invisible to the person deciding whether to click.
+ * Some standard code descriptions are genuinely long ("Turbocharger boost
+ * control position sensor circuit range/performance"), which pushes the full
+ * form well past 90.
+ *
+ * Two things give way, in order of how little they cost. The brand suffix goes
+ * first, because someone searching a code is not searching for us and the
+ * domain is shown separately anyway. Only if it still does not fit does the
+ * description get trimmed, and then on a word boundary rather than mid-word.
+ * The code itself is never touched: it is the entire reason the page ranks.
+ */
+const TITLE_LIMIT = 88;
+const BRAND_SUFFIX = " | Wrenchlane";
+
+function fitTitle(headline: string): string {
+  const full = `${headline}${BRAND_SUFFIX}`;
+  if (full.length <= TITLE_LIMIT) return full;
+  if (headline.length <= TITLE_LIMIT) return headline;
+
+  const trimmed = headline.slice(0, TITLE_LIMIT);
+  const lastSpace = trimmed.lastIndexOf(" ");
+  return (lastSpace > 20 ? trimmed.slice(0, lastSpace) : trimmed).replace(
+    /[,\s/]+$/,
+    "",
+  );
+}
+
+/**
  * Title and description.
  *
  * Leads with the code, because that is the query. The description carries one
@@ -119,7 +150,7 @@ function metaFor(row: LandingCandidate, seen: DtcCodeRow | undefined) {
     : `${row.code} is not individually documented in the standard. Here is what its structure does tell you, and what it appears alongside.`;
 
   return {
-    title: `${headline} | Wrenchlane`,
+    title: fitTitle(headline),
     description: [gloss, evidence].filter(Boolean).join(" ").slice(0, 320),
   };
 }
@@ -234,7 +265,7 @@ export function buildFaultCodeBundle(
       })),
       manufacturerCodes,
       meta: {
-        title: `${family.label} fault codes | Wrenchlane`,
+        title: fitTitle(`${family.label} fault codes`),
         description: `Every ${family.label.toLowerCase()} code we have seen in real diagnostics, ranked by how often it turns up. ${family.pages} documented, plus the manufacturer-specific codes that belong to the same group.`.slice(
           0,
           320,
@@ -274,8 +305,12 @@ export function validateBundle(bundle: FaultCodeBundle): string[] {
     if (page.path !== faultCodePath(page.code)) {
       problems.push(`${page.code} path mismatch: ${page.path}`);
     }
-    if (page.meta.title.length > 90) {
+    if (page.meta.title.length > TITLE_LIMIT) {
       problems.push(`${page.code} title too long: ${page.meta.title.length}`);
+    }
+    if (!page.meta.title.startsWith(`${page.code}:`)) {
+      // The code is the query. If a trim ever ate it, the page is pointless.
+      problems.push(`${page.code} title does not lead with the code`);
     }
     if (/[—–]/.test(page.meta.title) || /[—–]/.test(page.meta.description)) {
       problems.push(`${page.code} meta contains a long dash`);
