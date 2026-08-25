@@ -360,8 +360,16 @@ export const PMAX_POWER_TABLE: PowerRow[] = [
 
 export const PMAX_RECOMMENDATION: InfoPoint[] = [
   {
-    heading: "Fix what bidding optimises for, before testing anything",
-    body: "Performance Max reports 134,158 GA4 key events against 976 actual signups, which is 3.48 so-called conversions for every single click. Whatever conversion action this account optimises toward, it is not signups. A better landing page cannot show up in a number that is already measuring the wrong thing, so this outranks everything else on this page.",
+    heading: "The conversion setup is sound, contrary to what GA4 suggests",
+    body: "GA4 reports 134,158 key events for this campaign against 976 signups, which looked like bidding was chasing engagement noise. Reading the ad account directly shows otherwise: the only enabled primary conversion actions are WrenchLane (web) sign_up and the Android sign_up, both categorised SIGNUP. Google Ads counted 305 conversions in the last 30 days, which lines up with real signups. GA4's keyEvents metric counts every event marked as a key event in GA4, most of which are set to Hidden in Google Ads and never reach bidding. The two numbers measure different things.",
+  },
+  {
+    heading: "But revenue is watched, not chased",
+    body: "WrenchLane (web) purchase is enabled and set to secondary, so purchases are recorded but bidding does not optimise toward them. That is still the change worth making: signups are a weak proxy for value when activation is around 30 percent and only a fraction of those ever pay.",
+  },
+  {
+    heading: "One small counting bug",
+    body: "The web sign_up action counts once per click, which is right for a signup. The Android sign_up counts many per click, which is not, and will inflate that action's numbers relative to the web one. Worth aligning.",
   },
   {
     heading: "Add asset groups to the campaign you already have",
@@ -411,12 +419,16 @@ export const MULTIPLE_PAGES_ANSWER: InfoPoint[] = [
     body: "Each asset group in a Performance Max campaign carries its own final URL. Four asset groups means four landing pages inside one campaign, with one budget and one pool of learning. This is the controlled way to do it.",
   },
   {
-    heading: "And also through final URL expansion, whether you want it or not",
-    body: "Final URL expansion lets Google replace your chosen page with any other page on the domain it thinks will convert better for that person. The catalog records this campaign's landing page as Google's choice, which means expansion is probably on right now. If so, the campaign already has many landing pages and nobody chose them.",
+    heading: "Right now there is exactly one asset group, pointed at the homepage",
+    body: "Read from the account directly: all three Performance Max campaigns hold a single asset group called \"Pmax eng\", and every one of them has the same final URL, wrenchlane.com/en. So the plan pages are not being used by Performance Max at all. The idea of a page per plan is not competing with an existing setup, it would be the first version of one.",
   },
   {
-    heading: "So the first move is to find out which of those is happening",
-    body: "In Google Ads, the Expanded Final URL assets report shows where expansion has actually been sending people. Until expansion is either switched off or deliberately kept, no comparison between pages means anything, because the pages being compared are not the ones anybody picked.",
+    heading: "And also through final URL expansion, whether you want it or not",
+    body: "Final URL expansion lets Google replace your chosen page with any other page on the domain it thinks will convert better for that person. With every asset group pointing at the homepage, expansion is doing most of the routing decisions in this account today, and nobody chose those destinations.",
+  },
+  {
+    heading: "There are already three Performance Max campaigns, two of them paused",
+    body: "Pmax eng may 2026 runs at 750 SEK a day. Two near-duplicates sit paused behind it at 1,700 and 750 SEK a day. Before creating more, those are worth either deleting or repurposing, because a paused duplicate is a budget mistake waiting to be un-paused by accident.",
   },
 ];
 
