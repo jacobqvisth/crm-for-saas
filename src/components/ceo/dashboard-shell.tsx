@@ -29,6 +29,7 @@ const COUNTRY_FILTER_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "diagnostics",
   "diagnostic-search-terms",
   "dtc-codes",
+  "landing-pages",
   "workshops",
 ]);
 
@@ -48,6 +49,7 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "google-ads-users",
   "cac-ltv",
   "campaigns",
+  "landing-pages",
 ]);
 
 // Sections that render their OWN measurement-window control in the page body.

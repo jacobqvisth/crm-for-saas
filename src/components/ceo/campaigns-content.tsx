@@ -40,6 +40,7 @@ import {
   WHY_TARGETING_IS_IMPRECISE,
   WHY_THIS_WORKS,
   type InfoPoint,
+  type PlanPhaseState,
 } from "@/lib/ceo/campaigns-info";
 import { InfoHint, type SourceInfo } from "./source-info";
 
@@ -50,7 +51,7 @@ type CampaignsContentProps = {
 const SPEND_INFO: SourceInfo = {
   title: "Where the spend numbers come from",
   body:
-    "There is no Google Ads API connection on this account (no developer token). Every number here comes from GA4's linked-Google-Ads dimensions, synced hourly. That means two things: a campaign only appears once it has actually served an impression, so paused campaigns show nothing at all; and spend arrives in USD even though the ad account bills in SEK.",
+    "Every number here comes from GA4's linked-Google-Ads dimensions, synced hourly, not from the Google Ads API. That means two things: a campaign only appears once it has actually served an impression, so paused campaigns show nothing at all; and spend arrives in USD even though the ad account bills in SEK. The API route now exists and is wired, and GOOGLE_ADS_CUSTOMER_ID is set, but GOOGLE_ADS_DEVELOPER_TOKEN is not present in any environment yet. Once it is, spend can come from the account itself and these two caveats go away.",
   sources: [
     "dashboard_metric_snapshots · source_key = google_ads",
     "GA4 Data API · sessionGoogleAdsCampaignName × advertiserAdCost",
@@ -82,7 +83,7 @@ const USERS_INFO: SourceInfo = {
 const CREATIVE_INFO: SourceInfo = {
   title: "Ad copy and keywords",
   body:
-    "This is a mirror of what is live in Google Ads, maintained by hand, not read back from the ad account. Reading real ad text would need a Google Ads API developer token this account does not have. If the copy is edited in Google Ads without updating the dashboard, this will drift.",
+    "This is a mirror of what is live in Google Ads, maintained by hand, not read back from the ad account. Reading real ad text needs the Google Ads API, which is wired but still missing its developer token in the environment. Until that lands, editing copy in Google Ads without updating the dashboard makes this drift silently.",
   sources: ["src/lib/ceo/campaigns-creative.ts"],
   logic:
     "Last reconciled 2026-08-24 against the scripts that created and expanded these ads.",
@@ -519,6 +520,17 @@ function CampaignTab({ detail }: { detail: CampaignDetail }) {
 
 /* ------------------------------------------------------------- info tab */
 
+/**
+ * "Built" and "Ready to run" read as done, everything blocked reads as stalled,
+ * and the rest is still ahead of us. Three tones rather than five, because the
+ * badge is a glance and the detail is in the phase body.
+ */
+function planStateTone(state: PlanPhaseState) {
+  if (state === "Built") return "badge badge-live";
+  if (state === "Blocked externally") return "badge badge-paused";
+  return "badge badge-planned";
+}
+
 function PointList({ points }: { points: InfoPoint[] }) {
   return (
     <dl className="definition-list">
@@ -814,7 +826,19 @@ function InfoTab() {
         <p className="panel-description">
           Ordered so each phase unblocks the next. Phase 0 is not optional:
           nothing else changes anything while the live campaigns cannot win an
-          auction.
+          auction. Each phase now carries where it actually stands, so the plan
+          stops reading as untouched once work has landed against it.
+        </p>
+        <p className="panel-description">
+          Phase 3, the fault-code pages, has grown large enough to need its own
+          page. It is designed, sized against real diagnostic demand and queued
+          on{" "}
+          <a href="/dashboard/landing-pages">
+            <strong>Landing Pages</strong>
+          </a>
+          , together with the map of which ad surface is allowed to point at
+          which page and the one decision still open about where the pages get
+          built.
         </p>
       </article>
 
@@ -825,9 +849,18 @@ function InfoTab() {
               <p className="eyebrow">{phase.phase}</p>
               <h3>{phase.title}</h3>
             </div>
-            <span className="badge">{phase.effort} effort</span>
+            <div className="flex items-center gap-2">
+              <span className={planStateTone(phase.state)}>{phase.state}</span>
+              <span className="badge">{phase.effort} effort</span>
+            </div>
           </div>
           <p className="panel-description">{phase.why}</p>
+          {phase.progress ? (
+            <p className="panel-description">
+              <strong>Where it stands. </strong>
+              {phase.progress}
+            </p>
+          ) : null}
           {phase.blocked ? (
             <p className="panel-description">
               <strong>Constraint. </strong>
@@ -1226,12 +1259,14 @@ function OverviewTab({
             </dd>
           </div>
           <div className="definition-item">
-            <dt>No conversions per campaign</dt>
+            <dt>No conversions per campaign, for one more reason</dt>
             <dd>
               Spend, clicks and impressions come from GA4. Conversions and
-              revenue per campaign would need the Google Ads API, which requires
-              a developer token this account does not have. The closest
-              available answer is the users-acquired column, which is
+              revenue per campaign need the Google Ads API. That client is now
+              built and <code>GOOGLE_ADS_CUSTOMER_ID</code> is set, but{" "}
+              <code>GOOGLE_ADS_DEVELOPER_TOKEN</code> is not present in any
+              environment, and both are required. Until it is added, the closest
+              available answer stays the users-acquired column, which is
               first-touch attribution rather than a conversion count.
             </dd>
           </div>

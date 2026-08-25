@@ -1,0 +1,140 @@
+import { describe, expect, it } from "vitest";
+import {
+  COMPETITOR_TARGETS,
+  competitorAdGroupName,
+  competitorKeywords,
+  unfedCompetitors,
+} from "./ad-targets";
+import { planCompetitorSync, type ObservedAdGroup } from "./ads-sync";
+
+function group(over: Partial<ObservedAdGroup> & { name: string }): ObservedAdGroup {
+  return {
+    resourceName: `customers/1/adGroups/${over.name}`,
+    id: over.name,
+    campaignName: "WL Plan | Small",
+    status: "ENABLED",
+    finalUrls: ["https://wrenchlane.com/small"],
+    keywords: [],
+    ...over,
+  };
+}
+
+describe("competitor registry", () => {
+  it("covers all fifteen live comparison pages", () => {
+    expect(COMPETITOR_TARGETS).toHaveLength(15);
+  });
+
+  it("uses verified paths, not names turned into slugs", () => {
+    // These three are exactly the cases where guessing from the rival's name
+    // would have produced a 404, which is worse than the generic page.
+    const byKey = new Map(COMPETITOR_TARGETS.map((t) => [t.key, t.path]));
+    expect(byKey.get("mitchell1-prodemand")).toBe("/en/vs/mitchell1-prodemand");
+    expect(byKey.get("jayda-ai")).toBe("/en/vs/jayda-ai");
+    expect(byKey.get("autel-maxisys")).toBe("/en/vs/autel-maxisys");
+  });
+
+  it("has a unique key and path per rival", () => {
+    const keys = COMPETITOR_TARGETS.map((t) => t.key);
+    const paths = COMPETITOR_TARGETS.map((t) => t.path);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it("counts eleven pages with no ads pointing at them", () => {
+    expect(unfedCompetitors()).toHaveLength(11);
+  });
+
+  it("bids the rival name exact and the intent variants phrase", () => {
+    const keywords = competitorKeywords(COMPETITOR_TARGETS[0]);
+    expect(keywords[0].matchType).toBe("EXACT");
+    expect(keywords.slice(1).every((k) => k.matchType === "PHRASE")).toBe(true);
+  });
+});
+
+describe("the reconciler", () => {
+  it("flags an ad group that buys a rival and lands on a generic page", () => {
+    const plan = planCompetitorSync([
+      group({
+        name: "Small | alternatives",
+        keywords: ["[alldata alternative]", "[haynespro alternative]"],
+        finalUrls: ["https://wrenchlane.com/small"],
+      }),
+    ]);
+
+    const retargets = plan.actions.filter((a) => a.kind === "retarget");
+    expect(retargets.length).toBeGreaterThanOrEqual(2);
+    expect(plan.violations).toBe(retargets.length);
+    const alldata = retargets.find(
+      (a) => a.kind === "retarget" && a.to.endsWith("/en/vs/alldata"),
+    );
+    expect(alldata).toBeDefined();
+  });
+
+  it("matches on what a group buys, not on what it is called", () => {
+    // The account names ad groups by plan, and the plan axis is the thing that
+    // is wrong, so the keyword text has to be the ground truth.
+    const plan = planCompetitorSync([
+      group({
+        name: "Something Unrelated",
+        keywords: ["[identifix alternative]"],
+        finalUrls: ["https://wrenchlane.com/large"],
+      }),
+    ]);
+    expect(
+      plan.actions.some(
+        (a) => a.kind === "retarget" && a.to.endsWith("/en/vs/identifix"),
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves a correctly routed group alone", () => {
+    const plan = planCompetitorSync([
+      group({
+        name: "Competitor | ALLDATA",
+        keywords: ["[alldata]"],
+        finalUrls: ["https://wrenchlane.com/en/vs/alldata"],
+      }),
+    ]);
+    expect(plan.actions.some((a) => a.kind === "ok")).toBe(true);
+    expect(
+      plan.actions.some(
+        (a) => a.kind === "retarget" && a.to.endsWith("/en/vs/alldata"),
+      ),
+    ).toBe(false);
+  });
+
+  it("tolerates a trailing slash on the current URL", () => {
+    const plan = planCompetitorSync([
+      group({
+        name: "Competitor | Qira",
+        keywords: ["[qira]"],
+        finalUrls: ["https://wrenchlane.com/en/vs/qira/"],
+      }),
+    ]);
+    const qira = plan.actions.filter(
+      (a) => a.kind !== "create_ad_group" && a.adGroupName === "Competitor | Qira",
+    );
+    expect(qira.every((a) => a.kind === "ok")).toBe(true);
+  });
+
+  it("proposes an ad group for every rival nobody bids on", () => {
+    const plan = planCompetitorSync([]);
+    expect(plan.creates).toBe(COMPETITOR_TARGETS.length);
+    const names = plan.actions
+      .filter((a) => a.kind === "create_ad_group")
+      .map((a) => a.adGroupName);
+    expect(names).toContain(competitorAdGroupName(COMPETITOR_TARGETS[0]));
+  });
+
+  it("reports ad groups the programme says nothing about rather than touching them", () => {
+    const plan = planCompetitorSync([
+      group({ name: "Brand | exact", keywords: ["[wrenchlane]"] }),
+    ]);
+    expect(plan.unmanaged).toContain("Brand | exact");
+    expect(
+      plan.actions.some(
+        (a) => a.kind === "retarget" && a.adGroupName === "Brand | exact",
+      ),
+    ).toBe(false);
+  });
+});

@@ -36,6 +36,7 @@ export type DashboardSectionKey =
   | "promo-users"
   | "google-ads-users"
   | "campaigns"
+  | "landing-pages"
   | "cac-ltv"
   | "toplists"
   | "cta-clicks"
@@ -150,6 +151,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Campaigns",
     description:
       "Every Google Ads campaign on one page: what each one is for, who it targets, which landing page it sends people to, how it bids, and why it exists — joined to what it actually spent and delivered. Includes a plain-English comparison of how Performance Max, Demand Gen and Search differ in what we control versus what Google controls, since comparing them on cost per click alone is misleading. Spend, clicks and impressions come from GA4's linked-Ads dimensions (there is no Google Ads API token on this account), which means paused campaigns show no data at all and money is converted from GA4's USD to SEK at a fixed rate. Per-campaign user counts are GA4 first-touch and lifetime, so they sit against all-time spend only.",
+  },
+  {
+    key: "landing-pages",
+    label: "Landing Pages",
+    glyph: "LP",
+    href: "/dashboard/landing-pages",
+    title: "Landing Pages",
+    description:
+      "The landing-page programme: which ad surface is allowed to point at which page, what is missing, and how big the fault-code cluster actually is. Sizes itself from the same diagnostics analysis the DTC Codes page uses, so the page counts move as the product does rather than being a number someone wrote down once. Codes are tiered by whether we can say something true about them, then ordered by measured demand, workshop spread and how often the code arrives with no description at all. Manufacturer-specific codes are excluded from standalone pages on purpose and roll up into make hubs, because one description cannot serve the same code across marques. Also carries the signup-handoff contract that makes any of it measurable, and the open decision about where the pages should physically be built.",
   },
   {
     key: "cac-ltv",
