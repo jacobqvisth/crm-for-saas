@@ -29,11 +29,14 @@ import {
   FUNNEL_MAP,
   FUNNEL_MECHANICS,
   IMPROVEMENT_PLAN,
+  MORE_PAGES_ANSWER,
+  MULTIPLE_PAGES_ANSWER,
   PLAN_FACTS,
   PMAX_BASELINE,
   PMAX_POWER_TABLE,
   PMAX_RECOMMENDATION,
   PMAX_SPLIT_VERDICT,
+  TRACKING_ANSWER,
   WHY_TARGETING_IS_IMPRECISE,
   WHY_THIS_WORKS,
   type InfoPoint,
@@ -759,6 +762,45 @@ function InfoTab() {
           </div>
         </div>
         <PointList points={PMAX_RECOMMENDATION} />
+      </article>
+
+      {/* ---- the three follow-on questions -------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Follow-on question</p>
+            <h3>Should we build more landing pages?</h3>
+          </div>
+        </div>
+        <PointList points={MORE_PAGES_ANSWER} />
+      </article>
+
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Follow-on question</p>
+            <h3>Can one Performance Max campaign use several landing pages?</h3>
+          </div>
+        </div>
+        <PointList points={MULTIPLE_PAGES_ANSWER} />
+      </article>
+
+      <article className="panel panel-wide campaign-alert">
+        <h3>Can we track which page delivers best? Not today</h3>
+        <p>
+          This is the question worth acting on. Three separate layers each
+          block it, and the fix for all three is the same two columns.
+        </p>
+      </article>
+
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Follow-on question</p>
+            <h3>Why we cannot currently tell which page delivered a signup</h3>
+          </div>
+        </div>
+        <PointList points={TRACKING_ANSWER} />
       </article>
 
       {/* ---- the plan ------------------------------------------------------------ */}

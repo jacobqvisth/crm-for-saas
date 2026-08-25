@@ -212,6 +212,7 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     actions: [
       "Raise the max CPC. The retired us-generic Search campaign paid about 46 SEK a click; anything far below that wins no auctions.",
       "Capture the GCLID at signup. It is stored nowhere today, which is what forces conversion imports down the hashed-email route instead of the click-ID one.",
+      "Capture the landing page at signup too, in the same change. There is no landing page column on any table, which is the single reason we cannot say which page delivered a given customer. Two columns close that gap permanently.",
       "Make signup read ?plan=. All four plan pages currently send visitors to the same generic signup, so the plan intent we paid for is discarded at the handoff.",
     ],
   },
@@ -377,5 +378,67 @@ export const PMAX_RECOMMENDATION: InfoPoint[] = [
   {
     heading: "A second campaign is justified by a different goal, not a different page",
     body: "Splitting by language, market or budget ownership is a real reason to run another Performance Max campaign, because those genuinely need separate control. Splitting purely to compare landing pages is not, because asset groups already do that job and do it better.",
+  },
+];
+
+/* ---------------------------------------------------------------------------
+   The three follow-on questions: should we build more pages, can one campaign
+   use several, and can we tell which one performs best.
+   --------------------------------------------------------------------------- */
+
+export const MORE_PAGES_ANSWER: InfoPoint[] = [
+  {
+    heading: "Yes, but for new intents rather than new wordings",
+    body: "A new page earns its place when it answers a question no existing page answers. It does not earn its place by re-wording one that already does. That distinction is what separates a page that adds traffic from a page that only splits the traffic you already had.",
+  },
+  {
+    heading: "The biggest gap is fault codes",
+    body: "The product holds 802 manufacturer fault codes and a large article library, and none of it has a public page built for search. Mechanics type codes and symptoms, not plan names. This is the one page type that would reach demand that currently has nowhere to land.",
+  },
+  {
+    heading: "Eleven comparison pages already exist with no ads pointing at them",
+    body: "Fifteen competitor pages are live at /en/vs and only four rival names are bid on, all of them routed to the generic Small page. Before building anything new, the cheapest win is pointing traffic at pages that were already built and are already indexed.",
+  },
+  {
+    heading: "One genuinely new page worth building: a plan qualifier",
+    body: "Shop size cannot be targeted in an auction but it can be asked on a page. A short qualifier that recommends a plan does the segmentation the campaign structure is currently attempting and failing to do, and it collects the firmographic data the CRM does not have.",
+  },
+];
+
+export const MULTIPLE_PAGES_ANSWER: InfoPoint[] = [
+  {
+    heading: "Yes, through asset groups, deliberately",
+    body: "Each asset group in a Performance Max campaign carries its own final URL. Four asset groups means four landing pages inside one campaign, with one budget and one pool of learning. This is the controlled way to do it.",
+  },
+  {
+    heading: "And also through final URL expansion, whether you want it or not",
+    body: "Final URL expansion lets Google replace your chosen page with any other page on the domain it thinks will convert better for that person. The catalog records this campaign's landing page as Google's choice, which means expansion is probably on right now. If so, the campaign already has many landing pages and nobody chose them.",
+  },
+  {
+    heading: "So the first move is to find out which of those is happening",
+    body: "In Google Ads, the Expanded Final URL assets report shows where expansion has actually been sending people. Until expansion is either switched off or deliberately kept, no comparison between pages means anything, because the pages being compared are not the ones anybody picked.",
+  },
+];
+
+export const TRACKING_ANSWER: InfoPoint[] = [
+  {
+    heading: "Google's own asset group reporting is real, but it is not a fair test",
+    body: "You can see cost, clicks and conversions per asset group, and that maps one to one onto landing page when expansion is off. What you cannot read it as is a comparison. Google does not split traffic evenly; it sends each person to whichever asset group it predicts will convert for them. An asset group can look like the winner purely because it was handed the better users.",
+  },
+  {
+    heading: "GA4 knows landing pages, but not the one that mattered",
+    body: "GA4 can report landing page against conversions at session level. What it has no dimension for is the landing page of a user's FIRST visit. There is firstUserSource, firstUserMedium and firstUserCampaign, but no firstUserLandingPage. So GA4 can say which pages convert in-session; it cannot say which page brought in someone who signed up two visits later.",
+  },
+  {
+    heading: "And our own warehouse does not capture it at all",
+    body: "There is no landing page column and no gclid column on any table. dashboard_users carries a ga_client_id, but GA4's reporting API does not expose client ID as a queryable dimension, so it cannot be joined back without the BigQuery export. Today the honest answer to which page delivered a given signup is that we do not know.",
+  },
+  {
+    heading: "The fix is two columns, and it is small",
+    body: "Record the landing page and the gclid on the signup record, the same way a referrer would be captured. Then the join belongs to us, it is exact rather than modelled, and it survives every limitation above. Google's asset group report becomes a useful cross-check instead of the only available evidence.",
+  },
+  {
+    heading: "Only after that is a page comparison worth running",
+    body: "With landing page stored per signup, comparing pages stops being a reporting question and becomes a query. And a proper split test, one ad destination with visitors randomised at the page, becomes measurable end to end rather than inferred from whichever asset group Google favoured.",
   },
 ];
