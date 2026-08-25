@@ -202,5 +202,11 @@ export async function POST(
     skippedTotal: results.reduce((n, r) => n + r.skipped.length, 0),
     failedTotal: results.reduce((n, r) => n + r.failed.length, 0),
     stepsWithoutCopy: results.filter((r) => r.error).length,
+    // Translations that landed but need review, prefixed with their step so
+    // "step 3's Czech subject is still English" is actionable without
+    // opening every step.
+    warnings: results.flatMap((r) =>
+      r.warnings.map((w) => `Step ${(r.stepOrder ?? 0) + 1} - ${w}`),
+    ),
   });
 }
