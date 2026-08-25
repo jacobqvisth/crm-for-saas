@@ -2305,3 +2305,192 @@ a {
   vertical-align: top;
   min-width: 150px;
 }
+
+/* ---------------------------------------------------------------------------
+   /dashboard/campaigns — tab bar, per-campaign charts, creative chips.
+   --------------------------------------------------------------------------- */
+
+.campaign-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.campaign-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-bottom-color: transparent;
+  border-radius: 6px 6px 0 0;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.campaign-tab:hover {
+  background: var(--surface);
+  color: inherit;
+}
+
+.campaign-tab.is-active {
+  background: var(--surface);
+  color: inherit;
+  border-color: var(--line);
+  border-bottom-color: var(--surface);
+  margin-bottom: -1px;
+  font-weight: 600;
+}
+
+/* The status badge riding inside a tab is decoration, not a control. Shrink it
+   so it never competes with the campaign name. */
+.campaign-tab .badge {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+}
+
+.campaign-chart {
+  margin-top: 4px;
+}
+
+.campaign-chart svg {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+
+.campaign-chart-fill {
+  fill: rgba(37, 99, 235, 0.10);
+  stroke: none;
+}
+
+.campaign-chart-line-spend {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.campaign-chart-line-clicks {
+  fill: none;
+  stroke: #16794a;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.campaign-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.campaign-chart-legend .swatch {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.swatch-spend { background: #2563eb; }
+.swatch-clicks { background: #16794a; }
+
+.campaign-chart-range {
+  color: var(--muted-2);
+}
+
+.subheading {
+  margin: 18px 0 8px;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+/* Headlines and descriptions read better as scannable chips than as a table:
+   there are up to 15 of them and the length counter matters more than order. */
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip-list li {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 5px 9px;
+  font-size: 0.86rem;
+}
+
+.chip-list li small {
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  margin-left: 4px;
+}
+
+.chip-list-muted li {
+  background: var(--surface-muted);
+  color: var(--muted-2);
+  text-decoration: line-through;
+}
+
+@media (max-width: 720px) {
+  .campaign-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .campaign-tab {
+    white-space: nowrap;
+  }
+}
+
+/* An alert panel: something is wrong with a campaign and the reader should act.
+   Deliberately louder than a normal panel, but still inside the design system. */
+.campaign-alert {
+  border-left: 3px solid #d97706;
+  background: #fffaf1;
+}
+
+.campaign-alert h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: #92400e;
+}
+
+.campaign-alert p,
+.campaign-alert li {
+  color: #7c3f0a;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* A button that reads as a link, for jumping from an overview alert into the
+   campaign's own tab. */
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
