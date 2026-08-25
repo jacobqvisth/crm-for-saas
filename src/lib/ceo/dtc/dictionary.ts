@@ -411,3 +411,16 @@ export function codeName(base: string): string | null {
 export function dictionarySize() {
   return Object.keys(GENERIC_CODE_NAMES).length;
 }
+
+/**
+ * Every named generic code, sorted.
+ *
+ * The dashboard only ever asks about codes it has already seen, so lookup by
+ * key was enough. The landing-page planner needs the other direction: a code we
+ * can describe is worth a page whether or not it has turned up in our own
+ * diagnostics yet, so the candidate universe is the union of what we have seen
+ * and what we can name.
+ */
+export function dictionaryCodes(): string[] {
+  return Object.keys(GENERIC_CODE_NAMES).sort();
+}
