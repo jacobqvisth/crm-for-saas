@@ -62,6 +62,19 @@ export type AdSyncAction =
       reason: string;
     }
   | {
+      /**
+       * One ad group buying several rivals. It cannot be retargeted, because an
+       * ad group has one final URL and there is no single right answer for it.
+       * It has to be split, which is structural work rather than a correction.
+       */
+      kind: "split";
+      adGroupName: string;
+      campaignName: string;
+      from: string;
+      rivals: { name: string; to: string }[];
+      reason: string;
+    }
+  | {
       kind: "create_ad_group";
       adGroupName: string;
       finalUrl: string;
@@ -195,26 +208,35 @@ export function planCompetitorSync(observed: ObservedAdGroup[]): AdSyncPlan {
   const actions: AdSyncAction[] = [];
   const touched = new Set<string>();
 
-  for (const target of COMPETITOR_TARGETS) {
-    const wantedUrl = `${SITE_ORIGIN}${target.path}`;
-    const buyers = observed.filter((group) => buysTerm(group, target));
+  // Which rivals each ad group buys, resolved before any action is decided.
+  //
+  // This has to come first because the right action depends on how many rivals
+  // a group buys, not on the group and rival in isolation. An ad group has ONE
+  // final URL, so a group buying five rival names cannot be retargeted at five
+  // pages: emitting five retargets would apply them in sequence, leave the
+  // group pointing at whichever ran last, and report success while four of the
+  // five rivals stayed misrouted. That is worse than doing nothing, because it
+  // looks like it worked.
+  const rivalsByGroup = new Map<string, CompetitorTarget[]>();
+  for (const group of observed) {
+    const bought = COMPETITOR_TARGETS.filter((target) =>
+      buysTerm(group, target),
+    );
+    if (bought.length > 0) rivalsByGroup.set(group.id, bought);
+  }
 
-    if (buyers.length === 0) {
-      actions.push({
-        kind: "create_ad_group",
-        adGroupName: competitorAdGroupName(target),
-        finalUrl: wantedUrl,
-        keywords: competitorKeywords(target),
-        reason: `A comparison page for ${target.name} is published and indexed and nothing points at it.`,
-      });
-      continue;
-    }
+  const covered = new Set<string>();
 
-    for (const group of buyers) {
-      touched.add(group.id);
-      const current = group.finalUrls[0] ?? "";
-      const currentPath = pathOf(current);
+  for (const group of observed) {
+    const rivals = rivalsByGroup.get(group.id);
+    if (!rivals) continue;
+    touched.add(group.id);
+    const current = group.finalUrls[0] ?? "";
+    const currentPath = pathOf(current);
 
+    if (rivals.length === 1) {
+      const target = rivals[0];
+      covered.add(target.key);
       if (currentPath === target.path) {
         actions.push({
           kind: "ok",
@@ -224,32 +246,52 @@ export function planCompetitorSync(observed: ObservedAdGroup[]): AdSyncPlan {
         });
         continue;
       }
-
       actions.push({
         kind: "retarget",
         adGroupName: group.name,
         campaignName: group.campaignName,
         from: current || "(no final URL)",
-        to: wantedUrl,
+        to: `${SITE_ORIGIN}${target.path}`,
         reason: `Buys ${target.name} and lands on ${currentPath ?? "an unreadable URL"}, which is more generic than the query. A page written for this exact comparison already exists.`,
       });
+      continue;
     }
+
+    for (const target of rivals) covered.add(target.key);
+    actions.push({
+      kind: "split",
+      adGroupName: group.name,
+      campaignName: group.campaignName,
+      from: current || "(no final URL)",
+      rivals: rivals.map((target) => ({
+        name: target.name,
+        to: `${SITE_ORIGIN}${target.path}`,
+      })),
+      reason: `Buys ${rivals.length} rival names and has one final URL, so every one of them lands on ${currentPath ?? "an unreadable URL"}. There is no single correct destination for this group; it has to become one ad group per rival.`,
+    });
   }
 
-  const managed = new Set(
-    actions.flatMap((action) =>
-      action.kind === "retarget" || action.kind === "ok"
-        ? [action.adGroupName]
-        : [],
-    ),
-  );
+  for (const target of COMPETITOR_TARGETS) {
+    if (covered.has(target.key)) continue;
+    actions.push({
+      kind: "create_ad_group",
+      adGroupName: competitorAdGroupName(target),
+      finalUrl: `${SITE_ORIGIN}${target.path}`,
+      keywords: competitorKeywords(target),
+      reason: `A comparison page for ${target.name} is published and indexed and nothing points at it.`,
+    });
+  }
 
   return {
     actions,
     unmanaged: observed
-      .filter((group) => !managed.has(group.name) && !touched.has(group.id))
+      .filter((group) => !touched.has(group.id))
       .map((group) => group.name),
-    violations: actions.filter((action) => action.kind === "retarget").length,
+    // A split is a violation too: the traffic is landing in the wrong place
+    // right now. It just cannot be fixed by pointing a URL somewhere else.
+    violations: actions.filter(
+      (action) => action.kind === "retarget" || action.kind === "split",
+    ).length,
     creates: actions.filter((action) => action.kind === "create_ad_group")
       .length,
   };
@@ -286,6 +328,16 @@ export async function applyCompetitorSync(
     if (action.kind === "create_ad_group") {
       skipped.push(
         `${action.adGroupName}: creating an ad group commits new budget, so it is left for approval in the UI.`,
+      );
+      continue;
+    }
+    if (action.kind === "split") {
+      // Deliberately not automated. An ad group has one final URL, so there is
+      // no URL this could write that would be correct for all of its rivals.
+      // Splitting means creating ad groups, moving keywords and setting bids,
+      // which is a restructure rather than a correction.
+      skipped.push(
+        `${action.adGroupName}: buys ${action.rivals.length} rivals and has one final URL, so it needs splitting rather than retargeting. Left for a human.`,
       );
       continue;
     }

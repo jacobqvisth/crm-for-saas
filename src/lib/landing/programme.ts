@@ -188,3 +188,113 @@ export const ROLLOUT: RolloutPhase[] = [
     ],
   },
 ];
+
+/**
+ * What the account has already bid on, measured against the cluster.
+ *
+ * Read from the live Google Ads account on 2026-08-25 via
+ * `scripts/audit-code-keywords.mts`, and validated with the same
+ * `isValidSaeSecondChar` the DTC dashboard uses. Baked in as measured
+ * constants rather than fetched at render time: it is a 45,000-row read that
+ * changes only when someone edits the account.
+ *
+ * The headline is not the coverage number. It is that half the codes this
+ * account has ever bid on are not codes.
+ */
+export const KEYWORD_AUDIT = {
+  measuredOn: "2026-08-25",
+  keywords: 45965,
+  codeKeywords: 44505,
+  distinctCodes: 26204,
+  validCodes: 12963,
+  impossibleCodes: 13241,
+  /** Keywords where EVERY code in them is structurally impossible. */
+  impossibleKeywords: 13727,
+  codesWithAPage: 341,
+  landableKeywords: 5947,
+  /** Share of the structurally valid code keywords that now have a page. */
+  landableShareOfValidPct: 19,
+};
+
+export type KeywordCampaignRow = {
+  campaign: string;
+  status: string;
+  codeKeywords: number;
+  impossiblePct: number;
+  landablePct: number;
+  note: string;
+};
+
+export const KEYWORD_AUDIT_CAMPAIGNS: KeywordCampaignRow[] = [
+  {
+    campaign: "error codes",
+    status: "Paused",
+    codeKeywords: 26196,
+    impossiblePct: 51,
+    landablePct: 1,
+    note: "Bare codes, enumerated rather than researched. Half of them are strings no scan tool can display, so half this campaign could never have matched a search at any bid.",
+  },
+  {
+    campaign: "us-codes+make",
+    status: "Paused",
+    codeKeywords: 8787,
+    impossiblePct: 3,
+    landablePct: 28,
+    note: "Make plus code, which is the right shape for the query. Mostly real codes, and a quarter of them now have somewhere to land.",
+  },
+  {
+    campaign: "uk-codes+make",
+    status: "Paused",
+    codeKeywords: 8787,
+    impossiblePct: 3,
+    landablePct: 28,
+    note: "Identical to the US set. Worth checking whether two copies of the same keyword list is what was intended.",
+  },
+  {
+    campaign: "US - Fault Codes",
+    status: "Paused",
+    codeKeywords: 485,
+    impossiblePct: 0,
+    landablePct: 99,
+    note: "Make, model, year and code. Every keyword is a real code and 99 percent of them now have a page. This is the one to restart first.",
+  },
+  {
+    campaign: "Campaign TX / FL",
+    status: "Paused",
+    codeKeywords: 150,
+    impossiblePct: 0,
+    landablePct: 68,
+    note: "Geographic variant of the same idea, all real codes.",
+  },
+  {
+    campaign: "Campaign India",
+    status: "Paused",
+    codeKeywords: 100,
+    impossiblePct: 0,
+    landablePct: 100,
+    note: "Small and fully covered, though the market is a separate question from the keywords.",
+  },
+];
+
+export const KEYWORD_AUDIT_POINTS: InfoPoint[] = [
+  {
+    heading: "Half the codes this account has bid on are not codes",
+    body: "SAE J2012 allows only 0 to 3 as a code's second character, so P8000, P5200 and P9982 are strings no vehicle emits and no scan tool displays. 13,241 of the 26,204 distinct codes bid on are in that class. They were not chosen, they were enumerated: someone generated P plus four digits and uploaded the lot.",
+  },
+  {
+    heading: "That is 13,727 keywords that could never have matched anything",
+    body: "Not keywords that matched badly, or matched expensively. Keywords for which no search query exists, because the string never appears on a scan tool. No bid would have fixed them, which is worth knowing before concluding that fault-code campaigns do not work here.",
+  },
+  {
+    heading: "So the old campaigns had two independent problems, not one",
+    body: "They had nowhere to land, which this programme fixes. They were also half aimed at nothing, which it does not. Restarting them without pruning the keyword list would repeat the second problem against much better pages.",
+  },
+  {
+    heading: "US - Fault Codes is the one to restart first",
+    body: "485 code keywords, every one a real code, 99 percent of which now have a page written for them. It is already in the make-model-year-code shape people actually type, and unlike the enumerated sets it was clearly built by hand.",
+  },
+  {
+    heading: "The cluster covers 19 percent of the valid code keywords already",
+    body: "341 of the codes this account has bid on now have a page. That share rises as the tiers ship, and the audit is re-runnable, so it is a progress measure rather than a one-off number.",
+  },
+];

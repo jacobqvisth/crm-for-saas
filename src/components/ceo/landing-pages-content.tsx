@@ -11,6 +11,9 @@ import { AD_SURFACE_MAP, buildGaps, routingFixes } from "@/lib/landing/kinds";
 import type { LandingPlan } from "@/lib/landing/plan";
 import {
   DOORWAY_DEFENCES,
+  KEYWORD_AUDIT,
+  KEYWORD_AUDIT_CAMPAIGNS,
+  KEYWORD_AUDIT_POINTS,
   HONESTY_RULES,
   PROGRAMME_THESIS,
   ROLLOUT,
@@ -323,6 +326,86 @@ export function LandingPagesContent({
             only thing standing between this table and a reconciler run.
           </p>
         ) : null}
+      </article>
+
+      {/* ---- keyword audit ---------------------------------------------- */}
+      <article className="panel panel-wide campaign-alert">
+        <h3>
+          Half the fault codes this account has ever bid on are not fault codes
+        </h3>
+        <p>
+          Read from the live account on {KEYWORD_AUDIT.measuredOn}. Of{" "}
+          {formatNumber(KEYWORD_AUDIT.distinctCodes)} distinct code strings
+          across {formatNumber(KEYWORD_AUDIT.keywords)} keywords,{" "}
+          <strong>{formatNumber(KEYWORD_AUDIT.impossibleCodes)}</strong> are
+          structurally impossible. The standard allows only 0 to 3 as a
+          code&apos;s second character, so P8000 and P9982 are strings no vehicle
+          emits and no scan tool displays. They were enumerated, not chosen.
+        </p>
+      </article>
+
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Why the old fault-code campaigns failed</p>
+            <h2>What is already bid on, and what can now land</h2>
+          </div>
+        </div>
+        <div className="summary-grid columns-4">
+          <SummaryCard
+            value={formatNumber(KEYWORD_AUDIT.codeKeywords)}
+            label="Keywords containing a code"
+            hint={`of ${formatNumber(KEYWORD_AUDIT.keywords)} in the account`}
+          />
+          <SummaryCard
+            value={formatNumber(KEYWORD_AUDIT.impossibleKeywords)}
+            label="Could never match a search"
+            hint="Every code in them is impossible"
+          />
+          <SummaryCard
+            value={formatNumber(KEYWORD_AUDIT.codesWithAPage)}
+            label="Bid-on codes that now have a page"
+            hint={`${formatNumber(KEYWORD_AUDIT.landableKeywords)} keywords made landable`}
+          />
+          <SummaryCard
+            value={`${KEYWORD_AUDIT.landableShareOfValidPct}%`}
+            label="Of the valid code keywords covered"
+            hint="Rises as the tiers ship"
+          />
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Campaign</th>
+                <th>Status</th>
+                <th>Code keywords</th>
+                <th>Impossible</th>
+                <th>Now landable</th>
+                <th>What it is</th>
+              </tr>
+            </thead>
+            <tbody>
+              {KEYWORD_AUDIT_CAMPAIGNS.map((row) => (
+                <tr key={row.campaign}>
+                  <td>
+                    <strong>{row.campaign}</strong>
+                  </td>
+                  <td>
+                    <span className="badge badge-paused">{row.status}</span>
+                  </td>
+                  <td>{formatNumber(row.codeKeywords)}</td>
+                  <td>{row.impossiblePct}%</td>
+                  <td>
+                    <strong>{row.landablePct}%</strong>
+                  </td>
+                  <td>{row.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <PointList points={KEYWORD_AUDIT_POINTS} />
       </article>
 
       {/* ---- the tiers -------------------------------------------------- */}

@@ -66,22 +66,62 @@ describe("competitor registry", () => {
 });
 
 describe("the reconciler", () => {
-  it("flags an ad group that buys a rival and lands on a generic page", () => {
+  it("splits an ad group that buys several rivals, rather than retargeting it", () => {
+    // The bug this guards: an ad group has ONE final URL. Emitting a retarget
+    // per rival would apply them in sequence, leave the group pointing at
+    // whichever ran last, and report success while the rest stayed misrouted.
+    // Observed on the live account, where Small | alternatives buys five.
     const plan = planCompetitorSync([
       group({
         name: "Small | alternatives",
         keywords: ["[alldata alternative]", "[haynespro alternative]"],
-        finalUrls: ["https://wrenchlane.com/small"],
+        finalUrls: ["https://wrenchlane.com/en/small"],
       }),
     ]);
 
+    expect(plan.actions.filter((a) => a.kind === "retarget")).toHaveLength(0);
+    const splits = plan.actions.filter((a) => a.kind === "split");
+    expect(splits).toHaveLength(1);
+    const split = splits[0];
+    if (split.kind !== "split") throw new Error("expected a split");
+    expect(split.rivals.map((r) => r.to).sort()).toEqual([
+      "https://wrenchlane.com/en/vs/alldata",
+      "https://wrenchlane.com/en/vs/haynespro",
+    ]);
+    // A split is still a violation: that traffic is landing wrong right now.
+    expect(plan.violations).toBe(1);
+  });
+
+  it("retargets an ad group that buys exactly one rival", () => {
+    const plan = planCompetitorSync([
+      group({
+        name: "Small | alternatives",
+        keywords: ["[alldata alternative]"],
+        finalUrls: ["https://wrenchlane.com/en/small"],
+      }),
+    ]);
     const retargets = plan.actions.filter((a) => a.kind === "retarget");
-    expect(retargets.length).toBeGreaterThanOrEqual(2);
-    expect(plan.violations).toBe(retargets.length);
-    const alldata = retargets.find(
-      (a) => a.kind === "retarget" && a.to.endsWith("/en/vs/alldata"),
-    );
-    expect(alldata).toBeDefined();
+    expect(retargets).toHaveLength(1);
+    const only = retargets[0];
+    if (only.kind !== "retarget") throw new Error("expected a retarget");
+    expect(only.to).toBe("https://wrenchlane.com/en/vs/alldata");
+  });
+
+  it("does not also propose creating an ad group for a rival already bought", () => {
+    // Otherwise a split would be reported alongside "nothing points at this",
+    // which contradicts itself.
+    const plan = planCompetitorSync([
+      group({
+        name: "Small | alternatives",
+        keywords: ["[alldata alternative]", "[haynespro alternative]"],
+      }),
+    ]);
+    const created = plan.actions
+      .filter((a) => a.kind === "create_ad_group")
+      .map((a) => (a.kind === "create_ad_group" ? a.adGroupName : ""));
+    expect(created).not.toContain("Competitor | ALLDATA");
+    expect(created).not.toContain("Competitor | HaynesPro");
+    expect(plan.creates).toBe(13);
   });
 
   it("matches on what a group buys, not on what it is called", () => {

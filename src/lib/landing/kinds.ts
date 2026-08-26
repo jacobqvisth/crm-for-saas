@@ -44,8 +44,8 @@ export const AD_SURFACE_MAP: readonly AdSurface[] = [
     pageKind: "fault_code",
     urlPattern: "/en/fault-code/<code>",
     state: "not_built",
-    pages: "Hundreds, tiered by measured demand",
-    note: "The largest gap on this page. A technician mid-repair types a code, and the most specific page we own is the homepage. Dynamic Search Ads cannot help either, because they match against pages that exist, and none of these do.",
+    pages: "447 built, awaiting the cutover",
+    note: "Built in the Astro repo and indexed nowhere until the DNS cutover. Worth knowing before restarting the paused code campaigns: they had two separate problems, and this fixes one. 44,505 keywords in the account carry a fault code, and half the distinct codes among them are structurally impossible strings no vehicle emits.",
   },
   {
     key: "fault_code_family",
@@ -85,7 +85,7 @@ export const AD_SURFACE_MAP: readonly AdSurface[] = [
     urlPattern: "/vs/<rival>",
     state: "exists_unrouted",
     pages: "15 published",
-    note: "The cheapest win available. Fifteen pages are live and indexed, four rival names are bid on, and all four route to the generic Small plan page. Splitting the ad group and pointing each name at its own page is a routing change with no build cost.",
+    note: "The cheapest win available, and bigger than it looked. Reading the account shows six rival names bought across TWO ad groups, Small | alternatives and Large | multi-tech workshop, every one landing on a generic plan page. Because an ad group has a single final URL, neither can simply be retargeted: they have to be split, one ad group per rival.",
   },
   {
     key: "qualifier",
