@@ -97,8 +97,12 @@ export const WHERE_TO_BUILD: InfoPoint[] = [
     body: "Several hundred items is close to what a CMS is worst at: every page is an API call to create and another to update, item limits become a plan question rather than an engineering one, and the internal-link graph between codes, families and makes has to be maintained by hand. Astro rebuilds all of it from the data file in about five seconds.",
   },
   {
-    heading: "Still to do on the Webflow side",
-    body: "A Fault Codes collection, a template page, and the eight flagship codes as draft items. That is Designer work on the live site, so it is a scoped piece of its own rather than something to fold into a build, and the items stay drafts until reviewed.",
+    heading: "Built: the Webflow flagship batch, as drafts",
+    body: "A Fault Codes collection with a nine-field schema, a template page bound to it, and the eight flagship codes as draft items at /en/fault-code/<code>. Every one is isDraft and has never been published, so nothing is public until reviewed. The template is deliberately thin, four bindings rather than thirty, because the batch exists to answer whether the live domain indexes these pages at all, not to build the final template twice.",
+  },
+  {
+    heading: "One real gap in the Webflow half, worth knowing",
+    body: "Webflow has no build step, so those pages carry the landing-page identity into the signup link but cannot forward a click id at click time the way the Astro pages do. That makes the batch an indexation test rather than the measurement surface. Attribution works properly on the Astro cluster.",
   },
   {
     heading: "The cluster is now the strongest argument for finishing the cutover",
@@ -153,7 +157,8 @@ export const ROLLOUT: RolloutPhase[] = [
     state: "Built",
     actions: [
       "Done: the fault-code route, templates and all 896 pages are built in the Astro repo and reviewable on the public test URL.",
-      "Remaining: the eight flagship codes as draft items in Webflow, so the live domain gets an indexation signal before cutover.",
+      "Done: the eight flagship codes exist in Webflow as draft CMS items with a bound template page, so the live domain can be tested for indexation before the cutover.",
+      "Remaining, and it is a human decision: review the eight drafts, then un-draft and publish the items to start the indexation clock.",
       "Publish the flagship tier only, each page reviewed by a human first.",
       "Submit the folder to Search Console and wait for indexation rather than for traffic.",
       "Point a Search campaign on those exact codes at them, and turn on Dynamic Search Ads scoped to the folder once there is a folder to scope to.",
