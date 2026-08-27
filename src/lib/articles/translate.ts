@@ -24,7 +24,10 @@ const schema = z.object({
   slug: z
     .string()
     .describe(
-      "URL slug for the Swedish headline: lowercase ASCII, hyphens, no Swedish characters (a for a-ring and a-umlaut, o for o-umlaut).",
+      // Deliberately does NOT ask for ASCII: asciiSlug() transliterates this
+      // field afterwards, and spelling the rule out here taught the model to
+      // strip Swedish letters from the title and body too.
+      "URL slug for the Swedish headline, lowercase words joined by hyphens, spelled in normal Swedish.",
     ),
   summary: z.string().describe("The Swedish post summary, one or two sentences."),
   bodyHtml: z.string().describe("The full Swedish body, same HTML structure as the English."),
@@ -39,7 +42,10 @@ export interface SwedishArticle {
 
 const SYSTEM = `You translate WrenchLane product release announcements from English into Swedish.
 
-WrenchLane sells AI-assisted diagnostics to independent car workshops, so write for a Swedish mechanic or workshop owner: direct, concrete, no marketing gloss. Translate meaning, not words. Established renderings used on the site: "labor time" is "arbetstid", "repair procedure" is "reparationsbeskrivning" (never "reparationsprocedur"), "mileage" is "matarstallning", "fault" is "fel", "diagnostics" is "diagnostik". Product names, "WrenchLane", "VIN", "OEM" and release numbers stay as they are.
+WrenchLane sells AI-assisted diagnostics to independent car workshops, so write for a Swedish mechanic or workshop owner: direct, concrete, no marketing gloss. Translate meaning, not words. Established renderings used on the site: "labor time" is "arbetstid", "repair procedure" is "reparationsbeskrivning" (never "reparationsprocedur"), "mileage" is "mätarställning", "fault" is "fel", "diagnostics" is "diagnostik", "light commercial vehicles" is "lätta nyttofordon", "van" is "transportbil" (never "skåpbil" or "lastbil"). Product names, "WrenchLane", "VIN", "OEM" and release numbers stay as they are.
+
+WRITE PROPER SWEDISH ORTHOGRAPHY.
+Å, Ä and Ö are ordinary letters and must appear wherever Swedish spelling requires them, in the title, the summary and the body alike: "lätta", "för", "månad", "söka", "mätarställning". Never substitute a, a, o for them and never strip an accent. The ONLY ASCII-only field is the slug.
 
 THE BODY IS HTML AND ITS STRUCTURE IS LOAD-BEARING.
 - Reproduce every tag, attribute, class and URL exactly as given. Never edit a src, an href, an iframe or a figure.

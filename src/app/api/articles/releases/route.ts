@@ -25,6 +25,7 @@ import {
   looksLikeRelease,
   parseReleaseEmail,
   releaseImageUrls,
+  releaseLanguage,
   releaseSlug,
   type ParsedRelease,
 } from "@/lib/articles/release-mail";
@@ -75,6 +76,8 @@ interface ReleaseCandidate {
   sectionCount: number;
   imageCount: number;
   hasVideo: boolean;
+  /** A Swedish send of the same release exists, so the SV variant is human copy. */
+  hasSwedishMail: boolean;
   /** Set when this release is already in the Library. */
   articleId: string | null;
   publishedUrl: string | null;
@@ -120,13 +123,35 @@ interface FoundMail {
   receivedAt: string | null;
   html: string;
   parsed: ParsedRelease;
+  language: "en" | "sv";
 }
 
 /**
- * Newest release mails first, one per version.
+ * A forward of the broadcast, not the broadcast.
+ *
+ * Colleagues forward the release mail to each other minutes after it goes out,
+ * and Gmail returns the newest copy first, so the naive "newest wins" dedup
+ * picks the forward and files the article against a forward's message id.
+ * Covers the Swedish client prefix too.
+ */
+const FORWARD_SUBJECT = /^\s*(fwd?|vb|vidarebefordrat)\b\s*:/i;
+
+/** The bare address out of a From header. */
+function senderAddress(from: string): string | null {
+  return from.match(/<([^>]+)>/)?.[1]?.trim() ?? (from.includes("@") ? from.trim() : null);
+}
+
+/**
+ * Newest release mails first, one per version PER LANGUAGE.
  *
  * The same broadcast reaches several seed addresses, so the raw list contains
  * near-duplicates. Keying on the version keeps the newest copy of each.
+ *
+ * The language belongs in the key: Customer.io sends the English and Swedish
+ * releases as two broadcasts carrying the same version, so keying on version
+ * alone threw one of them away, and which one it threw away depended on send
+ * order. The Swedish mail is the Swedish variant's source, so losing it meant
+ * silently falling back to machine translation.
  */
 async function findReleases(token: string, limit = MAX_MESSAGES): Promise<FoundMail[]> {
   const list = await gmail<{ messages?: { id: string }[] }>(
@@ -135,7 +160,7 @@ async function findReleases(token: string, limit = MAX_MESSAGES): Promise<FoundM
   );
   if (!list?.messages?.length) return [];
 
-  const byVersion = new Map<string, FoundMail>();
+  const byKey = new Map<string, FoundMail>();
   for (const { id } of list.messages) {
     const msg = await gmail<{ payload: GmailPayload; internalDate?: string }>(
       token,
@@ -156,14 +181,61 @@ async function findReleases(token: string, limit = MAX_MESSAGES): Promise<FoundM
       receivedAt: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null,
       html,
       parsed,
+      language: releaseLanguage(html),
     };
 
-    // Gmail returns newest first, so the first copy of a version wins.
-    const key = parsed.version ?? found.subject.toLowerCase();
-    if (!byVersion.has(key)) byVersion.set(key, found);
+    // Gmail returns newest first, so the first copy of a version wins, except
+    // that a direct send always beats a forward of the same broadcast.
+    const key = `${found.language}:${parsed.version ?? found.subject.toLowerCase()}`;
+    const held = byKey.get(key);
+    if (!held) byKey.set(key, found);
+    else if (FORWARD_SUBJECT.test(held.subject) && !FORWARD_SUBJECT.test(found.subject)) {
+      byKey.set(key, found);
+    }
   }
 
-  return [...byVersion.values()];
+  return [...byKey.values()];
+}
+
+/**
+ * The Swedish send of the same release, if there is one.
+ *
+ * Scoped to the same sender and a day either side of the English mail: the two
+ * broadcasts go out minutes apart, where a subject search would depend on
+ * wording that changes every release. Returns null rather than throwing, so a
+ * miss falls back to translation instead of failing the import.
+ */
+async function findSwedishCounterpart(
+  token: string,
+  english: { from: string; receivedAt: string | null; version: string | null; messageId: string },
+): Promise<ParsedRelease | null> {
+  const sender = senderAddress(english.from);
+  if (!sender || !english.receivedAt) return null;
+
+  const at = Date.parse(english.receivedAt);
+  if (Number.isNaN(at)) return null;
+  const DAY = 24 * 60 * 60 * 1000;
+  const q = `from:${sender} after:${Math.floor((at - DAY) / 1000)} before:${Math.floor((at + DAY) / 1000)}`;
+
+  const list = await gmail<{ messages?: { id: string }[] }>(
+    token,
+    `/messages?q=${encodeURIComponent(q)}&maxResults=25`,
+  );
+  if (!list?.messages?.length) return null;
+
+  for (const { id } of list.messages) {
+    if (id === english.messageId) continue;
+    const msg = await gmail<{ payload: GmailPayload }>(token, `/messages/${id}?format=full`);
+    if (!msg?.payload) continue;
+    const html = extractHtmlBody(msg.payload);
+    if (!html || !looksLikeRelease(html)) continue;
+    if (releaseLanguage(html) !== "sv") continue;
+    const parsed = parseReleaseEmail(html);
+    // Same release, not the previous one that happens to sit in the window.
+    if (!parsed || parsed.version !== english.version) continue;
+    return parsed;
+  }
+  return null;
 }
 
 export async function GET() {
@@ -176,7 +248,14 @@ export async function GET() {
     return NextResponse.json({ error: mailbox.reason, configured: isWebflowConfigured() }, { status: 502 });
   }
 
-  const found = await findReleases(mailbox.token);
+  const all = await findReleases(mailbox.token);
+  // Only the English send is offered for import: it is the article's source,
+  // and the Swedish one is consumed as its translation rather than listed as a
+  // second article to publish.
+  const found = all.filter((f) => f.language === "en");
+  const swedishVersions = new Set(
+    all.filter((f) => f.language === "sv").map((f) => f.parsed.version ?? ""),
+  );
 
   // Which of these are already in the Library, so the UI can say so rather than
   // offering to import a duplicate.
@@ -200,6 +279,7 @@ export async function GET() {
       sectionCount: f.parsed.sections.length,
       imageCount: releaseImageUrls(f.parsed).length,
       hasVideo: Boolean(f.parsed.videoId),
+      hasSwedishMail: swedishVersions.has(f.parsed.version ?? ""),
       articleId: already?.id ?? null,
       publishedUrl: already?.published_url ?? null,
       status: already?.status ?? null,
@@ -365,13 +445,50 @@ export async function POST(request: NextRequest) {
   // Swedish URL would be worse than saying it did not translate.
   const translations: Record<string, string> = {};
   const translationErrors: string[] = [];
+  let swedishSource: "mail" | "translated" | null = null;
   const swedishLocaleId = locales?.secondary?.sv;
   if (swedishLocaleId) {
-    const sv = await translateReleaseToSwedish({
-      title: parsed.title,
-      summary: metaDescription,
-      bodyHtml: body,
+    // Prefer the Swedish broadcast over translating the English one. It is the
+    // copy the company actually shipped to Swedish customers, so it carries the
+    // house terminology ("lätta nyttofordon", not the model's "lätta
+    // lastbilar") and needs no review. Translation stays the fallback for
+    // releases that went out in English only.
+    const svMail = await findSwedishCounterpart(mailbox.token, {
+      from: getHeader(headers, "from"),
+      receivedAt: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null,
+      version: parsed.version,
+      messageId,
     });
+
+    // The two broadcasts have so far shared their screenshots, so the English
+    // pass has normally hosted them already. Anything unique to the Swedish
+    // mail still has to be re-hosted, or that image would be the one thing on
+    // the page left pointing at an email CDN.
+    if (svMail) {
+      for (const [i, src] of releaseImageUrls(svMail).entries()) {
+        if (hosted.has(src)) continue;
+        const up = await hostImage(src, `${slug}-sv-${i + 1}`);
+        if (up) hosted.set(src, up.url);
+        else failedImages.push(src);
+      }
+    }
+
+    const sv = svMail
+      ? {
+          title: svMail.title,
+          slug: releaseSlug(svMail),
+          summary: (svMail.lead ?? svMail.title).replace(/<[^>]+>/g, "").slice(0, 200),
+          // Same hosted-image map as the English body, so both locales point at
+          // the copies on the Webflow CDN rather than at the email CDN.
+          bodyHtml: buildReleaseBodyHtml(svMail, hosted),
+        }
+      : await translateReleaseToSwedish({
+          title: parsed.title,
+          summary: metaDescription,
+          bodyHtml: body,
+        });
+    if (sv) swedishSource = svMail ? "mail" : "translated";
+
     if (!sv) {
       translationErrors.push("sv");
     } else {
@@ -382,9 +499,11 @@ export async function POST(request: NextRequest) {
         bodyFormat: "html",
         summary: sv.summary,
         // Swedish articles on this site deliberately carry no meta fields; the
-        // template falls back to name and post-summary.
-        metaTitle: null,
-        metaDescription: null,
+        // template falls back to name and post-summary. Empty string, not null:
+        // Webflow drops a null from a PATCH body, so the English meta copied in
+        // at creation survived and the Swedish page shipped English metadata.
+        metaTitle: "",
+        metaDescription: "",
         categoryIds,
         tagIds,
         image,
@@ -411,6 +530,7 @@ export async function POST(request: NextRequest) {
         images: sourceUrls.length,
         translations,
         translationErrors,
+        swedishSource,
       },
       format: "blog_article",
       language: "en",
@@ -448,6 +568,9 @@ export async function POST(request: NextRequest) {
       imageNote,
       translations,
       translationErrors,
+      // "mail" means the Swedish came from the Swedish broadcast and needs no
+      // language review; "translated" means a model wrote it and it does.
+      swedishSource,
       categories: categoryIds.map((id) => categories.find((c) => c.id === id)?.name).filter(Boolean),
       tags: tagIds.map((id) => tags.find((t) => t.id === id)?.name).filter(Boolean),
     },
