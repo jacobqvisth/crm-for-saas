@@ -1458,7 +1458,7 @@ function finishEmails(
         body: "Every email that actually left Valdemar's mailboxes in the range: sequence steps, one-off composes, and mail he typed by hand in the Gmail web app. Scheduled-but-not-yet-sent emails are in the 'In queue' tile instead.",
         sources: ALL_SENDS_SOURCE,
         logic:
-          "CRM sends come from email_queue (status=sent). Gmail-web sends have no queue row at all, so they are counted from the email_sent activities the mailbox-sync cron writes for each connected mailbox. Because that cron runs at :15 and :45, an email sent in the last half hour may not be counted yet.",
+          "CRM sends come from email_queue (status=sent). Gmail-web sends have no queue row at all, so they are counted from the email_sent activities the mailbox-sync cron writes for each connected mailbox. Two consequences: that cron runs at :15 and :45, so mail sent in the last half hour may not be counted yet; and it only logs mail addressed to someone the CRM can place, so a note to a personal contact who is not in the CRM never appears here.",
       },
     },
     {
