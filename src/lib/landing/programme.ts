@@ -217,8 +217,17 @@ export const KEYWORD_AUDIT = {
   distinctCodes: 26204,
   validCodes: 12963,
   impossibleCodes: 13241,
+  /**
+   * Removable after two guards the first pass lacked: keywords naming a marque
+   * (C4500 is a Chevrolet, not a chassis code) and keywords that have ever
+   * served an impression, which is evidence the shape argument is wrong about
+   * them. 56 were model names and 2 had served 78 impressions between them.
+   */
+  removableKeywords: 13669,
+  /** Removed so far. Explorer access allows 2,880 operations a day. */
+  removedSoFar: 0,
   /** Keywords where EVERY code in them is structurally impossible. */
-  impossibleKeywords: 13727,
+  impossibleKeywords: 13671,
   codesWithAPage: 341,
   landableKeywords: 5947,
   /** Share of the structurally valid code keywords that now have a page. */
@@ -289,6 +298,10 @@ export const KEYWORD_AUDIT_POINTS: InfoPoint[] = [
   {
     heading: "Half the codes this account has bid on are not codes",
     body: "SAE J2012 allows only 0 to 3 as a code's second character, so P8000, P5200 and P9982 are strings no vehicle emits and no scan tool displays. 13,241 of the 26,204 distinct codes bid on are in that class. They were not chosen, they were enumerated: someone generated P plus four digits and uploaded the lot.",
+  },
+  {
+    heading: "The evidence is stronger than the standard, and it corrects it",
+    body: "Reading the standard is an argument. Lifetime impressions are evidence, and they say two things. The error codes campaign holds 26,196 keywords and exactly one has ever served a single impression in the account's history. And 56 keywords the shape test flagged are not codes at all: C4500 is a Chevrolet truck, not a chassis code, and those keywords have served real impressions. Both guards are now in the audit, which is why the removable count is 13,669 rather than the 13,727 first reported.",
   },
   {
     heading: "That is 13,727 keywords that could never have matched anything",
@@ -368,6 +381,13 @@ export const WHAT_EXISTS: BuiltThing[] = [
       "Diffs what every ad group actually buys against the fifteen verified comparison URLs. Dry run by default, and a dry run goes to Google with validateOnly rather than guessing locally. Retargets single-rival groups; refuses to split or create, because both commit structure and budget nobody has approved.",
   },
   {
+    what: "The keyword pruner",
+    where: "scripts/prune-impossible-keywords.mts",
+    state: "Blocked",
+    detail:
+      "Removes keywords that can never match: no valid code, no marque named, and never a single impression. Guarded three ways and it never touches an enabled campaign. Built and shape-checked against the live account; what stops it is Explorer quota at 2,880 operations a day against 13,669 removals, so it needs about six daily runs or Basic access.",
+  },
+  {
     what: "The keyword audit",
     where: "scripts/audit-code-keywords.mts",
     state: "Live",
@@ -394,9 +414,11 @@ export type BacklogItem = {
 export const BACKLOG: BacklogItem[] = [
   {
     rank: 1,
-    what: "Delete the 13,727 impossible keywords",
+    what: "Delete the 13,669 unmatchable keywords",
     effort: "Low",
-    why: "They bid on strings no vehicle emits and no scan tool displays, so they can never match a search at any price. They also make every account-level quality and coverage number meaningless. This is now a scripted operation rather than a manual one, and it has to happen before any code campaign restarts or the new pages inherit a broken keyword list.",
+    blockedBy:
+      "Explorer access allows 2,880 API operations a day against 13,669 removals, so this needs about six daily runs or an upgrade to Basic access.",
+    why: "They bid on strings no vehicle emits, so they can never match a search at any price, and they make every account-level coverage number meaningless. The script is built, guarded and re-runnable: it removes only keywords with no valid code, no marque named, and no impression ever served, and it never touches an enabled campaign. It stops cleanly when the daily quota runs out and resumes next run with no bookkeeping.",
   },
   {
     rank: 2,
