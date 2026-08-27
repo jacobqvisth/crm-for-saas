@@ -287,9 +287,29 @@ function titleCase(value: string) {
     .join("");
 }
 
-function normalizeMake(raw: string | null): string | null {
+/**
+ * Canonical display form for a marque.
+ *
+ * Exported because the landing-page make hubs have to group codes by exactly
+ * the same marque string this analysis groups by. Two different normalisations
+ * would silently split "VW" and "Volkswagen" across two hubs.
+ */
+export function normalizeMake(raw: string | null): string | null {
   if (!raw) return null;
-  const upper = raw.trim().toUpperCase().replace(/\s+/g, " ");
+  // Fold diacritics BEFORE the alias lookup and before grouping.
+  //
+  // The data carries both "Citroen" and "Citroën", and treating them as two
+  // marques split one hub in half and silently dropped the smaller one when
+  // both produced the same URL slug. Folding generically also handles Skoda
+  // and anything else that arrives accented from one scan tool and plain from
+  // another. The cost is that the display name loses its accent, which is a
+  // fair trade against reporting one marque as two.
+  const upper = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
   if (upper.length === 0) return null;
   const aliased = MAKE_ALIASES[upper];
   if (aliased) return aliased;

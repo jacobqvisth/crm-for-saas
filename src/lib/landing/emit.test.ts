@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { DtcAnalysis, DtcCodeRow } from "@/lib/ceo/dtc/analyse";
-import { buildFaultCodeBundle, validateBundle } from "./emit";
+import type { DiagnosticListItem } from "@/lib/ceo/data/diagnostics";
+import {
+  buildFaultCodeBundle,
+  MAKE_HUB_MIN_DIAGNOSTICS,
+  validateBundle,
+} from "./emit";
 import { buildLandingPlan } from "./plan";
 
 function codeRow(over: Partial<DtcCodeRow> & { base: string }): DtcCodeRow {
@@ -33,13 +38,47 @@ function analysisWith(
   return { topCodes: rows, pairs, makes: [] } as unknown as DtcAnalysis;
 }
 
-function bundleFrom(rows: DtcCodeRow[], pairs: DtcAnalysis["pairs"] = []) {
+function bundleFrom(
+  rows: DtcCodeRow[],
+  pairs: DtcAnalysis["pairs"] = [],
+  items: DiagnosticListItem[] = [],
+) {
   const analysis = analysisWith(rows, pairs);
   return buildFaultCodeBundle(
     buildLandingPlan(analysis),
     analysis,
     "2026-08-25",
+    items,
   );
+}
+
+function diagnostic(
+  over: Partial<DiagnosticListItem> & { dtcs: string[] },
+): DiagnosticListItem {
+  return {
+    diagnosticId: `d-${Math.abs(over.dtcs.join().length)}-${over.carMake ?? "x"}`,
+    status: "complete",
+    createdAt: "2026-06-01T00:00:00.000Z",
+    completedAt: null,
+    username: null,
+    userName: null,
+    userRole: null,
+    workshopId: "w1",
+    workshopName: "Shop",
+    country: "SE",
+    language: "sv",
+    isInternal: false,
+    carMake: "Volvo",
+    carModel: null,
+    carYear: null,
+    symptoms: [],
+    description: null,
+    mileage: null,
+    aiModel: null,
+    diagCost: 0,
+    numCauses: 0,
+    ...over,
+  } as DiagnosticListItem;
 }
 
 describe("the emitted bundle", () => {
@@ -233,6 +272,109 @@ describe("the emitted bundle", () => {
     ]);
     const hub = bundle.families.find((family) => family.key === "catalyst");
     expect(hub?.manufacturerCodes).toContain("P1420");
+  });
+
+  it("builds a make hub once a marque clears the floor", () => {
+    // Manufacturer-specific codes get no page anywhere, so the make hub is
+    // their only home. That is the whole reason this page type exists.
+    const items = Array.from({ length: MAKE_HUB_MIN_DIAGNOSTICS }, () =>
+      diagnostic({ carMake: "Volvo", dtcs: ["P1525", "P0420"] }),
+    );
+    const bundle = bundleFrom(
+      [
+        codeRow({ base: "P0420", name: "Catalyst efficiency", entries: 31 }),
+        codeRow({ base: "P1525", scope: "manufacturer", entries: 8 }),
+      ],
+      [],
+      items,
+    );
+    const volvo = bundle.makes.find((make) => make.make === "Volvo");
+    expect(volvo).toBeDefined();
+    expect(volvo?.manufacturerCodes.map((row) => row.code)).toContain("P1525");
+    expect(volvo?.genericCodes.map((row) => row.code)).toContain("P0420");
+    expect(validateBundle(bundle)).toEqual([]);
+  });
+
+  it("gives a marque below the floor no hub at all", () => {
+    // One shop's week is not a fact about a marque.
+    const items = [diagnostic({ carMake: "Volvo", dtcs: ["P1525"] })];
+    const bundle = bundleFrom(
+      [codeRow({ base: "P1525", scope: "manufacturer", entries: 1 })],
+      [],
+      items,
+    );
+    expect(bundle.makes).toHaveLength(0);
+  });
+
+  it("normalises marque spelling so one make is one hub", () => {
+    // Two normalisations would split VW and Volkswagen into half-empty hubs.
+    const items = [
+      ...Array.from({ length: 5 }, () =>
+        diagnostic({ carMake: "VOLKSWAGEN", dtcs: ["P0420"] }),
+      ),
+      ...Array.from({ length: 5 }, () =>
+        diagnostic({ carMake: "volkswagen", dtcs: ["P0420"] }),
+      ),
+    ];
+    const bundle = bundleFrom(
+      [codeRow({ base: "P0420", name: "Catalyst efficiency", entries: 31 })],
+      [],
+      items,
+    );
+    expect(bundle.makes).toHaveLength(1);
+    expect(bundle.makes[0].diagnostics).toBe(10);
+  });
+
+  it("never links a code from a make hub that has no page", () => {
+    const items = Array.from({ length: MAKE_HUB_MIN_DIAGNOSTICS }, () =>
+      diagnostic({ carMake: "Volvo", dtcs: ["P0420"] }),
+    );
+    const bundle = bundleFrom(
+      [codeRow({ base: "P0420", name: "Catalyst efficiency", entries: 31 })],
+      [],
+      items,
+    );
+    bundle.makes[0].genericCodes.push({
+      code: "P9999",
+      name: null,
+      diagnostics: 1,
+      path: "/en/fault-code/p9999",
+    });
+    expect(validateBundle(bundle).join(" ")).toContain("which has no page");
+  });
+
+  it("merges accented and plain spellings of the same marque", () => {
+    // Citroen and Citroen-with-an-accent arrived as two marques, produced one
+    // slug, and one hub silently overwrote the other at build time.
+    const items = [
+      ...Array.from({ length: 5 }, () =>
+        diagnostic({ carMake: "Citroen", dtcs: ["P0420"] }),
+      ),
+      ...Array.from({ length: 5 }, () =>
+        diagnostic({ carMake: "Citro\u00ebn", dtcs: ["P0420"] }),
+      ),
+    ];
+    const bundle = bundleFrom(
+      [codeRow({ base: "P0420", name: "Catalyst efficiency", entries: 31 })],
+      [],
+      items,
+    );
+    expect(bundle.makes).toHaveLength(1);
+    expect(bundle.makes[0].diagnostics).toBe(10);
+    expect(validateBundle(bundle)).toEqual([]);
+  });
+
+  it("catches two marques that would share a slug", () => {
+    const items = Array.from({ length: MAKE_HUB_MIN_DIAGNOSTICS }, () =>
+      diagnostic({ carMake: "Volvo", dtcs: ["P0420"] }),
+    );
+    const bundle = bundleFrom(
+      [codeRow({ base: "P0420", name: "Catalyst efficiency", entries: 31 })],
+      [],
+      items,
+    );
+    bundle.makes.push({ ...bundle.makes[0], make: "Volvo Cars" });
+    expect(validateBundle(bundle).join(" ")).toContain("share the slug");
   });
 
   it("catches a bad bundle rather than writing it", () => {

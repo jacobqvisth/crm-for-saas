@@ -39,7 +39,7 @@ const plan = buildLandingPlan(analysis);
 // Stamped rather than computed at read time, so a page can say how current its
 // evidence is and a stale bundle is visible instead of merely old.
 const generatedFor = new Date().toISOString().slice(0, 10);
-const bundle = buildFaultCodeBundle(plan, analysis, generatedFor);
+const bundle = buildFaultCodeBundle(plan, analysis, generatedFor, diagnostics);
 
 const problems = validateBundle(bundle);
 if (problems.length > 0) {
@@ -62,4 +62,7 @@ for (const [tier, count] of [...byTier].sort((a, b) => b[1] - a[1])) {
   console.log(`    ${tier.padEnd(12)} ${count}`);
 }
 console.log(`  family hubs      : ${bundle.families.length}`);
+console.log(`  make hubs        : ${bundle.makes.length}`);
+console.log(`  system hubs      : ${bundle.systems.length}`);
+console.log(`  URLs per locale  : ${bundle.totals.urls}`);
 console.log(`  not built        : ${plan.totals.belowFloor} below the floor, ${plan.totals.excluded} manufacturer-specific`);
