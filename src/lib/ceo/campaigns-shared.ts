@@ -181,7 +181,7 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     status: "live",
     purpose: "acquisition",
     audience:
-      "Independent workshops with one or two mechanics. Includes a second ad group for people searching for alternatives to competing repair-data tools.",
+      "Small workshops. Unlimited users on one plan, metered at 50 premium vehicles a month. Includes a second ad group for people searching for alternatives to competing repair-data tools, each rival term routed to its own comparison page.",
     landingPage: "wrenchlane.com/en/small",
     dailyBudgetSek: 96,
     bidding: "Manual CPC",
@@ -198,15 +198,15 @@ export const CAMPAIGN_CATALOG: CatalogCampaign[] = [
     status: "live",
     purpose: "acquisition",
     audience:
-      "Workshops running three to ten technicians who need shared access across a team.",
+      "Busy workshops. Unlimited users on one plan, metered at 200 premium vehicles a month.",
     landingPage: "wrenchlane.com/en/large",
     dailyBudgetSek: 96,
     bidding: "Manual CPC",
     geo: "US, UK, Sweden. English",
     rationale:
-      "Highest revenue per customer at 195 USD a month, so it can carry a much higher cost per click than the other two before it stops making sense.",
+      "Highest revenue per customer at 249 USD a month, so it can carry a much higher cost per click than the other two before it stops making sense.",
     caveat:
-      "Live since 2026-08-24 with 16 keywords at a 35 SEK bid, and zero impressions so far, not even the one or two the other two have picked up. Its keywords are the most invented of the three (\"repair information for multiple technicians\", \"workshop software for teams\"), which are phrases describing the product rather than phrases anybody types. This is the campaign most likely to need its keyword list rewritten from search data rather than from the plan description.",
+      "The zero-impressions note here was a timing artefact and is now wrong: as of 2026-08-27 Large has served 415 impressions and 12 clicks, and it is capped, losing 90 percent of available impressions to budget with under 7 percent lost to rank. Its keywords are still the most invented of the three (\"repair information for multiple technicians\", \"workshop software for teams\"), which are phrases describing the product rather than phrases anybody types, and only three of them have ever served. The bigger problem found on 2026-08-27 was the copy: it advertised 195 USD and 80 vehicles a month against a page saying 249 USD and 200. Corrected. Its search terms also skew heavily to scan-tool hardware, now blocked by SCAN_TOOL_NEGATIVES.",
   },
   {
     name: "WL Plan | Upsell Free Users",

@@ -6,14 +6,28 @@
 // developer token on this account, so the dashboard cannot read ad text back
 // from Google. When the copy changes in the ad account, update it here too.
 //
-// Last reconciled: 2026-08-24, against the scripts that created and then
-// expanded these ads (create-plan-campaigns.js, expand-rsa-copy.js,
-// create-upsell-campaign.js in _planning/google-ads/).
+// Last reconciled: 2026-08-27, read back from the live account over the API
+// (the developer token now exists, so this file is verifiable rather than
+// hopeful). The 2026-08-27 pass rewrote all four live ad groups because the
+// pricing pages changed underneath them: seats are no longer metered, vehicles
+// are, and the 14-day money-back guarantee now applies to ONE alone.
+//
+// Two outright errors were found in the copy that had been running: Large
+// advertised "$195/Month" and "80 Premium Vehicles/Month" against a page that
+// says $249 and 200 vehicles, and Small and Large both promised a money-back
+// guarantee their landing pages no longer offer.
 
 export type CatalogAdGroup = {
   name: string;
   /** Written the way Google writes them: [exact], "phrase", bare = broad. */
   keywords: string[];
+  /**
+   * Keyword-level final URLs, keyed by the keyword exactly as written above.
+   * An ad group has one final URL per ad, so this is how competitor terms
+   * reach their own comparison page without splitting the ad group and
+   * committing new bids.
+   */
+  keywordRoutes?: Record<string, string>;
   headlines: string[];
   descriptions: string[];
 };
@@ -30,6 +44,15 @@ const PMAX_WORKSHOP = [
   "Smart Workshop Decision Tool",
   "AI For Auto Repair Shops",
 ];
+
+/**
+ * The five carried into the plan campaigns. Each workshop ad group now has ten
+ * plan-specific headlines of its own, and Google caps a responsive search ad at
+ * fifteen, so only five of the seven fit. These five are the ones that describe
+ * the product rather than a workshop size, which is the axis that changed when
+ * pricing moved from seats to vehicles.
+ */
+const PMAX_WORKSHOP_5 = PMAX_WORKSHOP.slice(0, 5);
 
 const PMAX_SINGLE = [
   "AI Automotive Diagnostics",
@@ -51,6 +74,50 @@ export const WITHHELD_HEADLINES = [
   "Sign Up For Free Now",
 ];
 
+/**
+ * Scan-tool hardware terms, added as BROAD campaign negatives on all three
+ * plan campaigns on 2026-08-27.
+ *
+ * The search terms report showed the plan campaigns paying for people shopping
+ * for a physical OBD dongle: topdon scanner, carly obd, icarsoft, launch scan
+ * tool, vcds, hex v2, forscan. WrenchLane is not a scanner, so those clicks
+ * can never convert, and at 96 SEK a day a single one is a meaningful share of
+ * the budget.
+ *
+ * Autel, Bosch and Snap-on are deliberately ABSENT. They look like the same
+ * kind of term but each has a published comparison page, so they are
+ * competitor intent worth buying, not hardware shopping worth blocking.
+ */
+export const SCAN_TOOL_NEGATIVES = [
+  "topdon",
+  "icarsoft",
+  "thinkcar",
+  "thinkdiag",
+  "launch x431",
+  "vcds",
+  "vag com",
+  "vag k can",
+  "hex v2",
+  "forscan",
+  "carly",
+  "obdeleven",
+  "elm327",
+  "ancel",
+  "foxwell",
+  "xtool",
+  "autophix",
+  "konnwei",
+  "mucar",
+  "vident",
+  "obd2 scanner",
+  "obd scanner",
+  "code reader",
+  "scan tool",
+  "scanner",
+  "dongle",
+  "carpal",
+];
+
 export const CAMPAIGN_CREATIVE: Record<string, CatalogAdGroup[]> = {
   "WL Plan | One": [
     {
@@ -62,21 +129,26 @@ export const CAMPAIGN_CREATIVE: Record<string, CatalogAdGroup[]> = {
         '"vehicle repair data subscription"',
         '"car service data online"',
       ],
+      // ONE keeps the money-back line, because ONE is the only tier that
+      // still carries it. The page leads on the yearly rate, so the ad does too.
       headlines: [
         "WrenchLane ONE",
+        "From $5/Month Yearly",
+        "One Car, Fully Unlocked",
         "OEM Repair Data, One Car",
-        "From $19/Month",
-        "AI Diagnostics for One Car",
         "Wiring Diagrams Included",
         "14-Day Money-Back",
+        "Snap A Photo, Read The Codes",
+        "Unlimited AI Chat",
+        "Repair Manuals + Specs",
         "Fix It Right, First Time",
         ...PMAX_SINGLE,
       ],
       descriptions: [
-        "Professional diagnostics and OEM repair data for one vehicle. Start free, no card needed.",
-        "Repair manuals, wiring diagrams and service data. From $19/month. 14-day money-back.",
-        "OEM repair data, wiring diagrams and service info for your vehicle, in one place.",
-        "Start free, no card needed. 14-day money-back guarantee, cancel anytime.",
+        "Full OEM repair data for one vehicle. From $5/month billed yearly.",
+        "Repair manuals, wiring diagrams and service data for your car. 14-day money-back.",
+        "Unlimited diagnostics and AI chat on one fully unlocked vehicle.",
+        "Snap a photo of the dash and we read the codes. Cancel anytime.",
       ],
     },
   ],
@@ -91,21 +163,27 @@ export const CAMPAIGN_CREATIVE: Record<string, CatalogAdGroup[]> = {
         '"repair information for workshops"',
         '"garage diagnostic software"',
       ],
+      // "Built for 1-2 Mechanics" was removed deliberately. Seat counts are
+      // not what Small sells any more; 50 vehicles a month is, and the page
+      // now says "Unlimited users" in as many words.
       headlines: [
-        "For Independent Workshops",
+        "Unlimited Mechanics, One Fee",
+        "50 Vehicles A Month",
         "AI Diagnostics, $79/Month",
+        "No Per Seat Pricing",
         "OEM Data + Labour Times",
-        "Built for 1-2 Mechanics",
-        "Diagnose Faster, Fix Right",
-        "14-Day Money-Back",
+        "Snap A Photo, Read The Codes",
+        "Built For Small Workshops",
+        "Full InfoPro Technical Data",
+        "Cancel Anytime, No Contract",
         "One Workflow, Every Job",
-        ...PMAX_WORKSHOP,
+        ...PMAX_WORKSHOP_5,
       ],
       descriptions: [
-        "AI diagnostics, OEM data, wiring diagrams and labour times in one workflow. $79/month.",
-        "Built for workshops with 1-2 mechanics. Start free, 14-day money-back guarantee.",
-        "OEM repair data, wiring diagrams and labour times in one AI-powered workflow.",
-        "Start free, no card needed. 14-day money-back guarantee, cancel anytime.",
+        "Unlimited mechanics on one plan. Premium data for 50 vehicles a month. $79/month.",
+        "AI diagnostics, OEM data, wiring diagrams and labour times in one workflow.",
+        "Rivals charge per seat. We charge per workshop. Unlimited users, cancel anytime.",
+        "Snap a photo of the dash and we read the codes. Start free, no card needed.",
       ],
     },
     {
@@ -124,22 +202,64 @@ export const CAMPAIGN_CREATIVE: Record<string, CatalogAdGroup[]> = {
         "[identifix alternative]",
         "[shopkey alternative]",
         "[alldata competitor]",
+        // Live in the account since launch but missing from this mirror until
+        // 2026-08-27, found by the routing test rather than by reading.
+        '"alternative to autodata"',
+        '"alternative to mitchell 1"',
+        // Price-intent terms added 2026-08-27. The search terms report showed
+        // "alldata price", "alldata cost" and "haynes pro workshop data price"
+        // already matching and landing on a generic plan page. This is the
+        // highest-intent traffic in the account and the new pricing finally
+        // answers it: the rivals licence per seat, WrenchLane does not.
+        "[alldata price]",
+        "[alldata cost]",
+        '"alldata pricing"',
+        "[prodemand price]",
+        "[prodemand cost]",
+        "[mitchell 1 price]",
+        "[haynespro price]",
+        "[identifix price]",
+        "[autodata price]",
       ],
+      keywordRoutes: {
+        "[alldata alternative]": "https://wrenchlane.com/en/vs/alldata",
+        "[alldata competitor]": "https://wrenchlane.com/en/vs/alldata",
+        "\"alternative to alldata\"": "https://wrenchlane.com/en/vs/alldata",
+        "[autodata alternative]": "https://wrenchlane.com/en/vs/autodata",
+        "\"alternative to autodata\"": "https://wrenchlane.com/en/vs/autodata",
+        "[prodemand alternative]": "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[mitchell 1 alternative]": "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "\"alternative to mitchell 1\"": "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[identifix alternative]": "https://wrenchlane.com/en/vs/identifix",
+        "[haynespro alternative]": "https://wrenchlane.com/en/vs/haynespro",
+        "[alldata price]": "https://wrenchlane.com/en/vs/alldata",
+        "[alldata cost]": "https://wrenchlane.com/en/vs/alldata",
+        "\"alldata pricing\"": "https://wrenchlane.com/en/vs/alldata",
+        "[prodemand price]": "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[prodemand cost]": "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[mitchell 1 price]": "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[haynespro price]": "https://wrenchlane.com/en/vs/haynespro",
+        "[identifix price]": "https://wrenchlane.com/en/vs/identifix",
+        "[autodata price]": "https://wrenchlane.com/en/vs/autodata",
+      },
       headlines: [
-        "A Faster Repair Data Tool",
-        "AI Diagnostics, $79/Month",
-        "OEM Data + Labour Times",
+        "Unlimited Mechanics, One Fee",
+        "No Per Seat Pricing",
+        "See The Price Side By Side",
         "Compare Repair Data Tools",
-        "Built for Small Workshops",
-        "14-Day Money-Back",
+        "AI Diagnostics, $79/Month",
+        "Full InfoPro Technical Data",
         "Switch In One Afternoon",
-        ...PMAX_WORKSHOP,
+        "Snap A Photo, Read The Codes",
+        "Cancel Anytime, No Contract",
+        "50 Vehicles A Month",
+        ...PMAX_WORKSHOP_5,
       ],
       descriptions: [
-        "Compare repair data tools on real prices and features. No spin, sourced comparisons.",
-        "AI diagnostics on top of OEM repair data. $79/month, 14-day money-back guarantee.",
-        "OEM repair data, wiring diagrams and labour times in one AI-powered workflow.",
-        "Start free, no card needed. 14-day money-back guarantee, cancel anytime.",
+        "See how WrenchLane compares on price, coverage and per seat fees.",
+        "Unlimited mechanics, premium data by the vehicle. No per seat licence.",
+        "AI diagnostics plus full OEM technical data. Start free, no card needed.",
+        "Compare repair data tools on real prices and features. No spin, sourced.",
       ],
     },
   ],
@@ -153,22 +273,44 @@ export const CAMPAIGN_CREATIVE: Record<string, CatalogAdGroup[]> = {
         "[multi user repair data]",
         '"diagnostic software for busy workshops"',
         '"repair data for whole workshop"',
+        // Four rival names are live in this ad group and were missing from this
+        // mirror entirely, which made the misrouting look like a Small-only
+        // problem when it spans two ad groups.
+        "[prodemand alternative]",
+        "[identifix alternative]",
+        "[shopkey alternative]",
+        "[mitchell prodemand alternative]",
       ],
+      // Large also buys rival names. Same treatment: route each to its own
+      // comparison page instead of the generic /en/large.
+      keywordRoutes: {
+        "[prodemand alternative]":
+          "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[mitchell prodemand alternative]":
+          "https://wrenchlane.com/en/vs/mitchell1-prodemand",
+        "[identifix alternative]": "https://wrenchlane.com/en/vs/identifix",
+      },
+      // Was advertising $195 and 80 vehicles. The page says $249 and 200.
+      // A wrong price in a live ad is the most expensive kind of stale copy,
+      // so this correction is the reason the whole pass happened.
       headlines: [
-        "For Workshops of 3-10",
-        "One Workflow, Whole Shop",
-        "AI Diagnostics, $195/Month",
-        "Shared Team Access",
-        "80 Premium Vehicles/Month",
-        "OEM Data + Labour Times",
-        "Book a Demo Today",
-        ...PMAX_WORKSHOP,
+        "200 Vehicles A Month",
+        "Unlimited Mechanics Included",
+        "AI Diagnostics, $249/Month",
+        "The Whole Floor, One Fee",
+        "No Per Technician Fees",
+        "Snap A Photo, Read The Codes",
+        "Built For Busy Workshops",
+        "OEM Depth On Every Job",
+        "Save 26% Billed Yearly",
+        "One Workflow, Every Bay",
+        ...PMAX_WORKSHOP_5,
       ],
       descriptions: [
-        "One diagnostic and repair workflow for workshops with 3-10 technicians. Shared access.",
-        "80 premium vehicles a month, OEM data and labour times. $195/month, money-back.",
-        "OEM repair data, wiring diagrams and labour times in one AI-powered workflow.",
-        "Shared access for your whole team. 14-day money-back guarantee, cancel anytime.",
+        "Premium data for 200 vehicles a month, unlimited mechanics. $249/month.",
+        "One diagnostic workflow for the whole floor. OEM data, labour times, wiring diagrams.",
+        "No per technician fees. Every mechanic on one plan. Save 26% billed yearly.",
+        "Snap a photo of the dash and we read the codes. Start free, no card needed.",
       ],
     },
   ],

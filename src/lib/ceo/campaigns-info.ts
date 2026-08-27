@@ -36,15 +36,17 @@ export const PLAN_FACTS: PlanFact[] = [
   {
     plan: "Small",
     price: "79 USD / month",
-    builtFor: "Independent workshops with one or two mechanics.",
+    builtFor:
+      "Small workshops. Unlimited users, metered at 50 premium vehicles a month.",
     landingPage: "/en/small",
     reachability:
       "The most-picked paid tier, and the one where competitor searches actually signal the right buyer.",
   },
   {
     plan: "Large",
-    price: "195 USD / month",
-    builtFor: "Workshops running three to ten technicians who need shared access.",
+    price: "249 USD / month",
+    builtFor:
+      "Busy workshops. Unlimited users, metered at 200 premium vehicles a month.",
     landingPage: "/en/large",
     reachability:
       "Rare but valuable. Too few searches to run a campaign on volume, so worth reaching through sales and comparison content rather than raw keyword bidding.",
