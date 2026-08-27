@@ -40,6 +40,7 @@ const INCREMENTAL_OVERLAP_MS = 60 * 60 * 1000;
 type AccountRow = {
   id: string;
   email_address: string;
+  display_name: string | null;
   workspace_id: string;
   status: string | null;
 };
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   const { data: accounts } = await supabase
     .from("gmail_accounts")
-    .select("id, email_address, workspace_id, status")
+    .select("id, email_address, display_name, workspace_id, status")
     .neq("status", "disconnected");
 
   if (!accounts || accounts.length === 0) {
@@ -284,13 +285,22 @@ async function processThread(
     if (resolveCache.has(email)) return resolveCache.get(email)!;
     const match = await findContactByEmail(supabase, account.workspace_id, email);
     let contactId = match.contactId;
-    if (!contactId && qualifying.has(email)) {
-      contactId = await autoCreateContactFromMail(supabase, {
-        workspaceId: account.workspace_id,
-        email,
-        name,
-        companyId: match.companyId,
-      });
+    // Two paths to a brand-new contact:
+    //   1. Genuine two-way thread with someone we've never stored (original rule).
+    //   2. The address sits on a company we already track. findContactByEmail
+    //      only reports a companyId with a null contactId when the domain is
+    //      non-generic AND matches a CRM company, so this is "we mailed a new
+    //      address at a known workshop" — exactly the mail that used to vanish
+    //      (a rep writing info@shop.se while the CRM holds kontakt@shop.se).
+    if (!contactId && !isRoleOrNoReplyAddress(email)) {
+      if (qualifying.has(email) || match.companyId) {
+        contactId = await autoCreateContactFromMail(supabase, {
+          workspaceId: account.workspace_id,
+          email,
+          name,
+          companyId: match.companyId,
+        });
+      }
     }
     resolveCache.set(email, contactId);
     return contactId;
@@ -324,40 +334,49 @@ async function processThread(
       // Already logged by the sequence sender? Skip.
       if (await isSequenceSend(supabase, msgId, seqSendCache)) continue;
 
-      let contactId: string | null = null;
-      let usedRecip: string | null = null;
+      // One activity per recipient we can place. A mail addressed to three
+      // contacts belongs on all three timelines; the old loop stopped at the
+      // first match and the other two never saw it.
+      const targets: { contactId: string; email: string }[] = [];
+      const seenContacts = new Set<string>();
       for (const r of recips) {
         const id = await resolveContact(r, null);
-        if (id) {
-          contactId = id;
-          usedRecip = r;
-          break;
+        if (id && !seenContacts.has(id)) {
+          seenContacts.add(id);
+          targets.push({ contactId: id, email: r });
         }
       }
-      if (!contactId) continue; // outbound to a stranger (one-way) — skip
+      if (targets.length === 0) continue; // outbound to a stranger (one-way) — skip
 
-      const inserted = await insertSyncedActivity(supabase, {
-        workspace_id: account.workspace_id,
-        type: "email_sent",
-        subject: subject || "(no subject)",
-        body: `Email sent to ${usedRecip}`,
-        contact_id: contactId,
-        // Stamp the activity with the real send date, not now(). Backfilled mail
-        // is often months old; without this the whole thread bunches at sync time.
-        created_at: tsIso,
-        metadata: {
-          synced_from: "mailbox_sync",
-          direction: "outbound",
-          gmail_message_id: msgId,
-          gmail_thread_id: threadId,
-          gmail_account_id: account.id,
-          to: recips,
-          sent_at: tsIso,
-        },
-      });
-      if (inserted) {
-        stats.outbound++;
-        await touchContact(supabase, contactId, tsIso);
+      for (const target of targets) {
+        const inserted = await insertSyncedActivity(supabase, {
+          workspace_id: account.workspace_id,
+          type: "email_sent",
+          subject: subject || "(no subject)",
+          body: `Email sent to ${target.email}`,
+          contact_id: target.contactId,
+          // Stamp the activity with the real send date, not now(). Backfilled mail
+          // is often months old; without this the whole thread bunches at sync time.
+          created_at: tsIso,
+          metadata: {
+            synced_from: "mailbox_sync",
+            direction: "outbound",
+            gmail_message_id: msgId,
+            gmail_thread_id: threadId,
+            gmail_account_id: account.id,
+            // Who actually sent it. The contact timeline renders "Email sent by
+            // <name>" off these two keys; without them a rep's own Gmail send
+            // reads as anonymous system mail.
+            sender_email: account.email_address,
+            sender_name: account.display_name,
+            to: recips,
+            sent_at: tsIso,
+          },
+        });
+        if (inserted) {
+          stats.outbound++;
+          await touchContact(supabase, target.contactId, tsIso);
+        }
       }
     } else {
       // ---- INBOUND ----
@@ -401,7 +420,10 @@ async function processThread(
         const inserted = await insertSyncedActivity(supabase, {
           workspace_id: account.workspace_id,
           type: "email_received",
-          subject: "Email received",
+          // The real subject, not the literal string "Email received" — the
+          // timeline renders "Reply received: <subject>", which used to come
+          // out as the useless "Reply received: Email received".
+          subject: subject || "(no subject)",
           body: `Email from ${from}`,
           contact_id: contactId,
           // Real received date, not now() — see the outbound insert above.
@@ -412,6 +434,9 @@ async function processThread(
             gmail_message_id: msgId,
             gmail_thread_id: threadId,
             gmail_account_id: account.id,
+            // Which of our mailboxes this landed in — with a dozen connected
+            // accounts, "who received it" is as useful as "who sent it".
+            mailbox_email: account.email_address,
             from,
             received_at: tsIso,
             is_auto_reply: false,

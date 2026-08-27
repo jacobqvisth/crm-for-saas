@@ -1134,8 +1134,20 @@ type EmailEventRow = {
   created_at: string | null;
 };
 
+// A mail the rep typed in the Gmail web app. It never passed through
+// email_queue, so it has no tracking pixel, no wrapped links and no queue row —
+// mailbox-sync logs it as an activity and that is the only record of it.
+type ManualSentRow = {
+  id: string;
+  at: string;
+  to_email: string;
+  subject: string;
+  contact_id: string | null;
+};
+
 type EmailsRaw = {
   sent: EmailQueueRow[];
+  manualSent: ManualSentRow[];
   eventsByEmail: Map<string, EmailEventRow[]>;
   replies: { received_at: string; contact_id: string | null }[];
   pendingCount: number;
@@ -1153,6 +1165,7 @@ async function loadEmails(
   if (identity.accountIds.length === 0) {
     return {
       sent: [],
+      manualSent: [],
       eventsByEmail: new Map(),
       replies: [],
       pendingCount: 0,
@@ -1219,15 +1232,71 @@ async function loadEmails(
     }>;
   });
 
-  const [sentResult, pendingResult, failedResult, repliesResult] =
-    await Promise.all([
-      sentQuery,
-      pendingCountQuery,
-      failedCountQuery,
-      repliesQuery,
-    ]);
+  // Mail typed by hand in the Gmail web app. It never touches email_queue, so
+  // counting only that table made a rep who works out of Gmail look idle: the
+  // page reported 9 sends for a month in which 23 external emails went out.
+  // mailbox-sync logs each one as an activity, which is the only record there is.
+  type ManualActivityRow = {
+    id: string;
+    created_at: string | null;
+    subject: string | null;
+    body: string | null;
+    contact_id: string | null;
+    metadata: Record<string, unknown> | null;
+  };
+  const manualSentQuery = pageAll<ManualActivityRow>(({ from, to }) => {
+    let query = admin
+      .from("activities")
+      .select("id, created_at, subject, body, contact_id, metadata")
+      .eq("type", "email_sent")
+      .eq("metadata->>synced_from", "mailbox_sync")
+      .in("metadata->>gmail_account_id", identity.accountIds)
+      .lt("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (startIso) query = query.gte("created_at", startIso);
+    return query as unknown as PromiseLike<{
+      data: ManualActivityRow[] | null;
+      error: { message: string } | null;
+    }>;
+  });
+
+  const [
+    sentResult,
+    pendingResult,
+    failedResult,
+    repliesResult,
+    manualSentResult,
+  ] = await Promise.all([
+    sentQuery,
+    pendingCountQuery,
+    failedCountQuery,
+    repliesQuery,
+    manualSentQuery,
+  ]);
 
   const sent = sentResult.data ?? [];
+
+  const manualSent: ManualSentRow[] = (manualSentResult.data ?? [])
+    .filter((row) => row.created_at)
+    .map((row) => {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const recipients = Array.isArray(meta.to)
+        ? (meta.to as unknown[]).filter(
+            (value): value is string => typeof value === "string",
+          )
+        : [];
+      return {
+        id: row.id,
+        at: row.created_at as string,
+        // `body` is the "Email sent to <address>" summary the cron writes; the
+        // metadata list is the authoritative recipient set.
+        to_email: recipients[0] ?? row.body?.replace(/^Email sent to /, "") ?? "",
+        subject: row.subject ?? "(no subject)",
+        contact_id: row.contact_id,
+      };
+    });
   // Reply-rate convention: exclude auto-replies / out-of-office (they stay in
   // the Inbox but never count as replies — same rule as the funnel loader).
   const replies = (repliesResult.data ?? [])
@@ -1311,13 +1380,16 @@ async function loadEmails(
 
   return {
     sent,
+    manualSent,
     eventsByEmail,
     replies,
     pendingCount: pendingResult.count ?? 0,
     failedCount: failedResult.count ?? 0,
     sequenceNameByEnrollment,
     contactIds: [
-      ...new Set(sent.map((r) => r.contact_id).filter(Boolean)),
+      ...new Set(
+        [...sent, ...manualSent].map((r) => r.contact_id).filter(Boolean),
+      ),
     ] as string[],
   };
 }
@@ -1329,7 +1401,15 @@ function finishEmails(
   start: Date | null,
   end: Date,
 ): ValdemarEmailsData {
-  const sentCount = raw.sent.length;
+  // Two populations, deliberately kept apart:
+  //   trackedCount — sent through the CRM, so they carry a pixel and wrapped
+  //                  links and can be measured for opens and clicks.
+  //   manualCount  — typed in Gmail. Real mail that must be counted as sent,
+  //                  but it can never register an open, so folding it into the
+  //                  open-rate denominator would just invent a fake decline.
+  const trackedCount = raw.sent.length;
+  const manualCount = raw.manualSent.length;
+  const sentCount = trackedCount + manualCount;
 
   const openedEmails = new Set<string>();
   const clickedEmails = new Set<string>();
@@ -1358,38 +1438,55 @@ function finishEmails(
   }
 
   const repliesReceived = raw.replies.length;
-  const uniqueRecipients = new Set(raw.sent.map((r) => r.to_email)).size;
+  const uniqueRecipients = new Set([
+    ...raw.sent.map((r) => r.to_email),
+    ...raw.manualSent.map((r) => r.to_email),
+  ]).size;
 
   const EMAIL_SOURCE = ["email_queue", "email_events", "inbox_messages"];
+  const ALL_SENDS_SOURCE = [...EMAIL_SOURCE, "activities"];
   const kpis: ValdemarKpi[] = [
     {
       label: "Emails sent",
       value: String(sentCount),
-      hint: `${uniqueRecipients} unique recipients`,
+      hint:
+        manualCount > 0
+          ? `${uniqueRecipients} unique recipients · ${trackedCount} via CRM, ${manualCount} from Gmail`
+          : `${uniqueRecipients} unique recipients`,
       info: {
         title: "Emails sent",
-        body: "Emails actually delivered to Gmail from Valdemar's mailboxes in the range — sequence steps and one-off composes alike. Scheduled-but-not-yet-sent emails are in the 'In queue' tile instead.",
-        sources: EMAIL_SOURCE,
+        body: "Every email that actually left Valdemar's mailboxes in the range: sequence steps, one-off composes, and mail he typed by hand in the Gmail web app. Scheduled-but-not-yet-sent emails are in the 'In queue' tile instead.",
+        sources: ALL_SENDS_SOURCE,
+        logic:
+          "CRM sends come from email_queue (status=sent). Gmail-web sends have no queue row at all, so they are counted from the email_sent activities the mailbox-sync cron writes for each connected mailbox. Because that cron runs at :15 and :45, an email sent in the last half hour may not be counted yet.",
       },
     },
     {
       label: "Open rate",
-      value: formatPercentValue(safePercent(openedEmails.size, sentCount)),
+      value: formatPercentValue(safePercent(openedEmails.size, trackedCount)),
       hint: `${openedEmails.size} opened · ${openEvents} opens total`,
       info: {
         title: "Open rate",
         body: "Share of sent emails opened at least once, measured by the tracking pixel. Undercounts readers whose mail client blocks images; a single email opened five times still counts once in the rate.",
         sources: EMAIL_SOURCE,
+        logic:
+          manualCount > 0
+            ? `Measured over the ${trackedCount} emails sent through the CRM, not all ${sentCount}. Mail typed in Gmail carries no tracking pixel, so it can never register an open — putting it in the denominator would report a drop in open rate that never happened.`
+            : undefined,
       },
     },
     {
       label: "Click rate",
-      value: formatPercentValue(safePercent(clickedEmails.size, sentCount)),
+      value: formatPercentValue(safePercent(clickedEmails.size, trackedCount)),
       hint: `${clickedEmails.size} emails clicked · ${clickEvents} clicks`,
       info: {
         title: "Click rate",
         body: "Share of sent emails where the recipient clicked at least one tracked link (links are wrapped through the tracking domain).",
         sources: EMAIL_SOURCE,
+        logic:
+          manualCount > 0
+            ? `Measured over the ${trackedCount} emails sent through the CRM. Links in a hand-written Gmail message are not wrapped through the tracking domain, so those clicks are invisible to us.`
+            : undefined,
       },
     },
     {
@@ -1426,8 +1523,13 @@ function finishEmails(
     },
   ];
 
-  const earliest = raw.sent.length
-    ? new Date(raw.sent[raw.sent.length - 1].sent_at ?? Date.now())
+  // Both lists are newest-first, so the earliest send is whichever tail is older.
+  const sendTimestamps = [
+    ...raw.sent.map((r) => r.sent_at),
+    ...raw.manualSent.map((r) => r.at),
+  ].filter((value): value is string => Boolean(value));
+  const earliest = sendTimestamps.length
+    ? new Date(Math.min(...sendTimestamps.map((v) => new Date(v).getTime())))
     : addStockholmDays(end, -1);
   const buckets = buildBuckets(start ?? earliest, end);
   const sentOpens = bucketSeries(buckets, 2);
@@ -1438,9 +1540,8 @@ function finishEmails(
     sent: 0,
   }));
 
-  for (const row of raw.sent) {
-    if (!row.sent_at) continue;
-    const at = new Date(row.sent_at);
+  for (const iso of sendTimestamps) {
+    const at = new Date(iso);
     const values = sentOpens.get(buckets.keyFor(at));
     if (values) values[0] += 1;
     byHour[getStockholmParts(at).hour].sent += 1;
@@ -1464,7 +1565,14 @@ function finishEmails(
   }
 
   const funnelSteps = [
-    { key: "sent", label: "Sent", value: sentCount },
+    // Tracked sends only. Opens and clicks cannot exist for Gmail-web mail, so
+    // seeding the funnel with the full send count would show a collapse at the
+    // first step that is an artefact of measurement, not of engagement.
+    {
+      key: "sent",
+      label: manualCount > 0 ? "Sent via CRM" : "Sent",
+      value: trackedCount,
+    },
     { key: "opened", label: "Opened", value: openedEmails.size },
     { key: "clicked", label: "Clicked", value: clickedEmails.size },
     { key: "replied", label: "Replied", value: repliesReceived },
@@ -1487,6 +1595,10 @@ function finishEmails(
     if (repliedEmails.has(row.id)) agg.replies += 1;
     sequenceAgg.set(name, agg);
   }
+  if (manualCount > 0) {
+    // Hand-written mail is its own "campaign" — no enrollment, no tracking.
+    sequenceAgg.set("Sent from Gmail", { sent: manualCount, replies: 0 });
+  }
   const topSequences: SequenceSlice[] = [...sequenceAgg.entries()]
     .map(([name, agg]) => ({ name, ...agg }))
     .sort((a, b) => b.sent - a.sent)
@@ -1500,7 +1612,7 @@ function finishEmails(
     healthScore: account.health_score,
   }));
 
-  const rows: ValdemarEmailRow[] = raw.sent.slice(0, EMAIL_ROW_LIMIT).map(
+  const trackedRows: ValdemarEmailRow[] = raw.sent.map(
     (row) => {
       const events = raw.eventsByEmail.get(row.id) ?? [];
       const eventItems: EmailEventItem[] = events.slice(0, 20).map((event) => ({
@@ -1530,6 +1642,32 @@ function finishEmails(
       };
     },
   );
+
+  // Gmail-web sends carry no events, so every engagement flag is false rather
+  // than unknown. The "Sent from Gmail" sequence label is what tells the reader
+  // those blanks mean "not measurable", not "nobody opened it".
+  const manualRows: ValdemarEmailRow[] = raw.manualSent.map((row) => ({
+    id: row.id,
+    at: row.at,
+    toEmail: row.to_email,
+    subject: row.subject,
+    status: "sent",
+    contactId: row.contact_id,
+    contactName: row.contact_id
+      ? names.contactName.get(row.contact_id) ?? null
+      : null,
+    sequenceName: "Sent from Gmail",
+    opened: false,
+    openCount: 0,
+    clicked: false,
+    replied: false,
+    bounced: false,
+    events: [],
+  }));
+
+  const rows: ValdemarEmailRow[] = [...trackedRows, ...manualRows]
+    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+    .slice(0, EMAIL_ROW_LIMIT);
 
   return {
     kpis,

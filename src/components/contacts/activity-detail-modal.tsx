@@ -8,7 +8,7 @@ import type { Tables } from '@/lib/database.types';
 type Activity = Tables<'activities'>;
 
 interface EmailBody {
-  source: 'inbox' | 'queue' | null;
+  source: 'inbox' | 'queue' | 'gmail' | null;
   subject?: string | null;
   body_html: string | null;
   body_text: string | null;
@@ -22,8 +22,13 @@ interface EmailBody {
 const METADATA_LABELS: Record<string, string> = {
   sender_name: 'Sent by',
   sender_email: 'Sender',
+  mailbox_email: 'Received in',
   recipient: 'Recipient',
   to_email: 'Recipient',
+  to: 'Recipients',
+  synced_from: 'Logged by',
+  sent_at: 'Sent at',
+  received_at: 'Received at',
   gmail_message_id: 'Gmail message ID',
   gmail_thread_id: 'Gmail thread ID',
   email_queue_id: 'Email queue ID',
