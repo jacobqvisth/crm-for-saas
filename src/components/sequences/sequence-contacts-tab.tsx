@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
 import { format, formatDistanceToNow, differenceInHours } from "date-fns";
-import { Pause, Play, Trash2, Send, Eye, MousePointer, Reply, AlertTriangle } from "lucide-react";
+import { Pause, Play, Trash2, Send, Eye, MousePointer, Reply, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Tables, SequenceSettings } from "@/lib/database.types";
 import { estimateSendTimes } from "@/lib/sequences/estimate-send-times";
+
+const PAGE_SIZE = 50;
 
 type Step = Tables<"sequence_steps">;
 
@@ -89,26 +91,60 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Maps keyed by enrollment_id
   const [estSendByEnrollment, setEstSendByEnrollment] = useState<Map<string, EstSendDisplay>>(new Map());
   const [sentCountByEnrollment, setSentCountByEnrollment] = useState<Map<string, number>>(new Map());
   const [lastActivityByContact, setLastActivityByContact] = useState<Map<string, ActivityInfo>>(new Map());
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch]);
+
   const load = useCallback(async () => {
     if (!workspaceId) return;
     setLoading(true);
 
-    // 1. Load enrollments with contact + company
-    const { data, error } = await supabase
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const hasSearch = debouncedSearch.length > 0;
+    // `!inner` so the .or() filter on the joined contacts row actually restricts
+    // sequence_enrollments. Without inner-join, no-match rows still come back with
+    // contact:null and break the count.
+    const contactsRel = hasSearch ? "contacts!inner" : "contacts";
+
+    let query = supabase
       .from("sequence_enrollments")
       .select(
-        "id, contact_id, status, current_step, enrolled_at, contacts(id, first_name, last_name, email, company:companies(name))"
+        `id, contact_id, status, current_step, enrolled_at, ${contactsRel}(id, first_name, last_name, email, company:companies(name))`,
+        { count: "exact" }
       )
       .eq("sequence_id", sequenceId)
-      .order("enrolled_at", { ascending: false });
+      .order("enrolled_at", { ascending: false })
+      .range(from, to);
+
+    if (hasSearch) {
+      const escaped = debouncedSearch.replace(/[%_\\]/g, "\\$&");
+      const pattern = `%${escaped}%`;
+      query = query.or(
+        `first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern}`,
+        { referencedTable: "contacts" }
+      );
+    }
+
+    const { data, error, count } = await query;
 
     if (!error && data) {
+      setTotal(count ?? 0);
       setEnrollments(
         data.map((d) => ({
           ...d,
@@ -204,7 +240,7 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
     }
 
     setLoading(false);
-  }, [workspaceId, sequenceId, supabase, settings]);
+  }, [workspaceId, sequenceId, supabase, settings, page, debouncedSearch]);
 
   useEffect(() => {
     load();
@@ -219,12 +255,19 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
     });
   };
 
+  const pageIds = useMemo(() => enrollments.map((e) => e.id), [enrollments]);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+
   const toggleSelectAll = () => {
-    if (selected.size === enrollments.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(enrollments.map((e) => e.id)));
-    }
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        for (const id of pageIds) next.delete(id);
+      } else {
+        for (const id of pageIds) next.add(id);
+      }
+      return next;
+    });
   };
 
   const bulkPause = async () => {
@@ -370,16 +413,33 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-      </div>
-    );
-  }
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rangeStart = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(total, (page + 1) * PAGE_SIZE);
+  const hasSearch = debouncedSearch.length > 0;
 
   return (
     <div>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by name or email…"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+        <div className="text-sm text-slate-500 whitespace-nowrap">
+          {loading && enrollments.length === 0
+            ? "Loading…"
+            : total === 0
+              ? hasSearch ? "0 matches" : "0 enrolled"
+              : `${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()} of ${total.toLocaleString()}`}
+        </div>
+      </div>
+
       {selected.size > 0 && (
         <div className="flex items-center gap-2 mb-4 p-3 bg-indigo-50 rounded-lg">
           <span className="text-sm font-medium text-indigo-700">{selected.size} selected</span>
@@ -404,9 +464,15 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
         </div>
       )}
 
-      {enrollments.length === 0 ? (
+      {loading && enrollments.length === 0 ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        </div>
+      ) : enrollments.length === 0 ? (
         <div className="text-center py-8 text-sm text-slate-500">
-          No contacts enrolled yet. Click &quot;Add Contacts&quot; to get started.
+          {hasSearch
+            ? `No contacts match "${debouncedSearch}".`
+            : "No contacts enrolled yet. Click \"Add Contacts\" to get started."}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
@@ -416,7 +482,7 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
                 <th className="px-4 py-3 w-8">
                   <input
                     type="checkbox"
-                    checked={selected.size === enrollments.length && enrollments.length > 0}
+                    checked={allPageSelected}
                     onChange={toggleSelectAll}
                     className="rounded border-slate-300"
                   />
@@ -506,6 +572,30 @@ export function SequenceContactsTab({ sequenceId, steps, settings }: SequenceCon
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-xs text-slate-500">
+            Page {page + 1} of {totalPages.toLocaleString()}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0 || loading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white rounded-md border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" /> Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || loading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white rounded-md border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>
