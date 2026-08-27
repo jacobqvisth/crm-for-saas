@@ -7214,3 +7214,32 @@ Notable:
 Skipped, deliberately: publishing the 8 Webflow drafts. Their template layout needs a **site** publish, and the Pricing page carries an unpublished edit from 19:45 that is not ours. Waiting on that decision rather than shipping someone else's staged change.
 
 Build/lint/typecheck clean. Both production deploys READY.
+
+---
+
+## 2026-08-27 — Gmail-web email logging: make it legible and countable (PR #734)
+
+**Branch:** worktree-gmail-web-email-logging → squashed to `fa408d2` on main. Deploy READY.
+
+**The question:** "If Valdemar or I send/reply from the Gmail web app to a CRM contact, does it show up on that contact's log? HubSpot used a Chrome extension for this."
+
+**The answer: it already did.** The `mailbox-sync` cron (PR #435, June) has been doing it server-side since June, which is strictly better than HubSpot's extension because we hold the Gmail OAuth. Reconciled the real Gmail Sent folders against `activities` over 30 days: **jacob@ 82/82** contact-recipients covered, **valdemar@ 18/19** (the miss was sent 7 minutes after the last sync tick and landed on the next one). Capture was never the problem.
+
+**What actually was the problem — all fixed:**
+- Timeline never named the sender. Cron wrote only `gmail_account_id`, never `sender_name`/`sender_email`, which is exactly what `contact-detail-client.tsx` and `activity-feed.tsx` read to render "Email sent by X". Hand-written mail read as anonymous system mail.
+- Body unreadable. Gmail-web outbound has no `email_queue` row and no `inbox_messages` row, so the detail modal said "Full message text not available". Added a Gmail fallback to `/api/activities/[id]/email-body` — **retroactive for every mailbox_sync activity ever logged (incl. hans's 2,883), no backfill, no new storage.**
+- `/dashboard/valdemar` counted `email_queue` only → showed **9** for a month with 23 external sends. Now merges mailbox_sync activities. Open/click rates deliberately keep the tracked-send denominator: hand-written mail has no pixel and can never open, so including it would fake a decline.
+- Multi-recipient mail landed on one timeline only (loop `break`ed at first match). Unique index widened to `(gmail_message_id, contact_id)`.
+- Mail to a new address at a known company vanished entirely (info@shop.se while CRM held kontakt@shop.se). Ate 3 of valdemar's + 7 of jacob's sends in 30d.
+- Inbound subject was the literal `"Email received"` → "Reply received: Email received".
+
+**Migration `20260827100000` applied to prod (approved in chat).** Backfilled 4,141 sent activities with sender identity, 3,227 received with mailbox + real subject, 0 rows left missing either. Old index dropped, new one live. Also corrected `valdemar@`'s `display_name` from "valdemar" to "Valdemar Eklund" (matches what his Gmail already sends as).
+
+**Verified post-deploy:** sync ran at 13:15 UTC on the new code; Valdemar's August total is now **32** (11 CRM + 21 Gmail-web) against the 9 the page used to show. The `jocke@vikbobil.se` gap found during investigation is logged.
+
+**Checks:** tsc clean · eslint clean · `npm run build` compiled · 952 unit tests pass (the one failing file, `src/lib/routes/generate.test.ts`, fails on main too and was untouched).
+
+**Open / not fixed here:**
+- `matteo@wrenchlane.com` has been `disconnected` since 2026-08-10 and logs nothing. Reconnect in settings.
+- Old threads are never re-scanned (incremental uses `after:last_sync`), so mail sent before someone became a contact stays invisible.
+- Cron runs :15/:45, so a send can be up to 30 min behind.
