@@ -101,6 +101,10 @@ export const WHERE_TO_BUILD: InfoPoint[] = [
     body: "A Fault Codes collection with a nine-field schema, a template page bound to it, and the eight flagship codes as draft items at /en/fault-code/<code>. Every one is isDraft and has never been published, so nothing is public until reviewed. The template is deliberately thin, four bindings rather than thirty, because the batch exists to answer whether the live domain indexes these pages at all, not to build the final template twice.",
   },
   {
+    heading: "The eight are built but not published, and that is deliberate",
+    body: "Making them public needs a Webflow site publish, because a page's layout is part of the compiled site rather than per-item content. The site was last published at 19:40 on 2026-08-26 and the Pricing page carries an edit from 19:45 that nobody published. A site publish would ship that edit too. Publishing the items without the template would be worse still: eight live URLs rendering an empty page, which is exactly the thin content the programme is designed not to produce. So this waits on one decision about the Pricing edit, not on more building.",
+  },
+  {
     heading: "One real gap in the Webflow half, worth knowing",
     body: "Webflow has no build step, so those pages carry the landing-page identity into the signup link but cannot forward a click id at click time the way the Astro pages do. That makes the batch an indexation test rather than the measurement surface. Attribution works properly on the Astro cluster.",
   },
@@ -301,5 +305,161 @@ export const KEYWORD_AUDIT_POINTS: InfoPoint[] = [
   {
     heading: "The cluster covers 19 percent of the valid code keywords already",
     body: "341 of the codes this account has bid on now have a page. That share rises as the tiers ship, and the audit is re-runnable, so it is a progress measure rather than a one-off number.",
+  },
+];
+
+/* ---------------------------------------------------------------------------
+   What exists, and what is next.
+
+   Kept as data next to the rest of the argument so the page can answer "what
+   did we actually build" without anyone reconstructing it from commit history,
+   and so the backlog is ranked in one place rather than remembered in several.
+   --------------------------------------------------------------------------- */
+
+export type BuiltThing = {
+  what: string;
+  where: string;
+  detail: string;
+  state: "Live" | "Merged, awaiting cutover" | "Draft, not public" | "Blocked";
+};
+
+/** Everything the programme has actually produced, with where it lives. */
+export const WHAT_EXISTS: BuiltThing[] = [
+  {
+    what: "The planner",
+    where: "src/lib/landing/plan.ts",
+    state: "Live",
+    detail:
+      "Turns the diagnostics analysis into a ranked, tiered build queue. Pure, so it is testable without credentials, and it adds no queries: it reads the same analysis the DTC Codes page already computes. Decides which codes earn a page, which are excluded outright, and in what order the rest get built.",
+  },
+  {
+    what: "The emitter",
+    where: "scripts/emit-fault-code-pages.mts",
+    state: "Live",
+    detail:
+      "Renders the queue into page payloads and refuses to write a bundle that fails validation. The invariant it guards hardest is that no manufacturer-specific code ever gets a standalone page. Re-run it after a data refresh and the whole cluster updates.",
+  },
+  {
+    what: "896 pages in the Astro repo",
+    where: "wrenchlane-site, PR #27",
+    state: "Merged, awaiting cutover",
+    detail:
+      "417 code pages, 30 family hubs and a cluster root, emitted for en-us and en-gb. Took that site from 365 pages to 1,261 with no broken internal links anywhere in the build. Reviewable now on the public test URL; live on wrenchlane.com only at the DNS cutover.",
+  },
+  {
+    what: "8 flagship pages in Webflow",
+    where: "Fault Codes collection, live site",
+    state: "Draft, not public",
+    detail:
+      "A collection, a bound template page at /en/fault-code, and the eight highest-evidence codes as draft items. Exists to test whether the live domain indexes these pages at all, months before the cutover. Publishing is blocked on a site publish, which would also ship an unrelated staged edit.",
+  },
+  {
+    what: "The signup handoff",
+    where: "src/lib/landing/tracking.ts",
+    state: "Blocked",
+    detail:
+      "Every generated page carries its own slug and page kind into the signup link and forwards gclid, wbraid and gbraid from its own URL at click time. The page half is done. The core-app half, persisting those four parameters at signup, is owned elsewhere and is what the whole programme's measurability waits on.",
+  },
+  {
+    what: "The ad reconciler",
+    where: "/api/landing-pages/ads-sync",
+    state: "Live",
+    detail:
+      "Diffs what every ad group actually buys against the fifteen verified comparison URLs. Dry run by default, and a dry run goes to Google with validateOnly rather than guessing locally. Retargets single-rival groups; refuses to split or create, because both commit structure and budget nobody has approved.",
+  },
+  {
+    what: "The keyword audit",
+    where: "scripts/audit-code-keywords.mts",
+    state: "Live",
+    detail:
+      "Validates every fault code the account bids on against the same parser the dashboard uses, and measures how many now have a page. This is what found that half the codes bid on are not codes.",
+  },
+];
+
+export type BacklogItem = {
+  rank: number;
+  what: string;
+  why: string;
+  effort: "Low" | "Medium" | "High";
+  blockedBy?: string;
+};
+
+/**
+ * What to build next, ranked.
+ *
+ * Ordered by value per unit of effort rather than by size, which is why two
+ * ad-account chores outrank the content work: they are hours, not weeks, and
+ * one of them stops us buying traffic that cannot exist.
+ */
+export const BACKLOG: BacklogItem[] = [
+  {
+    rank: 1,
+    what: "Delete the 13,727 impossible keywords",
+    effort: "Low",
+    why: "They bid on strings no vehicle emits and no scan tool displays, so they can never match a search at any price. They also make every account-level quality and coverage number meaningless. This is now a scripted operation rather than a manual one, and it has to happen before any code campaign restarts or the new pages inherit a broken keyword list.",
+  },
+  {
+    rank: 2,
+    what: "Persist lp, wl_kind, plan and gclid at signup",
+    effort: "Low",
+    blockedBy: "Owned by the codeoc team, in app.wrenchlane.com.",
+    why: "The single change that makes the entire programme measurable. Until it lands, every page built here is one nobody can rank, prune or learn from, and conversion imports stay stuck on the hashed-email route instead of the click-id one. It is a few lines against parameters that already arrive.",
+  },
+  {
+    rank: 3,
+    what: "Split the two competitor ad groups",
+    effort: "Low",
+    why: "Six rival names bought across two ad groups, all landing on a generic plan page, against fifteen comparison pages that are already published and indexed. The reconciler has the exact plan. It needs a human because splitting creates ad groups and sets bids, which is budget, not routing.",
+  },
+  {
+    rank: 4,
+    what: "Give Performance Max an asset group per plan",
+    effort: "Low",
+    why: "All three Performance Max campaigns hold exactly one asset group, and every one points at the homepage. The four plan pages are not used by Performance Max at all. Asset groups are how one campaign serves different pages to different audiences without splitting budget or competing with itself, and right now that mechanism is entirely unused.",
+  },
+  {
+    rank: 5,
+    what: "Build the make hubs",
+    effort: "Medium",
+    why: "The largest hole in the cluster as shipped. The honesty rule sends manufacturer-specific codes to make-scoped hubs, and those hubs do not exist, so roughly 340 codes we have seen appear on no page at all. It also opens the make-plus-code query, which is 8,787 keywords the account already bids on.",
+  },
+  {
+    rank: 6,
+    what: "Restart US - Fault Codes against the new pages",
+    effort: "Low",
+    blockedBy: "Needs the pages live, so it waits on the cutover or the Webflow batch.",
+    why: "485 keywords, every one a real code, 99 percent of which now have a page written for them. Already in the make-model-year-code shape people actually type, and hand-built rather than enumerated. The cheapest possible test of whether the cluster earns clicks.",
+  },
+  {
+    rank: 7,
+    what: "Build /en/find-your-plan",
+    effort: "Medium",
+    why: "Shop size cannot be targeted in an auction but it can be asked on a page. Broad Performance Max and Demand Gen traffic currently lands on a plan page that guesses wrong most of the time. The qualifier also collects the firmographic data the CRM does not have, first-party and therefore usable later.",
+  },
+  {
+    rank: 8,
+    what: "A Swedish fault-code cluster",
+    effort: "High",
+    why: "Sweden is the largest single market in the CRM and the cluster is English only, so sv-se currently gets no Problem-stage pages at all. Most of the work is smaller than it looks: the evidence is language-neutral and only the code descriptions and template copy need translating. Doing it badly, by machine-translating into the Swedish tree, would be worse than leaving it empty.",
+  },
+  {
+    rank: 9,
+    what: "Symptom pages",
+    effort: "Medium",
+    why: "The half of Problem-stage demand that arrives without a code, which no page on the site answers. Deliberately curated rather than generated: symptom phrasing has no finite vocabulary, so a generator would invent queries nobody types.",
+  },
+  {
+    rank: 10,
+    what: "A brand campaign, and delete the duplicate PMax campaigns",
+    effort: "Low",
+    why: "Our own name is not bought by us, which leaves it available to anyone who wants it. Separately, two near-duplicate paused Performance Max campaigns sit at 1,700 and 750 SEK a day: harmless while paused and an expensive accident if either is ever resumed by mistake.",
+  },
+  {
+    rank: 11,
+    what: "Import activated users and payers as conversions",
+    effort: "Medium",
+    blockedBy:
+      "Customer Match uploads are refused for a developer token with no prior history, so this goes through Data Manager rather than the API.",
+    why: "Bidding optimises toward signups today. Activation is roughly thirty percent and only a fraction pay, so pointing far more traffic at that target buys more of the wrong people faster. This gets more urgent the moment the cluster ships, not less.",
   },
 ];
