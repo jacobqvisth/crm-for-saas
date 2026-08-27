@@ -7188,3 +7188,29 @@ Asked for "a similar page as /dashboard/promo-users but for all users who have a
 - **Three self-caught defects before merge.** The timeline builder did `calls.find(...)` / `emails.find(...)` once per source row (quadratic; the email side runs to thousands of rows across ~350 contacts) — both now keyed by id. The outreach logs render the 400 most recent rows while saying nothing about it, which reads as "this is everything" — both now state the slice against the total. And auditing all 37 className literals against both stylesheets turned up one I had invented (`panel-grid`, which exists nowhere); the product tab now uses `article.content-grid` like the rest of the dashboard.
 - **Checks:** `npx tsc --noEmit` clean, `npm run lint` 0 errors, `npm run build` green with `/dashboard/trial-users` in the route table, all four RPCs verified live through PostgREST with the service role (385 / 384 / 4 / 27 rows, no truncation), Build & Lint green on every commit, Vercel prod deploy READY for 4398c91.
 - **Open:** the page has not been viewed logged-in (auth-gated, background job). Every number was verified in SQL against exactly what the loader reads.
+
+## Landing-page programme (fault-code cluster + ad reconciler) — 2026-08-26
+
+**PRs:** #729 (programme, emitter, reconciler), #730 (inventory + backlog). #727 closed and replaced by #729 after a rebase. Sibling: wrenchlane-site #27 (merged).
+**Branches:** `landing-page-programme`, `landing-page-backlog`.
+
+Built:
+- `/dashboard/landing-pages` — sizes the whole programme from the diagnostics analysis the DTC Codes page already computes. No new queries, no new tables, no migration.
+- `src/lib/landing/*` — planner (tiered build queue), emitter (validated page bundle), ad reconciler, signup-handoff contract, Webflow rich-text renderer.
+- `scripts/emit-fault-code-pages.mts`, `scripts/ads-sync-dryrun.mts`, `scripts/audit-code-keywords.mts`.
+- `/api/landing-pages/ads-sync` — dry run by default, `validateOnly` against Google, confirmation string required to write.
+- wrenchlane-site: 896 pages (417 codes + 30 family hubs + root, en-us and en-gb). That site went 365 -> 1,261 pages, 0 broken internal links.
+- Webflow: `Fault Codes` collection + bound template at `/en/fault-code` + 8 flagship codes **as drafts**.
+
+Measured on prod: 1,071 codes considered, 417 code pages built, 459 manufacturer-specific excluded outright, 195 below the floor.
+
+Notable:
+- **Fixed a latent bug in `google-ads-client.ts`**: `googleAdsSearch` always sent `pageSize`, which the API rejects. Never caught because no developer token had ever been set. Also bumped v21 -> v25. Both verified live.
+- `GOOGLE_ADS_DEVELOPER_TOKEN` added to Vercel production. `GOOGLE_ADS_LOGIN_CUSTOMER_ID` is not needed.
+- **Found: 13,241 of 26,204 distinct codes the account bids on are structurally impossible** (SAE allows only 0-3 as the second character). 13,727 keywords could never match a search.
+- Reconciler found 6 rival names bought across **two** ad groups, not one. Multi-rival groups need `split`, not `retarget`, because an ad group has one final URL.
+- Two broken-internal-link bugs caught, same class both times: generated pages linking to codes deliberately not built.
+
+Skipped, deliberately: publishing the 8 Webflow drafts. Their template layout needs a **site** publish, and the Pricing page carries an unpublished edit from 19:45 that is not ours. Waiting on that decision rather than shipping someone else's staged change.
+
+Build/lint/typecheck clean. Both production deploys READY.
