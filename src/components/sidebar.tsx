@@ -35,6 +35,7 @@ import {
   Tag,
   Route,
   Filter,
+  MonitorPlay,
   Bot,
   Headphones,
 } from "lucide-react";
@@ -71,6 +72,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/dtc-lookup", label: "DTC Codes Lookup", icon: ScanSearch },
   { href: "/pricing-options", label: "Pricing options", icon: Tag },
   { href: "/funnel", label: "Funnel", icon: Filter },
+  { href: "/mockup", label: "Mockup", icon: MonitorPlay },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
