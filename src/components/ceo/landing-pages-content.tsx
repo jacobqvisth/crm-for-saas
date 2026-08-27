@@ -10,7 +10,9 @@ import {
 import { AD_SURFACE_MAP, buildGaps, routingFixes } from "@/lib/landing/kinds";
 import type { LandingPlan } from "@/lib/landing/plan";
 import {
+  BACKLOG,
   DOORWAY_DEFENCES,
+  WHAT_EXISTS,
   KEYWORD_AUDIT,
   KEYWORD_AUDIT_CAMPAIGNS,
   KEYWORD_AUDIT_POINTS,
@@ -88,6 +90,16 @@ function rolloutTone(state: string) {
   if (state === "Ready to run") return "badge badge-live";
   if (state === "Blocked externally") return "badge badge-paused";
   return "badge badge-planned";
+}
+
+function builtTone(state: string) {
+  if (state === "Live") return "badge badge-live";
+  if (state === "Blocked") return "badge badge-paused";
+  return "badge badge-planned";
+}
+
+function effortTone(effort: string) {
+  return effort === "Low" ? "badge badge-live" : "badge";
 }
 
 const QUEUE_PAGE_SIZE = 40;
@@ -713,6 +725,113 @@ export function LandingPagesContent({
                   <td>{item.change}</td>
                   <td>{item.why}</td>
                   <td>{item.owner}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      {/* ---- what exists ------------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Inventory</p>
+            <h2>What has actually been built</h2>
+          </div>
+        </div>
+        <p className="panel-description">
+          Written down here so this question does not have to be answered by
+          reading commit history. Everything below exists today; the state
+          column says whether it is doing anything yet.
+        </p>
+        <div className="table-wrap">
+          <table className="data-table campaign-type-table">
+            <thead>
+              <tr>
+                <th>What</th>
+                <th>Where it lives</th>
+                <th>State</th>
+                <th>What it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              {WHAT_EXISTS.map((row) => (
+                <tr key={row.what}>
+                  <td>
+                    <strong>{row.what}</strong>
+                  </td>
+                  <td>
+                    <code>{row.where}</code>
+                  </td>
+                  <td>
+                    <span className={builtTone(row.state)}>{row.state}</span>
+                  </td>
+                  <td>{row.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      {/* ---- backlog ------------------------------------------------------- */}
+      <article className="panel panel-wide">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">What to build next</p>
+            <h2>The backlog, ranked by value per unit of effort</h2>
+          </div>
+        </div>
+        <p className="panel-description">
+          Ranked by return per hour rather than by size, which is why two
+          ad-account chores outrank the content work. They take hours rather
+          than weeks, and one of them stops us buying traffic that cannot
+          exist. Anything marked blocked is waiting on someone outside this
+          repo, not on a decision here.
+        </p>
+        <div className="table-wrap">
+          <table className="data-table campaign-type-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>What</th>
+                <th>Effort</th>
+                <th>Why it is worth doing, and why here</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BACKLOG.map((item) => (
+                <tr key={item.rank}>
+                  <td>
+                    <strong>{item.rank}</strong>
+                  </td>
+                  <td>
+                    <strong>{item.what}</strong>
+                    {item.blockedBy ? (
+                      <>
+                        <br />
+                        <span className="badge badge-paused">Blocked</span>
+                      </>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span className={effortTone(item.effort)}>
+                      {item.effort}
+                    </span>
+                  </td>
+                  <td>
+                    {item.why}
+                    {item.blockedBy ? (
+                      <>
+                        <br />
+                        <small>
+                          <strong>Blocked by. </strong>
+                          {item.blockedBy}
+                        </small>
+                      </>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
