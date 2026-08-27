@@ -39,6 +39,14 @@ const SIGN_OFF_PATTERNS = [
   /^unsubscribe$/i,
   /^ai-driven car diagnostics$/i,
   /^www\.wrenchlane\.com$/i,
+  // Swedish. Customer.io sends a Swedish variant of every broadcast with the
+  // same template furniture, and without these the entire sign-off, plus the
+  // footer's bold "WrenchLane" as a dangling heading, lands in the article.
+  /^med (vänliga|varma) hälsningar\b/i,
+  /^(hälsningar|mvh)\b[\s,.!]*$/i,
+  /^frågor eller feedback/i,
+  /^tack[\s,.!]*$/i,
+  /^avregistrera\b/i,
 ];
 
 /** Greetings. Skipped in place rather than ending the body. */
@@ -56,6 +64,12 @@ const OUTRO_PATTERNS = [
   /shaped by your feedback/i,
   /from your feedback/i,
   /reply to this email/i,
+  // Swedish, kept as loose as the English above for the same reason: the
+  // Swedish copy rewords its thank-you release to release just like the
+  // English does, and a miss here is silent.
+  /tack för att (du|ni|er)\b/i,
+  /från (din|ditt|dina|er|ert|era) feedback/i,
+  /svara [^.]{0,40}(mejlet|mailet|e-posten)/i,
 ];
 
 /**
@@ -201,6 +215,31 @@ export function looksLikeRelease(html: string): boolean {
   return Boolean(extractReleaseVersion(html)) && /<h1[\s>]/i.test(html);
 }
 
+/**
+ * Swedish template furniture. Every Swedish send carries at least one of these,
+ * and no English send carries any, so this tells the two apart without guessing
+ * at the prose. Keyed on the template rather than on language statistics
+ * because the feature copy is full of English product nouns either way
+ * ("Caddy", "Sprinter", "OEM", "VIN") and a word-frequency check trips on them.
+ */
+const SWEDISH_FURNITURE = [
+  /med vänliga hälsningar/i,
+  /frågor eller feedback\?/i,
+  /öppna wrenchlane/i,
+  /svara [^.<]{0,40}(mejlet|mailet)/i,
+];
+
+/**
+ * Which language a release mail is written in.
+ *
+ * Customer.io sends the same release as a separate English and Swedish
+ * broadcast, minutes apart. The Swedish one is the article's Swedish source,
+ * which beats translating the English one.
+ */
+export function releaseLanguage(html: string): "en" | "sv" {
+  return SWEDISH_FURNITURE.some((re) => re.test(html)) ? "sv" : "en";
+}
+
 /* ---------------------------------------------------------------- parser */
 
 type Block =
@@ -297,7 +336,12 @@ export function parseReleaseEmail(html: string): ParsedRelease | null {
   }
   if (current.heading || current.paragraphs.length || current.images.length) sections.push(current);
 
-  return { version: extractReleaseVersion(html), title, lead, sections, videoId };
+  // A heading whose entire body was outro or furniture is not a feature, it is
+  // a leftover. Emitting it produces an <h3> with nothing under it, which is
+  // how the Swedish mail's footer first showed up in an article.
+  const kept = sections.filter((s) => s.paragraphs.length || s.images.length || s.videoId);
+
+  return { version: extractReleaseVersion(html), title, lead, sections: kept, videoId };
 }
 
 /* --------------------------------------------------------------- output */
