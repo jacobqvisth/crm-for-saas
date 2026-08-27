@@ -7243,3 +7243,32 @@ Build/lint/typecheck clean. Both production deploys READY.
 - `matteo@wrenchlane.com` has been `disconnected` since 2026-08-10 and logs nothing. Reconnect in settings.
 - Old threads are never re-scanned (incremental uses `after:last_sync`), so mail sent before someone became a contact stays invisible.
 - Cron runs :15/:45, so a send can be up to 30 min behind.
+
+## 2026-08-27 — Mockup page + Autoremote partnership draft (PR #739)
+
+**Branch:** `feat/mockup-page` → merged to main (de3a87e)
+
+- Added `/mockup` to the CRM (sidebar + `src/app/(dashboard)/mockup/page.tsx` +
+  `src/components/mockup/mockup-client.tsx`), an internal home for design drafts
+  that need review before they ship. Behind the normal CRM login.
+- First tenant: the Autoremote partnership, drafted for the 1 September launch.
+  Carries seven captured screens, the three points where the May sketch
+  contradicts the agreed affiliate model, the open questions, and how to run the
+  clickable version locally.
+- Screens live in `public/mockup/` (1.2 MB of JPEGs), served as plain `<img>`.
+- `NEXT_PUBLIC_MOCKUP_URL` links the clickable mockup once it is deployed; until
+  then the page says so rather than showing a dead button.
+
+**The clickable mockup itself is NOT in this repo.** It is the WrenchLane
+product frontend on branch `autoremote-mock` in
+`~/wrenchlane-design-mock/.claude/worktrees/design-mock`, running in mock mode
+against recorded and anonymised production data. Plan and full reasoning:
+https://claude.ai/code/artifact/73816390-771e-4ba0-a6c5-30c210139ef8
+
+**Build status:** `next build` pass, `tsc --noEmit` clean, ESLint clean,
+Build & Lint pass. Vercel preview failed as it always does on this repo;
+production deploy Ready and `/mockup/ar-hero.jpg` serves 200.
+
+**Not done:** the clickable mockup is not deployed to Vercel yet, so
+`NEXT_PUBLIC_MOCKUP_URL` is unset. The page renders correctly without it.
+I also did not visually verify the rendered page, since it sits behind the login.
