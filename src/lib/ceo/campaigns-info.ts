@@ -169,7 +169,7 @@ export const FUNNEL_MAP: FunnelStage[] = [
     question: "Has a fault code or a symptom, right now",
     campaignType: "Search on codes and symptoms, Dynamic Search Ads",
     page: "Fault-code and article pages",
-    status: "Not built",
+    status: "Built, awaiting the cutover",
   },
   {
     stage: "Evaluation",
@@ -194,12 +194,30 @@ export const FUNNEL_MAP: FunnelStage[] = [
   },
 ];
 
+/**
+ * How far a phase has got.
+ *
+ * Added once the plan stopped being purely a list of intentions. A phase that
+ * has been designed, sized and built in the dashboard is in a genuinely
+ * different state from one nobody has touched, and collapsing the two makes the
+ * plan read as permanently untouched no matter how much work has landed.
+ */
+export type PlanPhaseState =
+  | "Not started"
+  | "Designed"
+  | "Built"
+  | "Needs a decision"
+  | "Blocked externally";
+
 export type PlanPhase = {
   phase: string;
   title: string;
   why: string;
   actions: string[];
   effort: "Low" | "Medium" | "High";
+  state: PlanPhaseState;
+  /** What has actually shipped against this phase, when anything has. */
+  progress?: string;
   blocked?: string;
 };
 
@@ -209,6 +227,11 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     title: "Unblock what is already built",
     why: "Three campaigns are live and serving a handful of impressions a day with no clicks. Nothing else on this list matters while that is true.",
     effort: "Low",
+    state: "Blocked externally",
+    progress:
+      "The page half of the capture is built. Every generated landing page carries its own slug and page kind into the signup link and forwards gclid, wbraid and gbraid from its own URL at click time, so a paid click keeps its identity across the domain hop. What is left is the core-app half: reading those parameters at signup and persisting them. That is tracked as an open contract on the Landing Pages page.",
+    blocked:
+      "Signup lives in app.wrenchlane.com, a different codebase owned by the codeoc team, so the persist step cannot be done from here.",
     actions: [
       "Raise the max CPC. The retired us-generic Search campaign paid about 46 SEK a click; anything far below that wins no auctions.",
       "Capture the GCLID at signup. It is stored nowhere today, which is what forces conversion imports down the hashed-email route instead of the click-ID one.",
@@ -219,13 +242,16 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
   {
     phase: "Phase 1",
     title: "Send competitor traffic to the competitor pages",
-    why: "There are 15 published comparison pages at /en/vs, one per rival, in both languages. The alternatives ad group bids on four of those rival names and sends every one of them to the generic Small plan page instead.",
+    why: "There are 15 published comparison pages at /en/vs, one per rival, in both languages. The alternatives ad group bids on five of those rival names, plus ShopKey which has no page at all, and sends every one of them to the generic Small plan page instead.",
     effort: "Low",
+    state: "Built",
+    progress:
+      "Automated. A reconciler on the Landing Pages page reads what every ad group actually buys, compares it against all fifteen verified comparison-page URLs, and reports the difference. It matches on keywords rather than ad-group names, because the account names its groups by plan and the plan axis is exactly what is wrong here. Retargeting an ad group that already exists is a correction and it will make it; creating the ten missing ad groups commits budget nobody has agreed to, so those stay a plan for a human. It needs GOOGLE_ADS_DEVELOPER_TOKEN in the environment before it can run.",
     actions: [
       "Split the alternatives ad group into one ad group per competitor.",
       "Point each at its own /en/vs page: ALLDATA, Autodata, Mitchell 1 ProDemand, HaynesPro, Bosch ESI[tronic], Snap-on SureTrack, Identifix, Autel MaxiSYS and the rest.",
       "Keep rival trademarks in keywords only, never in ad text, which is Google policy.",
-      "Extend beyond the four currently bid on: eleven more comparison pages already exist and have no ads pointing at them.",
+      "Extend beyond the five currently bid on: ten more comparison pages already exist and have no ads pointing at them.",
     ],
   },
   {
@@ -233,6 +259,9 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     title: "Let the landing page do the segmenting the auction cannot",
     why: "Shop size cannot be targeted in the auction, but it can simply be asked on the page. Move the segmentation to where it actually works.",
     effort: "Medium",
+    state: "Designed",
+    progress:
+      "Carried into the landing-page programme as the qualifier page, and named there as the page broad Performance Max and Demand Gen traffic should land on instead of a specific plan page that guesses wrong two times in three. Not built.",
     actions: [
       "Build /en/find-your-plan: two or three questions (how many mechanics, how many cars a month, do you need shared access).",
       "Recommend a plan from the answers and hand off into signup with that plan preselected.",
@@ -243,12 +272,20 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
   {
     phase: "Phase 3",
     title: "Problem-first pages, the real volume play",
-    why: "Mechanics search fault codes and symptoms, not pricing tiers. The product holds 802 manufacturer fault codes and a large article library, and none of it has a public landing page built for search.",
+    why: "Mechanics search fault codes and symptoms, not pricing tiers. Every code query today has no honest destination on the site, so the most specific page we own for the highest-intent visitor this business can get is the homepage.",
     effort: "High",
+    state: "Built",
+    progress:
+      "Built. 896 pages are live in the Astro repo: 417 code pages, 30 family hubs and a cluster root, emitted for en-us and en-gb, taking the site from 365 pages to 1,261. Every page leads with what the code means, then carries evidence no competitor has, how often we see it, at how many workshops, on which marque, and what it travels with. astro check is clean and no built page contains a broken internal link. The Landing Pages page sizes and ranks the whole programme from live diagnostics.",
+    blocked:
+      "It ships to wrenchlane.com only at the DNS cutover, which is still awaiting Phase 6 review. A flagship batch in Webflow is the separate piece that would get a live indexation signal sooner.",
     actions: [
-      "Create a fault-code CMS collection and template, one page per code, answering the query first and converting second.",
-      "Start with the codes that already drive diagnostic volume in the product, so the content matches real demand rather than guesswork.",
-      "Run Dynamic Search Ads across the article and code library, which lets Google match long-tail queries nobody could enumerate by hand.",
+      "Done: built in Astro, on the grounds that this cluster is the first thing the new site can do that the old one structurally cannot. It is reviewable now on the public test URL.",
+      "Remaining: eight flagship codes as draft items in Webflow, so the live domain gets an indexation signal before the cutover.",
+      "Correct the premise this phase was originally written on: the 802 codes are a single Mercedes service manual, not an SEO inventory. The real universe is about 1,070 codes seen in real diagnostics or nameable from the generic dictionary.",
+      "Exclude manufacturer-specific codes from standalone pages entirely. They are the largest single group at roughly 460, and one page cannot honestly serve the same code across marques, so they roll up into make hubs.",
+      "Publish in demand order and in batches, not all at once, and let the flagship tier index before releasing the next one.",
+      "Run Dynamic Search Ads scoped to the fault-code folder, which only becomes possible once there is a folder for it to match against.",
       "Send this traffic to Free, not to a paid plan. Someone mid-repair wants an answer, not a pricing table.",
     ],
   },
@@ -257,6 +294,9 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     title: "Make bidding chase revenue instead of signups",
     why: "Smart Bidding currently optimises toward registrations. Activation is roughly 30 percent and only a fraction ever pay, so Google is efficiently buying the wrong people.",
     effort: "Medium",
+    state: "Blocked externally",
+    progress:
+      "Unchanged, and it gets more urgent the moment Phase 3 ships. Pointing a few hundred new pages at a bidding target that is already the wrong one would buy more of the wrong people, faster.",
     blocked:
       "Customer Match uploads via the API are refused for any developer token with no prior Customer Match history, so this has to go through Data Manager or Enhanced Conversions for Leads rather than the API.",
     actions: [
@@ -270,6 +310,7 @@ export const IMPROVEMENT_PLAN: PlanPhase[] = [
     title: "Campaign types worth testing once the above is working",
     why: "These are cheap to run and cover gaps the current three campaigns leave open.",
     effort: "Medium",
+    state: "Not started",
     actions: [
       "A brand campaign, to hold our own name cheaply rather than letting competitors buy it.",
       "A Swedish-language campaign. The site is fully bilingual and Sweden is the largest single market in the CRM, but every campaign runs in English only.",
@@ -404,8 +445,8 @@ export const MORE_PAGES_ANSWER: InfoPoint[] = [
     body: "The product holds 802 manufacturer fault codes and a large article library, and none of it has a public page built for search. Mechanics type codes and symptoms, not plan names. This is the one page type that would reach demand that currently has nowhere to land.",
   },
   {
-    heading: "Eleven comparison pages already exist with no ads pointing at them",
-    body: "Fifteen competitor pages are live at /en/vs and only four rival names are bid on, all of them routed to the generic Small page. Before building anything new, the cheapest win is pointing traffic at pages that were already built and are already indexed.",
+    heading: "Ten comparison pages already exist with no ads pointing at them",
+    body: "Fifteen competitor pages are live at /en/vs and only five rival names are bid on, all of them routed to the generic Small page. Before building anything new, the cheapest win is pointing traffic at pages that were already built and are already indexed.",
   },
   {
     heading: "One genuinely new page worth building: a plan qualifier",
