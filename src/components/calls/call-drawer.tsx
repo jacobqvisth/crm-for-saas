@@ -28,6 +28,7 @@ import {
   Languages,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { friendlyAiError } from "@/lib/ai/friendly-error";
 import { CALL_OUTCOME_LABEL, type CallOutcome } from "@/lib/calls/decision";
 import { WebrtcState } from "@/lib/calls/webrtc-client";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
@@ -259,7 +260,10 @@ export function CallDrawer({
 
           {recoverable && (
             <div className="space-y-2">
-              {session?.error && <p className="text-xs text-rose-600">{session.error}</p>}
+              {/* Older rows stored the raw provider JSON, so map at render too. */}
+              {session?.error && (
+                <p className="text-xs text-rose-600">{friendlyAiError(session.error)}</p>
+              )}
               <button
                 onClick={onRetry}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"

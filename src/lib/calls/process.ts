@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, TablesInsert } from "@/lib/database.types";
 import { insertActivity } from "@/lib/activities/insert";
 import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
+import { friendlyAiError } from "@/lib/ai/friendly-error";
 import { fetchRecordingAudio } from "./elks";
 import { transcribeAudio, formatTranscript } from "./deepgram";
 import { analyzeCall } from "./ai-summary";
@@ -102,7 +103,7 @@ export async function processCallSession(
       timeoutMs: (session.duration_seconds ?? 0) > 120 ? 180_000 : 120_000,
     });
   } catch (err) {
-    const reason = err instanceof Error ? err.message : "transcription failed";
+    const reason = friendlyAiError(err instanceof Error ? err.message : "transcription failed");
     await supabase.from("call_sessions").update({ status: "failed", error: reason }).eq("id", sessionId);
     return { ok: false, status: "failed", reason };
   }
@@ -122,15 +123,16 @@ export async function processCallSession(
 
   if (!analyzed.ok) {
     // Keep the transcript even if analysis failed.
+    const reason = friendlyAiError(analyzed.reason);
     await supabase
       .from("call_sessions")
       .update({
         status: "failed",
-        error: analyzed.reason,
+        error: reason,
         transcript: transcriptUtterances as unknown as Json,
       })
       .eq("id", sessionId);
-    return { ok: false, status: "failed", reason: analyzed.reason };
+    return { ok: false, status: "failed", reason };
   }
 
   const a = analyzed.analysis;
