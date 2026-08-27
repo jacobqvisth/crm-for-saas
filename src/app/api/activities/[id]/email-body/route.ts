@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { getGmailClient } from "@/lib/gmail/client";
+import { getValidAccessToken } from "@/lib/gmail/token-refresh";
+import { extractTextBody, extractHtmlBody } from "@/lib/gmail/messages";
 
 /**
  * Returns the full email body for an activity, resolved from the underlying
@@ -7,6 +11,13 @@ import { createClient } from "@/lib/supabase/server";
  * "Email from foo@bar.com"); the real message text lives in `inbox_messages`
  * (inbound) or `email_queue` (outbound). We resolve it here via the ids stashed
  * in the activity's metadata, so this works retroactively for every logged email.
+ *
+ * Mail a rep wrote by hand in the Gmail web app has neither: `mailbox-sync`
+ * logs it as an activity but there is no queue row (we never composed it) and
+ * no inbox row (it is outbound). Those fell through to "Full message text not
+ * available". Since we already hold the mailbox's OAuth token, the last resort
+ * is to go read it from Gmail — which also revives every such email already
+ * logged, with no backfill.
  */
 export async function GET(
   _request: NextRequest,
@@ -24,7 +35,7 @@ export async function GET(
   // RLS scopes this to the caller's workspace(s).
   const { data: activity } = await supabase
     .from("activities")
-    .select("id, type, subject, metadata")
+    .select("id, type, subject, metadata, workspace_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -86,6 +97,74 @@ export async function GET(
     }
   }
 
+  // 3) Nothing stored locally. If the activity came from mailbox-sync we know
+  //    which mailbox holds the message, so fetch it straight from Gmail.
+  const gmailAccountId =
+    typeof meta.gmail_account_id === "string" ? meta.gmail_account_id : null;
+
+  if (gmailMessageId && gmailAccountId) {
+    const body = await fetchBodyFromGmail(
+      gmailAccountId,
+      gmailMessageId,
+      activity.workspace_id,
+    );
+    if (body) {
+      return NextResponse.json({
+        source: "gmail",
+        subject: activity.subject,
+        body_html: body.html,
+        body_text: body.text,
+        detected_language: null,
+        subject_translated_en: null,
+        body_translated_en: null,
+      });
+    }
+  }
+
   // Nothing stored (older activity, non-email, or body never captured).
   return NextResponse.json({ source: null, body_html: null, body_text: null });
+}
+
+/**
+ * Read one message out of a connected mailbox. Uses the service client because
+ * OAuth tokens are service-role-only, so the workspace check is done by hand:
+ * the mailbox must belong to the same workspace as the activity the caller was
+ * already allowed to read. Returns null on any failure — a disconnected
+ * mailbox or a deleted message must degrade to "not available", never a 500.
+ */
+async function fetchBodyFromGmail(
+  gmailAccountId: string,
+  gmailMessageId: string,
+  workspaceId: string,
+): Promise<{ html: string | null; text: string | null } | null> {
+  try {
+    const admin = createServiceClient();
+    const { data: account } = await admin
+      .from("gmail_accounts")
+      .select("id, workspace_id, status")
+      .eq("id", gmailAccountId)
+      .maybeSingle();
+
+    if (!account || account.workspace_id !== workspaceId) return null;
+    if (account.status === "disconnected") return null;
+
+    const tokenResult = await getValidAccessToken(account.id);
+    if ("error" in tokenResult) return null;
+
+    const gmail = getGmailClient(tokenResult.accessToken);
+    const { data: message } = await gmail.users.messages.get({
+      userId: "me",
+      id: gmailMessageId,
+      format: "full",
+    });
+    if (!message?.payload) return null;
+
+    const html = extractHtmlBody(message.payload) || null;
+    const text = extractTextBody(message.payload) || null;
+    if (!html && !text) return null;
+    return { html, text };
+  } catch (err) {
+    console.error("email-body: Gmail fetch failed", err);
+    return null;
+  }
 }
