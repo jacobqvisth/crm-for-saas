@@ -25,6 +25,9 @@
  */
 
 import type { DtcAnalysis, DtcCodeRow } from "@/lib/ceo/dtc/analyse";
+import { normalizeMake } from "@/lib/ceo/dtc/analyse";
+import type { DiagnosticListItem } from "@/lib/ceo/data/diagnostics";
+import { parseDtcList } from "@/lib/ceo/dtc/parse";
 import { DTC_SYSTEMS, classifyFamily, ftbName } from "@/lib/ceo/dtc/taxonomy";
 import type { LandingCandidate, LandingTier } from "./types";
 import type { LandingPlan } from "./plan";
@@ -108,12 +111,67 @@ export type FamilyHubPage = {
   meta: { title: string; description: string };
 };
 
+export type MakeHubPage = {
+  make: string;
+  slug: string;
+  path: string;
+  /** Coded diagnostics we have seen on this marque. */
+  diagnostics: number;
+  distinctCodes: number;
+  /**
+   * Manufacturer-specific codes seen on this marque.
+   *
+   * This is the entire reason make hubs exist. These codes get no standalone
+   * page anywhere on the site, because the same code means different things on
+   * different marques. Scoped to one marque the question becomes answerable,
+   * so this hub is their only honest home.
+   */
+  manufacturerCodes: { code: string; diagnostics: number }[];
+  /** Standardised codes that skew to this marque, each with a page. */
+  genericCodes: {
+    code: string;
+    name: string | null;
+    diagnostics: number;
+    path: string;
+  }[];
+  topFamilies: { label: string; diagnostics: number }[];
+  meta: { title: string; description: string };
+};
+
+export type SystemHubPage = {
+  key: string;
+  label: string;
+  hint: string;
+  slug: string;
+  path: string;
+  pages: number;
+  diagnostics: number;
+  families: { key: string; label: string; pages: number; path: string }[];
+  topCodes: { code: string; name: string | null; path: string }[];
+  meta: { title: string; description: string };
+};
+
 export type FaultCodeBundle = {
   generatedFor: string;
   pages: FaultCodePage[];
   families: FamilyHubPage[];
-  totals: { pages: number; families: number };
+  makes: MakeHubPage[];
+  systems: SystemHubPage[];
+  totals: {
+    pages: number;
+    families: number;
+    makes: number;
+    systems: number;
+    /** Every URL the cluster produces, per locale. */
+    urls: number;
+  };
 };
+
+/** How many manufacturer-specific codes a family hub lists before it stops. */
+export const MANUFACTURER_LIST_CAP = 40;
+
+const TITLE_LIMIT = 88;
+const BRAND_SUFFIX = " | Wrenchlane";
 
 /**
  * Fit a title into the space a search result actually gives it.
@@ -130,12 +188,6 @@ export type FaultCodeBundle = {
  * description get trimmed, and then on a word boundary rather than mid-word.
  * The code itself is never touched: it is the entire reason the page ranks.
  */
-/** How many manufacturer-specific codes a family hub lists before it stops. */
-export const MANUFACTURER_LIST_CAP = 40;
-
-const TITLE_LIMIT = 88;
-const BRAND_SUFFIX = " | Wrenchlane";
-
 function fitTitle(headline: string): string {
   const full = `${headline}${BRAND_SUFFIX}`;
   if (full.length <= TITLE_LIMIT) return full;
@@ -204,10 +256,217 @@ function companionsFor(
     });
 }
 
+
+/**
+ * How many coded diagnostics a marque needs before it gets a hub.
+ *
+ * Below this a "make hub" is one shop's week rather than anything about the
+ * marque, and the codes on it would be indistinguishable from noise. The same
+ * floor the DTC dashboard uses for its make table, for the same reason.
+ */
+export const MAKE_HUB_MIN_DIAGNOSTICS = 8;
+
+/** Manufacturer-specific codes a make hub lists before it stops. */
+export const MAKE_CODE_LIST_CAP = 60;
+
+/**
+ * Make hubs, built from the raw diagnostics rather than the analysis.
+ *
+ * The analysis rolls makes up to one row each, which is enough for a dashboard
+ * table and not enough for a page: a hub needs the actual codes seen on that
+ * marque, and specifically the manufacturer-specific ones, which exist nowhere
+ * else on the site by design.
+ *
+ * Marque strings are normalised with the same function the analysis uses.
+ * Normalising differently here would silently split "VW" and "Volkswagen" into
+ * two hubs that each look half-empty.
+ */
+export function buildMakeHubs(
+  items: DiagnosticListItem[],
+  plan: LandingPlan,
+): MakeHubPage[] {
+  const pageByCode = new Map(
+    plan.candidates
+      .filter((row) => row.tier !== "excluded" && row.tier !== "below_floor")
+      .map((row) => [row.code, row]),
+  );
+
+  type Acc = {
+    make: string;
+    diagnostics: number;
+    codes: Map<string, number>;
+    families: Map<string, number>;
+  };
+  const byMake = new Map<string, Acc>();
+
+  for (const item of items) {
+    const make = normalizeMake(item.carMake);
+    if (!make) continue;
+    const bases = Array.from(
+      new Set(
+        parseDtcList(item.dtcs)
+          .map((entry) => entry.base)
+          .filter((base): base is string => Boolean(base)),
+      ),
+    );
+    if (bases.length === 0) continue;
+
+    let acc = byMake.get(make);
+    if (!acc) {
+      acc = { make, diagnostics: 0, codes: new Map(), families: new Map() };
+      byMake.set(make, acc);
+    }
+    acc.diagnostics += 1;
+    for (const base of bases) {
+      acc.codes.set(base, (acc.codes.get(base) ?? 0) + 1);
+      const family = classifyFamily(base);
+      acc.families.set(
+        family.label,
+        (acc.families.get(family.label) ?? 0) + 1,
+      );
+    }
+  }
+
+  return Array.from(byMake.values())
+    .filter((acc) => acc.diagnostics >= MAKE_HUB_MIN_DIAGNOSTICS)
+    .map((acc) => {
+      const ranked = Array.from(acc.codes.entries()).sort(
+        (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+      );
+
+      const manufacturerCodes = ranked
+        .filter(([code]) => baseCodeScope(code) === "manufacturer")
+        .slice(0, MAKE_CODE_LIST_CAP)
+        .map(([code, diagnostics]) => ({ code, diagnostics }));
+
+      const genericCodes = ranked
+        .filter(([code]) => pageByCode.has(code))
+        .slice(0, 40)
+        .map(([code, diagnostics]) => {
+          const row = pageByCode.get(code)!;
+          return {
+            code,
+            name: row.name,
+            diagnostics,
+            path: row.path,
+          };
+        });
+
+      const topFamilies = Array.from(acc.families.entries())
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 6)
+        .map(([label, diagnostics]) => ({ label, diagnostics }));
+
+      const slug = textSlug(acc.make);
+      return {
+        make: acc.make,
+        slug,
+        path: `/en/fault-code/make/${slug}`,
+        diagnostics: acc.diagnostics,
+        distinctCodes: acc.codes.size,
+        manufacturerCodes,
+        genericCodes,
+        topFamilies,
+        meta: {
+          title: fitTitle(`${acc.make} fault codes`),
+          description:
+            `Fault codes we have seen on ${acc.make} across ${acc.diagnostics} real diagnostics, including the ${acc.make}-specific codes that no generic code list can decode.`.slice(
+              0,
+              320,
+            ),
+        },
+      };
+    })
+    .sort((left, right) => right.diagnostics - left.diagnostics);
+}
+
+
+/**
+ * One hub per code system: powertrain, body, chassis, network.
+ *
+ * The broadest honest grouping in the standard, and the top of the cluster's
+ * link graph. Four pages, so this is cheap; its value is structural rather than
+ * in the queries it catches, because it gives every family hub a parent and
+ * gives a crawler an obvious route from the root to any code.
+ */
+export function buildSystemHubs(
+  plan: LandingPlan,
+  pages: FaultCodePage[],
+  families: FamilyHubPage[],
+): SystemHubPage[] {
+  const systems = new Map<string, FaultCodePage[]>();
+  for (const page of pages) {
+    const key = page.code.charAt(0);
+    const list = systems.get(key) ?? [];
+    list.push(page);
+    systems.set(key, list);
+  }
+
+  const familyByKey = new Map(families.map((family) => [family.key, family]));
+
+  return Array.from(systems.entries())
+    .map(([key, members]) => {
+      const spec = DTC_SYSTEMS[key as keyof typeof DTC_SYSTEMS];
+      const familyKeys = Array.from(
+        new Set(members.map((page) => page.familyKey)),
+      );
+      const slug = key.toLowerCase();
+      const diagnostics = members.reduce(
+        (sum, page) => sum + page.evidence.sessions,
+        0,
+      );
+      return {
+        key,
+        label: spec?.label ?? key,
+        hint: spec?.hint ?? "",
+        slug,
+        path: `/en/fault-code/system/${slug}`,
+        pages: members.length,
+        diagnostics,
+        families: familyKeys
+          .map((familyKey) => familyByKey.get(familyKey))
+          .filter((family): family is FamilyHubPage => Boolean(family))
+          .map((family) => ({
+            key: family.key,
+            label: family.label,
+            pages: family.pages,
+            path: family.path,
+          }))
+          .sort((left, right) => right.pages - left.pages),
+        topCodes: [...members]
+          .sort((a, b) => b.evidence.sessions - a.evidence.sessions)
+          .slice(0, 24)
+          .map((page) => ({
+            code: page.code,
+            name: page.name,
+            path: page.path,
+          })),
+        meta: {
+          title: fitTitle(`${spec?.label ?? key} fault codes`),
+          description:
+            `Every standardised ${(spec?.label ?? key).toLowerCase()} fault code we have seen in real diagnostics, grouped by what part of the vehicle it concerns. ${members.length} documented.`.slice(
+              0,
+              320,
+            ),
+        },
+      };
+    })
+    .sort((left, right) => right.pages - left.pages);
+}
+
 export function buildFaultCodeBundle(
   plan: LandingPlan,
   analysis: DtcAnalysis,
   generatedFor: string,
+  /**
+   * Required, not defaulted.
+   *
+   * This was `= []` for one commit and the emitter silently produced zero make
+   * hubs, because a call site written before make hubs existed still
+   * type-checked. A default that means "quietly build nothing" is worse than a
+   * compile error.
+   */
+  items: DiagnosticListItem[],
 ): FaultCodeBundle {
   const seenByCode = new Map<string, DtcCodeRow>();
   for (const row of analysis.topCodes) seenByCode.set(row.base, row);
@@ -308,11 +567,22 @@ export function buildFaultCodeBundle(
     };
   });
 
+  const makes = buildMakeHubs(items, plan);
+  const systems = buildSystemHubs(plan, pages, families);
+
   return {
     generatedFor,
     pages,
     families,
-    totals: { pages: pages.length, families: families.length },
+    makes,
+    systems,
+    totals: {
+      pages: pages.length,
+      families: families.length,
+      makes: makes.length,
+      systems: systems.length,
+      urls: pages.length + families.length + makes.length + systems.length + 1,
+    },
   };
 }
 
@@ -361,6 +631,40 @@ export function validateBundle(bundle: FaultCodeBundle): string[] {
         );
       }
     }
+  }
+
+  // Same rule as companions: a make hub may only link a code that has a page.
+  // Third time this class of bug has come up, so it is asserted rather than
+  // assumed.
+  for (const make of bundle.makes) {
+    for (const row of make.genericCodes) {
+      if (!seenSlugs.has(codeSlug(row.code))) {
+        problems.push(
+          `make hub ${make.make} links ${row.code}, which has no page`,
+        );
+      }
+    }
+    for (const row of make.manufacturerCodes) {
+      if (baseCodeScope(row.code) !== "manufacturer") {
+        problems.push(
+          `make hub ${make.make} lists ${row.code} as manufacturer-specific but it is generic`,
+        );
+      }
+    }
+  }
+
+  // Two marques that produce the same slug means one hub silently overwrites
+  // the other at build time, and the loss is invisible in the data. This is
+  // what "Citroen" and "Citroen" with an accent did before normalizeMake
+  // folded diacritics.
+  const makeSlugs = new Set<string>();
+  for (const make of bundle.makes) {
+    if (makeSlugs.has(make.slug)) {
+      problems.push(
+        `two marques share the slug ${make.slug}; one hub would overwrite the other`,
+      );
+    }
+    makeSlugs.add(make.slug);
   }
 
   const familyPaths = new Set(bundle.families.map((family) => family.path));

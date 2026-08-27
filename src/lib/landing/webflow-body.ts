@@ -20,7 +20,12 @@
  */
 
 import { stripLongDashes } from "@/lib/ai/no-long-dash";
-import type { FaultCodePage } from "./emit";
+import type {
+  FamilyHubPage,
+  FaultCodePage,
+  MakeHubPage,
+  SystemHubPage,
+} from "./emit";
 
 /** Escape for text nodes and attribute values. */
 function esc(value: string): string {
@@ -187,4 +192,138 @@ export function webflowItemFor(
     tier: page.tier,
     diagnostics: page.evidence.sessions,
   };
+}
+
+/* ---------------------------------------------------------------------------
+   Hub bodies.
+
+   Same trade as the code pages: one generated rich-text field rather than a
+   template with thirty bindings, because the Webflow side has to carry the
+   whole cluster before the October cutover and building four full templates by
+   hand is not the best use of the time before then.
+   --------------------------------------------------------------------------- */
+
+
+/** Link a code only when the target actually exists on the target site. */
+function codeLink(
+  code: string,
+  label: string | null,
+  published: ReadonlySet<string>,
+): string {
+  const slug = code.toLowerCase();
+  const text = esc(label ?? "not individually documented");
+  return published.has(slug)
+    ? `<li><a href="${SITE}/en/fault-code/${esc(slug)}">${esc(code)}</a>, ${text}</li>`
+    : `<li>${esc(code)}, ${text}</li>`;
+}
+
+export function renderFamilyBody(
+  family: FamilyHubPage,
+  published: ReadonlySet<string>,
+): string {
+  const out: string[] = [];
+  if (family.hint) out.push(`<p>${esc(family.hint)}</p>`);
+  out.push(`<h2>Ranked by how often we actually see them</h2>`);
+  out.push(
+    `<ul role="list">${[...family.codes]
+      .sort((a, b) => b.sessions - a.sessions)
+      .map((row) => codeLink(row.code, row.name, published))
+      .join("")}</ul>`,
+  );
+
+  if (family.manufacturerCodes.length > 0) {
+    out.push(`<h2>Manufacturer-specific codes in this group</h2>`);
+    out.push(
+      `<p>We have seen these in this area of the vehicle, and they get no page of their own on purpose. A manufacturer-specific code means different things on different marques, so a single description for one would be wrong more often than right. To decode one you need the marque as well as the code.</p>`,
+    );
+    out.push(
+      `<p>${family.manufacturerCodes.map((code) => esc(code)).join(" &middot; ")}</p>`,
+    );
+    if (family.manufacturerCodesTotal > family.manufacturerCodes.length) {
+      out.push(
+        `<p>Showing ${family.manufacturerCodes.length} of ${family.manufacturerCodesTotal} we have seen in this group, most frequent first.</p>`,
+      );
+    }
+  }
+  return stripLongDashes(out.join("\n"));
+}
+
+export function renderMakeBody(
+  make: MakeHubPage,
+  published: ReadonlySet<string>,
+): string {
+  const out: string[] = [];
+  out.push(
+    `<p>${make.distinctCodes} distinct codes across ${make.diagnostics} real diagnostics on ${esc(make.make)}, including the ${esc(make.make)}-specific ones no generic code list can decode.</p>`,
+  );
+
+  if (make.manufacturerCodes.length > 0) {
+    out.push(`<h2>${esc(make.make)}-specific codes</h2>`);
+    out.push(
+      `<p>These are manufacturer-specific, which means the same code on another marque is a different fault. That is exactly why they have no page of their own and no entry in any generic code list. Scoped to ${esc(make.make)} and ranked by how often we have actually seen them, they are a claim we can stand behind.</p>`,
+    );
+    out.push(
+      `<ul role="list">${make.manufacturerCodes
+        .map(
+          (row) =>
+            `<li><strong>${esc(row.code)}</strong>, seen in ${row.diagnostics} ${esc(make.make)} diagnostic${row.diagnostics === 1 ? "" : "s"}</li>`,
+        )
+        .join("")}</ul>`,
+    );
+  }
+
+  if (make.genericCodes.length > 0) {
+    out.push(`<h2>Standard codes we see most on ${esc(make.make)}</h2>`);
+    out.push(
+      `<p>These are standardised, so they mean the same thing on every vehicle. The counts are what we see on ${esc(make.make)} specifically.</p>`,
+    );
+    out.push(
+      `<ul role="list">${make.genericCodes
+        .map((row) => codeLink(row.code, row.name, published))
+        .join("")}</ul>`,
+    );
+  }
+
+  if (make.topFamilies.length > 0) {
+    out.push(`<h2>What tends to go wrong on ${esc(make.make)}</h2>`);
+    out.push(
+      `<p>By share of the codes we have seen on this marque. A description of our own caseload, not a reliability ranking.</p>`,
+    );
+    out.push(
+      `<ul role="list">${make.topFamilies
+        .map(
+          (family) =>
+            `<li>${esc(family.label)}, ${family.diagnostics} code sighting${family.diagnostics === 1 ? "" : "s"}</li>`,
+        )
+        .join("")}</ul>`,
+    );
+  }
+  return stripLongDashes(out.join("\n"));
+}
+
+export function renderSystemBody(
+  system: SystemHubPage,
+  published: ReadonlySet<string>,
+): string {
+  const out: string[] = [];
+  if (system.hint) out.push(`<p>${esc(system.hint)}</p>`);
+  out.push(
+    `<p>${system.pages} documented code${system.pages === 1 ? "" : "s"} across ${system.families.length} functional group${system.families.length === 1 ? "" : "s"}.</p>`,
+  );
+  out.push(`<h2>By what part of the vehicle</h2>`);
+  out.push(
+    `<ul role="list">${system.families
+      .map(
+        (family) =>
+          `<li>${esc(family.label)}, ${family.pages} code${family.pages === 1 ? "" : "s"}</li>`,
+      )
+      .join("")}</ul>`,
+  );
+  out.push(`<h2>The ones we see most</h2>`);
+  out.push(
+    `<ul role="list">${system.topCodes
+      .map((row) => codeLink(row.code, row.name, published))
+      .join("")}</ul>`,
+  );
+  return stripLongDashes(out.join("\n"));
 }
