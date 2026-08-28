@@ -11,8 +11,17 @@
 
 import { useState } from "react";
 
-/** Set NEXT_PUBLIC_MOCKUP_URL once the mockup is deployed to show the live link. */
-const LIVE_URL = process.env.NEXT_PUBLIC_MOCKUP_URL ?? "";
+/**
+ * The deployed clickable mockup. Override with NEXT_PUBLIC_MOCKUP_URL if it
+ * ever moves.
+ *
+ * It sits behind Vercel Authentication on purpose. The fixtures behind it are
+ * recorded InfoPro and HaynesPro technical data, which is licensed, so the
+ * mockup must not be reachable by an open URL. Anyone who needs to see it needs
+ * access to the Vercel team, or a screen share.
+ */
+const LIVE_URL =
+  process.env.NEXT_PUBLIC_MOCKUP_URL ?? "https://wrenchlane-autoremote-mockup.vercel.app";
 const PLAN_URL = "https://claude.ai/code/artifact/73816390-771e-4ba0-a6c5-30c210139ef8";
 
 interface Shot {
@@ -138,6 +147,13 @@ export function MockupClient() {
           Open the full plan
         </a>
       </div>
+
+      <p className="-mt-6 mb-10 text-sm text-slate-500">
+        The clickable mockup is behind Vercel Authentication, so opening it needs access to
+        the Vercel team. That is deliberate: the data behind it is recorded InfoPro and
+        HaynesPro technical content, which is licensed and must not sit on an open URL. The
+        screens below are here so the draft can be reviewed without that.
+      </p>
 
       <section className="mb-12">
         <h2 className="mb-1 text-lg font-semibold text-slate-900">The screens</h2>
