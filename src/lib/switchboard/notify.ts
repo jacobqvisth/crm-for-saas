@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { appBaseUrl } from "@/lib/app-url";
 
 type Client = SupabaseClient<Database>;
 
@@ -26,12 +27,6 @@ export interface NotifyParams {
   reason: string | null;
   contactId: string | null;
   companyId: string | null;
-}
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://crm-for-saas.vercel.app"
-  );
 }
 
 export async function notifySlack(p: NotifyParams): Promise<void> {

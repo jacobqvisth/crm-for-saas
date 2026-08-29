@@ -5,6 +5,7 @@ import { placeBridgeCall } from "@/lib/calls/elks";
 import { normalizePhone } from "@/lib/calls/phone";
 import { resolveWebrtcNumber } from "@/lib/calls/webrtc";
 import type { TablesInsert } from "@/lib/database.types";
+import { appBaseUrl } from "@/lib/app-url";
 
 export const maxDuration = 30;
 
@@ -20,13 +21,6 @@ const DialBody = z.object({
    *  browser via the 46elks WebRTC number ("webrtc" — talk from the computer). */
   mode: z.enum(["bridge", "webrtc"]).optional(),
 });
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "https://crm-for-saas.vercel.app"
-  );
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();

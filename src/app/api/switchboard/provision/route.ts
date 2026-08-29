@@ -3,15 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/call-agent/auth";
 import { loadSwitchboardRow } from "@/lib/switchboard/settings";
 import { provisionSwitchboard } from "@/lib/switchboard/provision";
+import { appBaseUrl } from "@/lib/app-url";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://crm-for-saas.vercel.app"
-  );
-}
 
 /**
  * POST /api/switchboard/provision — the "Provision / Sync" button.

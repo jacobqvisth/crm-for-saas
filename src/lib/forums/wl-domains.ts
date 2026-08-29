@@ -1,15 +1,26 @@
-// Wrenchlane footprint detection on Reddit. Kept in code (like targets.ts's
+// Brand footprint detection on Reddit. Kept in code (like targets.ts's
 // subreddit list) rather than the DB so the domain set is versioned with the
 // scanner. Used by the mention backfill (our own posts) and, later, the
 // third-party scan job.
 
-// Any host containing one of these tokens counts as a Wrenchlane link. We match
+import { getTenant } from "@/config/tenants";
+
+// Any host containing one of these tokens counts as one of our links. We match
 // on the registrable stem so every ccTLD (.com/.se/.co/.fr/…) and the tracking
 // subdomain (link.wrenchlane.se) are covered without listing each one.
-const WL_HOST_TOKENS = ["wrenchlane"];
+//
+// The tokens come from the tenant config so this scanner finds the CURRENT
+// customer's footprint rather than Wrenchlane's. For Wrenchlane the value is
+// unchanged: ["wrenchlane"].
+const WL_HOST_TOKENS = getTenant().domains.brandHostTokens;
 
-// The word on its own (case-insensitive), for plaintext mentions.
-const WL_WORD = /\bwrenchlane\b/i;
+// The same tokens as whole words (case-insensitive), for plaintext mentions.
+// Built from the config rather than written out, so a tenant cannot end up with
+// host detection and word detection disagreeing about who it is.
+const WL_WORD = new RegExp(
+  `\\b(${WL_HOST_TOKENS.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
+  "i",
+);
 
 // Grab URLs out of free text (markdown links, bare URLs).
 const URL_RE = /\bhttps?:\/\/[^\s)\]<>"']+/gi;

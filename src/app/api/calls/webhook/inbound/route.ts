@@ -4,6 +4,7 @@ import { normalizePhone } from "@/lib/calls/phone";
 import { buildInboundActions } from "@/lib/calls/inbound-actions";
 import { resolveWebrtcNumber } from "@/lib/calls/webrtc";
 import type { TablesInsert } from "@/lib/database.types";
+import { appBaseUrl } from "@/lib/app-url";
 
 // Inbound call handler for the dedicated agent numbers.
 //
@@ -21,12 +22,6 @@ import type { TablesInsert } from "@/lib/database.types";
 // 46elks sends no auth headers, so the configured voice_start URL carries
 // ?token=CALL_WEBHOOK_SECRET, verified here.
 export const maxDuration = 30;
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://crm-for-saas.vercel.app"
-  );
-}
 
 function pick(form: FormData, ...keys: string[]): string | null {
   for (const k of keys) {
