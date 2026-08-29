@@ -49,7 +49,7 @@ export async function POST(
 
   // Verify the target gmail account belongs to this workspace and is active
   const { data: gmailAccount, error: gmailError } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, email_address, status")
     .eq("id", senderAccountId)
     .eq("workspace_id", sequence.workspace_id)

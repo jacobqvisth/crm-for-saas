@@ -41,7 +41,7 @@ export async function GET(
 
   // 1. Check for active Gmail accounts (all of them for capacity info)
   const { data: gmailAccounts } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, email_address, display_name, daily_sends_count, max_daily_sends, status")
     .eq("workspace_id", workspaceId)
     .eq("status", "active")

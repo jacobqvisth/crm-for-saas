@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   tomorrow.setUTCHours(0, 0, 0, 0);
 
   const { error, count } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .update({
       daily_sends_count: 0,
       status: "active",

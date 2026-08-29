@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   // column-vs-column comparison ("daily_sends_count < max_daily_sends") cleanly,
   // so pull all active accounts and filter in JS. The set is small (< 20 rows).
   const { data: activeAccounts } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, daily_sends_count, max_daily_sends")
     .eq("status", "active");
 
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
   for (const [senderAccountId, items] of bySender) {
     // Check sender daily limit
     const { data: account } = await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("daily_sends_count, max_daily_sends, status, workspace_id, email_address, display_name")
       .eq("id", senderAccountId)
       .single();
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
 
         // Pause the account
         await supabase
-          .from("gmail_accounts")
+          .from("mail_accounts")
           .update({ status: "paused", pause_reason: pauseReason })
           .eq("id", senderAccountId);
 
@@ -594,6 +594,9 @@ export async function POST(request: NextRequest) {
             sent_at: sentAt,
             gmail_message_id: result.messageId || null,
             gmail_thread_id: gmailThreadId,
+            // Dual-write during the phase 06 expand step: the old column stays
+            // populated so a deployment on the previous release keeps working.
+            thread_key: gmailThreadId,
           })
           .eq("id", item.id);
 
@@ -706,7 +709,7 @@ export async function POST(request: NextRequest) {
             if (nextEmailSenderId !== senderAccountId) {
               // Pinned sender differs from current — verify it's still active
               const { data: pinnedAccount } = await supabase
-                .from("gmail_accounts")
+                .from("mail_accounts")
                 .select("status")
                 .eq("id", nextEmailSenderId)
                 .single();
@@ -791,7 +794,7 @@ export async function POST(request: NextRequest) {
         // retry logic would reschedule +15min and fail items unnecessarily when
         // min_send_interval > cron tick frequency (5min).
         const { data: senderRow } = await supabase
-          .from("gmail_accounts")
+          .from("mail_accounts")
           .select("updated_at, min_send_interval_seconds")
           .eq("id", senderAccountId)
           .single();

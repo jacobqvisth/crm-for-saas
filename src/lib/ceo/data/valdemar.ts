@@ -129,7 +129,7 @@ async function resolveIdentity(
       .select("user_id, full_name")
       .ilike("full_name", "%valdemar%"),
     admin
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select(
         "id, user_id, email_address, display_name, status, daily_sends_count, max_daily_sends, health_score",
       )
@@ -152,7 +152,7 @@ async function resolveIdentity(
   // user ids, not only the ones whose address contains his name.
   if (userIds.size > 0) {
     const { data: accountsByUser } = await admin
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select(
         "id, user_id, email_address, display_name, status, daily_sends_count, max_daily_sends, health_score",
       )

@@ -31,6 +31,9 @@ const METADATA_LABELS: Record<string, string> = {
   received_at: 'Received at',
   gmail_message_id: 'Gmail message ID',
   gmail_thread_id: 'Gmail thread ID',
+  // Dual-write during the phase 06 expand step: the old column stays
+  // populated so a deployment on the previous release keeps working.
+  thread_key: 'Gmail thread ID',
   email_queue_id: 'Email queue ID',
   enrollment_id: 'Enrollment ID',
   sequence_id: 'Sequence ID',

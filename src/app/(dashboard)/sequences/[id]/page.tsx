@@ -170,7 +170,7 @@ export default function SequenceDetailPage() {
     let senders: { id: string; email: string; status: string; enrollmentCount: number }[] = [];
     if (uniqueSenderIds.length > 0) {
       const { data: gmailRows } = await supabase
-        .from("gmail_accounts")
+        .from("mail_accounts")
         .select("id, email_address, status")
         .in("id", uniqueSenderIds);
       senders = (gmailRows || []).map((g) => ({
@@ -186,7 +186,7 @@ export default function SequenceDetailPage() {
     let gmailConnected = senders.length > 0;
     if (senders.length === 0) {
       const { data: fallbackAccounts } = await supabase
-        .from("gmail_accounts")
+        .from("mail_accounts")
         .select("id, email_address, status")
         .eq("workspace_id", workspaceId)
         .eq("status", "active")

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   // account is immediately visible in the rotation pool). Within active, secondary
   // sort by created_at desc.
   const { data: accounts, error } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, user_id, email_address, display_name, daily_sends_count, max_daily_sends, status, created_at")
     .eq("workspace_id", workspaceId)
     .order("status", { ascending: true })

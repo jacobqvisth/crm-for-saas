@@ -90,7 +90,7 @@ async function openMailbox(): Promise<
 > {
   const admin = createServiceClient();
   const { data: accounts, error } = await admin
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, email_address")
     .eq("status", "active")
     .order("email_address");

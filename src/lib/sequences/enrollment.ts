@@ -151,7 +151,7 @@ export async function enrollContacts(
     const hasPool = Array.isArray(rotationPool) && rotationPool.length > 0;
 
     let senderQuery = supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("id, daily_sends_count, max_daily_sends, status, workspace_id")
       .eq("workspace_id", workspaceId)
       .eq("status", "active")

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Get sender account email addresses for filtering
     const senderIds = [...new Set(sentEmails.map((e) => e.sender_account_id).filter(notNull))];
     const { data: accounts } = await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("id, email_address, workspace_id")
       .in("id", senderIds);
 
@@ -148,6 +148,9 @@ export async function POST(request: NextRequest) {
             gmail_account_id: account.id,
             gmail_message_id: message.id,
             gmail_thread_id: email.gmail_thread_id!,
+            // Dual-write during the phase 06 expand step: the old column stays
+            // populated so a deployment on the previous release keeps working.
+            thread_key: email.gmail_thread_id!,
             email_queue_id: threadEmail?.id ?? null,
             contact_id: contact?.id ?? null,
             from_email: fromEmail,
@@ -199,6 +202,9 @@ export async function POST(request: NextRequest) {
               metadata: {
                 gmail_message_id: message.id,
                 gmail_thread_id: email.gmail_thread_id,
+                // Dual-write during the phase 06 expand step: the old column stays
+                // populated so a deployment on the previous release keeps working.
+                thread_key: email.gmail_thread_id,
                 email_queue_id: threadEmail?.id ?? null,
                 is_auto_reply: autoReply,
               },

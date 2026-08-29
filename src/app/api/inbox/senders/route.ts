@@ -20,7 +20,7 @@ export async function GET() {
   }
 
   const { data, error } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, email_address, display_name, status, user_id")
     .eq("workspace_id", membership.workspace_id)
     .order("email_address", { ascending: true });

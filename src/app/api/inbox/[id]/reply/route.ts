@@ -105,7 +105,7 @@ export async function POST(
   }
 
   const { data: senderAccount } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("email_address, display_name")
     .eq("id", senderAccountId)
     .maybeSingle();
@@ -121,6 +121,9 @@ export async function POST(
     metadata: {
       inbox_message_id: id,
       gmail_thread_id: inboxMessage.gmail_thread_id,
+      // Dual-write during the phase 06 expand step: the old column stays
+      // populated so a deployment on the previous release keeps working.
+      thread_key: inboxMessage.gmail_thread_id,
       reply_message_id: result.messageId,
       body_en: replyBody,
       body_sent: sentBody,

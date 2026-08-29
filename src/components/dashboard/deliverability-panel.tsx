@@ -56,7 +56,7 @@ export function DeliverabilityPanel() {
 
       // 2. Fetch Gmail accounts
       const { data: gmailAccounts } = await supabase
-        .from("gmail_accounts")
+        .from("mail_accounts")
         .select("*")
         .eq("workspace_id", workspaceId);
       setAccounts(gmailAccounts || []);

@@ -46,7 +46,7 @@ export async function GET() {
 
   // Get Gmail accounts for the workspace (all members)
   const { data: gmailAccounts } = await serviceClient
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("user_id, email_address, display_name, status")
     .eq("workspace_id", workspaceId);
 

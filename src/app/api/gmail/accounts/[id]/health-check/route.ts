@@ -276,7 +276,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: account } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, workspace_id, email_address, status, pause_reason")
     .eq("id", id)
     .single();
