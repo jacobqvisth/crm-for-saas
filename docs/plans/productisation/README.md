@@ -97,7 +97,7 @@ Run in order. Do not start a phase before the previous one is merged.
 
 | # | Phase | Status | Visible change for Wrenchlane |
 |---|---|---|---|
-| [01](01-migration-baseline.md) | Squash the desynced migration history into one honest baseline | **Done** 2026-08-29 | None |
+| [01](01-migration-baseline.md) | Squash the desynced migration history into one honest baseline | **Done** 2026-08-29 (#746) | None |
 | [02](02-tenant-config.md) | Typed tenant config module and resolver | Not started | None |
 | [03](03-feature-registry.md) | Feature registry, and gate nav + routes + crons | Not started | None (all flags default on) |
 | [04](04-control-plane.md) | Control-plane database and super-admin console | Not started | None |
