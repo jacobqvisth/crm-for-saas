@@ -7648,3 +7648,64 @@ and the brief's "done when" does not require it:
 
 The super-admin Google account now controls feature access for three paying customers.
 It needs a hardware key or passkey, not SMS.
+
+## 2026-08-30 — Productisation phase 05: config pull, cache and fallback — PR #753 — `feature/prod-05-config-pull`
+
+**Phase:** 05. **Visible change for Wrenchlane:** none, with a test that diffs resolved
+values against compiled defaults key by key.
+
+### Built
+
+Three-layer resolution in `src/lib/tenant-config/`: live pull (3s timeout) → cache in the
+tenant's OWN database → compiled defaults. **There is no `throw` in the pull path and there
+must not be one** — a throw makes a control-plane outage an outage for three businesses.
+
+- `resolve.ts` — the ladder, with the cache injected so all five brief verifications are
+  real tests rather than a checklist.
+- `runtime.ts` — `peekFlags()`, **synchronous**, for middleware. Module-level memo, falls
+  back to compiled when cold, refreshes in the background without being awaited. A
+  serverless instance is reused, so it is one pull per TTL per instance, not per request.
+- `cache.ts` + migration `20260830090000_tenant_config_cache.sql` (additive, R3).
+- `(control-plane)/api/config/route.ts` — the token identifies the tenant; there is no
+  tenant id in the request because a caller-supplied id is caller-controlled.
+- `cronGate()` is now **async** and resolves the full ladder. 22 call sites awaited.
+
+### The phase 01 machinery had its first real use
+
+The new migration was applied to prod with `node scripts/migrate-tenants.mjs
+--tenant=wrenchlane --apply`. Reported 1 pending → applied → now "nothing to apply
+(2 recorded, 2 on disk)". Prod table count 101 → 102. The whole point of phase 01, working.
+
+### Verified against real processes
+
+Two servers, real token, real toggle. Endpoint: 401 no token, 401 wrong token, 200 with 19
+features and no keys beyond the contract. After switching forums off in the control plane:
+`/forums` went 307 (cold memo, compiled) → **404** (memo warm, pulled), `/dtc-lookup` stayed
+307, and the forums cron reported `"source":"live"`. Then the control plane was **killed**:
+tenant kept serving everything and the cron reported `"source":"cache"`.
+
+### THE TRAP THIS SESSION HIT — read before doing any local run in phases 08/09
+
+The local tenant process ran with `.env.local`, which points at **production** Supabase. It
+therefore wrote a real `tenant_config_cache` row saying `forums: false` into **Wrenchlane's
+production database**. Because `CONTROL_PLANE_URL` is unset in prod, the live pull fails,
+the resolver reads that cache, and **Wrenchlane would have lost the forums feature.**
+
+Cleaned up: cache row deleted, control-plane override removed, verification token revoked.
+Prod verified back to 0 cache rows / 0 overrides / 0 live tokens → compiled defaults → every
+feature on.
+
+**Generalise this:** running the app locally with `.env.local` is running it against
+production. Anything the app writes, it writes for real. Before a local run that exercises a
+write path, either point at a scratch database or plan the cleanup first.
+
+### Checks
+
+build pass · lint 0 errors · tsc clean · smoke 10/10 · **1058 unit tests across 81 files,
+0 failing** (25 new).
+
+### Still not deployed
+
+The control plane has no Vercel project yet, so `CONTROL_PLANE_URL` is unset in production
+and Wrenchlane runs on compiled defaults — a supported state, not a broken one. Deploy steps
+are in the phase 04 entry above.
