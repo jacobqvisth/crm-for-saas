@@ -7755,3 +7755,43 @@ which the current code does not do — a small quota change to be aware of when 
 
 build pass · lint 0 errors · tsc clean · smoke 10/10 · **1066 unit tests across 82 files, 0
 failing**.
+
+## 2026-08-30 — Productisation phase 10 (D+E): contract register + CLAUDE.md — PR #755
+
+Documentation only. The only parts of phase 10 not gated on customer knowledge.
+
+- **`docs/plans/productisation/CONTRACT-STEPS.md`** — the visible list R3 and phase 10 D ask
+  for. Three open steps, all from phase 06. Each names what blocks it. Note the warning that
+  `security_invoker` on the `mail_accounts` view is load-bearing.
+- **CLAUDE.md is true again.** Every claim was checked against the repo, not taken from the
+  ground-rules note: Inngest is not in the stack (0 refs in `src/`, not in package.json),
+  `/deals` is not a route (page does not exist), and **"All 18 tables have RLS enabled" was
+  wrong by 83 tables** — there are 101 tables, 97 with RLS, 4 deliberately without. In a
+  programme about tenant isolation that was the worst kind of stale. The deals/pipelines
+  TABLES survive and the file now says not to delete them.
+
+### Not attempted: RLS on `discovered_shops` (#747)
+
+**Five discovery API routes use the user-session Supabase client, not the service role**
+(`shops`, `stats`, `skip`, `promote`, `verify-email`). So enabling RLS is not a no-op that
+only matters for a leaked key — without a correct policy it breaks `/discovery` for real
+users immediately. Verifying needs an authenticated browser session. Findings posted to #747.
+
+### WHERE THE PROGRAMME STOPPED
+
+Phases 01-06 merged. **07, 08, 09 and 10 A-C are blocked on inputs, not effort:**
+
+- **07** opens with a spike against a throwaway Microsoft 365 mailbox and needs an Entra app
+  registration with admin consent **in the customer's own tenant**. Admin consent is called
+  out in the brief as the slowest external step in the programme — start those conversations.
+- **08 / 09** need each customer's real domains, mailboxes, Supabase + Vercel projects and
+  Microsoft tenants.
+- **10 A-C** are gated by their own brief: "Get Animech's actual stages, deal sizes and
+  typical cycle length before designing the forecast. Guessing produces a pipeline nobody
+  uses." and "Scope it with Spennare rather than from first principles."
+
+### Also outstanding
+
+- **The control plane is not deployed to Vercel** (steps in the phase 04 entry). Until it is,
+  `CONTROL_PLANE_URL` is unset and Wrenchlane runs on compiled defaults — a supported state.
+- **The seven Gmail call sites** still call Gmail directly (phase 06 entry).

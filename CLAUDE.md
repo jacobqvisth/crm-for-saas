@@ -6,7 +6,7 @@ This file tells Claude Code how to work on this project.
 
 Self-hosted CRM with email sequencing (like HubSpot Sales + Lemlist) for a SaaS company. Manages 10,000+ contacts, tracks company users, and sends automated email sequences through Google Workspace.
 
-**Tech stack:** Next.js 16 (App Router) + Supabase (PostgreSQL) + Tailwind CSS 4 + Vercel + Inngest + Gmail API
+**Tech stack:** Next.js 16 (App Router) + Supabase (PostgreSQL) + Tailwind CSS 4 + Vercel + Gmail API + Vercel Cron
 
 ## Workflow
 
@@ -58,13 +58,12 @@ This app uses a `(dashboard)` route group for layout only. Routes are:
 - `/dashboard` → `src/app/(dashboard)/dashboard/page.tsx`
 - `/contacts` → `src/app/(dashboard)/contacts/page.tsx`
 - `/companies` → `src/app/(dashboard)/companies/page.tsx`
-- `/deals` → `src/app/(dashboard)/deals/page.tsx`
 - `/sequences` → `src/app/(dashboard)/sequences/page.tsx`
 - `/lists` → `src/app/(dashboard)/lists/page.tsx`
 - `/templates` → `src/app/(dashboard)/templates/page.tsx`
 - `/settings` → `src/app/(dashboard)/settings/page.tsx`
 
-**Routes are NOT prefixed with `/dashboard/`.** The sidebar links use `/contacts`, `/deals`, etc. The middleware protects all these routes (see `src/lib/supabase/middleware.ts`).
+**Routes are NOT prefixed with `/dashboard/`.** The sidebar links use `/contacts`, `/companies`, etc. The middleware protects all these routes (see `src/lib/supabase/middleware.ts`).
 
 ### Supabase Clients
 - **Browser (client components):** `import { createClient } from "@/lib/supabase/client"`
@@ -77,14 +76,22 @@ This app uses a `(dashboard)` route group for layout only. Routes are:
 - All Supabase queries on workspace-scoped tables must filter by `workspace_id`
 
 ### RLS (Row-Level Security)
-- All 18 tables have RLS enabled
+- 97 of the 101 tables in `public` have RLS enabled. **Four deliberately do not:**
+  `_ops_queue_pause_2026_04_28`, `dashboard_cta_clicks`, `dashboard_domain_health_checks`
+  and `discovered_shops`. The first three are ops/analytics tables with no customer
+  contact data. `discovered_shops` holds ~42k scraped contacts and is an open issue
+  (#747) that must be closed before a second customer is stood up
 - Most tables use: `workspace_id IN (SELECT get_user_workspace_ids())`
 - `get_user_workspace_ids()` is a SECURITY DEFINER function — it bypasses RLS internally
 - **`workspace_members` table has special policies** — do NOT add policies that self-reference `workspace_members` directly (causes infinite recursion). Use `user_id = auth.uid()` or SECURITY DEFINER helper functions instead.
 
 ### Database Schema
 The CRM is a hybrid of prospect-discovery + outreach + actual-customer management. Tables:
-- **Core CRM:** workspaces, workspace_members, contacts, companies, pipelines, deals, deal_contacts, activities
+- **Core CRM:** workspaces, workspace_members, contacts, companies, activities
+- **Dormant:** `pipelines`, `deals`, `deal_contacts` — the tables survive, the feature does
+  not. The Deals UI was removed in PR #357 because Wrenchlane does not sell deal by deal.
+  Do not delete the tables: productisation phase 10 rebuilds the feature for Animech and
+  Spennare, behind the `deals` flag, off for Wrenchlane
 - **Customer lifecycle:** subscriptions (Stripe history per company), usage_events (generic event stream — login, diagnostic, subscription, etc. — built for the dashboard merge)
 - **Prospect staging:** discovered_shops (Apify Google Maps imports + manual prospect lists land here, then are promoted to companies+contacts via the `/discovery` page)
 - **Lists:** contact_lists, contact_list_members
@@ -191,9 +198,9 @@ Do NOT commit `e2e/.auth/user.json` — it contains session tokens and is gitign
 
 - Phase 1: Scaffolding + Auth + Dashboard layout ✅
 - Phase 2: Contacts + Companies + CSV Import ✅
-- Phase 3: Deals Pipeline (Kanban board) ✅
+- Phase 3: Deals Pipeline (Kanban board) ✅ — later REMOVED in PR #357; see Dormant above
 - Phase 4: Gmail Integration (OAuth, sending engine) ✅
-- Phase 5: Email Sequences (Lemlist-like builder + Inngest execution) ✅
+- Phase 5: Email Sequences (Lemlist-like builder) ✅ — originally Inngest, since replaced by Vercel Cron
 - Phase 6: Email Tracking (open pixel, click wrapping, unsubscribe) ✅
 - Phase 7: Contact Lists + Smart Lists ✅ (PR #8)
 - Phase 8: Dashboard + Reports ✅ (PR #9)
@@ -211,6 +218,17 @@ Before signing off on any session, run these checks:
 3. `npx tsc --noEmit` — no type errors
 
 Every 3–4 phases, a dedicated health check session runs: lint to zero, dead code removal, `npm audit`, `npx depcheck`, git branch cleanup, env var audit, TODO sweep, and CLAUDE.md freshness check.
+
+## Productisation
+
+This repo is being turned into one product serving several customers (Wrenchlane,
+Animech, Spennare) from one `main`, with a separate deployment and database per
+customer. **`docs/plans/productisation/00-ground-rules.md` governs that work and
+overrides parts of this file while it is in progress** — in particular, migrations are
+applied through `scripts/migrate-tenants.mjs` rather than by hand, and every migration
+must be additive and backward compatible because tenants can run different releases.
+
+Open expand/contract steps are tracked in `docs/plans/productisation/CONTRACT-STEPS.md`.
 
 ## Key Files
 
