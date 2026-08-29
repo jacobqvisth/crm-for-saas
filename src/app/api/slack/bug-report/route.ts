@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { postBugReport } from "@/lib/slack/notify";
+import { appBaseUrl } from "@/lib/app-url";
 
 // Post a call follow-up / bug to the #bug-reports Slack channel. Authorized as
 // a workspace member; the channel is fixed by the SLACK_BUG_REPORTS_WEBHOOK_URL
@@ -15,10 +16,6 @@ const Body = z.object({
   companyName: z.string().max(200).nullish(),
   dueDate: z.string().max(40).nullish(),
 });
-
-function appBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://crm-for-saas.vercel.app";
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();

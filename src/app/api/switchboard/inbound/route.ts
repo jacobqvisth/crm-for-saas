@@ -4,6 +4,7 @@ import { normalizePhone } from "@/lib/calls/phone";
 import { matchCaller } from "@/lib/switchboard/brief";
 import { buildAgentLegPayload } from "@/lib/switchboard/routing";
 import type { TablesInsert } from "@/lib/database.types";
+import { appBaseUrl } from "@/lib/app-url";
 
 // POST /api/switchboard/inbound — the växel's front door.
 //
@@ -16,12 +17,6 @@ import type { TablesInsert } from "@/lib/database.types";
 // ?token=<switchboard webhook_secret>, verified here.
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://crm-for-saas.vercel.app"
-  );
-}
 
 function pick(form: FormData, ...keys: string[]): string | null {
   for (const k of keys) {

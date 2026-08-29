@@ -6,6 +6,7 @@
 // logged — only whether they are present and well-formed.
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { appBaseUrl } from "@/lib/app-url";
 
 export type CheckSeverity = "high" | "medium" | "low" | "info";
 
@@ -21,13 +22,6 @@ export type ScanResult = {
   checks: CheckResult[];
   severity_counts: Record<string, number>;
 };
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "https://crm-for-saas.vercel.app"
-  );
-}
 
 // The CRM must expose these enforced security headers on every response.
 const REQUIRED_CRM_HEADERS = [

@@ -1,24 +1,23 @@
+import { getTenant } from "@/config/tenants";
 import type { createSupabaseServiceClient } from "@/lib/ceo/supabase";
 
 // Email domains whose users are automatically flagged as internal-test
 // (dashboard_users.is_internal_test = true). Applied at every core_app sync
-// and via the matching backfill migration. Add a new entry here to start
-// filtering anyone with that domain out of CEO dashboard metrics.
+// and via the matching backfill migration.
 //
 // The per-user exempt flag (dashboard_users.is_internal_test_exempt) overrides
 // this, so individual customers inside a flagged domain stay counted.
 //
-// codeoc.ai is CodeOC, the dev company behind Wrenchlane — every account on
-// that domain is an internal team member, not a customer.
-export const INTERNAL_TEST_EMAIL_DOMAINS = [
-  "wrenchlane.com",
-  "codeoc.ai",
-  // Hans's own domain — hans@wrenchlane.com, hans@codeoc.ai and hans@bitknife.se
-  // are the same person. It was previously covered only by the exact-email
-  // pattern hans@bitknife.se, so a second bitknife.se account (hans-hasseeklun)
-  // slipped into the diagnostics data. Domain-level keeps future signups out.
-  "bitknife.se",
-] as const;
+// The list now comes from the tenant config (`domains.internalDomains`), which
+// is the right home for it: every customer of this CRM has its own staff
+// domains, and hardcoding Wrenchlane's here would have flagged the wrong
+// people the moment a second tenant existed. Edit
+// src/config/tenants/<slug>.ts to change it. For Wrenchlane the values are
+// unchanged: wrenchlane.com, codeoc.ai (CodeOC, the dev company behind the
+// product) and bitknife.se (Hans's own domain — hans@wrenchlane.com,
+// hans@codeoc.ai and hans@bitknife.se are one person).
+export const INTERNAL_TEST_EMAIL_DOMAINS: readonly string[] =
+  getTenant().domains.internalDomains;
 
 type ServiceClient = NonNullable<ReturnType<typeof createSupabaseServiceClient>>;
 

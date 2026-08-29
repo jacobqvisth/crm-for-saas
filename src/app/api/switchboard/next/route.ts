@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isWithinOfficeHours } from "@/lib/switchboard/types";
 import { loadTargets } from "@/lib/switchboard/settings";
+import { appBaseUrl } from "@/lib/app-url";
 import {
   buildTransferAction,
   buildVoicemailAction,
@@ -23,12 +24,6 @@ import {
 // PUBLIC route, authenticated by ?token= like the inbound webhook.
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://crm-for-saas.vercel.app"
-  );
-}
 
 function pick(form: FormData, ...keys: string[]): string | null {
   for (const k of keys) {
