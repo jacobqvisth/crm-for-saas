@@ -101,7 +101,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [02](02-tenant-config.md) | Typed tenant config module and resolver | **Done** 2026-08-29 (#749) | None |
 | [03](03-feature-registry.md) | Feature registry, and gate nav + routes + crons | **Done** 2026-08-30 (#751) | None (all flags default on) |
 | [04](04-control-plane.md) | Control-plane database and super-admin console | **Done** 2026-08-30 | None |
-| [05](05-config-pull.md) | Tenants pull their config, with cache and fallback | Not started | None |
+| [05](05-config-pull.md) | Tenants pull their config, with cache and fallback | **Done** 2026-08-30 | None |
 | [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | Not started | None |
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
 | [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started | None |

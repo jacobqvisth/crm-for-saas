@@ -36,7 +36,7 @@ function isAuthorized(request: NextRequest): boolean {
 export async function GET(request: NextRequest) {
   // Feature gate. 200 rather than an error: a switched-off feature is not
   // a failure, and a cron that fails on a schedule buries the alert channel.
-  const skip = cronGate("forums");
+  const skip = await cronGate("forums");
   if (skip) return skip;
 
   if (!isAuthorized(request)) {
