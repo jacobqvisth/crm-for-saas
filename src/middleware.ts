@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { getTenant } from "@/config/tenants";
 import { featureForPath, isCronPath } from "@/config/features";
+import { CONTROL_PLANE_PREFIX } from "@/lib/control-plane/routes";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -23,6 +24,20 @@ export async function middleware(request: NextRequest) {
   // /api/forums/candidates/scan) sit UNDER a gated prefix, so without this
   // check they would 404 here and Vercel would report a failing schedule every
   // day for a feature that is merely switched off.
+  // The control-plane console is mounted only on the deployment that IS the
+  // control plane. On a tenant deployment these routes must not exist at all —
+  // 404, not 403, because a 403 confirms the console lives at this URL.
+  //
+  // The page and every server action re-check this themselves. Middleware is a
+  // convenience, not the boundary: a server action reached by direct POST does
+  // not necessarily pass through here.
+  if (pathname === CONTROL_PLANE_PREFIX || pathname.startsWith(`${CONTROL_PLANE_PREFIX}/`)) {
+    if (process.env.IS_CONTROL_PLANE !== "1") {
+      return new NextResponse(null, { status: 404 });
+    }
+    return await updateSession(request);
+  }
+
   if (!isCronPath(pathname)) {
     const feature = featureForPath(pathname);
     if (feature && getTenant().features[feature] !== true) {
