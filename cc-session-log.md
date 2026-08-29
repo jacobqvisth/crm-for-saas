@@ -7272,3 +7272,140 @@ production deploy Ready and `/mockup/ar-hero.jpg` serves 200.
 **Not done:** the clickable mockup is not deployed to Vercel yet, so
 `NEXT_PUBLIC_MOCKUP_URL` is unset. The page renders correctly without it.
 I also did not visually verify the rendered page, since it sits behind the login.
+
+## 2026-08-29 — Productisation phase 01: one honest migration baseline — branch `feature/prod-01-migration-baseline`
+
+**Phase:** 01 of `docs/plans/productisation/`. **PR:** not yet opened — `gh pr create` was
+blocked by the auto-mode classifier; branch is pushed and ready. **Visible change for
+Wrenchlane:** none, verified.
+
+### What the problem actually was
+
+The brief said "many" local migration files were never recorded as applied and "many"
+remote entries have no local file. Measured, it is worse than that:
+
+| | |
+|---|---|
+| Local `.sql` files | 129 |
+| Distinct version prefixes among them | 122 |
+| Rows in `supabase_migrations.schema_migrations` on the remote | 68 |
+| **Versions present both locally and remotely** | **2** |
+| Local versions with no remote row | 120 |
+| Remote rows with no local file | 66 |
+
+Two of sixty-eight, and the only two either side agreed on were `20260630140000` and
+`20260630160000`. Two causes: migrations were routinely applied by hand through psql or
+the Management API, which applies the change without writing the history row (the
+documented workaround for a desynced history, which widened the desync every time it was
+used), and seven timestamp prefixes are shared by two files each, so only one file per
+prefix could ever be recorded.
+
+### Built
+
+- `supabase/migrations/00000000000000_baseline.sql` (361 KB) — the schema, from
+  `pg_dump --schema-only --no-owner --no-privileges --schema=public` against production,
+  plus by hand: the 9 `CREATE EXTENSION` statements, the 3 storage buckets, the 1 storage
+  policy. `CREATE SCHEMA public` and `COMMENT ON SCHEMA public` stripped (Supabase rejects
+  them), as were the psql 18 `\restrict` / `\unrestrict` meta-commands.
+- 129 files moved to `supabase/migrations/_archive/` with a README recording the drift.
+- `scripts/migrate-tenants.mjs` — applies pending migrations to every tenant from one
+  place (R4). Dry-run default, `--apply` to write, refuses >1 tenant without `--all`.
+  Shells out to psql rather than adding a Postgres driver dependency.
+- `scripts/reconcile-migration-history.sql` — the remaining production step.
+
+### Step 3, the round-trip: the diff result
+
+Created scratch Supabase project `icgdvrqvszitkhbosjue` (eu-north-1, PG 17.6, same as
+prod), applied the baseline — **clean on the first attempt, psql exit 0, no errors,
+including `CREATE EXTENSION pg_cron`** — dumped that schema and diffed it against the
+production dump.
+
+**Raw diff: 638 differing lines across 5 hunks, out of 10785 lines each side.**
+**Sorted diff: EMPTY.** Identical multiset of lines, and an identical inventory of all
+**1014** objects.
+
+The 638 lines are entirely ordering. Production emits `companies`, `contacts`,
+`suppressions` and `dashboard_users` ahead of the alphabetical run (a pg_dump
+dependency-ordering artifact — functions referencing those tables pull them forward);
+the scratch dump is purely alphabetical. `-- Name: companies; Type: TABLE` sits at line
+1945 in one and 2265 in the other. No object differs in content.
+
+Catalogue counts, queried identically against both databases:
+
+| Object | Production | Scratch |
+|---|---|---|
+| Tables | 101 | 101 |
+| User functions (excl. extension-owned) | 32 | 32 |
+| Triggers | 53 | 53 |
+| Policies | 123 | 123 |
+| RLS enabled / disabled | 97 / 4 | 97 / 4 |
+| Views | 12 | 12 |
+| Indexes (`pg_indexes`) | 354 | 354 |
+| Extensions | 9 | 9 |
+
+All 9 extensions landed in the right schemas (`pg_net`/`pg_trgm`/`unaccent` in `public`,
+`pg_stat_statements`/`pgcrypto`/`uuid-ossp` in `extensions`, `pg_cron`/`plpgsql` in
+`pg_catalog`, `supabase_vault` in `vault`). `get_user_workspace_ids()` is SECURITY DEFINER
+on both. Scratch had **zero** `cron.job` rows (R6). **Scratch project deleted.**
+
+### The extensions trap is real
+
+`pg_net`, `pg_trgm` and `unaccent` are installed into `public`, and the `--schema=public`
+dump emits **zero** `CREATE EXTENSION` statements while emitting 2 trgm and 8 unaccent
+references that depend on them — including
+`public.immutable_unaccent`, whose body is
+`SELECT public.unaccent('public.unaccent'::regdictionary, $1)`, and
+`idx_companies_name_trgm`, which uses `public.gin_trgm_ops`. A naive baseline fails to
+apply. The baseline creates all 9 extensions first.
+
+### Two brief numbers that were wrong, and one that was not
+
+Investigated rather than updated, per instruction:
+
+- **"128 migration files"** — there are 129, and there were 129 at the commit where the
+  brief was written. A prose off-by-one, not drift.
+- **"~357 KB dump"** — the public-only dump is 395 KB; the estimate predated the storage
+  schema being in the command. The finished baseline is 361 KB.
+- **"205 indexes"** — correct, and not what it looks like. 205 is the count of plain
+  `CREATE INDEX ... ON public.`; there are also 24 `CREATE UNIQUE INDEX` (229 in the dump),
+  and 354 in `pg_indexes` once constraint-backing indexes count. All three numbers are the
+  same schema counted three ways.
+
+### Ground rules
+
+- **R1** — production public schema re-dumped after all work: **byte-identical**, 10787
+  lines before and after. Nothing was written to production this session.
+- **R6** — the 9 `pg_cron` jobs deliberately not carried across.
+- **R9** — `npm run build` pass (164/164 pages), `npm run lint` 0 errors (1 pre-existing
+  warning in `call-provider.tsx`, untouched), `npx tsc --noEmit` clean,
+  `test:e2e:smoke` 10/10 (with `--workers=1`).
+
+### Left for Jacob — both blocked by the auto-mode classifier
+
+1. **Open and merge the PR.** Branch `feature/prod-01-migration-baseline` is pushed.
+   `gh pr create` and `gh issue create` were both blocked.
+2. **Run `scripts/reconcile-migration-history.sql` against production**, once, after the
+   merge. It writes only `supabase_migrations.schema_migrations` and changes no schema.
+   It **deletes** the 68 rows rather than only inserting the baseline: version
+   `00000000000000` sorts before all of them, and the Supabase CLI refuses to push when a
+   local migration predates the latest remote entry, so leaving them preserves the exact
+   breakage this phase removes. A full backup of all 68 rows including `statements` was
+   taken during the session, and version+name are committed in the archive README.
+   Afterwards `node scripts/migrate-tenants.mjs` must report "nothing to apply" —
+   that is the check that it worked. Right now it correctly reports 1 pending.
+3. **Open an issue for `discovered_shops`.** RLS disabled, ~42,000 rows of scraped
+   prospect data including emails and phone numbers, workspace-scoped everywhere in
+   application code and nowhere in the database. Fine with one tenant, a leak with three,
+   almost certainly one of the known multi-tenant isolation leaks. **Must be closed before
+   phase 08.** Not fixed here: enabling RLS without a policy denies all reads immediately,
+   which would break R1. Full issue text is in the PR body.
+
+### Surprising
+
+- Only 2 of 68 remote history rows had a matching local file. The desync was not partial,
+  it was near-total.
+- The baseline applied to a brand new project cleanly on the first attempt, `pg_cron`
+  included, which I did not expect.
+- `next build` silently appends a `<!-- BEGIN:nextjs-agent-rules -->` block to `AGENTS.md`
+  (written by `node_modules/next/dist/server/lib/generate-agent-files.js`). Reverted here
+  to keep the diff scoped; it will reappear on anyone's next build.
