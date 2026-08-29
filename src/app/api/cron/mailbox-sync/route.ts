@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now();
 
   const { data: accounts } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, email_address, display_name, workspace_id, status")
     .neq("status", "disconnected");
 
@@ -363,6 +363,9 @@ async function processThread(
             direction: "outbound",
             gmail_message_id: msgId,
             gmail_thread_id: threadId,
+            // Dual-write during the phase 06 expand step: the old column stays
+            // populated so a deployment on the previous release keeps working.
+            thread_key: threadId,
             gmail_account_id: account.id,
             // Who actually sent it. The contact timeline renders "Email sent by
             // <name>" off these two keys; without them a rep's own Gmail send
@@ -398,6 +401,9 @@ async function processThread(
             gmail_account_id: account.id,
             gmail_message_id: msgId,
             gmail_thread_id: threadId,
+            // Dual-write during the phase 06 expand step: the old column stays
+            // populated so a deployment on the previous release keeps working.
+            thread_key: threadId,
             contact_id: contactId,
             from_email: from,
             from_name: fromParsed.name || null,
@@ -433,6 +439,9 @@ async function processThread(
             direction: "inbound",
             gmail_message_id: msgId,
             gmail_thread_id: threadId,
+            // Dual-write during the phase 06 expand step: the old column stays
+            // populated so a deployment on the previous release keeps working.
+            thread_key: threadId,
             gmail_account_id: account.id,
             // Which of our mailboxes this landed in — with a dozen connected
             // accounts, "who received it" is as useful as "who sent it".

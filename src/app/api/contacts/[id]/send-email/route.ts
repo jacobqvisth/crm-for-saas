@@ -200,7 +200,7 @@ export async function POST(
   let senderId = body.senderAccountId ?? null;
   if (senderId) {
     const { data: chosen } = await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("id, status")
       .eq("id", senderId)
       .eq("workspace_id", workspaceId)
@@ -305,6 +305,9 @@ export async function POST(
       sent_at: sentAt,
       gmail_message_id: result.messageId ?? null,
       gmail_thread_id: result.threadId ?? null,
+      // Dual-write during the phase 06 expand step: the old column stays
+      // populated so a deployment on the previous release keeps working.
+      thread_key: result.threadId ?? null,
     })
     .eq("id", queueRow.id);
 
@@ -315,7 +318,7 @@ export async function POST(
     .eq("id", contactId);
 
   const { data: senderAccount } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("email_address, display_name")
     .eq("id", senderId)
     .maybeSingle();
@@ -331,6 +334,9 @@ export async function POST(
       tracking_id: trackingId,
       gmail_message_id: result.messageId ?? null,
       gmail_thread_id: result.threadId ?? null,
+      // Dual-write during the phase 06 expand step: the old column stays
+      // populated so a deployment on the previous release keeps working.
+      thread_key: result.threadId ?? null,
       sender_account_id: senderId,
       sender_email: senderAccount?.email_address ?? null,
       sender_name: senderAccount?.display_name ?? null,

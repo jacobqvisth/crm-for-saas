@@ -140,7 +140,7 @@ async function fetchBodyFromGmail(
   try {
     const admin = createServiceClient();
     const { data: account } = await admin
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("id, workspace_id, status")
       .eq("id", gmailAccountId)
       .maybeSingle();

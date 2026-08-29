@@ -38,7 +38,7 @@ export async function listReps(
   supabase: SupabaseClient<Database>,
 ): Promise<Rep[]> {
   const { data, error } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("user_id, display_name, email_address, created_at")
     .order("created_at", { ascending: true });
 

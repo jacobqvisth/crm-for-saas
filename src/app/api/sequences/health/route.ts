@@ -59,7 +59,7 @@ export async function GET() {
 
       if (senderIds.length > 0) {
         const { data: accounts } = await supabase
-          .from("gmail_accounts")
+          .from("mail_accounts")
           .select("id, status")
           .in("id", senderIds);
 

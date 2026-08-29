@@ -200,7 +200,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
   // Get the Gmail account record
   const { data: account, error: fetchError } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("*")
     .eq("id", params.accountId)
     .single();
@@ -216,7 +216,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   // Check daily send limit
   if ((account.daily_sends_count ?? 0) >= (account.max_daily_sends ?? 0)) {
     await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .update({ status: "rate_limited" })
       .eq("id", params.accountId);
     return { success: false, error: "Daily send limit reached" };
@@ -306,7 +306,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
     // Increment daily send count
     await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .update({
         daily_sends_count: (account.daily_sends_count ?? 0) + 1,
       })
@@ -323,7 +323,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     // Handle 429 — rate limited by Google
     if (error.code === 429) {
       await supabase
-        .from("gmail_accounts")
+        .from("mail_accounts")
         .update({ status: "rate_limited" })
         .eq("id", params.accountId);
       return { success: false, error: "Google API rate limit reached" };
@@ -344,7 +344,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         });
 
         await supabase
-          .from("gmail_accounts")
+          .from("mail_accounts")
           .update({
             daily_sends_count: (account.daily_sends_count ?? 0) + 1,
           })

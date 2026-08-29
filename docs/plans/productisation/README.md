@@ -102,7 +102,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [03](03-feature-registry.md) | Feature registry, and gate nav + routes + crons | **Done** 2026-08-30 (#751) | None (all flags default on) |
 | [04](04-control-plane.md) | Control-plane database and super-admin console | **Done** 2026-08-30 | None |
 | [05](05-config-pull.md) | Tenants pull their config, with cache and fallback | **Done** 2026-08-30 | None |
-| [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | Not started | None |
+| [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | **Partial** 2026-08-30 | None |
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
 | [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started | None |
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
@@ -115,6 +115,17 @@ history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs`
 The control plane lives at Supabase project `ktkuwmuhhrbwzysuxfzi`
 (`wrenchlane-control-plane`). It is **not deployed to Vercel yet** — see the phase 04
 section of `cc-session-log.md` for the remaining deploy steps.
+
+**Phase 06 is deliberately half-landed.** The interface, the Google implementation and
+the whole schema half are done and verified. The seven live Gmail API call sites (the send
+engine, `check-replies`, `mailbox-sync`, the inbox routes and the OAuth connect) still call
+Gmail directly through `lib/mail/google/client`, and are unchanged.
+
+That was a judgment call, not an oversight. Rewiring them means changing Wrenchlane's live
+outbound and inbox-sync paths, and the brief's own "done when" requires proving it by
+sending a real sequence email and seeing the reply detected in production — which cannot be
+done from an agent session. Swapping them blind and merging would have put a live business's
+email on an unverified path. Do that swap in a session where a real send can be watched.
 
 Phases 01 to 07 change nothing that any Wrenchlane user can see. That is deliberate, and it
 means the first stretch of work produces nothing demonstrable. Say so up front rather than

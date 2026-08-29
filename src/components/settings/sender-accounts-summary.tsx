@@ -26,7 +26,7 @@ export function SenderAccountsSummary() {
   const loadAccounts = useCallback(async () => {
     if (!workspaceId) return;
     const { data, error } = await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true });

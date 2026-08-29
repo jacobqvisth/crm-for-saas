@@ -23,7 +23,7 @@ export async function getValidAccessToken(accountId: string): Promise<RefreshRes
   const supabase = createServiceClient();
 
   const { data: account, error: fetchError } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("*")
     .eq("id", accountId)
     .single();
@@ -79,7 +79,7 @@ export async function getValidAccessToken(accountId: string): Promise<RefreshRes
     }
 
     await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .update(updateData)
       .eq("id", accountId);
 
@@ -87,7 +87,7 @@ export async function getValidAccessToken(accountId: string): Promise<RefreshRes
   } catch (err) {
     // Refresh failed — mark account as disconnected
     await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .update({ status: "disconnected" })
       .eq("id", accountId);
 

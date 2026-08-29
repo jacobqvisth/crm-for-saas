@@ -1147,7 +1147,7 @@ async function getTrialUsersDataUncached(): Promise<TrialUsersData> {
     ),
     pageAll<MailboxDbRow>(({ from, to }) =>
       supabase
-        .from("gmail_accounts")
+        .from("mail_accounts")
         .select("id, email_address, display_name")
         .order("id", { ascending: true })
         .range(from, to),

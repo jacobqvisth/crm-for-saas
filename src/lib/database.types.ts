@@ -3355,6 +3355,7 @@ export type Database = {
           error_message: string | null
           gmail_message_id: string | null
           gmail_thread_id: string | null
+          thread_key: string | null
           id: string
           max_retries: number | null
           retry_count: number | null
@@ -3378,6 +3379,7 @@ export type Database = {
           error_message?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
+          thread_key?: string | null
           id?: string
           max_retries?: number | null
           retry_count?: number | null
@@ -3401,6 +3403,7 @@ export type Database = {
           error_message?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
+          thread_key?: string | null
           id?: string
           max_retries?: number | null
           retry_count?: number | null
@@ -4195,7 +4198,18 @@ export type Database = {
           },
         ]
       }
-      gmail_accounts: {
+      /**
+       * Provider-agnostic view over gmail_accounts (phase 06).
+       *
+       * Typed under Tables rather than Views deliberately: it is a simple
+       * single-table view and therefore auto-updatable, so it accepts
+       * INSERT/UPDATE/DELETE like a table. Typing it as a View would make
+       * every write through it a type error.
+       *
+       * The base table is renamed in the release-N+1 contract step, at which
+       * point this entry becomes the real table and gmail_accounts goes.
+       */
+      mail_accounts: {
         Row: {
           access_token: string | null
           created_at: string | null
@@ -4210,6 +4224,7 @@ export type Database = {
           max_daily_sends: number | null
           min_send_interval_seconds: number
           pause_reason: string | null
+          provider: string
           refresh_token: string | null
           signature: string | null
           signature_html: string | null
@@ -4238,6 +4253,7 @@ export type Database = {
           max_daily_sends?: number | null
           min_send_interval_seconds?: number
           pause_reason?: string | null
+          provider?: string
           refresh_token?: string | null
           signature?: string | null
           signature_html?: string | null
@@ -4266,6 +4282,105 @@ export type Database = {
           max_daily_sends?: number | null
           min_send_interval_seconds?: number
           pause_reason?: string | null
+          provider?: string
+          refresh_token?: string | null
+          signature?: string | null
+          signature_html?: string | null
+          status?: string | null
+          target_daily_sends?: number | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+          warmup_day?: number | null
+          warmup_enabled?: boolean | null
+          warmup_stage?: string | null
+          warmup_start_date?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_accounts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_accounts: {
+        Row: {
+          access_token: string | null
+          created_at: string | null
+          daily_sends_count: number | null
+          daily_sends_reset_at: string | null
+          display_name: string | null
+          domain_health: Json | null
+          email_address: string
+          health_score: number | null
+          id: string
+          is_warmup: boolean | null
+          max_daily_sends: number | null
+          min_send_interval_seconds: number
+          pause_reason: string | null
+          provider: string
+          refresh_token: string | null
+          signature: string | null
+          signature_html: string | null
+          status: string | null
+          target_daily_sends: number | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string
+          warmup_day: number | null
+          warmup_enabled: boolean | null
+          warmup_stage: string | null
+          warmup_start_date: string | null
+          workspace_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string | null
+          daily_sends_count?: number | null
+          daily_sends_reset_at?: string | null
+          display_name?: string | null
+          domain_health?: Json | null
+          email_address: string
+          health_score?: number | null
+          id?: string
+          is_warmup?: boolean | null
+          max_daily_sends?: number | null
+          min_send_interval_seconds?: number
+          pause_reason?: string | null
+          provider?: string
+          refresh_token?: string | null
+          signature?: string | null
+          signature_html?: string | null
+          status?: string | null
+          target_daily_sends?: number | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id: string
+          warmup_day?: number | null
+          warmup_enabled?: boolean | null
+          warmup_stage?: string | null
+          warmup_start_date?: string | null
+          workspace_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string | null
+          daily_sends_count?: number | null
+          daily_sends_reset_at?: string | null
+          display_name?: string | null
+          domain_health?: Json | null
+          email_address?: string
+          health_score?: number | null
+          id?: string
+          is_warmup?: boolean | null
+          max_daily_sends?: number | null
+          min_send_interval_seconds?: number
+          pause_reason?: string | null
+          provider?: string
           refresh_token?: string | null
           signature?: string | null
           signature_html?: string | null
@@ -4359,6 +4474,7 @@ export type Database = {
           gmail_account_id: string
           gmail_message_id: string
           gmail_thread_id: string
+          thread_key: string | null
           id: string
           is_auto_reply: boolean | null
           is_read: boolean
@@ -4389,6 +4505,7 @@ export type Database = {
           gmail_account_id: string
           gmail_message_id: string
           gmail_thread_id: string
+          thread_key?: string | null
           id?: string
           is_auto_reply?: boolean | null
           is_read?: boolean
@@ -4419,6 +4536,7 @@ export type Database = {
           gmail_account_id?: string
           gmail_message_id?: string
           gmail_thread_id?: string
+          thread_key?: string | null
           id?: string
           is_auto_reply?: boolean | null
           is_read?: boolean

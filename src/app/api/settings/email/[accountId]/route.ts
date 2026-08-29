@@ -18,7 +18,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   // Verify account belongs to user's workspace
   const { data: account } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("id, workspace_id")
     .eq("id", accountId)
     .single();
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   const { error } = await supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .update(update)
     .eq("id", accountId);
 

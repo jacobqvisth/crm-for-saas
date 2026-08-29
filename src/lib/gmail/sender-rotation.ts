@@ -55,7 +55,7 @@ export async function getNextSender(
   const supabase = createServiceClient();
 
   let query = supabase
-    .from("gmail_accounts")
+    .from("mail_accounts")
     .select("*")
     .eq("workspace_id", workspaceId)
     .eq("status", "active")

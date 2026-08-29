@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     // Check if this Gmail account is already connected
     const { data: existing } = await supabase
-      .from("gmail_accounts")
+      .from("mail_accounts")
       .select("id")
       .eq("workspace_id", stateData.workspaceId)
       .eq("email_address", emailAddress)
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     if (existing) {
       // Update existing account (reconnect)
       const { error: updateError } = await supabase
-        .from("gmail_accounts")
+        .from("mail_accounts")
         .update({
           access_token: encryptedAccessToken,
           refresh_token: encryptedRefreshToken,
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // Insert new account
-      const { error: insertError } = await supabase.from("gmail_accounts").insert({
+      const { error: insertError } = await supabase.from("mail_accounts").insert({
         workspace_id: stateData.workspaceId,
         user_id: user.id,
         email_address: emailAddress,
