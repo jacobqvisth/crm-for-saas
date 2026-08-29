@@ -5,6 +5,7 @@ import { SWITCHBOARD_KNOWLEDGE } from "@/lib/switchboard/knowledge";
 import { analyzeSwitchboardCall, transcriptToText } from "@/lib/switchboard/analyze";
 import { switchboardApiKey } from "@/lib/switchboard/settings";
 import type { Json } from "@/lib/database.types";
+import { cronGate } from "@/lib/features";
 
 // Pull finished switchboard conversations back into the CRM.
 //
@@ -145,8 +146,18 @@ async function handle(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("call_agent");
+  if (skip) return skip;
+
   return handle(request);
 }
 export async function POST(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("call_agent");
+  if (skip) return skip;
+
   return handle(request);
 }

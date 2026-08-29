@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { markIntentionalSignOut } from "@/lib/auth/sign-out";
 import { UserAvatar } from "@/components/user-avatar";
+import { featureForNavHref, type FeatureKey } from "@/config/features";
 import type { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard,
@@ -76,7 +77,17 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+/**
+ * The sidebar is a client component, so it cannot read TENANT_SLUG itself —
+ * `process.env` is not populated in the browser for non-public variables. The
+ * enabled feature list is therefore resolved once, server-side, in
+ * `(dashboard)/layout.tsx` and handed down. That keeps one source of truth per
+ * request, which is what the phase 03 brief asks for.
+ *
+ * Hiding a nav item is NOT the security boundary; the middleware 404 is. This
+ * only stops a user being shown a door that will not open.
+ */
+export function Sidebar({ enabledFeatures }: { enabledFeatures: FeatureKey[] }) {
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [tasksDueCount, setTasksDueCount] = useState(0);
@@ -143,7 +154,13 @@ export function Sidebar() {
     router.push("/login");
   };
 
-  const allNavItems: Omit<NavItem, "badge">[] = staticNavItems;
+  // Drop the items whose feature this tenant does not have. An item that maps
+  // to no feature is core product and always shown.
+  const enabled = new Set(enabledFeatures);
+  const allNavItems: Omit<NavItem, "badge">[] = staticNavItems.filter((item) => {
+    const feature = featureForNavHref(item.href);
+    return feature === null || enabled.has(feature);
+  });
 
   const navItems: NavItem[] = allNavItems.map((item) => ({
     ...item,

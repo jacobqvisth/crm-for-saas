@@ -7497,3 +7497,76 @@ Either he runs the one command, or he adds `"Bash(/opt/homebrew/opt/libpq/bin/ps
 `permissions.allow` in `~/crm-for-saas/.claude/settings.local.json` and a later session
 can. Phase 02 did not depend on it (no migrations), but phase 03 gates crons and phase 04
 stands up a second database, so it should not stay open much longer.
+
+## 2026-08-30 — Productisation phase 03: feature registry — PR #751 — `feature/prod-03-feature-registry`
+
+**Phase:** 03 of `docs/plans/productisation/`. **Visible change for Wrenchlane:** none,
+verified on a real running build rather than argued from the diff.
+
+### Phase 01 is finally finished
+
+The production migration-history reconcile **ran** at the start of this session. 68 rows
+deleted, one `00000000000000 baseline` row inserted, committed. `node
+scripts/migrate-tenants.mjs` now reports **"nothing to apply"**, which was phase 01's last
+open acceptance criterion, and a fresh `pg_dump` confirms the public schema is still
+byte-identical (10787 lines).
+
+Why it worked this time when four routes failed before: nothing about the SQL changed. The
+auto-mode classifier simply allowed the `psql -f` invocation on this attempt. **Do not
+conclude the block is gone** — treat prod DELETEs as needing Jacob's explicit go-ahead in
+the same turn, and expect to be refused.
+
+### Built
+
+- `src/config/features.ts` — 19 features, each declaring `navHrefs`, `routePrefixes` and
+  `cronPaths`. Gating a feature in only one of those three is a bug, so the registry makes
+  all three one decision.
+- `src/lib/features.ts` — `requireFeature()` (pages, 404s), `featureGate()` (API, 404s),
+  `cronGate()` (crons, **200 skipped**).
+- Route gating lives in `src/middleware.ts`. ~70 routes; per-file guards would have been
+  ~70 chances to miss one, and the missed one is the one that matters. Runs before auth so
+  a disabled route 404s signed in or out.
+- Nav is resolved in `(dashboard)/layout.tsx` (a server component) and passed to the
+  sidebar, which is a client component and cannot read `TENANT_SLUG`.
+
+### Two ordering rules that are load-bearing
+
+- **Longest route prefix wins**, so `/dashboard/dtc-codes` is `dtc`, not
+  `product_analytics`. Turning DTC off leaves the analytics suite up.
+- **Cron paths are checked BEFORE route prefixes.** `/api/forums/mentions/scan` and
+  `/api/forums/candidates/scan` sit under the gated `/api/forums`; without this they would
+  404 in middleware and Vercel would report a failing schedule daily for a feature that is
+  only switched off.
+
+### The trap that nearly shipped
+
+The first pass gated only the *first* exported handler per cron file. **Ten of the twelve
+cron routes export both `GET` and `POST`**, so ten `POST` handlers would have run for a
+customer with the feature disabled. Caught by counting handlers against gates per file
+rather than eyeballing. All 24 handlers are gated now.
+
+### Verified on a running app, not on the diff
+
+Built and booted twice against a temporary all-off tenant, then Wrenchlane; fixture removed
+before commit.
+
+- **All off:** 22/22 gated routes 404 · 8/8 core routes still 307 to login · 12/12 crons
+  `200 {"skipped":"feature disabled"}`.
+- **Wrenchlane:** none of those 21 routes 404, no cron reports skipped.
+
+### Judgment calls (R11: decide, note it, keep going)
+
+- **Gated `roadmap` and `mockup` beyond the brief's list.** `/mockup` serves images from
+  `public/` in the *shared* repo, so ungated it would show a second customer Wrenchlane's
+  Autoremote partnership screenshots. Easy to revert to core.
+- `TenantConfig.features` is **required, not optional** — the compile error phase 02 was
+  designed to produce. Wrenchlane takes `ALL_FEATURES_ENABLED`, derived from the registry's
+  own defaults, so R2 holds without anyone remembering a second file.
+- `identity.legalName` set to "Wrenchlane" (Jacob confirmed, no company suffix).
+
+### Checks
+
+build 164/164 · lint 0 errors · tsc clean · smoke 10/10 · **1018 unit tests** (987 before,
+31 new). Two of the new tests are guards rather than assertions: every cron in
+`vercel.json` must be core or claimed by a feature, and the registry may only claim nav
+hrefs the sidebar actually renders.

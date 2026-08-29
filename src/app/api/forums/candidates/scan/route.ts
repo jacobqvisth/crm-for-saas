@@ -5,6 +5,7 @@ import { SHARED_FORUMS_WORKSPACE_ID } from "@/lib/forums/server";
 import { REPLY_SUBREDDITS } from "@/lib/forums/replies";
 import { isApifyConfigured, apifySearchRedditPosts } from "@/lib/forums/reddit-apify";
 import { upsertCandidates } from "@/lib/forums/candidates";
+import { cronGate } from "@/lib/features";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,11 @@ function isAuthorized(request: NextRequest): boolean {
 // Uses the service-role client so the cron isn't tied to a user session; all
 // forum tables share one workspace (SHARED_FORUMS_WORKSPACE_ID).
 export async function GET(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("forums");
+  if (skip) return skip;
+
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
