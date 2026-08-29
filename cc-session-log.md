@@ -7570,3 +7570,81 @@ build 164/164 · lint 0 errors · tsc clean · smoke 10/10 · **1018 unit tests*
 31 new). Two of the new tests are guards rather than assertions: every cron in
 `vercel.json` must be core or claimed by a feature, and the registry may only claim nav
 hrefs the sidebar actually renders.
+
+## 2026-08-30 — Productisation phase 04: control plane + super-admin console — PR #752 — `feature/prod-04-control-plane`
+
+**Phase:** 04. **Visible change for Wrenchlane:** none. Nothing reads the control plane yet
+(phase 05), and with `IS_CONTROL_PLANE` unset every `/admin` route 404s.
+
+### The design decision that defines this phase
+
+The obvious console holds each tenant's service-role key and writes flags into each
+database. Service-role keys bypass RLS, so that console is **one credential that reads
+every customer's entire CRM**. This one stores flags only; tenants pull with a token scoped
+to themselves. Compromise it and you can toggle features, not read data. Do not "simplify"
+this later by adding a key column.
+
+### Control plane
+
+Supabase project **`ktkuwmuhhrbwzysuxfzi`** (`wrenchlane-control-plane`, eu-north-1, PG
+17.6). Schema at `supabase/control-plane/001_schema.sql`, applied via the Management API.
+
+Verified by querying the catalogue, not by intention: 6 tables, RLS on all 6, **0 policies**
+(service role only), **no CRM table present**, and the only credential-shaped column is
+`tenant_tokens.token_hash` (a SHA-256; plaintext shown once, never stored).
+
+Seeded: 19 features + 1 tenant (wrenchlane) via `node scripts/seed-control-plane.mjs
+--apply`. That script parses `src/config/features.ts` so the registry stays the single
+definition, is dry-run by default, and **refuses to run against any database with a
+`contacts` table**.
+
+### Credentials added to `~/crm-for-saas/.env.local`
+
+`CONTROL_PLANE_SUPABASE_URL`, `CONTROL_PLANE_SERVICE_ROLE_KEY`,
+`CONTROL_PLANE_ADMIN_EMAILS` (jacob.qvisth@gmail.com + jacob@wrenchlane.com break-glass),
+`IS_CONTROL_PLANE` (blank). Named unlike the tenant Supabase vars on purpose so a copied
+env file cannot point the console at a customer CRM.
+
+### Auth, stricter than CEO_ALLOWED_EMAILS
+
+Keeps its four good properties and adds: email must be confirmed, provider must be Google,
+and **`@domain` entries are dropped rather than honoured** — the primary super-admin
+address is a Gmail one, so `@gmail.com` would admit the internet. Re-checked in every
+handler and server action; middleware is not the boundary.
+
+### The test suite is repaired (worth knowing)
+
+`server-only` is resolved by Next through its own dependency tree, so it is not at the top
+of `node_modules` and **vitest could never load any module importing it**. That is the
+`generate.test.ts` failure verified against clean `origin/main` in #749 — it was never a
+worktree artifact, it was always broken. vitest was also collecting the 16 Playwright specs.
+
+`vitest.config.ts` now aliases `server-only` to `src/test/server-only-stub.ts` and excludes
+`e2e/`. **Before: `18 files failed | 75 passed`, 987 tests. After: `79 passed, 0 failed`,
+1033 tests.** The old "ignore the 18 failures" advice in earlier log entries is now obsolete
+— a failing test file means something real again.
+
+### Checks
+
+build pass · lint 0 errors · tsc clean · smoke 10/10 · **1033 unit tests, 0 failing files**.
+Booted twice: `IS_CONTROL_PLANE` unset → `/admin` 404; `=1` → 307 to sign-in.
+
+### LEFT TO DO — deploying the control plane
+
+Not done because which Vercel project, domain and OAuth client to use are Jacob's calls,
+and the brief's "done when" does not require it:
+
+1. Create a Vercel project from this repo, root `/`, production branch `stable`.
+2. Set on it: `IS_CONTROL_PLANE=1`, `CONTROL_PLANE_SUPABASE_URL`,
+   `CONTROL_PLANE_SERVICE_ROLE_KEY`, `CONTROL_PLANE_ADMIN_EMAILS`, plus
+   `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` pointing at the
+   **control-plane** project (the console signs in through Supabase Auth).
+3. On Supabase project `ktkuwmuhhrbwzysuxfzi`: enable **Google only**, disable
+   email/password and magic link, disable public sign-up, and add the deployment's
+   `/auth/callback` to the redirect allow-list. **Never append a query string to
+   `redirectTo`** — Supabase matches it exactly.
+4. Sign in as jacob.qvisth@gmail.com and confirm the console lists Wrenchlane with all 19
+   features showing "inherited".
+
+The super-admin Google account now controls feature access for three paying customers.
+It needs a hardware key or passkey, not SMS.

@@ -99,8 +99,8 @@ Run in order. Do not start a phase before the previous one is merged.
 |---|---|---|---|
 | [01](01-migration-baseline.md) | Squash the desynced migration history into one honest baseline | **Done** 2026-08-29 (#746) | None |
 | [02](02-tenant-config.md) | Typed tenant config module and resolver | **Done** 2026-08-29 (#749) | None |
-| [03](03-feature-registry.md) | Feature registry, and gate nav + routes + crons | Not started | None (all flags default on) |
-| [04](04-control-plane.md) | Control-plane database and super-admin console | Not started | None |
+| [03](03-feature-registry.md) | Feature registry, and gate nav + routes + crons | **Done** 2026-08-30 (#751) | None (all flags default on) |
+| [04](04-control-plane.md) | Control-plane database and super-admin console | **Done** 2026-08-30 | None |
 | [05](05-config-pull.md) | Tenants pull their config, with cache and fallback | Not started | None |
 | [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | Not started | None |
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
@@ -108,12 +108,13 @@ Run in order. Do not start a phase before the previous one is merged.
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
 | [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | Not started | Additive |
 
-Phase 01 is merged, but one production step needs Jacob's hands: the remote migration
-history on Wrenchlane still holds the old 68 rows and must be replaced with the single
-`00000000000000` baseline row before `supabase db push --linked` works or
-`migrate-tenants.mjs` reports "nothing to apply". The SQL is committed, with the reasoning
-for why it deletes rather than adds, at `scripts/reconcile-migration-history.sql`.
-**Run it before starting phase 02.**
+Phase 01's production reconcile **has been run** (2026-08-30). Wrenchlane's migration
+history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs` reports
+"nothing to apply", and the schema is unchanged.
+
+The control plane lives at Supabase project `ktkuwmuhhrbwzysuxfzi`
+(`wrenchlane-control-plane`). It is **not deployed to Vercel yet** — see the phase 04
+section of `cc-session-log.md` for the remaining deploy steps.
 
 Phases 01 to 07 change nothing that any Wrenchlane user can see. That is deliberate, and it
 means the first stretch of work produces nothing demonstrable. Say so up front rather than
