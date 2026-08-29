@@ -106,7 +106,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
 | [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started | None |
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
-| [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | Not started | Additive |
+| [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | **D+E partial** 2026-08-30 | Additive |
 
 Phase 01's production reconcile **has been run** (2026-08-30). Wrenchlane's migration
 history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs` reports
@@ -130,6 +130,25 @@ email on an unverified path. Do that swap in a session where a real send can be 
 Phases 01 to 07 change nothing that any Wrenchlane user can see. That is deliberate, and it
 means the first stretch of work produces nothing demonstrable. Say so up front rather than
 discovering it halfway.
+
+## Where this stopped, and why
+
+Phases 01 to 06 are merged. **07, 08, 09 and most of 10 are blocked on things that cannot be
+obtained from a code session**, not on effort:
+
+- **07 (Microsoft Graph)** opens with a one-day spike against a throwaway Microsoft 365
+  mailbox, and needs an Entra app registration with admin consent in the customer's own
+  tenant. No mailbox, no tenant, no consent.
+- **08 / 09 (Animech, Spennare)** need each customer's real domains, mailboxes, Supabase and
+  Vercel projects and their Microsoft tenants.
+- **10 A-C** are explicitly gated on customer knowledge by their own brief: "Get Animech's
+  actual stages, deal sizes and typical cycle length before designing the forecast. Guessing
+  produces a pipeline nobody uses." and "Scope it with Spennare rather than from first
+  principles."
+
+10 D and E were unblocked and are done: the contract-step register exists, and `CLAUDE.md`
+no longer documents a deleted feature, a dependency that is not installed, or an RLS claim
+that was wrong by 83 tables.
 
 ## Acceptance test for the whole programme
 
