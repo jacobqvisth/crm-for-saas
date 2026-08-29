@@ -23,6 +23,8 @@
 //   environment variables, one set per tenant, and are never shared between
 //   tenants (ground rule R5).
 
+import type { FeatureFlags } from "../features";
+
 /** ISO 639-1 code, e.g. "sv", "en". */
 export type LanguageCode = string;
 
@@ -145,13 +147,7 @@ export interface TenantAi {
   toneNotes: string;
 }
 
-/**
- * One customer's complete configuration.
- *
- * `features` arrives in phase 03. It is deliberately absent rather than
- * optional: adding it later is a compile error in every tenant file, which is
- * exactly the prompt we want at that point.
- */
+/** One customer's complete configuration. */
 export interface TenantConfig {
   identity: TenantIdentity;
   domains: TenantDomains;
@@ -159,4 +155,13 @@ export interface TenantConfig {
   locale: TenantLocale;
   ai: TenantAi;
   integrations: TenantIntegrations;
+  /**
+   * Which optional surfaces this customer sees. One boolean per key in the
+   * feature registry; the type is exhaustive, so a new feature is a compile
+   * error here until every tenant has an answer for it.
+   *
+   * Wrenchlane uses ALL_FEATURES_ENABLED rather than a hand-written list, which
+   * is what makes ground rule R2 automatic.
+   */
+  features: FeatureFlags;
 }

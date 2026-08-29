@@ -11,6 +11,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { reconcileWlAttribution } from "@/lib/wl-sync/reconcile-attribution";
+import { cronGate } from "@/lib/features";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,9 +68,19 @@ async function run(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("product_analytics");
+  if (skip) return skip;
+
   return run(request);
 }
 
 export async function GET(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("product_analytics");
+  if (skip) return skip;
+
   return run(request);
 }

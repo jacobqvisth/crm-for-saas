@@ -11,15 +11,15 @@
 // are behaviour preserving, and Wrenchlane's config is the baseline that new
 // tenants are configured to differ FROM.
 
+import { ALL_FEATURES_ENABLED } from "../features";
 import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
 import type { TenantConfig } from "./types";
 
 export const wrenchlane: TenantConfig = {
   identity: {
     slug: "wrenchlane",
-    // TODO(tenant-config): confirm the registered entity with Jacob. The
-    // codebase never states one, so the trading name is used rather than
-    // guessing at a company suffix. Nothing reads this yet.
+    // Confirmed by Jacob 2026-08-29: the registered entity is "Wrenchlane",
+    // with no company suffix.
     legalName: "Wrenchlane",
     displayName: "Wrenchlane",
     // Condensed from the first paragraph of WRENCHLANE_KNOWLEDGE.
@@ -91,6 +91,12 @@ export const wrenchlane: TenantConfig = {
     toneNotes:
       "Peer-to-peer and technically credible. Lead with the business outcome or the workflow that gets easier, respect the reader's time, and show you understand a workshop's day.",
   },
+
+  // Every feature, taken from the registry's own defaults rather than written
+  // out. A feature added to the registry is therefore on for Wrenchlane the
+  // moment it exists, which is ground rule R2 made automatic: Wrenchlane never
+  // silently loses a surface because someone forgot a second file.
+  features: ALL_FEATURES_ENABLED,
 
   integrations: {
     apify: true,

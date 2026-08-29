@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { processCallSession } from "@/lib/calls/process";
+import { cronGate } from "@/lib/features";
 
 // Safety net for the post-call AI pipeline. The pipeline is kicked from the
 // 46elks hangup webhook via a Vercel `after()` background task; if that task is
@@ -125,8 +126,18 @@ async function failOrphanedAgentJobs(
 
 // Vercel Cron invokes the path with GET; allow POST too for manual triggering.
 export async function GET(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("calling");
+  if (skip) return skip;
+
   return handle(request);
 }
 export async function POST(request: NextRequest) {
+  // Feature gate. 200 rather than an error: a switched-off feature is not
+  // a failure, and a cron that fails on a schedule buries the alert channel.
+  const skip = cronGate("calling");
+  if (skip) return skip;
+
   return handle(request);
 }
