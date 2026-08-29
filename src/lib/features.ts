@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { notFound } from "next/navigation";
 import { getTenant } from "@/config/tenants";
+import { getTenantConfig } from "@/lib/tenant-config/resolve";
 import {
   FEATURES,
   type FeatureKey,
@@ -80,13 +81,27 @@ export function featureGate(key: FeatureKey): NextResponse | null {
  * Guard for a CRON. Returns a 200 "skipped" response when the feature is off,
  * or null when it is on:
  *
- *   const skip = cronGate("reviews");
+ *   const skip = await cronGate("reviews");
  *   if (skip) return skip;
  *
  * 200 rather than 404 on purpose: Vercel and the health checker treat a
  * non-2xx cron as a failure, and a disabled feature is not a failure.
+ *
+ * Async since phase 05, and it resolves through the full live/cache/compiled
+ * ladder rather than the compiled config alone. Crons are where a console
+ * toggle most needs to bite: switching a feature off should stop the tenant
+ * spending money on that feature's APIs within one TTL, not at the next deploy.
+ * A cron runs a handful of times an hour, so a pull costs nothing here.
+ *
+ * It cannot fail. resolveConfig() degrades to compiled defaults rather than
+ * throwing, so an unreachable control plane leaves every cron running exactly
+ * as it did before.
  */
-export function cronGate(key: FeatureKey): NextResponse | null {
-  if (isFeatureEnabled(key)) return null;
-  return NextResponse.json({ skipped: "feature disabled", feature: key }, { status: 200 });
+export async function cronGate(key: FeatureKey): Promise<NextResponse | null> {
+  const cfg = await getTenantConfig();
+  if (cfg.features[key] === true) return null;
+  return NextResponse.json(
+    { skipped: "feature disabled", feature: key, source: cfg.source },
+    { status: 200 },
+  );
 }

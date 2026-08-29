@@ -1,11 +1,12 @@
 import { Sidebar } from "@/components/sidebar";
-import { enabledFeatureKeys } from "@/lib/features";
+import { FEATURES, type FeatureKey } from "@/config/features";
+import { getTenantConfig } from "@/lib/tenant-config/resolve";
 import { SessionWatcher } from "@/components/auth/session-watcher";
 import { WorkspaceProvider } from "@/lib/hooks/use-workspace";
 import { WebrtcPresence } from "@/components/calls/webrtc-presence";
 import { CallProvider } from "@/components/calls/call-provider";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -13,7 +14,16 @@ export default function DashboardLayout({
   // Resolved here, in a server component, because the sidebar is a client
   // component and cannot read TENANT_SLUG. One resolution per request, handed
   // down, so nav and routing can never disagree about what is enabled.
-  const enabledFeatures = enabledFeatureKeys();
+  //
+  // Since phase 05 this goes through the full live/cache/compiled ladder, so a
+  // toggle in the admin console removes the nav item within one TTL instead of
+  // at the next deploy. getTenantConfig() is request-memoized, so rendering a
+  // page with forty components resolves once. It cannot throw: an unreachable
+  // control plane falls back to the cache, and then to the compiled defaults.
+  const cfg = await getTenantConfig();
+  const enabledFeatures = FEATURES.filter((f) => cfg.features[f.key] === true).map(
+    (f) => f.key as FeatureKey,
+  );
 
   return (
     <WorkspaceProvider>

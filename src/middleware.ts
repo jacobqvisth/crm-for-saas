@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { getTenant } from "@/config/tenants";
+import { peekFlags } from "@/lib/tenant-config/runtime";
 import { featureForPath, isCronPath } from "@/config/features";
 import { CONTROL_PLANE_PREFIX } from "@/lib/control-plane/routes";
 
@@ -40,7 +40,11 @@ export async function middleware(request: NextRequest) {
 
   if (!isCronPath(pathname)) {
     const feature = featureForPath(pathname);
-    if (feature && getTenant().features[feature] !== true) {
+    // peekFlags() never awaits a network call: it answers from a module-level
+    // memo, falling back to the compiled defaults, and refreshes in the
+    // background. Middleware runs on nearly every request, so blocking here
+    // would put a control-plane round trip in front of the whole app.
+    if (feature && peekFlags()[feature] !== true) {
       return new NextResponse(null, { status: 404 });
     }
   }

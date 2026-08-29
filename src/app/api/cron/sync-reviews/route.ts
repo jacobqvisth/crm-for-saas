@@ -46,7 +46,7 @@ async function run(request: NextRequest) {
 export async function GET(request: NextRequest) {
   // Feature gate. 200 rather than an error: a switched-off feature is not
   // a failure, and a cron that fails on a schedule buries the alert channel.
-  const skip = cronGate("reviews");
+  const skip = await cronGate("reviews");
   if (skip) return skip;
 
   return run(request);
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   // Feature gate. 200 rather than an error: a switched-off feature is not
   // a failure, and a cron that fails on a schedule buries the alert channel.
-  const skip = cronGate("reviews");
+  const skip = await cronGate("reviews");
   if (skip) return skip;
 
   return run(request);
