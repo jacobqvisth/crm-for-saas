@@ -7422,7 +7422,7 @@ that did not hold here. Assume prod DELETEs need Jacob's own hands regardless.
   (written by `node_modules/next/dist/server/lib/generate-agent-files.js`). Reverted here
   to keep the diff scoped; it will reappear on anyone's next build.
 
-## 2026-08-29 — Productisation phase 02: typed tenant config — PR #TBD — `feature/prod-02-tenant-config`
+## 2026-08-29 — Productisation phase 02: typed tenant config — PR #749 — `feature/prod-02-tenant-config`
 
 **Phase:** 02 of `docs/plans/productisation/`. **Visible change for Wrenchlane:** none.
 `TENANT_SLUG` unset and `TENANT_SLUG=wrenchlane` resolve to the same config, and that
