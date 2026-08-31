@@ -104,7 +104,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [05](05-config-pull.md) | Tenants pull their config, with cache and fallback | **Done** 2026-08-30 | None |
 | [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | **Partial** 2026-08-30 | None |
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
-| [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started | None |
+| [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started — **08a needs no customer** | None |
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
 | [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | **D+E partial** 2026-08-30 | Additive |
 | [11](11-tenant-bring-up.md) | Branding, env manifest, tenant bootstrap, per-tenant defaults | **Not started — blocks 08** | None |
@@ -166,8 +166,12 @@ obtained from a code session**, not on effort:
   Application Access Policy that scopes the app to named mailboxes rather than the whole
   tenant, and the `Test-ApplicationAccessPolicy` output to ask back as evidence. Both new
   tenants are on Microsoft 365, so it blocks both.
-- **08 / 09 (Animech, Spennare)** need each customer's real domains, mailboxes, Supabase and
-  Vercel projects and their Microsoft tenants.
+- **08 / 09 (Animech, Spennare)** are **half blocked, not wholly.** The brief now splits
+  them: **08a** (Supabase project, Vercel project, baseline migration, env, tenant config,
+  feature flags) needs nothing from the customer and produces a live URL with a live
+  database. **08b** (mail, Microsoft sign-in) needs their Entra tenant and a sending domain.
+  The only thing standing between today and 08a is phase 11 and **$10/month** for the
+  Supabase project — see the who-does-what table in the phase 08 brief.
 - **10 A-C** are explicitly gated on customer knowledge by their own brief: "Get Animech's
   actual stages, deal sizes and typical cycle length before designing the forecast. Guessing
   produces a pipeline nobody uses." and "Scope it with Spennare rather than from first
