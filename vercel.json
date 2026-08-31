@@ -83,6 +83,10 @@
     {
       "path": "/api/cron/sync-ad-conversions",
       "schedule": "35 5 * * *"
+    },
+    {
+      "path": "/api/cron/upload-paid-conversions",
+      "schedule": "50 5 * * *"
     }
   ]
 }

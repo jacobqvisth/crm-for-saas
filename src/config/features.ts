@@ -204,6 +204,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
       "/api/cron/check-sync-health",
       "/api/cron/sync-google-ads-assets",
       "/api/cron/sync-ad-conversions",
+      "/api/cron/upload-paid-conversions",
     ],
   },
   {

@@ -417,8 +417,10 @@ async function loadPayingCustomers(): Promise<PayingCustomersData> {
     }))
     .sort((a, b) => b.last30dConversions - a.last30dConversions);
 
-  // Match Google's actions by name rather than by a hard-coded id, so a
-  // rebuilt action (this account has several REMOVED duplicates) keeps working.
+  // Match on CATEGORY rather than on a name or a hard-coded id. Names change —
+  // the purchase action has already been renamed once to stop it reading as
+  // revenue — and this account carries several REMOVED duplicates of the same
+  // action from earlier rebuilds. The category is the stable thing.
   const signupIds = actionsRes.data
     .filter((a) => a.category === "SIGNUP")
     .map((a) => a.conversion_action_id);
