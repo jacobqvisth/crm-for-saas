@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { safeNextPath } from "@/lib/auth/next-path";
+import { getTenant } from "@/config/tenants";
+import { resolveHomeRoute } from "@/config/home-route";
 
 /** Paths reachable without a session. `/` server-redirects on its own. */
 const PUBLIC_PATHS = ["/", "/login", "/auth"];
@@ -77,7 +79,13 @@ export async function updateSession(request: NextRequest) {
   if (user && pathname === "/login") {
     // `next` can carry its own query string, so resolve it as a URL rather
     // than assigning it to `pathname` (which would escape the "?").
-    const target = safeNextPath(request.nextUrl.searchParams.get("next")) ?? "/dashboard";
+    // The fallback is the tenant's home route rather than "/dashboard", which
+    // is a feature-owned path that not every tenant has. See
+    // src/config/home-route.ts.
+    const tenant = getTenant();
+    const target =
+      safeNextPath(request.nextUrl.searchParams.get("next")) ??
+      resolveHomeRoute((key) => tenant.features[key]);
     return NextResponse.redirect(new URL(target, request.nextUrl.origin));
   }
 

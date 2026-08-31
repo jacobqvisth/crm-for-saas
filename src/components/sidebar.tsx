@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { markIntentionalSignOut } from "@/lib/auth/sign-out";
 import { UserAvatar } from "@/components/user-avatar";
 import { featureForNavHref, type FeatureKey } from "@/config/features";
+import { resolveHomeRouteFromList } from "@/config/home-route";
 import type { TenantBranding } from "@/config/tenants/types";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -191,7 +192,10 @@ export function Sidebar({
     >
       {/* Logo */}
       <div className="flex items-center px-4 h-16 border-b border-slate-200">
-        <Link href="/dashboard" className="flex items-center">
+        {/* Not "/dashboard": that is feature-owned and 404s for a tenant
+            without product_analytics, which made the logo a dead link on
+            Animech. See src/config/home-route.ts. */}
+        <Link href={resolveHomeRouteFromList(enabledFeatures)} className="flex items-center">
           {collapsed ? (
             <Image
               src={branding.markSrc}
