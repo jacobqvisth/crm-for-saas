@@ -51,6 +51,7 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "cac-ltv",
   "campaigns",
   "best-ads",
+  "paying-customers",
   "landing-pages",
 ]);
 

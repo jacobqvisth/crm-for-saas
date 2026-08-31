@@ -38,6 +38,7 @@ export type DashboardSectionKey =
   | "google-ads-users"
   | "campaigns"
   | "best-ads"
+  | "paying-customers"
   | "landing-pages"
   | "cac-ltv"
   | "toplists"
@@ -171,6 +172,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Best Performing Ads",
     description:
       "Every creative asset in the Google Ads account — headlines, descriptions, images, videos, sitelinks — ranked by how much better it did than a typical asset of its own kind, so the next batch of creative can be built on what already works. Read live from the Google Ads API, which is the only source that knows an asset exists: GA4 stops at the campaign. Two things shape how it must be read. Asset metrics are not additive, because Google credits every asset that served in an impression with that impression and its click, so asset clicks across a campaign sum to several times the clicks it actually bought; only rates are meaningful. And the copy that wins clicks is not the copy that wins signups — fault-code language runs 1.67x the average click-through and 0.41x the average conversion rate, OEM-data language is the exact mirror — so click lift and signup lift are scored separately and the default ranking is their product. Small samples are shrunk toward the average for their field type so an asset with eight impressions cannot top the list. Performance Max assets are listed as inventory without numbers: API v25 exposes no per-asset metrics for them at all.",
+  },
+  {
+    key: "paying-customers",
+    label: "Paying Customers",
+    glyph: "PC",
+    href: "/dashboard/paying-customers",
+    title: "Paying Customers",
+    description:
+      "Of the people an ad brought in, which ones actually started paying — not signed up, and not entered a card. Those three are different by an order of magnitude here, and the page exists because two of them are routinely mistaken for the third. Paying membership comes from Stripe's ever_paid flag, never from the plan on the account, because the plan is stamped at checkout while the trial is still running. Rates use a 60-day maturity cut-off so ad traffic, which is much newer, is not charged for cohorts that have not finished a trial. Also reconciles Google Ads' own conversion counts against Stripe month by month: the action Google calls \"purchase\" tracks card entries, so cost-per-acquisition and ROAS read from the Google Ads UI are measuring trials rather than revenue. Attribution is GA4 first-touch and stops at the campaign — no ad group, keyword, asset or gclid exists in our data — and nothing on this page is sent back to Google, because offline conversion import now requires the Data Manager API and an OAuth scope this app does not hold.",
   },
   {
     key: "landing-pages",
