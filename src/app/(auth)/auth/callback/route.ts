@@ -11,6 +11,8 @@ import {
   CONTROL_PLANE_PREFIX,
   isControlPlaneDeployment,
 } from "@/lib/control-plane/routes";
+import { getTenant } from "@/config/tenants";
+import { resolveHomeRoute } from "@/config/home-route";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -21,11 +23,16 @@ export async function GET(request: Request) {
   // POST_LOGIN_NEXT_COOKIE). A `?next=` query param is still honoured for
   // hand-made links, but it is user-controllable either way, so both go
   // through safeNextPath and anything off-site falls back to the dashboard.
+  //
+  // The final fallback is the tenant's own home route, not "/dashboard".
+  // "/dashboard" belongs to the `product_analytics` feature, so on a tenant
+  // without it a correct sign-in ended on a 404. See src/config/home-route.ts.
   const cookieStore = await cookies();
+  const tenant = getTenant();
   const next =
     safeNextPath(searchParams.get("next")) ??
     decodeNextCookie(cookieStore.get(POST_LOGIN_NEXT_COOKIE)?.value) ??
-    "/dashboard";
+    resolveHomeRoute((key) => tenant.features[key]);
 
   /** Consume the stashed destination so it can't misdirect a later sign-in. */
   const clearNextCookie = (res: NextResponse) => {
