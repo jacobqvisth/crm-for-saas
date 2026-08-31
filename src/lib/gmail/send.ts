@@ -8,6 +8,8 @@ import {
   encodeBodyBase64,
   encodeHeaderValue,
 } from "./mime-encode";
+import { htmlToText } from "./html-to-text";
+import { messageIdForQueueRow, normalizeMessageId } from "./message-id";
 
 interface SendEmailParams {
   accountId: string;
@@ -18,6 +20,22 @@ interface SendEmailParams {
   trackingId?: string;
   replyToMessageId?: string;
   replyToThreadId?: string;
+  /**
+   * This send's own `email_queue` row id. Used to mint a stable RFC 5322
+   * Message-ID (see `message-id.ts`) so the next step in the sequence has a
+   * real identifier to reference. Omit and no Message-ID is set, leaving
+   * Gmail to generate one, which breaks nothing but leaves the follow-up
+   * unable to thread outside Gmail.
+   */
+  queueRowId?: string;
+  /**
+   * The previous send's `email_queue` row id, for `In-Reply-To`. Preferred
+   * over `replyToMessageId`: the Gmail API id that used to be passed there is
+   * not a message identifier at all.
+   */
+  replyToQueueRowId?: string;
+  /** Earlier `email_queue` row ids in this thread, oldest first. */
+  referenceQueueRowIds?: string[];
   /**
    * Optional single address to Bcc. Set per sequence via
    * SequenceSettings.bcc_email; see that field for why (Trustpilot AFS).
@@ -127,6 +145,10 @@ export function buildMimeMessage(params: {
   textBody?: string;
   trackingId?: string;
   replyToMessageId?: string;
+  /** Earlier Message-IDs in this thread, oldest first. */
+  references?: string[];
+  /** This message's own RFC 5322 Message-ID, already angle-bracketed. */
+  messageId?: string;
   bcc?: string;
 }): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -137,8 +159,12 @@ export function buildMimeMessage(params: {
     finalHtml = applyTracking(params.htmlBody, params.trackingId);
   }
 
-  // Generate text from the original (unwrapped) HTML to avoid tracking URLs in plaintext
-  const textContent = params.textBody || params.htmlBody.replace(/<[^>]*>/g, "");
+  // Generate text from the original (unwrapped) HTML so the plaintext carries
+  // real destinations rather than click-wrapper redirects. `htmlToText` keeps
+  // the structure, decodes entities and preserves URLs; the old naive tag
+  // strip produced a single run-on line with raw `&nbsp;` and zero links,
+  // which left the two MIME alternatives describing different emails.
+  const textContent = params.textBody || htmlToText(params.htmlBody);
 
   // Subject is RFC 2047 encoded whenever it leaves ASCII. Raw UTF-8 bytes in
   // a header get re-read as latin-1 downstream, which is what turned every
@@ -158,9 +184,27 @@ export function buildMimeMessage(params: {
     headers.push(`Bcc: ${bcc}`);
   }
 
-  if (params.replyToMessageId) {
-    headers.push(`In-Reply-To: ${params.replyToMessageId}`);
-    headers.push(`References: ${params.replyToMessageId}`);
+  // Our own Message-ID, so a follow-up has something real to reference. Gmail
+  // preserves a well-formed `<id@domain>` on messages.send and only rewrites
+  // malformed ones, so this is what lands in the recipient's headers.
+  if (params.messageId) {
+    headers.push(`Message-ID: ${params.messageId}`);
+  }
+
+  // Threading. `normalizeMessageId` drops anything that is not a real message
+  // identifier, which is what stops a bare Gmail API id (no `@`, no brackets)
+  // from being emitted as `In-Reply-To`. Omitting the header beats sending a
+  // malformed one on a message whose subject already claims to be a reply.
+  const replyTo = normalizeMessageId(params.replyToMessageId);
+  if (replyTo) {
+    headers.push(`In-Reply-To: ${replyTo}`);
+    // References carries the whole chain when the caller knows it, so deep
+    // follow-ups thread correctly outside Gmail too.
+    const chain = (params.references ?? [])
+      .map(normalizeMessageId)
+      .filter((id): id is string => Boolean(id));
+    const references = chain.includes(replyTo) ? chain : [...chain, replyTo];
+    headers.push(`References: ${references.join(" ")}`);
   }
 
   // List-Unsubscribe headers (RFC 8058) for one-click unsubscribe in Gmail/Outlook
@@ -269,11 +313,28 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     if (signatureHtml && signatureHtml.trim()) {
       finalHtmlBody = appendSignature(finalHtmlBody, signatureHtml);
       if (finalTextBody) {
-        const sigText = signatureHtml.replace(/<[^>]*>/g, "").trim();
+        // Same converter as the body, so a signature's phone link and website
+        // survive into plaintext instead of collapsing to bare label text.
+        const sigText = htmlToText(signatureHtml);
         finalTextBody = `${finalTextBody}\n\n${sigText}`;
       }
     }
   }
+
+  // Mint this message's Message-ID and resolve the thread it belongs to, both
+  // derived from email_queue row ids against the sending mailbox's own domain.
+  // `replyToMessageId` stays supported for callers that already hold a real
+  // identifier, but a row id is preferred: the value previously passed there
+  // was the Gmail API id, which is not a message identifier.
+  const senderEmail = account.email_address as string;
+  const ownMessageId = messageIdForQueueRow(params.queueRowId, senderEmail);
+  const replyToMessageId =
+    messageIdForQueueRow(params.replyToQueueRowId, senderEmail) ??
+    normalizeMessageId(params.replyToMessageId) ??
+    undefined;
+  const references = (params.referenceQueueRowIds ?? [])
+    .map((rowId) => messageIdForQueueRow(rowId, senderEmail))
+    .filter((id): id is string => Boolean(id));
 
   const mimeMessage = buildMimeMessage({
     from: fromAddress,
@@ -282,7 +343,9 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     htmlBody: finalHtmlBody,
     textBody: finalTextBody,
     trackingId: params.trackingId,
-    replyToMessageId: params.replyToMessageId,
+    messageId: ownMessageId ?? undefined,
+    replyToMessageId,
+    references,
     bcc: params.bcc,
   });
 

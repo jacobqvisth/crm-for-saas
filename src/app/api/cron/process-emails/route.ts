@@ -494,23 +494,38 @@ export async function POST(request: NextRequest) {
       item.subject = rendered.subject;
       item.body_html = rendered.bodyHtml;
 
-      // Look up previous email in this enrollment for threading
-      let replyToMessageId: string | undefined;
+      // Look up previous email in this enrollment for threading.
+      //
+      // `replyToQueueRowId` (not gmail_message_id) is what feeds In-Reply-To.
+      // gmail_message_id is the Gmail *API* id, which is not a message
+      // identifier; passing it produced `In-Reply-To: 1a0384f90cd42904`, an
+      // invalid header on a message whose subject also claimed to be a reply.
+      // sendEmail derives a real Message-ID from the row id instead, matching
+      // the one it set when that earlier row was sent.
+      let replyToQueueRowId: string | undefined;
       let replyToThreadId: string | undefined;
+      let referenceQueueRowIds: string[] = [];
       if (item.enrollment_id) {
-        const { data: previousEmail } = await supabase
+        // Oldest first, so the References chain reads in thread order. The
+        // newest row is the one In-Reply-To points at.
+        const { data: threadRows } = await supabase
           .from("email_queue")
-          .select("gmail_message_id, gmail_thread_id, subject")
+          .select("id, gmail_message_id, gmail_thread_id, subject, sent_at")
           .eq("enrollment_id", item.enrollment_id)
           .eq("status", "sent")
           .not("gmail_message_id", "is", null)
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .order("sent_at", { ascending: true });
+
+        const previousEmail = threadRows?.length
+          ? threadRows[threadRows.length - 1]
+          : null;
 
         if (previousEmail?.gmail_message_id) {
-          replyToMessageId = previousEmail.gmail_message_id;
+          replyToQueueRowId = previousEmail.id;
           replyToThreadId = previousEmail.gmail_thread_id ?? undefined;
+          referenceQueueRowIds = (threadRows ?? [])
+            .slice(0, -1)
+            .map((row) => row.id);
           // Ensure the subject reads as a reply, with exactly one "Re: ".
           // Follow-up steps usually have no subject of their own and inherit
           // the previous send's, which already carries a "Re: " from the step
@@ -559,7 +574,9 @@ export async function POST(request: NextRequest) {
         subject: item.subject,
         htmlBody: item.body_html,
         trackingId: item.tracking_id ?? undefined,
-        replyToMessageId,
+        queueRowId: item.id,
+        replyToQueueRowId,
+        referenceQueueRowIds,
         replyToThreadId,
         includeSignature,
         bcc: sequenceBcc,
