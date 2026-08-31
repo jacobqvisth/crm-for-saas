@@ -37,6 +37,7 @@ export type DashboardSectionKey =
   | "promo-users"
   | "google-ads-users"
   | "campaigns"
+  | "best-ads"
   | "landing-pages"
   | "cac-ltv"
   | "toplists"
@@ -161,6 +162,15 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     title: "Campaigns",
     description:
       "Every Google Ads campaign on one page: what each one is for, who it targets, which landing page it sends people to, how it bids, and why it exists — joined to what it actually spent and delivered. Includes a plain-English comparison of how Performance Max, Demand Gen and Search differ in what we control versus what Google controls, since comparing them on cost per click alone is misleading. Spend, clicks and impressions come from GA4's linked-Ads dimensions (there is no Google Ads API token on this account), which means paused campaigns show no data at all and money is converted from GA4's USD to SEK at a fixed rate. Per-campaign user counts are GA4 first-touch and lifetime, so they sit against all-time spend only.",
+  },
+  {
+    key: "best-ads",
+    label: "Best Performing Ads",
+    glyph: "BA",
+    href: "/dashboard/best-ads",
+    title: "Best Performing Ads",
+    description:
+      "Every creative asset in the Google Ads account — headlines, descriptions, images, videos, sitelinks — ranked by how much better it did than a typical asset of its own kind, so the next batch of creative can be built on what already works. Read live from the Google Ads API, which is the only source that knows an asset exists: GA4 stops at the campaign. Two things shape how it must be read. Asset metrics are not additive, because Google credits every asset that served in an impression with that impression and its click, so asset clicks across a campaign sum to several times the clicks it actually bought; only rates are meaningful. And the copy that wins clicks is not the copy that wins signups — fault-code language runs 1.67x the average click-through and 0.41x the average conversion rate, OEM-data language is the exact mirror — so click lift and signup lift are scored separately and the default ranking is their product. Small samples are shrunk toward the average for their field type so an asset with eight impressions cannot top the list. Performance Max assets are listed as inventory without numbers: API v25 exposes no per-asset metrics for them at all.",
   },
   {
     key: "landing-pages",

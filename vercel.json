@@ -71,6 +71,10 @@
     {
       "path": "/api/cron/security-scan",
       "schedule": "45 5 * * *"
+    },
+    {
+      "path": "/api/cron/sync-google-ads-assets",
+      "schedule": "20 5 * * *"
     }
   ]
 }
