@@ -249,6 +249,68 @@ async function computeInternalStats(
   };
 }
 
+/**
+ * Volume across every active mailbox on the same domain, not just this one.
+ *
+ * Reputation is earned and lost per domain, but every other check here is
+ * scoped to a single `sender_account_id`. That gap is not theoretical: one
+ * sender running four same-person aliases showed "253 sends, looks healthy"
+ * on the mailbox panel while the domain behind it was carrying 2,686 over the
+ * same window. Judging placement off one alias of four is how a domain-level
+ * problem stays invisible.
+ *
+ * Warns when the mailbox is a minority of its own domain's volume, so the
+ * reader knows this panel is not the whole picture.
+ */
+async function checkDomainVolume(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  domain: string,
+  accountId: string,
+): Promise<CheckResult> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: siblings } = await supabase
+    .from("mail_accounts")
+    .select("id, email_address")
+    .eq("workspace_id", workspaceId)
+    .ilike("email_address", `%@${domain}`);
+
+  const ids = (siblings ?? []).map((a) => a.id);
+  if (ids.length <= 1) {
+    return {
+      level: "neutral",
+      label: "Domain volume",
+      detail: `This is the only mailbox sending from ${domain}.`,
+    };
+  }
+
+  const { count: domainSent } = await supabase
+    .from("email_queue")
+    .select("id", { count: "exact", head: true })
+    .in("sender_account_id", ids)
+    .eq("status", "sent")
+    .gte("sent_at", since);
+
+  const { count: mineSent } = await supabase
+    .from("email_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("sender_account_id", accountId)
+    .eq("status", "sent")
+    .gte("sent_at", since);
+
+  const total = domainSent ?? 0;
+  const mine = mineSent ?? 0;
+  const detail =
+    `${total} sent from ${domain} across ${ids.length} mailboxes in last 30d ` +
+    `(${mine} from this one). Reputation is shared across all of them.`;
+
+  // Under half means the numbers above describe a minority of what the
+  // receiving side attributes to this domain.
+  const level: CheckLevel = total > 0 && mine * 2 < total ? "warn" : "neutral";
+  return { level, label: "Domain volume", detail };
+}
+
 function pauseCheck(status: string, pauseReason: string | null): CheckResult {
   if (status === "active") {
     return { level: "good", label: "Account status", detail: "active, no circuit-breaker pause" };
@@ -295,13 +357,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Could not parse domain from email address" }, { status: 400 });
   }
 
-  const [spf, dkim, dmarc, mx, internal, blocklistRaw] = await Promise.all([
+  const [spf, dkim, dmarc, mx, internal, blocklistRaw, domainVolume] = await Promise.all([
     checkSPF(domain),
     checkDKIM(domain),
     checkDMARC(domain),
     checkMX(domain),
     computeInternalStats(supabase, account.id, account.status ?? 'disconnected', account.pause_reason),
     checkBlocklists(domain),
+    checkDomainVolume(supabase, account.workspace_id, domain, account.id),
   ]);
   const blocklists = blocklistRaw.map(blocklistToCheckResult);
 
@@ -313,6 +376,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     internal.bounce,
     internal.reply,
     internal.pause,
+    domainVolume,
     ...blocklists,
   ];
   const errors = checks.filter((c) => c.level === "error").length;
@@ -331,7 +395,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
           : `${errors} issue${errors === 1 ? "" : "s"} need attention.`,
     checks: {
       auth: [spf, dkim, dmarc, mx],
-      stats: [internal.bounce, internal.reply, internal.pause],
+      stats: [internal.bounce, internal.reply, internal.pause, domainVolume],
       blocklists,
     },
   });
