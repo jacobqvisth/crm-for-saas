@@ -378,8 +378,41 @@ and **the string "wrenchlane" appears nowhere in the login DOM**.
   Workspace" instead of joining their colleagues. **Google always sends both, so every
   fallback is dead code for Wrenchlane.**
 
+## URGENT, found while merging phase 08a: Animech's sign-up is open to the internet
+
+Phase 08a stood up `animech-crm.vercel.app` on Supabase project `hnriqsnenyzmlctkkdmi`
+while this branch was in flight. Its auth config, read from the Management API on
+2026-08-31 rather than assumed:
+
+```
+disable_signup:           false   <-- ANYONE CAN CREATE AN ACCOUNT
+external_email_enabled:   true
+external_google_enabled:  false
+external_azure_enabled:   false
+site_url:                 http://localhost:3000
+```
+
+This is exactly the failure section E predicts in writing: *"a tenant created with it left
+on default is open to the internet."* Email sign-up is on, sign-up is not disabled, and the
+deployment carries a real customer's name.
+
+**Two one-line fixes, both in the Supabase dashboard for that project, neither made here**
+(the change was blocked by the sandbox and is Jacob's to approve):
+
+1. Authentication -> Providers -> **turn `disable_signup` on**. Authorise people by creating
+   them through the admin API instead — `scripts/bootstrap-tenant.mjs --owner=` does it.
+2. Set **`site_url`** to `https://animech-crm.vercel.app` and add
+   `https://animech-crm.vercel.app/auth/callback` to the redirect allow-list. While it is
+   `http://localhost:3000`, a completed sign-in redirects the user to their own machine —
+   the same class of failure as the OAuth `redirectTo` trap in the ground rules.
+
+`animech.ts` records `auth: { google: false, microsoft: false, email: true }`, which is what
+that project actually has enabled today rather than what section E wants it to have. The two
+`false`s flip in the same change that enables the providers, not before.
+
 ## Still not done after this phase
 
+- **The two Animech auth fixes above.** They are the highest-priority item in this document.
 - `scripts/bootstrap-tenant.mjs --apply` has never run against an empty database.
 - Neither new tenant has a config in `src/config/tenants/`. That is phase 08/09's job and
   needs facts about the customers; the flags decided in D are waiting for them.

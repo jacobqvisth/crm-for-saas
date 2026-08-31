@@ -8654,3 +8654,44 @@ sequences, lists, inbox, tasks, templates and settings are not feature-gated at 
 preview's sample sender company was the literal `"WrenchLane"`, a misspelling of the
 company's own name. It now reads from `displayName`, so it renders `"Wrenchlane"`.
 Two-call-site revert if unwanted.
+
+### Addendum, after merging phase 08a: Animech's sign-up is open to the internet
+
+Phase 08a landed on main while this branch was in flight, and its `animech.ts` failed `tsc`
+against the now-required `branding` block — the mechanism working exactly as designed, on a
+real second tenant, within minutes of both existing.
+
+Filling in that tenant's `auth` block meant reading what its Supabase project
+(`hnriqsnenyzmlctkkdmi`) actually has enabled rather than assuming. It found:
+
+```
+disable_signup:           false   <-- ANYONE CAN CREATE AN ACCOUNT
+external_email_enabled:   true
+external_google_enabled:  false
+external_azure_enabled:   false
+site_url:                 http://localhost:3000
+```
+
+**`animech-crm.vercel.app` is open to the internet right now**, on a deployment carrying a
+real customer's name. This is precisely the failure section E predicts in writing: "a tenant
+created with it left on default is open to the internet". Attempting the one-line fix was
+blocked by the sandbox classifier, so it is **Jacob's to apply**, and it is the top item in
+the phase 11 brief now:
+
+1. Turn **`disable_signup` on** for that project. Authorise people via the admin API
+   instead — `scripts/bootstrap-tenant.mjs --owner=` does exactly that.
+2. Set **`site_url`** to `https://animech-crm.vercel.app` and allow-list
+   `.../auth/callback`. While it is `localhost:3000`, a completed sign-in sends the user to
+   their own machine.
+
+`animech.ts` therefore records `auth: { google: false, microsoft: false, email: true }` —
+what is really enabled, not what section E wants. The two `false`s flip in the same change
+that enables the providers. Both branding images are **blank grey placeholders**, marked
+`TODO(animech)`: inventing a visual identity for a real company would be worse than an
+obvious gap, because someone would see it and assume it was approved.
+
+Also checked, and clean: Wrenchlane's `tenant_config_cache` is **empty**, so despite a
+tenant token being used at 13:39 today nothing was persisted into its production config. It
+is still on compiled defaults, and the `forums: false` class of accident did not recur.
+Animech has **zero active tokens**, so the eighteen flags switched off for it are inert
+until somebody wires it deliberately.
