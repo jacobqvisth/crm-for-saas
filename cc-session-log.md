@@ -8301,3 +8301,91 @@ READY.
    an observation signal, not the bidding target, given the volume.
 3. **Capture `gclid` at signup** (app change, outside this repo) to make
    attribution exact rather than GA4-modelled.
+
+## 2026-08-31 — Paid conversions: fix the ad account, build the upload, spec the gclid gap — PR #769 — `feature/paid-conversion-upload`
+
+Follow-up to PR #766. Jacob approved all three open items and asked to start
+with the conversion action.
+
+### 1. The conversion action is fixed, applied live to the ad account
+
+`WrenchLane (web) purchase` measured card entries, not payments. Now:
+
+| | before | after |
+|---|---|---|
+| name | `WrenchLane (web) purchase` | `WrenchLane (web) checkout started (card entered)` |
+| `primary_for_goal` | false | true |
+| `include_in_conversions_metric` | false | true (follows automatically) |
+
+Card entries are counted instead of recorded and ignored, and the label no
+longer invites anyone to read 42,102 SEK of plan list price as revenue.
+
+**The check that mattered, and the reason to always look first:** Performance
+Max carries a CAMPAIGN-LEVEL conversion goal override pinned to `SIGNUP`
+(`campaign_conversion_goal`). Promoting the action therefore does NOT change
+what PMax bids on — verified unchanged after the write. Without checking,
+"made it primary" would have been a no-op across 89% of the spend and would have
+been reported as a fix.
+
+Revert: `primary_for_goal: false` plus the old name.
+
+### What was deliberately NOT done, and why
+
+Switching PMax onto the card-entry goal was the other half of the approved plan.
+**The PMax budget was cut to 300 SEK/day on 2026-08-31** (Aug 30 spent 738 SEK,
+Aug 31 only 280). PMax buys card entries at 921 SEK, so at that budget the goal
+would see ~10 conversions/month against the ~30 Smart Bidding needs, and its
+tCPA of 100 SEK — exactly right for signups at 99 SEK — would throttle delivery
+immediately. The switch wants the budget back near 900 SEK/day and a tCPA around
+950. Surfaced to Jacob rather than done silently, because it is a spend decision.
+
+### 2. The upload pipeline, inert until one command is run
+
+- `scripts/google-datamanager-setup.mjs` — loopback OAuth consent, then creates
+  the conversion action and prints the two env vars
+- `src/lib/ceo/paying-customers/data-manager.ts` — Data Manager ingest client
+- `src/lib/ceo/paying-customers/upload.ts` — Stripe payments → events + ledger
+- `/api/cron/upload-paid-conversions` — daily 05:50 UTC, `?dryRun=1`
+
+Three decisions worth keeping:
+
+- **Separate credential.** `GOOGLE_DATAMANAGER_REFRESH_TOKEN`, not a re-consent
+  of `GOOGLE_OAUTH_REFRESH_TOKEN`: that single token authenticates GA4, Search
+  Console, Firebase AND Google Ads, and adding one scope to it would stake every
+  Google sync in the app on the outcome of one browser redirect.
+- **No raw emails.** Keyed on `dashboard_users.email_hash`, verified to be
+  SHA-256 of the lowercase-trimmed email on 1,854 of 1,856 users — exactly the
+  normalisation Google requires.
+- **Not primary, consent not assumed.** The created action is category
+  `SUBSCRIBE_PAID` and secondary (4-10 real payments/month is an observation
+  signal, not a bidding target). Consent defaults to
+  `CONSENT_STATUS_UNSPECIFIED`, because asserting consent we have not recorded
+  would be a false statement to Google about a mostly-EU customer base.
+
+Ledger `dashboard_ad_conversion_uploads` plus a derived `transaction_id`, so a
+re-run is stopped locally and a retry after a timeout is deduplicated by Google.
+
+### 3. The gclid gap
+
+`dashboard_users.gclid` and `.landing_page` added, empty. Nothing in this repo
+can fill them: signup happens in the Wrenchlane app, which is not on this
+machine and is not this codebase. `docs/gclid-capture-spec.md` carries the
+cookie snippet, the first-write-wins reasoning, the core_app export change and
+what it unlocks. `upload.ts` already prefers a gclid over the hashed email the
+moment the column is populated, with no further change.
+
+### Checks
+
+tsc clean · lint clean · **1198 tests across 92 files, 0 failing** · build green
+(note: the build fails at prerender on `/sequences/new` when `.env.local` is
+absent — pre-existing, not this change) · conversion-action change applied and
+read back, PMax goals confirmed unchanged · upload cron exercised unconfigured
+and returns 200 `skipped` with an actionable reason · page re-fetched
+authenticated after the rename, bidding table shows the renamed action as
+"Drives bidding: yes" · prod deploy `3a71f21` READY.
+
+### Open
+
+- **PMax goal switch**, gated on the budget decision above.
+- **Run `scripts/google-datamanager-setup.mjs`** to activate the upload.
+- **The app change** for gclid capture, per the spec.
