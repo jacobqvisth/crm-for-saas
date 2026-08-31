@@ -11,9 +11,10 @@ provider seam. Every one of those was necessary.
 
 None of them stands a customer up.
 
-The four items below were found on 2026-08-31 by looking at what would actually happen if
-Animech logged in tomorrow. Each is small. Together they are the difference between "the
-architecture supports three customers" and "there are three customers". They are written
+Items A to D below were found on 2026-08-31 by looking at what would actually happen if
+Animech logged in tomorrow. Item E is a requirement Jacob added the same day. Each is small.
+Together they are the difference between "the architecture supports three customers" and
+"there are three customers". They are written
 here rather than folded into 08 so that 08 is a bring-up and not a discovery exercise.
 
 The acceptance test for the whole programme is that standing up Spennare takes about a day.
@@ -135,6 +136,67 @@ for and is now the easiest part of this brief.
 inherited, and the reasons are in the audit log.
 
 ---
+
+## E. Sign-in options are per tenant, and Wrenchlane is the exception
+
+Today `/login` offers exactly one button, "Sign in with Google Workspace", hardcoded. That
+is right for Wrenchlane and wrong for everyone else: **Animech and Spennare are both on
+Microsoft 365**, so their staff would be asked to sign in with the one identity provider they
+do not use.
+
+**Required:** every tenant except Wrenchlane offers **Google, Microsoft and email**.
+Wrenchlane stays Google-only — it works, its staff are on Workspace, and changing a working
+sign-in for a live business buys nothing (R1).
+
+### Do not confuse this with phase 07
+
+These are two different Entra app registrations and conflating them will cost a day:
+
+| | Phase 07 (`ENTRA-APP-SETUP.md`) | This |
+| --- | --- | --- |
+| Purpose | Send and read **mail** | Let **people sign in** |
+| Auth style | App-only, client credentials | Delegated, user consent |
+| Permissions | `Mail.Send`, `Mail.ReadWrite`, admin consent, Application Access Policy | `openid`, `profile`, `email` |
+| Configured in | The tenant's Vercel env | The tenant's **Supabase** auth settings, as the `azure` provider |
+| Who needs it | Only tenants whose mail we send | Every non-Wrenchlane tenant |
+
+The sign-in one is much smaller and needs no Application Access Policy. It can be done long
+before the mail consent lands.
+
+### Email sign-in means admin-authorised, not open
+
+Open email sign-up on a CRM is an invitation. The pattern is the one the control plane
+already uses and which is proven in production:
+
+- Set **`disable_signup: true`** on that tenant's Supabase project. This is a per-project
+  setting, not code, so it belongs on the bring-up checklist in section B — a tenant created
+  with it left on default is open to the internet.
+- Jacob authorises a person by **creating the user through the admin API** with
+  `email_confirm: true`. They then sign in with a magic link or password.
+- A first Google or Microsoft sign-in for an address that already exists **links** to that
+  user rather than being refused as a signup. That is exactly how the control plane's own
+  first sign-in was made to work on 2026-08-31, and it is worth knowing before someone
+  debugs "Signups not allowed for this instance" from scratch.
+
+An approval *queue* in the console is deliberately not proposed. Admin-invites is the same
+control with none of the build.
+
+### Do
+
+- Add an `auth` block to `TenantConfig`: `{ google: boolean; microsoft: boolean; email:
+  boolean }`. Required, not optional, so `tsc` names any tenant that has not decided.
+  Wrenchlane is `{ google: true, microsoft: false, email: false }`.
+- Render `/login` from it. One button today, three tomorrow, and **no tenant gets a provider
+  its Supabase project has not had enabled** — a button that produces "provider is not
+  enabled" is worse than no button, and that exact error already cost a round trip this week.
+- `src/app/(auth)/auth/callback/route.ts` is provider-agnostic already; check that the
+  workspace-onboarding path does the right thing for a Microsoft identity.
+- `requireSuperAdmin` in the control plane demands `provider === "google"`. That is the
+  **console**, not a tenant, and it stays Google-only. Do not loosen it while doing this.
+
+**Done when:** booting as a non-Wrenchlane tenant shows three working buttons, an
+unauthorised email address cannot create an account, and Wrenchlane's login page is
+byte-identical to what it is today.
 
 ## What this does not include
 

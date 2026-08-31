@@ -185,9 +185,10 @@ on a customer.
 1. **[Phase 11](11-tenant-bring-up.md) — the parts no phase covers.** Found on 2026-08-31 by
    asking what would happen if Animech signed in tomorrow. The sidebar hardcodes Wrenchlane's
    wordmark; 43 of the 67 environment variables the code reads are undocumented; a fresh
-   tenant database has 101 tables and no workspace; and 19 of 20 features default to ON, so a
+   tenant database has 101 tables and no workspace; 19 of 20 features default to ON, so a
    3D-configurator company would inherit fault-code dashboards and Reddit car-forum
-   answering. **This is the real blocker on 08**, and none of it needs Animech.
+   answering; and `/login` offers one hardcoded Google button, when both new tenants are on
+   Microsoft. **This is the real blocker on 08**, and none of it needs Animech.
 2. **Close [issue #747](https://github.com/jacobqvisth/crm-for-saas/issues/747)** —
    `discovered_shops` has RLS disabled and holds ~42k scraped contacts. Five discovery routes
    use the user-session client, so a policy has to be written and verified against a real
