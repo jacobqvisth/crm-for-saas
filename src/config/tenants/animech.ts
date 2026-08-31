@@ -209,8 +209,19 @@ export const animech: TenantConfig = {
     // Their core need, and it does not exist yet: the Deals UI was removed in
     // PR #357 and phase 10 rebuilds it. Off until there is something to show.
     deals: false,
-    // Off by default everywhere, including for Wrenchlane.
-    linkedin_steps: false,
+    // ON, and one of only two tenants it is on for. The registry defaults it
+    // off, which is why the phase-11 bring-up wrote `false` here, but the
+    // feature was built on 2026-08-31 specifically for Animech and Spennare:
+    // "bygg den för spennare och animech, låt den vara optional för
+    // wrenchlane". A buying committee of five to eight over a three to nine
+    // month cycle is exactly the motion LinkedIn touches serve, which is not
+    // true of a car workshop.
+    //
+    // Note what it does and does not do. It adds two step types to the
+    // sequence builder that create a TASK for a rep. Nothing is sent
+    // automatically, so switching this on cannot put an Animech employee's
+    // LinkedIn account at risk.
+    linkedin_steps: true,
   },
 
   integrations: {

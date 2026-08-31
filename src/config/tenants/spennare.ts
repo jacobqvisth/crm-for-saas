@@ -268,9 +268,22 @@ export const spennare: TenantConfig = {
     // Jacob's own internal surfaces, not customer-facing.
     roadmap: false,
     mockup: false,
-    // Off by default everywhere, including for Wrenchlane: useless until
-    // contacts actually have linkedin_url populated, which no tenant does.
-    linkedin_steps: false,
+    // ON, and one of only two tenants it is on for. The registry defaults it
+    // off, which is why the phase-11 bring-up wrote `false` here, but the
+    // feature was built on 2026-08-31 specifically for Spennare and Animech:
+    // "bygg den för spennare och animech, låt den vara optional för
+    // wrenchlane".
+    //
+    // The bring-up's reason for `false` (useless until linkedin_url is
+    // populated) was right about the data and wrong about the consequence: a
+    // step with no stored profile falls back to a LinkedIn people search built
+    // from the contact's name and company, and says in the task that the link
+    // is a guess. Finding a named reseller contact that way is seconds of work,
+    // so the step is useful before any enrichment exists.
+    //
+    // Nothing is sent automatically. Both step types create a TASK for a rep,
+    // so this cannot put a Spennare employee's LinkedIn account at risk.
+    linkedin_steps: true,
   },
 
   integrations: {
