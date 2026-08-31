@@ -65,10 +65,15 @@ describe("the super-admin allow-list", () => {
     expect(isSuperAdminEmail("jacob.qvisth@gmail.com")).toBe(true);
   });
 
-  it("carries the break-glass address alongside the primary", () => {
-    process.env.CONTROL_PLANE_ADMIN_EMAILS = "jacob.qvisth@gmail.com, jacob@wrenchlane.com";
-    expect(isSuperAdminEmail("jacob@wrenchlane.com")).toBe(true);
-    expect(isSuperAdminEmail("someone@wrenchlane.com")).toBe(false);
+  // The parser handles several entries and trims whitespace. It is only the
+  // PARSER being tested: production runs with one address,
+  // jacob.qvisth@gmail.com, and no break-glass second admin. A second address
+  // is a second account to compromise while there is exactly one operator.
+  it("parses a multi-entry list, trimming whitespace", () => {
+    process.env.CONTROL_PLANE_ADMIN_EMAILS = "first@example.com, second@example.com";
+    expect(isSuperAdminEmail("first@example.com")).toBe(true);
+    expect(isSuperAdminEmail("second@example.com")).toBe(true);
+    expect(isSuperAdminEmail("third@example.com")).toBe(false);
   });
 });
 

@@ -3,10 +3,21 @@
 The console that decides which features each customer gets. It is deployed, and this is how
 to run it.
 
-- **Console:** https://wrenchlane-control-plane.vercel.app/admin
-- **Vercel project:** `wrenchlane-control-plane` (`prj_8LG0FKZfeugFtiK8tuMcXQN9Oj2h`)
-- **Database:** Supabase `ktkuwmuhhrbwzysuxfzi` (`wrenchlane-control-plane`, eu-north-1)
+- **Console:** https://jacobs-crm-control.vercel.app/admin
+- **Vercel project:** `jacobs-crm-control` (`prj_IB1GurmxNOw8H4HFSnOwU0v79N6D`)
+- **Database:** Supabase `ktkuwmuhhrbwzysuxfzi` (`jacobs-crm-control`, eu-north-1)
 - **Branch of record:** `stable`
+
+## Why it is not called "Wrenchlane something"
+
+It was, briefly, and the name was wrong. This console decides feature access for **all three
+customers** — Wrenchlane, Animech and Spennare. Naming it after one of them implies it is
+part of that customer's system, which is exactly the confusion the whole productisation
+programme exists to remove, and it would read badly to a customer who saw it. It is Jacob's
+operator console, above all three tenants, so it is named for that.
+
+The Supabase project **ref** (`ktkuwmuhhrbwzysuxfzi`) is unchanged and cannot change, so the
+Google OAuth callback URL survives the rename.
 
 ## The one thing to understand first
 
@@ -37,7 +48,7 @@ that changes rarely and governs three businesses.
 
 ```bash
 git checkout stable && git merge --ff-only main && git push origin stable
-npx vercel link --yes --project wrenchlane-control-plane --scope jacobqvisths-projects
+npx vercel link --yes --project jacobs-crm-control --scope jacobqvisths-projects
 npx vercel deploy --prod --yes -A vercel.control-plane.json
 ```
 
@@ -49,9 +60,9 @@ while the deployment still reports READY.
 Verify after deploying:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://wrenchlane-control-plane.vercel.app/admin      # 307
-curl -s -o /dev/null -w '%{http_code}\n' https://wrenchlane-control-plane.vercel.app/contacts   # 404
-curl -s https://wrenchlane-control-plane.vercel.app/api/config                                  # 401
+curl -s -o /dev/null -w '%{http_code}\n' https://jacobs-crm-control.vercel.app/admin      # 307
+curl -s -o /dev/null -w '%{http_code}\n' https://jacobs-crm-control.vercel.app/contacts   # 404
+curl -s https://jacobs-crm-control.vercel.app/api/config                                  # 401
 ```
 
 ## What this deployment serves, and what it must not
@@ -70,11 +81,20 @@ admin is bounced to `/login?error=onboarding` with nothing explaining why.
 
 ## Signing in
 
-Authorisation is `CONTROL_PLANE_ADMIN_EMAILS`, re-checked in the page and in every server
-action. Middleware is a convenience, not the boundary. The rules are stricter than the CRM's
-`CEO_ALLOWED_EMAILS`: the address must match exactly, the email must be confirmed, the
-provider must be Google, and `@domain` entries are dropped rather than honoured, because the
-primary super-admin address is a Gmail one and `@gmail.com` would admit the internet.
+`CONTROL_PLANE_ADMIN_EMAILS` is **`jacob.qvisth@gmail.com` and nothing else.** There is no
+break-glass second address, by decision: this console governs three customers, so a
+`@wrenchlane.com` address is not a neutral operator of it, and one more admin address is one
+more account to compromise for no gain while there is exactly one operator.
+
+The allow-list is re-checked in the page and in every server action. Middleware is a
+convenience, not the boundary. The rules are stricter than the CRM's `CEO_ALLOWED_EMAILS`:
+the address must match exactly, the email must be confirmed, the provider must be Google,
+and `@domain` entries are dropped rather than honoured, because the super-admin address is a
+Gmail one and `@gmail.com` would admit the internet.
+
+The cost of having no second admin is that losing that Google account locks you out. The
+recovery path is the Supabase dashboard: change `CONTROL_PLANE_ADMIN_EMAILS` on the Vercel
+project and redeploy. Keep that in mind rather than adding a spare admin.
 
 **The super-admin Google account controls feature access for three paying customers. It
 needs a hardware key or a passkey, not SMS.**
@@ -86,7 +106,7 @@ state, not a broken one — Wrenchlane has run that way since phase 05.
 
 1. In the console, use **Rotate token** on the tenant. The plaintext is shown once and never
    stored; only a SHA-256 goes in the database.
-2. On that tenant's Vercel project set `CONTROL_PLANE_URL=https://wrenchlane-control-plane.vercel.app`
+2. On that tenant's Vercel project set `CONTROL_PLANE_URL=https://jacobs-crm-control.vercel.app`
    and `CONTROL_PLANE_TOKEN=<the token>`, then redeploy.
 3. Confirm the tenant still serves every feature it served before.
 
@@ -106,18 +126,33 @@ changes nothing, which is exactly the state to be in when you turn it on.
 
 ## Still to do
 
-- **Google sign-in is not enabled yet**, so nobody can actually sign in. It needs an OAuth
-  client the control plane owns. Deliberately not the CRM's client: that secret belongs to
-  the Wrenchlane tenant, and ground rule R7 says no credential crosses a tenant boundary.
+- **Google sign-in is not enabled yet, and this is why the login button hangs.**
 
-  In Google Cloud Console, create an OAuth client ID of type **Web application** with the
-  authorized redirect URI `https://ktkuwmuhhrbwzysuxfzi.supabase.co/auth/v1/callback`, then
-  put its id and secret into the control-plane Supabase auth settings and enable Google.
+  The sign-in page calls `signInWithOAuth({ provider: "google" })`. With no provider enabled
+  Supabase returns "provider is not enabled", and the button sits on "Redirecting..." for
+  ever. It is not a Workspace-versus-Gmail problem — **a personal Gmail is the intended
+  case**, which is exactly why `superAdminAllowList` drops `@domain` entries: `@gmail.com`
+  as an allow-list entry would admit the entire internet.
 
-  Everything else is already locked down: zero providers enabled, sign-up disabled, and the
-  redirect allow-list holds exactly
-  `https://wrenchlane-control-plane.vercel.app/auth/callback`. **Never append a query string
-  to `redirectTo`** — Supabase matches the whole string against the allow-list.
+  It needs an OAuth client the control plane owns. Deliberately not the CRM's client: that
+  secret belongs to the Wrenchlane tenant, and R7 says no credential crosses a tenant
+  boundary.
+
+  1. Google Cloud Console → **APIs & Services → Credentials → Create credentials → OAuth
+     client ID**, type **Web application**, name it `Jacobs CRM control`.
+  2. Authorized redirect URI, exactly:
+     `https://ktkuwmuhhrbwzysuxfzi.supabase.co/auth/v1/callback`
+     This is the SUPABASE callback, not the app's, and it is keyed on the project **ref** —
+     so it survives renaming the project and the Vercel hostname.
+  3. If the consent screen is unconfigured, set User type **External** and publishing status
+     **Testing**, then add `jacob.qvisth@gmail.com` as a test user. Testing mode is enough
+     for a one-person console and avoids Google's verification review entirely.
+  4. Copy the client id and client secret into Supabase → Authentication → Providers →
+     Google, and enable it.
+
+  Everything else is already locked down: sign-up disabled, and the redirect allow-list holds
+  exactly `https://jacobs-crm-control.vercel.app/auth/callback`. **Never append a query
+  string to `redirectTo`** — Supabase matches the whole string against the allow-list.
 
 - **A custom domain.** The console is on a `.vercel.app` hostname. Moving it means adding the
   domain in Vercel, then updating `site_url` and the redirect allow-list in Supabase, and
