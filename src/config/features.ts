@@ -40,7 +40,8 @@ export type FeatureKey =
   | "roadmap"
   | "mockup"
   | "deals"
-  | "dealer_network";
+  | "dealer_network"
+  | "linkedin_steps";
 
 /** Grouping for the phase 04 admin console, so 19 toggles are not one flat list. */
 export type FeatureCategory =
@@ -293,6 +294,29 @@ export const FEATURES: readonly FeatureDefinition[] = [
     routePrefixes: [],
     cronPaths: [],
   },
+
+  // The one flag that is deliberately OFF by default, and the only exception
+  // R2 allows: R2 exists so Wrenchlane never silently LOSES a surface it
+  // already has. LinkedIn steps are brand new, so defaulting them off removes
+  // nothing. Jacob asked for exactly this on 2026-08-31 ("bygg den för
+  // spennare och animech, låt den vara optional för wrenchlane"), which is the
+  // "unless Jacob says otherwise" the header paragraph reserves.
+  //
+  // It governs no route: LinkedIn steps live inside /sequences, which is core
+  // product. The gate is therefore in two other places, and both are needed —
+  // the step type is hidden from the builder, and `createStepTasks` refuses to
+  // create the task even for steps a tenant saved while the flag was on.
+  {
+    key: "linkedin_steps",
+    name: "LinkedIn steps",
+    category: "outbound",
+    description:
+      "Connection-request and message steps inside sequences. Creates a task for a rep; nothing is sent automatically.",
+    enabledByDefault: false,
+    navHrefs: [],
+    routePrefixes: [],
+    cronPaths: [],
+  },
 ] as const;
 
 /** One boolean per feature. Exhaustive: the compiler rejects a missing key. */
@@ -309,11 +333,15 @@ export function featureDefinition(key: FeatureKey): FeatureDefinition {
 }
 
 /**
- * Every feature on, built from the registry's own defaults.
+ * The registry's own defaults, which for all but the declared opt-ins means
+ * "on".
  *
- * Wrenchlane uses this rather than listing nineteen `true`s, which is what
- * makes R2 automatic: a feature added to the registry is on for Wrenchlane the
- * moment it exists, with no second file to remember to edit.
+ * Wrenchlane uses this rather than listing twenty booleans, which is what makes
+ * R2 automatic: a feature added to the registry is on for Wrenchlane the moment
+ * it exists, with no second file to remember to edit. A feature that ships
+ * `enabledByDefault: false` is therefore off for Wrenchlane too, which is only
+ * ever correct for something Wrenchlane never had — see the `OFF_BY_DEFAULT`
+ * list in features.test.ts, which is where that exception is policed.
  */
 export const ALL_FEATURES_ENABLED: FeatureFlags = Object.fromEntries(
   FEATURES.map((f) => [f.key, f.enabledByDefault]),

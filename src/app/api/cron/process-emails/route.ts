@@ -19,6 +19,7 @@ import {
 import { defaultLanguage } from "@/lib/sequences/language";
 import { walkFromStep } from "@/lib/sequences/step-walk";
 import { createStepTasks } from "@/lib/sequences/step-tasks";
+import { isFeatureEnabledLive } from "@/lib/tenant-config/resolve";
 import {
   hasReplyPrefix,
   threadedReplySubject,
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServiceClient();
+
+  // Resolved once for the whole run and handed to every createStepTasks call
+  // below, so one control-plane resolution covers a batch of a hundred sends.
+  const linkedinEnabled = await isFeatureEnabledLive("linkedin_steps");
 
   // Determine which senders still have daily capacity. PostgREST can't express a
   // column-vs-column comparison ("daily_sends_count < max_daily_sends") cleanly,
@@ -698,6 +703,7 @@ export async function POST(request: NextRequest) {
               enrollmentId: enrollment.id,
               contact,
               company,
+              linkedinEnabled,
             });
             if (taskError) {
               console.error(

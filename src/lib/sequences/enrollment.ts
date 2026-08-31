@@ -11,6 +11,7 @@ import {
   flushSendCountDeltas,
 } from "./variants";
 import { defaultLanguage, resolveContactLanguage } from "./language";
+import { isFeatureEnabledLive } from "@/lib/tenant-config/resolve";
 import type { Database, SequenceSettings, Tables } from "@/lib/database.types";
 
 type ContactWithCompany = Tables<"contacts"> & {
@@ -92,12 +93,18 @@ export async function enrollContacts(
   const enrolledContactIds = new Set((existingEnrollments || []).map((e) => e.contact_id));
 
   // Get every step — the opening of the sequence may be several non-email
-  // steps (delays, calls, tasks) before the first email.
+  // steps (delays, calls, tasks, LinkedIn touches) before the first email.
   const { data: steps } = await supabase
     .from("sequence_steps")
     .select("*")
     .eq("sequence_id", sequenceId)
     .order("step_order", { ascending: true });
+
+  // Resolved once for the whole batch rather than per contact: it is a property
+  // of the tenant, and enrolling a thousand contacts should not ask a thousand
+  // times. It cannot throw — an unreachable control plane falls back to the
+  // compiled default.
+  const linkedinEnabled = await isFeatureEnabledLive("linkedin_steps");
 
   // Get contacts. PostgREST puts the IN list in the URL, so a single .in() with
   // ~1000+ UUIDs blows past the URL length limit and the request fails with
@@ -377,6 +384,7 @@ export async function enrollContacts(
           enrollmentId: enrollment.id,
           contact,
           company,
+          linkedinEnabled,
         });
         if (taskError) {
           result.reasons.push(

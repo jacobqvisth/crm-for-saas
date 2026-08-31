@@ -44,8 +44,21 @@ export interface WalkResult<T extends WalkableStep = WalkableStep> {
   completed: boolean;
 }
 
-/** Step types that create a task and let the sequence carry on. */
-export const TASK_STEP_TYPES = ["call", "task"] as const;
+/**
+ * Step types that create a task and let the sequence carry on.
+ *
+ * The two LinkedIn types are in here rather than in a category of their own
+ * because, to the walk, they are the same shape: something a rep does, which
+ * never holds the enrollment open. That stays true only while nothing is sent
+ * automatically. A step that really sends would have to advance the enrollment
+ * itself, and belongs nowhere near this list.
+ */
+export const TASK_STEP_TYPES = [
+  "call",
+  "task",
+  "linkedin_invite",
+  "linkedin_message",
+] as const;
 
 export function isTaskStepType(type: string | null): boolean {
   return (TASK_STEP_TYPES as readonly string[]).includes(type ?? "");

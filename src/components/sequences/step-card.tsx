@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { Mail, Clock, GitBranch, Phone, CheckSquare, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { Mail, Clock, GitBranch, Phone, CheckSquare, Trash2, ChevronDown, ChevronUp, GripVertical, UserPlus, MessageSquare } from "lucide-react";
 import { EmailStepEditor } from "./email-step-editor";
 import { DelayStepEditor } from "./delay-step-editor";
 import { ConditionStepEditor } from "./condition-step-editor";
 import { TaskStepEditor } from "./task-step-editor";
+import { LinkedInStepEditor } from "./linkedin-step-editor";
+import { isLinkedInStepType } from "@/lib/sequences/linkedin";
 import type { Tables } from "@/lib/database.types";
 
 type Step = Tables<"sequence_steps">;
@@ -47,6 +49,20 @@ const STEP_CONFIG = {
     textColor: "text-sky-600",
     borderColor: "border-sky-200",
   },
+  linkedin_invite: {
+    icon: UserPlus,
+    label: "LinkedIn invite",
+    bgColor: "bg-blue-100",
+    textColor: "text-blue-700",
+    borderColor: "border-blue-200",
+  },
+  linkedin_message: {
+    icon: MessageSquare,
+    label: "LinkedIn message",
+    bgColor: "bg-blue-100",
+    textColor: "text-blue-700",
+    borderColor: "border-blue-200",
+  },
 };
 
 interface StepCardProps {
@@ -81,6 +97,16 @@ export function StepCard({ step, totalSteps, stepNumber, sequenceName, isFirstEm
     }
     if (step.type === "condition") {
       return `If previous email was ${step.condition_type || "opened"}`;
+    }
+    if (isLinkedInStepType(step.type)) {
+      const label =
+        step.task_title?.trim() ||
+        step.linkedin_body?.trim() ||
+        (step.type === "linkedin_invite"
+          ? "Send a connection request"
+          : "Send a LinkedIn message");
+      const due = step.task_due_days ?? 0;
+      return due > 0 ? `${label} — due in ${due} day${due !== 1 ? "s" : ""}` : label;
     }
     if (step.type === "call" || step.type === "task") {
       const label =
@@ -158,6 +184,12 @@ export function StepCard({ step, totalSteps, stepNumber, sequenceName, isFirstEm
           )}
           {(step.type === "call" || step.type === "task") && (
             <TaskStepEditor
+              step={step}
+              onUpdate={(updates) => onUpdate(step.id, updates)}
+            />
+          )}
+          {isLinkedInStepType(step.type) && (
+            <LinkedInStepEditor
               step={step}
               onUpdate={(updates) => onUpdate(step.id, updates)}
             />

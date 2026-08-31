@@ -5457,6 +5457,7 @@ export type Database = {
           delay_hours: number | null
           id: string
           include_signature: boolean
+          linkedin_body: string | null
           sequence_id: string
           step_order: number
           subject_override: string | null
@@ -5478,6 +5479,7 @@ export type Database = {
           delay_hours?: number | null
           id?: string
           include_signature?: boolean
+          linkedin_body?: string | null
           sequence_id: string
           step_order: number
           subject_override?: string | null
@@ -5499,6 +5501,7 @@ export type Database = {
           delay_hours?: number | null
           id?: string
           include_signature?: boolean
+          linkedin_body?: string | null
           sequence_id?: string
           step_order?: number
           subject_override?: string | null

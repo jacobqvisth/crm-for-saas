@@ -18,17 +18,38 @@ describe("the registry itself", () => {
     expect(new Set(FEATURE_KEYS).size).toBe(FEATURE_KEYS.length);
   });
 
-  // R2. A flag that defaults off before phase 08 means Wrenchlane lost a
-  // feature the day it merged.
-  it("defaults every feature to enabled", () => {
+  /**
+   * R2. A flag that defaults off means Wrenchlane lost a feature the day it
+   * merged — which is only untrue for a feature Wrenchlane never had.
+   *
+   * This list is that exception, spelled out rather than left to judgement, so
+   * adding a second one is a deliberate edit to a test and not a quiet `false`
+   * in a registry entry. Everything a Wrenchlane user can see today must stay
+   * off this list forever.
+   */
+  const OFF_BY_DEFAULT = new Set<string>(["linkedin_steps"]);
+
+  it("defaults every feature to enabled, except the declared opt-ins", () => {
     for (const f of FEATURES) {
-      expect(f.enabledByDefault, `${f.key} must default to on`).toBe(true);
+      const expected = !OFF_BY_DEFAULT.has(f.key);
+      expect(
+        f.enabledByDefault,
+        expected
+          ? `${f.key} must default to on`
+          : `${f.key} is declared opt-in, so it must default to off`,
+      ).toBe(expected);
     }
   });
 
-  it("gives Wrenchlane every feature", () => {
+  it("names only real features as opt-in", () => {
+    for (const key of OFF_BY_DEFAULT) {
+      expect(FEATURE_KEYS as readonly string[]).toContain(key);
+    }
+  });
+
+  it("gives Wrenchlane every feature it is not opted out of", () => {
     for (const key of FEATURE_KEYS) {
-      expect(wrenchlane.features[key], `wrenchlane.${key}`).toBe(true);
+      expect(wrenchlane.features[key], `wrenchlane.${key}`).toBe(!OFF_BY_DEFAULT.has(key));
     }
     expect(Object.keys(ALL_FEATURES_ENABLED).sort()).toEqual([...FEATURE_KEYS].sort());
   });
