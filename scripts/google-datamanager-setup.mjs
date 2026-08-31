@@ -122,10 +122,13 @@ function waitForCode(expectedState) {
       resolve(code);
     });
     server.listen(REDIRECT_PORT);
+    // Twenty minutes, not five. The first run of this timed out while the one
+    // person who can approve it was reading the message that told them to. The
+    // window has to outlast a coffee, not a keystroke.
     setTimeout(() => {
       server.close();
       reject(new Error("timed out waiting for the browser redirect"));
-    }, 300_000).unref();
+    }, 1_200_000).unref();
   });
 }
 
