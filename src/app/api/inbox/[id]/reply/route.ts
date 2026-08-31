@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/gmail/send";
+import { fetchThreadingHeaders } from "@/lib/gmail/fetch-threading-headers";
 import { translateOutboundReply } from "@/lib/inbox/translate-outbound";
 import { insertActivity } from "@/lib/activities/insert";
 import {
@@ -89,12 +90,38 @@ export async function POST(
     ? (inboxMessage.subject ?? "")
     : (threadedReplySubject("", inboxMessage.subject) ?? "");
 
+  // Threading. Two independent mechanisms, because they fix two different
+  // things and either one alone leaves the reply orphaned somewhere:
+  //
+  //  - `replyToThreadId` is what makes Gmail file the reply into the existing
+  //    conversation. Without it every reply we sent became its own one-message
+  //    thread, so the original thread still read as unanswered in Gmail even
+  //    though the customer had been answered.
+  //  - `In-Reply-To` / `References` are what every *other* mail client threads
+  //    on. These have to be the sender's real RFC identifiers; the Gmail API id
+  //    we used to pass here is not a message identifier and gets dropped.
+  //
+  // Only hand Gmail a thread id when we are sending from the same mailbox that
+  // holds the thread, since a thread id from another account is rejected. In
+  // practice they always match (inbound mail lands in the mailbox that sent
+  // it), so this is a guard, not a fallback path.
+  const threading = await fetchThreadingHeaders(
+    inboxMessage.gmail_account_id,
+    inboxMessage.gmail_message_id,
+  );
+  const replyToThreadId =
+    senderAccountId === inboxMessage.gmail_account_id
+      ? (inboxMessage.gmail_thread_id ?? undefined)
+      : undefined;
+
   const result = await sendEmail({
     accountId: senderAccountId,
     to: inboxMessage.from_email,
     subject: replySubject,
     htmlBody,
-    replyToMessageId: inboxMessage.gmail_message_id,
+    replyToMessageId: threading.messageId ?? undefined,
+    referenceMessageIds: threading.references,
+    replyToThreadId,
     // Manual replies are human-paced — exempt from the per-account
     // min_send_interval_seconds throttle that governs sequence sends.
     bypassSendInterval: true,
@@ -125,6 +152,12 @@ export async function POST(
       // populated so a deployment on the previous release keeps working.
       thread_key: inboxMessage.gmail_thread_id,
       reply_message_id: result.messageId,
+      // The thread the reply actually landed in. Equal to gmail_thread_id when
+      // threading worked; equal to reply_message_id when the send started a
+      // fresh thread, which is the failure this route used to have on every
+      // single reply. Stored so it is one query to check rather than an
+      // inference from message ids.
+      reply_thread_id: result.threadId ?? null,
       body_en: replyBody,
       body_sent: sentBody,
       target_language: translation.targetLanguage,
