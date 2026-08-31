@@ -50,6 +50,7 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   "google-ads-users",
   "cac-ltv",
   "campaigns",
+  "best-ads",
   "landing-pages",
 ]);
 
@@ -60,7 +61,7 @@ const FIXED_ALL_HISTORY_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
 // "All synced history" above it is simply wrong.
 const OWN_RANGE_CONTROL_SECTIONS: ReadonlySet<DashboardSectionKey> = new Set<
   DashboardSectionKey
->(["cac-ltv", "campaigns"]);
+>(["cac-ltv", "campaigns", "best-ads"]);
 
 type DashboardShellProps = {
   // Full warehouse read — only pass this when the page CONTENT actually uses
