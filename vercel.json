@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/sync-google-ads-assets",
       "schedule": "20 5 * * *"
+    },
+    {
+      "path": "/api/cron/sync-ad-conversions",
+      "schedule": "35 5 * * *"
     }
   ]
 }
