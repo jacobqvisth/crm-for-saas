@@ -5,6 +5,40 @@
 
 The first real proof the product works. Everything before this was preparation.
 
+## 08a is DONE (2026-08-31, PR #775)
+
+**https://animech-crm.vercel.app** · Supabase `hnriqsnenyzmlctkkdmi` · Vercel `animech-crm`,
+not git-connected, deploy with `-A vercel.animech.json`.
+
+What exists: its own database (108 tables, 104 with RLS, identical to Wrenchlane's, zero
+rows), its own tenant config, its own branding, its own twenty flags in the control plane,
+and a login page that says Animech. Proven with 16 probes against both deployments on the
+same commit.
+
+What does not: **no user can sign in yet**. Its Supabase project has no Google or Microsoft
+provider enabled, so `auth` is `{ google: false, microsoft: false, email: true }` — what is
+really enabled, not what section E of phase 11 wants. Enabling the other two is the next
+thing, and it is the same Console step Jacob did for the control plane.
+
+### STEP ZERO FOR THE NEXT TENANT: close sign-up before you deploy
+
+A new Supabase project ships with **sign-up open to the internet**. Animech's did:
+
+```
+disable_signup:         false
+external_email_enabled: true
+site_url:               http://localhost:3000
+```
+
+Anyone who found the URL could create an account on a deployment carrying a customer's name.
+Fix it with a single Management API `PATCH` to `/config/auth` — `disable_signup: true`, the
+real `site_url`, and a `uri_allow_list` — **before the first deploy, not after**.
+
+Then prove it, and mind two traps that both bit here: the setting takes a moment to
+propagate, so an immediate re-test returned `200` and really did create a user; and a `429
+over_email_send_rate_limit` is not evidence of anything, because the request was throttled
+before it was judged. The answer you want is `422 signup_disabled`.
+
 ## This phase splits, and the split is the point
 
 The header used to say "Depends on: 07", which held up the whole phase behind an Entra admin
