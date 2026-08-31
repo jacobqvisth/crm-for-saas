@@ -13,10 +13,13 @@ explaining why both exist. Phase 10 D asks for this list to be kept somewhere vi
 This is that list.
 
 **Nothing here may be actioned while any tenant is still on a release that reads the old
-shape.** Today there is one tenant (Wrenchlane), so "every tenant" is a low bar — but the
-whole point of the programme is that it will not stay that way, and a contract step landed
-just before Animech is stood up on an older release is the exact failure R3 exists to
-prevent.
+shape.** Today one tenant is *deployed* (Wrenchlane), so "every tenant" is still a low bar.
+Since 2026-08-31 the control plane also holds rows for Animech and Spennare as
+`provisioning`; those have no database yet, so they do not constrain a contract step — but
+the moment either is stood up, it is stood up from `main`, and a contract step landed just
+before that is the exact failure R3 exists to prevent.
+
+The safe window is therefore **now**, before customer two exists, not later.
 
 ---
 

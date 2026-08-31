@@ -107,6 +107,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started | None |
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
 | [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | **D+E partial** 2026-08-30 | Additive |
+| [11](11-tenant-bring-up.md) | Branding, env manifest, tenant bootstrap, per-tenant defaults | **Not started — blocks 08** | None |
 
 Phase 01's production reconcile **has been run** (2026-08-30). Wrenchlane's migration
 history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs` reports
@@ -115,12 +116,19 @@ history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs`
 The control plane lives at Supabase project `ktkuwmuhhrbwzysuxfzi`
 (`jacobs-crm-control`) and is **deployed** at
 https://jacobs-crm-control.vercel.app. How to operate, redeploy and wire tenants to it
-is in `CONTROL-PLANE-RUNBOOK.md`. One step remains before anyone can sign in: it needs its
-own Google OAuth client, deliberately not the CRM's, because R7 forbids a credential
+is in `CONTROL-PLANE-RUNBOOK.md`. Google sign-in is enabled and it has been signed into;
+the OAuth client is its own, deliberately not the CRM's, because R7 forbids a credential
 crossing a tenant boundary.
 
-No tenant is wired to it yet, so every tenant runs on compiled defaults. That is a supported
-state, and the runbook says what to check before changing it.
+All three tenants are in it: `wrenchlane` active, `animech` and `spennare` provisioning.
+Each tenant also reports aggregate counts to `/api/heartbeat` on a daily cron — **reported
+inward, never read out**, because reading would require the control plane to hold a
+service-role key per tenant, which is one credential that reads every customer's CRM.
+
+**No tenant is wired to it yet**, so every tenant runs on compiled defaults. That is a
+supported state. Note that wiring Wrenchlane is **no longer a no-op**: `linkedin_steps` was
+switched on for it in the console on 2026-08-31, so wiring would turn that feature on in
+production. Re-run the runbook's pre-flight comparison before doing it.
 
 **Phase 06 is deliberately half-landed.** The interface, the Google implementation and
 the whole schema half are done and verified. The seven live Gmail API call sites (the send
@@ -168,6 +176,33 @@ obtained from a code session**, not on effort:
 10 D and E were unblocked and are done: the contract-step register exists, and `CLAUDE.md`
 no longer documents a deleted feature, a dependency that is not installed, or an RLS claim
 that was wrong by 83 tables.
+
+## What is NOT blocked, in the order it should be done
+
+The list above is what needs someone else. This is what needs us, and none of it is waiting
+on a customer.
+
+1. **[Phase 11](11-tenant-bring-up.md) — the parts no phase covers.** Found on 2026-08-31 by
+   asking what would happen if Animech signed in tomorrow. The sidebar hardcodes Wrenchlane's
+   wordmark; 43 of the 67 environment variables the code reads are undocumented; a fresh
+   tenant database has 101 tables and no workspace; 19 of 20 features default to ON, so a
+   3D-configurator company would inherit fault-code dashboards and Reddit car-forum
+   answering; and `/login` offers one hardcoded Google button, when both new tenants are on
+   Microsoft. **This is the real blocker on 08**, and none of it needs Animech.
+2. **Close [issue #747](https://github.com/jacobqvisth/crm-for-saas/issues/747)** —
+   `discovered_shops` has RLS disabled and holds ~42k scraped contacts. Five discovery routes
+   use the user-session client, so a policy has to be written and verified against a real
+   login rather than switched on blind. The brief says close it before a second tenant exists.
+3. **Phase 06 part 2** — the seven live Gmail call sites. Not blocked on a customer, blocked
+   on supervision: it changes live outbound and inbox-sync, and its "done when" requires
+   watching a real send and reply in production.
+4. **Wire Wrenchlane to the control plane.** Everything for it exists and is verified. Read
+   the pre-flight check in the runbook first: it is no longer a no-op.
+5. **A custom domain for the console**, which is on a `.vercel.app` hostname.
+
+Worth saying plainly: **phases 01 to 10 made the codebase able to serve several customers.
+They did not make it able to stand one up.** That gap is phase 11, and it is small — but it
+is the difference between the architecture being right and there being three customers.
 
 ## Acceptance test for the whole programme
 

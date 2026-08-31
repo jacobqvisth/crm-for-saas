@@ -21,6 +21,14 @@ Never introduce a flag that defaults to off for Wrenchlane before phase 08. Ever
 Wrenchlane uses today defaults to enabled, forever, unless Jacob says otherwise. New
 tenants get a config that switches things off; Wrenchlane's config is the baseline.
 
+**The second sentence is now actionable and has not been acted on.** Since 2026-08-31 the
+control plane holds rows for all three tenants, so "a config that switches things off" is a
+set of overrides made in the console rather than a future idea. Nobody has decided which of
+the twenty features Animech and Spennare should get, so today they would inherit all
+nineteen that default on — including the fault-code dashboards and the car-forum answering.
+See `11-tenant-bring-up.md` section D. Turning them off per tenant honours this rule;
+flipping registry defaults breaks it.
+
 ## R3. Migrations are additive and backward compatible. Always.
 
 Tenants can be on different code versions (see release channels in the README). A migration
