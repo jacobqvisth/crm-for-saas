@@ -97,6 +97,24 @@ policy look stricter would invent a dimension the data does not have.
   migration filename. That is the desync that has regressed twice. Both were normalised by
   hand afterwards; all three tenants now list 8 migrations matching the 8 filenames on disk.
 
+### Merging is not deploying, for two of the three tenants
+
+Caught after the merge, not before, and worth writing down. All three PRs went in,
+Wrenchlane's production build went READY, and a signed-in Animech user was **still** landing
+on the /dashboard 404 that PR #781 exists to fix.
+
+**Only `crm-for-saas` is git-connected.** The other two Vercel projects deliberately are not,
+because `vercel.json` registers 18 cron schedules a tenant with no mail and no data must not
+inherit. So a merge to `main` reaches Wrenchlane and nobody else until someone runs
+`vercel deploy --prod -A vercel.<tenant>.json` from a checkout at that commit.
+
+Spennare needed it too, for a second reason: it was first deployed from the phase 09 branch,
+which predated PR #781.
+
+Both redeployed from `main`, both READY, and the fix then verified on Animech's own URL:
+signed-in `/` and `/login` now land on **/contacts, HTTP 200**, where both returned a blank
+404 twenty minutes earlier. **Verify a tenant fix on the tenant's URL, after redeploying it.**
+
 ### State at the end
 
 All three tenants: **121 public tables, 108 with RLS, 0 without, 8 migrations.** Identical.

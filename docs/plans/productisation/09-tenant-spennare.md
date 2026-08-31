@@ -31,6 +31,25 @@ from the phase 08 write-up:
 The acceptance-test verdict, and the list of five things that needed code rather than config,
 is in `README.md` under "Acceptance test for the whole programme".
 
+### MERGING TO `main` DOES NOT DEPLOY ANIMECH OR SPENNARE
+
+Only `crm-for-saas` is git-connected. The other two Vercel projects are deliberately not,
+because `vercel.json` registers 18 cron schedules that a tenant with no mail and no data
+must not inherit. So a fix merged to `main` reaches **Wrenchlane only** until someone runs:
+
+```
+vercel deploy --prod -A vercel.animech.json     # from a checkout at the commit you want
+vercel deploy --prod -A vercel.spennare.json
+```
+
+This was caught the hard way on 2026-08-31: the `/dashboard` 404 fix (PR #781) was merged,
+Wrenchlane's production build went READY, and a signed-in Animech user was **still** landing
+on the 404 — because Animech was still serving the pre-merge commit. Verify a tenant fix on
+the tenant's own URL after redeploying it, never on Wrenchlane's.
+
+A tenant is also not redeployed by its own earlier deploy: Spennare was first deployed from
+the phase 09 branch, which predated PR #781, so it needed the same second deploy.
+
 **09b**, like 08b, is the mail half: a sending domain and Entra consent. Blocked on the same
 external step, plus one extra of Spennare's own — `spennare.com` publishes **two conflicting
 `v=spf1` records**, which is invalid and can make receivers return permerror. Fixing that is
