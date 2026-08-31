@@ -8194,3 +8194,110 @@ only the CLI's own credentials.
 
 So the four Console steps in the runbook are genuinely manual. Everything after them is not:
 the client id and secret can go into Supabase through the Management API in seconds.
+
+## 2026-08-31 — Paying Customers: who actually pays, and what Google is really counting — PR #766 — `feature/paying-customers`
+
+Jacob asked, now that the Google Ads API is reachable, for tracking of which
+ad-acquired users go beyond signing up and actually start a paying subscription.
+New page at `/dashboard/paying-customers`. The research changed what the answer
+should be, so most of this entry is the research.
+
+### The literal ask was partly already built, and the interesting part was not
+
+`/dashboard/google-ads-users` already carried payer counts per cohort. What did
+not exist anywhere was the distinction the question turns on: **signed up**,
+**entered a card**, and **actually charged** are three different populations
+here, and two of them are routinely reported as the third.
+
+### Google Ads bids on signups, and its "purchase" action counts card entries
+
+Only two conversion actions on the account are BOTH `primary_for_goal` and
+`include_in_conversions_metric`: web and Android `sign_up`. Revenue reaches the
+bidding algorithm through nothing at all.
+
+`WrenchLane (web) purchase` is ENABLED but neither primary nor counted, and it
+is not measuring purchases. Its monthly counts track our checkout table almost
+row for row and bear no relation to Stripe charges:
+
+| month | Google "purchase" | our card entries | our real first payments |
+|---|---|---|---|
+| 2026-05 | 1 | 1 | 0 |
+| 2026-06 | 26 | 26 | 2 |
+| 2026-07 | 32 | 32 | 10 |
+| 2026-08 | 32 | 37 | 4 |
+
+So the ~42,102 SEK Google reports as revenue over four months is the LIST PRICE
+of plans people selected, and 16 customers actually started paying. **Every CPA
+and ROAS figure in the Google Ads UI is measuring trials.** Same shape as the
+`plan_key` trial trap, reproduced inside Google Ads.
+
+### Ads convert 7x worse than direct, and the loss is at checkout
+
+Maturity-controlled (ads era, 60-day window, internal-test excluded):
+
+| channel | signups | activated | entered a card | paid | signup→paid | card→paid |
+|---|---|---|---|---|---|---|
+| Google Ads | 547 | 28.7% | 6.4% | 15 | **2.74%** | 42.9% |
+| Direct | 73 | 52.1% | 35.6% | 14 | **19.18%** | 53.8% |
+
+Ads reach checkout at **0.18x** the direct rate; once carded they close at a
+comparable rate. The problem is reaching that point, not closing from it. The
+page computes that comparison live rather than hard-coding this session's
+answer. All time: 1,125 ad signups → 97 card entries → 17 payers, 146,662 SEK
+spend = **8,627 SEK per paying customer**. Ad-acquired payers also carry roughly
+half the MRR of direct ones.
+
+### Feeding payments back to Google is CLOSED, verified not assumed
+
+`ConversionUploadService.UploadClickConversions` returns
+`CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE` — "limited to existing users" — for
+BOTH gclid and hashed email, so it is the service that is blocked and not the
+identifier. Google now requires the **Data Manager API**, which answers 403
+`ACCESS_TOKEN_SCOPE_INSUFFICIENT`: reachable, but our refresh token carries only
+`adwords`, `analytics.readonly`, `firebase.readonly`, `webmasters.readonly`. It
+needs `https://www.googleapis.com/auth/datamanager` added by re-consenting
+OAuth. `acceptedCustomerDataTerms` is already true and creating an
+`UPLOAD_CLICKS` action validates fine, so the scope is the only thing missing.
+
+Relevant if that is pursued: real ad-attributed first payments run **4-10 per
+month**, well under the ~30/month Smart Bidding needs, so payment cannot be the
+sole bidding target. Card entries run 22-37/month and are 33-43% predictive of
+payment — the denser signal that still means something.
+
+### Shape
+
+- Migration `20260831180000`: `dashboard_ad_conversion_actions` (config, incl.
+  which actions reach bidding) + `dashboard_ad_conversion_stats` (daily counts).
+  The account-level row is STORED rather than summed from campaigns, because
+  Google's total includes conversions no campaign row carries.
+- `/api/cron/sync-ad-conversions`, daily 05:35 UTC, under `product_analytics`.
+- `src/lib/ceo/paying-customers/` — shared, funnel (pure, tested), sync.
+- Page: four tabs (funnel, named customers, Google vs reality, method).
+
+### Gotchas worth keeping
+
+- `metrics.conversions` cannot be selected FROM `conversion_action`
+  (`PROHIBITED_METRIC_IN_SELECT_OR_WHERE_CLAUSE`). Segment `customer` or
+  `campaign` on `segments.conversion_action` instead.
+- `LAST_90_DAYS` is not a valid `DURING` literal; use an explicit BETWEEN.
+- `dashboard_diagnostics` has no `id` column — page on `diagnostic_id`, and the
+  conversion-stats read needs TWO order columns because `stat_date` alone is not
+  unique within the `campaign_id = ''` slice.
+
+### Checks
+
+tsc clean · lint clean · **1194 tests across 91 files, 0 failing** (15 new,
+pinning paid-vs-plan, checkout-vs-payment and the maturity window) ·
+`npm run build` green · first sync loaded 37 conversion actions and 620 daily
+rows · page fetched authenticated against live prod (HTTP 200) and every figure
+above read off the rendered HTML rather than a fixture · prod deploy `a672d0f`
+READY.
+
+### Open, needs Jacob's call — all three touch a live account spending ~39k SEK/month
+
+1. **Fix the `purchase` conversion action.** No new access needed. Making it
+   primary would optimise toward card entries, still far better than raw signups.
+2. **Add the `datamanager` OAuth scope** so real payments can be uploaded — as
+   an observation signal, not the bidding target, given the volume.
+3. **Capture `gclid` at signup** (app change, outside this repo) to make
+   attribution exact rather than GA4-modelled.
