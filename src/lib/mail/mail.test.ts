@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isProviderSupported, providerFor } from "./index";
 import { GoogleMailProvider } from "./google/provider";
+import { MicrosoftMailProvider } from "./microsoft/provider";
 import type { MailAccount } from "./provider";
 
 const account = (over: Partial<MailAccount> = {}): MailAccount => ({
@@ -24,12 +25,21 @@ describe("provider selection", () => {
     expect(p?.name).toBe("google");
   });
 
-  // Phase 07 fills this in. Until then the honest answer is null, and callers
-  // must skip the account rather than throw: one unsupported mailbox must not
-  // stop a send batch that also contains working ones.
-  it("returns null for microsoft until phase 07, rather than throwing", () => {
-    expect(providerFor(account({ provider: "microsoft" }))).toBeNull();
-    expect(isProviderSupported("microsoft")).toBe(false);
+  // Filled in by phase 07. The implementation is registered even though the
+  // four-check spike has not been run against a real tenant, because no account
+  // carries provider='microsoft' until one is connected deliberately.
+  it("serves a microsoft account with the Graph implementation", () => {
+    const p = providerFor(account({ provider: "microsoft" }));
+    expect(p).toBeInstanceOf(MicrosoftMailProvider);
+    expect(p?.name).toBe("microsoft");
+    expect(isProviderSupported("microsoft")).toBe(true);
+  });
+
+  // Constructing a provider must never need credentials. Both are instantiated
+  // at import on every deployment, and Wrenchlane has no Microsoft secrets: a
+  // constructor that demanded them would break a Google-only tenant at boot.
+  it("constructs the Microsoft provider with no credentials present", () => {
+    expect(() => new MicrosoftMailProvider()).not.toThrow();
   });
 
   it("returns null for a provider it has never heard of", () => {
@@ -48,7 +58,7 @@ describe("provider selection", () => {
     const g = providerFor(account({ id: "a", provider: "google" }));
     const m = providerFor(account({ id: "b", provider: "microsoft" }));
     expect(g?.name).toBe("google");
-    expect(m).toBeNull();
+    expect(m?.name).toBe("microsoft");
   });
 });
 

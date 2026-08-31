@@ -113,8 +113,14 @@ history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs`
 "nothing to apply", and the schema is unchanged.
 
 The control plane lives at Supabase project `ktkuwmuhhrbwzysuxfzi`
-(`wrenchlane-control-plane`). It is **not deployed to Vercel yet** — see the phase 04
-section of `cc-session-log.md` for the remaining deploy steps.
+(`wrenchlane-control-plane`) and is **deployed** at
+https://wrenchlane-control-plane.vercel.app. How to operate, redeploy and wire tenants to it
+is in `CONTROL-PLANE-RUNBOOK.md`. One step remains before anyone can sign in: it needs its
+own Google OAuth client, deliberately not the CRM's, because R7 forbids a credential
+crossing a tenant boundary.
+
+No tenant is wired to it yet, so every tenant runs on compiled defaults. That is a supported
+state, and the runbook says what to check before changing it.
 
 **Phase 06 is deliberately half-landed.** The interface, the Google implementation and
 the whole schema half are done and verified. The seven live Gmail API call sites (the send
@@ -139,6 +145,13 @@ obtained from a code session**, not on effort:
 - **07 (Microsoft Graph)** opens with a one-day spike against a throwaway Microsoft 365
   mailbox, and needs an Entra app registration with admin consent in the customer's own
   tenant. No mailbox, no tenant, no consent.
+
+  Everything that does not need those now exists: `GraphProvider` is written and registered,
+  and `scripts/graph-spike.mjs` runs all four spike checks against the real provider class
+  and prints what it observed. **The implementation has never touched a real tenant**, so
+  nothing about it should be believed until that script has been run. It is written to fail
+  loudly and to say which of the four checks failed, because a failure there is a design
+  input for the phase rather than a bug to work around (R11).
 - **08 / 09 (Animech, Spennare)** need each customer's real domains, mailboxes, Supabase and
   Vercel projects and their Microsoft tenants.
 - **10 A-C** are explicitly gated on customer knowledge by their own brief: "Get Animech's

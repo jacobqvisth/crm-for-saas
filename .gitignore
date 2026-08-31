@@ -69,3 +69,6 @@ supabase/.temp/
 
 # local scratch from the Wrenchlane capture script
 .wrenchlane-capture/
+
+# phase 07 Graph spike scratch state (ids and timestamps, no secrets)
+.graph-spike-state.json
