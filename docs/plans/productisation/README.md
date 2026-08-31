@@ -113,8 +113,8 @@ history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs`
 "nothing to apply", and the schema is unchanged.
 
 The control plane lives at Supabase project `ktkuwmuhhrbwzysuxfzi`
-(`wrenchlane-control-plane`) and is **deployed** at
-https://wrenchlane-control-plane.vercel.app. How to operate, redeploy and wire tenants to it
+(`jacobs-crm-control`) and is **deployed** at
+https://jacobs-crm-control.vercel.app. How to operate, redeploy and wire tenants to it
 is in `CONTROL-PLANE-RUNBOOK.md`. One step remains before anyone can sign in: it needs its
 own Google OAuth client, deliberately not the CRM's, because R7 forbids a credential
 crossing a tenant boundary.

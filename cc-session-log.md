@@ -8095,3 +8095,46 @@ tsc clean · lint clean · **1158 tests across 88 files, 0 failing** (26 new) ·
 `npm run build` green · first sync loaded 288 assets, 12,932 metric rows, 185
 placements with no warnings · prod deploy `25cb0a4` READY, both new routes in
 the deployed route manifest.
+
+## 2026-08-31 — The control plane is renamed `jacobs-crm-control`, and has one admin — `worktree-rename-control-plane`
+
+**Why:** the console decides feature access for all three customers, so naming it after one
+of them was wrong. It is Jacob's operator console, above the tenants, not part of
+Wrenchlane's system.
+
+- **Console:** https://jacobs-crm-control.vercel.app · Vercel project `jacobs-crm-control`
+  (`prj_IB1GurmxNOw8H4HFSnOwU0v79N6D`). The old `wrenchlane-control-plane` project is
+  **deleted**, verified 404 on its hostname. Leaving it up would have meant a second admin
+  console against the same database, with the wider allow-list still on it.
+- **Supabase project renamed** to `jacobs-crm-control` via the Management API. The **ref is
+  unchanged and cannot change**, so `https://ktkuwmuhhrbwzysuxfzi.supabase.co/auth/v1/callback`
+  survives the rename and the Google OAuth setup is unaffected by it.
+- `site_url` and the redirect allow-list repointed at the new hostname.
+- **`CONTROL_PLANE_ADMIN_EMAILS` is now `jacob.qvisth@gmail.com` alone.** The break-glass
+  `jacob@wrenchlane.com` is gone; the phase 04 brief's Break-glass section is marked
+  SUPERSEDED in place rather than quietly edited.
+
+Vercel has no CLI rename, so this was a new project plus a delete rather than an edit. All 15
+route probes, both 401s and both redirects re-verified on the new hostname before the old
+project was removed.
+
+### Why sign-in was failing, which is not what it looked like
+
+Jacob tried to sign in and the button sat on "Redirecting...". The cause is **not** that the
+account is a personal Gmail rather than a Workspace one. **Google is not enabled as a
+provider at all** — the project has zero providers by deliberate choice, so
+`signInWithOAuth({ provider: "google" })` returns "provider is not enabled" and the page
+never navigates. A Workspace account would have hung identically.
+
+A personal Gmail is the intended case, and is why `superAdminAllowList` drops `@domain`
+entries: `@gmail.com` as a list entry would admit the internet.
+
+The runbook now leads with this and carries the four concrete steps, including that the
+redirect URI is the SUPABASE callback keyed on the project ref, and that an External consent
+screen left in **Testing** mode with one test user is sufficient and skips Google's
+verification review entirely.
+
+### Also
+
+`control-plane.test.ts` no longer names the Wrenchlane address in the multi-entry test. It
+was testing the PARSER, but read as though two admins were policy.

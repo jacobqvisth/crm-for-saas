@@ -153,6 +153,15 @@ that is used once a year.
 Document the fallback explicitly: the control-plane database is small and Jacob holds the
 Supabase account, so direct SQL is the last resort if both accounts are lost.
 
+> **SUPERSEDED 2026-08-31 by Jacob's decision.** There is no break-glass address.
+> `CONTROL_PLANE_ADMIN_EMAILS` is `jacob.qvisth@gmail.com` and nothing else, and the console
+> is named `jacobs-crm-control` rather than after a customer. The reasoning above still holds
+> in general; the call made here is that a second admin address is a second account to
+> compromise for no gain while there is exactly one operator, and that the recovery path is
+> the one the last paragraph already names — Jacob owns the Vercel project and the Supabase
+> account, so changing the env var and redeploying restores access. See
+> `CONTROL-PLANE-RUNBOOK.md`.
+
 ### Audit
 
 Every write records which admin address made it. With a single admin that looks like
