@@ -51,6 +51,28 @@ describe("the tenant registry", () => {
     expect(knownTenantSlugs()).toEqual(["wrenchlane", "animech", "spennare"]);
   });
 
+  /**
+   * `linkedin_steps` is the one flag whose compiled defaults invert the usual
+   * pattern: off for Wrenchlane, on for the two customers. It was built on
+   * Jacob's instruction to build it "för spennare och animech" and leave it
+   * optional for Wrenchlane.
+   *
+   * This is asserted rather than left to review because it has already been
+   * got wrong once: the phase-11 bring-up read the registry default and wrote
+   * `false` into both customer configs, which is the safe reading of any other
+   * flag and the wrong one here. A future bring-up would make the same call for
+   * the same sensible reason, so the intent is pinned here instead.
+   *
+   * The control plane can still override any of this live; these are the
+   * compiled fallbacks that apply when it is unreachable, and they should agree
+   * with it rather than quietly withdraw the feature during an outage.
+   */
+  it("has LinkedIn steps on for the two customers and off for Wrenchlane", () => {
+    expect(getTenantBySlug("animech")!.features.linkedin_steps).toBe(true);
+    expect(getTenantBySlug("spennare")!.features.linkedin_steps).toBe(true);
+    expect(wrenchlane.features.linkedin_steps).toBe(false);
+  });
+
   // Animech is a real customer on a real deployment, so the things that would
   // leak Wrenchlane into it are worth asserting rather than trusting to review.
   it("gives Animech nothing of Wrenchlane's", () => {
