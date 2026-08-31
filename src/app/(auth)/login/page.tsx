@@ -1,49 +1,20 @@
-"use client";
+import { getTenant } from "@/config/tenants";
+import { LoginForm } from "./login-form";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import {
-  POST_LOGIN_NEXT_COOKIE,
-  POST_LOGIN_NEXT_MAX_AGE,
-  encodeNextCookie,
-  safeNextPath,
-} from "@/lib/auth/next-path";
-import { Chrome } from "lucide-react";
-
+/**
+ * The sign-in page.
+ *
+ * A server component since phase 11, so it can read TENANT_SLUG and decide
+ * which providers to offer. The buttons themselves need browser APIs and live
+ * in ./login-form.tsx.
+ *
+ * `auth` comes from the compiled tenant config rather than the control plane on
+ * purpose: a remotely toggleable sign-in flag could lock every user out of a
+ * tenant, and the value has to agree with a Supabase dashboard setting that the
+ * control plane cannot see. See TenantAuth in src/config/tenants/types.ts.
+ */
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const supabase = createClient();
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-
-    // Middleware sends gated pages here as /login?next=/forums/answers. Carry
-    // that through the OAuth round-trip in a cookie, NOT on redirectTo: Supabase
-    // matches redirectTo against an exact allow-list entry, so a "?next=" query
-    // param made it fall back to the project Site URL (localhost) and stranded
-    // real users on "localhost refused to connect". Read from window rather than
-    // useSearchParams to keep this page prerenderable.
-    const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
-    if (next) {
-      document.cookie = `${POST_LOGIN_NEXT_COOKIE}=${encodeNextCookie(next)}; Path=/; Max-Age=${POST_LOGIN_NEXT_MAX_AGE}; SameSite=Lax`;
-    }
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        // Must stay byte-identical to the allow-listed Redirect URL.
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
-      },
-    });
-    if (error) {
-      console.error("Login error:", error.message);
-      setLoading(false);
-    }
-  };
+  const { auth } = getTenant();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -61,14 +32,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Chrome className="w-5 h-5" />
-            {loading ? "Redirecting..." : "Sign in with Google Workspace"}
-          </button>
+          <LoginForm auth={auth} />
 
           <p className="text-xs text-slate-400 text-center mt-6">
             By signing in, you agree to our Terms of Service and Privacy Policy.

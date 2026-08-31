@@ -28,6 +28,43 @@ export const wrenchlane: TenantConfig = {
     // From src/lib/switchboard/knowledge.ts, where the voice agent already
     // tells callers this address.
     supportEmail: "support@wrenchlane.com",
+
+    // VERBATIM from what the code rendered before phase 11. The two image
+    // paths and both alt strings are copied character for character out of
+    // src/components/sidebar.tsx, and the two browser strings out of the
+    // `metadata` export in src/app/layout.tsx.
+    //
+    // browserTitle is "CRM for SaaS" and NOT "Wrenchlane" deliberately. That
+    // string is what Wrenchlane's browser tabs say today, and R1 says a live
+    // business's product must be byte-identical after this phase. Making the
+    // title "the tenant's" is the requirement; making Wrenchlane's tenant
+    // value something new would be a visible change smuggled in as a
+    // refactor. Renaming it is a product decision, and a one-line one, once
+    // somebody decides to make it.
+    //
+    // Wrenchlane's assets stay at the repository root of `public/` rather than
+    // moving to `public/tenants/wrenchlane/`: moving them would change the URL
+    // of a live asset for no benefit, and any cached HTML still asking for the
+    // old path would 404.
+    branding: {
+      markSrc: "/wrenchlane-mark.png",
+      markAlt: "Wrenchlane",
+      wordmarkSrc: "/wrenchlane-wordmark.png",
+      wordmarkAlt: "Wrenchlane — AI-Driven Car Diagnostics",
+      browserTitle: "CRM for SaaS",
+      browserDescription: "Modern CRM with email sequencing for SaaS companies",
+    },
+  },
+
+  // Google only, and it stays that way. Wrenchlane's staff are all on Google
+  // Workspace, this is what works today, and changing a working sign-in for a
+  // live business buys nothing (R1). The other two providers are false because
+  // Wrenchlane's Supabase project has never had them enabled, so a button for
+  // either would fail with "provider is not enabled".
+  auth: {
+    google: true,
+    microsoft: false,
+    email: false,
   },
 
   domains: {

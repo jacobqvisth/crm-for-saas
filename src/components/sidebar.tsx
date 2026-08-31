@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { markIntentionalSignOut } from "@/lib/auth/sign-out";
 import { UserAvatar } from "@/components/user-avatar";
 import { featureForNavHref, type FeatureKey } from "@/config/features";
+import type { TenantBranding } from "@/config/tenants/types";
 import type { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard,
@@ -87,7 +88,17 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
  * Hiding a nav item is NOT the security boundary; the middleware 404 is. This
  * only stops a user being shown a door that will not open.
  */
-export function Sidebar({ enabledFeatures }: { enabledFeatures: FeatureKey[] }) {
+export function Sidebar({
+  enabledFeatures,
+  branding,
+}: {
+  enabledFeatures: FeatureKey[];
+  // Passed in rather than read here. This is a client component, so it cannot
+  // read TENANT_SLUG; the dashboard layout resolves the tenant once per request
+  // on the server and hands the result down, which is the same route the
+  // feature flags already take.
+  branding: TenantBranding;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [tasksDueCount, setTasksDueCount] = useState(0);
@@ -183,8 +194,8 @@ export function Sidebar({ enabledFeatures }: { enabledFeatures: FeatureKey[] }) 
         <Link href="/dashboard" className="flex items-center">
           {collapsed ? (
             <Image
-              src="/wrenchlane-mark.png"
-              alt="Wrenchlane"
+              src={branding.markSrc}
+              alt={branding.markAlt}
               width={32}
               height={32}
               priority
@@ -192,8 +203,8 @@ export function Sidebar({ enabledFeatures }: { enabledFeatures: FeatureKey[] }) 
             />
           ) : (
             <Image
-              src="/wrenchlane-wordmark.png"
-              alt="Wrenchlane — AI-Driven Car Diagnostics"
+              src={branding.wordmarkSrc}
+              alt={branding.wordmarkAlt}
               width={1200}
               height={300}
               priority

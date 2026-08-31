@@ -1,11 +1,24 @@
 import type { Metadata } from "next";
 import { Toaster } from "react-hot-toast";
+import { getTenant } from "@/config/tenants";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "CRM for SaaS",
-  description: "Modern CRM with email sequencing for SaaS companies",
-};
+// The tab title and meta description, per tenant.
+//
+// `metadata` was a static object with "CRM for SaaS" written into it, so every
+// customer would have shared one title. It is a plain function now because
+// getTenant() reads TENANT_SLUG, which is a deploy-time value.
+//
+// For Wrenchlane this resolves to exactly the two strings that were here
+// before — see the note on `branding` in src/config/tenants/wrenchlane.ts for
+// why its title is still "CRM for SaaS" rather than "Wrenchlane".
+export function generateMetadata(): Metadata {
+  const { branding } = getTenant().identity;
+  return {
+    title: branding.browserTitle,
+    description: branding.browserDescription,
+  };
+}
 
 export default function RootLayout({
   children,

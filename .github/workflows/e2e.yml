@@ -33,6 +33,14 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Fails when the code reads an environment variable that
+      # src/config/env-manifest.ts does not mention, or when
+      # .env.local.example has not been regenerated from it. Without this the
+      # manifest becomes another hand-maintained file that drifts, which is
+      # the problem it was written to solve.
+      - name: Environment manifest
+        run: npx tsx scripts/env-manifest.mts --check
+
   e2e-prod:
     name: E2E (production)
     needs: build-and-lint

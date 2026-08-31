@@ -70,7 +70,35 @@ export async function GET(request: Request) {
           .limit(1);
 
         if (!memberships || memberships.length === 0) {
-          const userEmail = user.email || "";
+          // MICROSOFT IDENTITIES, checked in phase 11.
+          //
+          // This path is provider-agnostic, but it read exactly two fields and
+          // both of them are ones Entra can decline to send:
+          //
+          //   user.email       Entra omits it when the account has no `mail`
+          //                    attribute set, which is common for accounts
+          //                    created without a mailbox. Supabase then carries
+          //                    the address only as `preferred_username`.
+          //   full_name        Supabase maps Google's claim to it directly;
+          //                    Entra sends `name`.
+          //
+          // Without these fallbacks a Microsoft user with either quirk gets a
+          // brand new workspace called "My Workspace" with a null domain, and
+          // sits alone in it, instead of joining their colleagues. That is not
+          // an error anyone would see: it looks like an empty CRM.
+          //
+          // Google always sends both fields, so for Wrenchlane every fallback
+          // below is dead code and behaviour is unchanged.
+          const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+          const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+          const preferred = str(meta.preferred_username);
+          const userEmail =
+            user.email ||
+            str(meta.email) ||
+            // Only when it is actually an address: for some Entra
+            // configurations preferred_username is a bare username.
+            (preferred?.includes("@") ? preferred : undefined) ||
+            "";
           const emailDomain = userEmail.split("@")[1]?.toLowerCase();
 
           // Use service-role client for domain lookup (new user has no workspace yet, RLS blocks)
@@ -132,10 +160,15 @@ export async function GET(request: Request) {
             }
           } else {
             // No matching workspace — create a new one
-            const workspaceName =
-              user.user_metadata?.full_name
-                ? `${user.user_metadata.full_name}'s Workspace`
-                : "My Workspace";
+            // Entra sends `name` where Google sends `full_name`. Same fallback
+            // reasoning as the email above: dead code for Google.
+            const displayName =
+              str(meta.full_name) ??
+              str(meta.name) ??
+              str([str(meta.given_name), str(meta.family_name)].filter(Boolean).join(" "));
+            const workspaceName = displayName
+              ? `${displayName}'s Workspace`
+              : "My Workspace";
 
             const { data: workspace, error: workspaceError } = await serviceClient
               .from("workspaces")

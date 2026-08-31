@@ -2,6 +2,7 @@
 
 import type { Company } from './types';
 import { OUTREACH_LABEL, type OutreachStatus } from './status';
+import { useTenantBrand, type TenantBrand } from '@/lib/hooks/use-tenant-brand';
 
 interface StatusesTabProps {
   company: Company;
@@ -21,7 +22,8 @@ type Concept = {
 };
 
 export function StatusesTab({ company, outreachStatus }: StatusesTabProps) {
-  const concepts: Concept[] = buildConcepts(company, outreachStatus);
+  const brand = useTenantBrand();
+  const concepts: Concept[] = buildConcepts(company, outreachStatus, brand);
 
   return (
     <div className="space-y-3">
@@ -80,7 +82,11 @@ function ConceptCard({ concept }: { concept: Concept }) {
   );
 }
 
-function buildConcepts(company: Company, outreachStatus: OutreachStatus): Concept[] {
+function buildConcepts(
+  company: Company,
+  outreachStatus: OutreachStatus,
+  brand: TenantBrand,
+): Concept[] {
   const concepts: Concept[] = [];
 
   // 1) Has app account
@@ -88,7 +94,7 @@ function buildConcepts(company: Company, outreachStatus: OutreachStatus): Concep
     key: 'app-account',
     title: 'Has app account',
     source: 'companies.wl_workshop_id',
-    description: 'Whether this company has signed up in the Wrenchlane app.',
+    description: `Whether this company has signed up in the ${brand.displayName} app.`,
     values: [
       { value: 'yes', label: 'yes', activeCls: 'bg-violet-100 text-violet-700' },
       { value: 'no',  label: 'no',  activeCls: 'bg-slate-100 text-slate-700' },

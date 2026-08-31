@@ -8466,3 +8466,99 @@ guessed. Four things, none of them in any of the ten phases, now written up as
 **The honest summary: phases 01 to 10 made the codebase able to serve several customers.
 They did not make it able to stand one up.** Phase 11 is small, needs no customer input, and
 is the real blocker on 08 — not the Microsoft consent everyone is waiting for.
+
+---
+
+## 2026-08-31 — Phase 11 A-E: tenant bring-up
+
+**Branch:** `feature/prod-11-tenant-bring-up` · **Phase:** 11 (all five sections)
+
+Executed the brief written earlier the same day. Wrenchlane is byte-identical, Animech and
+Spennare have twenty decided flags each, and phase 08 is no longer blocked by anything in
+this repository.
+
+### Proving R1 rather than asserting it
+
+`/login` is prerendered by `next build`, so a copy of `.next/server/app/login.html` was
+taken **before the first edit** and re-diffed after every change. Stripping `<script>`
+blocks and hashed chunk URLs (which change on any edit at all, a comment included) leaves
+the user-visible DOM: **byte-for-byte identical, 1961 bytes**, both times. That file carries
+the root layout's `<title>` and `<meta description>` as well as the whole login form, so one
+artifact covers section A's title change and section E's login rewrite at once.
+
+The sidebar is behind auth and never prerendered, so `branding.test.ts` pins its four
+previously-hardcoded strings instead. Full gate green: build, lint (0 errors, 1 pre-existing
+warning), `tsc --noEmit`, and **1216 vitest tests in 94 files**.
+
+### Two measurements in the brief were wrong
+
+**The brief said 9 env vars were "documented but never read" and to delete them. All nine
+are read.** It measured with a `process.env.` search, which misses `getEnv("NAME")` and
+`getRequiredEnv("NAME")` — how roughly a third of this codebase's configuration is read —
+and misses `process.env[CONSTANT]` entirely. `TRUSTPILOT_*`, `GBP_*` and `GOOGLE_OAUTH_*`
+all go through `getEnv()`. Following the instruction would have deleted live documentation
+for working configuration.
+
+The same blind spot understated the total: **the code reads 100 environment variables, not
+67.** So bring-up was even more of a guessing game than the brief claimed. `.env.local.example`
+went from 32 entries to 101, generated from `src/config/env-manifest.ts` by
+`scripts/env-manifest.mts`, grouped by the integration or feature that gates them and
+graded required / required-for-feature / optional / platform. `--check` is now a step in
+**Build & Lint**, so it cannot drift back.
+
+### The thing that made section C real
+
+Dry-running `bootstrap-tenant.mjs` against Wrenchlane's own database (a read-only SELECT,
+to test its refuse-to-run guard) showed **three workspaces**, and the real one is named
+**"My Workspace"**. That is precisely the `/auth/callback` onboarding artefact the brief
+predicts a new tenant would get — except it is sitting in production today. The guard fired
+correctly and refused.
+
+### Per-tenant flags, decided
+
+`scripts/decide-tenant-features.mjs` writes all twenty per new tenant with a note each, and
+**refuses to touch Wrenchlane's** — the baseline, and the tenant a previous session once
+wrote `forums: false` into from a local run.
+
+| | On | Off |
+| --- | --- | --- |
+| Animech | articles, domain_portfolio | 18 |
+| Spennare | articles, domain_portfolio, discovery | 17 |
+
+**17 of Animech's and 16 of Spennare's differed from the registry default** — the concrete
+size of what R2 predicted. Two `audit_log` entries under actor `phase-11-tenant-bring-up`;
+Wrenchlane still has exactly its one pre-existing `linkedin_steps` override. The tenants
+differ on one flag only: Maps discovery finds Spennare's resellers and does not find
+Animech's manufacturers.
+
+Switching eighteen of twenty off leaves a clean CRM, not a stub: contacts, companies,
+sequences, lists, inbox, tasks, templates and settings are not feature-gated at all.
+
+### Traps found and written down
+
+- **`getTenant()` is unsafe in a client component.** Next.js only inlines `NEXT_PUBLIC_`
+  vars into the browser bundle, so `TENANT_SLUG` is `undefined` there and getTenant()
+  silently returns the default tenant — Wrenchlane. A client component calling it would
+  render "Wrenchlane" for every customer while type-checking perfectly and passing every
+  server-side test. Hence `useTenantBrand()`, whose fallback is "your company", never
+  Wrenchlane.
+- **Entra can omit `email`** (accounts with no `mail` attribute) and sends `name` where
+  Google sends `full_name`. Unhardened, such a user lands alone in a fresh "My Workspace"
+  instead of joining colleagues — and it looks like an empty CRM, not an error. Fallbacks
+  added; they are dead code for Google.
+
+### Deliberately not done
+
+- `bootstrap-tenant.mjs --apply` has never run against an empty database. There is no second
+  Supabase project to run it against, so the write path is unexercised.
+- No `src/config/tenants/animech.ts` or `spennare.ts`. Those need customer facts and belong
+  to phases 08/09; the flags above are waiting for them. A throwaway slug was used to verify
+  the non-Wrenchlane path (three login buttons, tenant title, zero "wrenchlane" in the DOM)
+  and then deleted rather than committed.
+- Signature placeholders still read "Jacob Qvisth". Genericising them changes what a live
+  business sees, so it is Jacob's call.
+
+**One intentional Wrenchlane-visible change**, flagged rather than buried: the sequence
+preview's sample sender company was the literal `"WrenchLane"`, a misspelling of the
+company's own name. It now reads from `displayName`, so it renders `"Wrenchlane"`.
+Two-call-site revert if unwanted.

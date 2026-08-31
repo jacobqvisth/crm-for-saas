@@ -107,7 +107,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started | None |
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
 | [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | **D+E partial** 2026-08-30 | Additive |
-| [11](11-tenant-bring-up.md) | Branding, env manifest, tenant bootstrap, per-tenant defaults | **Not started — blocks 08** | None |
+| [11](11-tenant-bring-up.md) | Branding, env manifest, tenant bootstrap, per-tenant defaults | **A-E done** 2026-08-31 | None (proved by diff) |
 
 Phase 01's production reconcile **has been run** (2026-08-30). Wrenchlane's migration
 history is a single `00000000000000 baseline` row, `scripts/migrate-tenants.mjs` reports
@@ -182,13 +182,15 @@ that was wrong by 83 tables.
 The list above is what needs someone else. This is what needs us, and none of it is waiting
 on a customer.
 
-1. **[Phase 11](11-tenant-bring-up.md) — the parts no phase covers.** Found on 2026-08-31 by
-   asking what would happen if Animech signed in tomorrow. The sidebar hardcodes Wrenchlane's
-   wordmark; 43 of the 67 environment variables the code reads are undocumented; a fresh
-   tenant database has 101 tables and no workspace; 19 of 20 features default to ON, so a
-   3D-configurator company would inherit fault-code dashboards and Reddit car-forum
-   answering; and `/login` offers one hardcoded Google button, when both new tenants are on
-   Microsoft. **This is the real blocker on 08**, and none of it needs Animech.
+1. ~~**[Phase 11](11-tenant-bring-up.md) — the parts no phase covers.**~~ **Done 2026-08-31.**
+   Sections A to E are all merged: branding is a required block on every tenant config, the
+   environment manifest generates `.env.local.example` and is enforced in CI,
+   `scripts/bootstrap-tenant.mjs` stands up an empty database, Animech's and Spennare's
+   twenty flags are each decided with a note in the control plane, and `/login` renders from
+   a per-tenant `auth` block. See the "What was actually done" section in the brief, which
+   also corrects two of the measurements above: the code reads **100** environment
+   variables, not 67, and the nine "documented but never read" entries **are** read, through
+   `getEnv()`.
 2. **Close [issue #747](https://github.com/jacobqvisth/crm-for-saas/issues/747)** —
    `discovered_shops` has RLS disabled and holds ~42k scraped contacts. Five discovery routes
    use the user-session client, so a policy has to be written and verified against a real
@@ -203,6 +205,11 @@ on a customer.
 Worth saying plainly: **phases 01 to 10 made the codebase able to serve several customers.
 They did not make it able to stand one up.** That gap is phase 11, and it is small — but it
 is the difference between the architecture being right and there being three customers.
+
+**Phase 11 closed that gap on 2026-08-31.** What now blocks phase 08 is only what needs
+Animech: their domains, mailboxes, Supabase and Vercel projects, and the two Entra
+registrations (one for mail in `ENTRA-APP-SETUP.md`, one for sign-in in section E of the
+phase 11 brief). Nothing in this repository is in the way any more.
 
 ## Acceptance test for the whole programme
 
