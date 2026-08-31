@@ -152,6 +152,12 @@ obtained from a code session**, not on effort:
   nothing about it should be believed until that script has been run. It is written to fail
   loudly and to say which of the four checks failed, because a failure there is a design
   input for the phase rather than a bug to work around (R11).
+
+  **The consent conversation can start now.** `ENTRA-APP-SETUP.md` is written to be sent to
+  a customer's IT more or less as it stands: what to register, the two permissions, the
+  Application Access Policy that scopes the app to named mailboxes rather than the whole
+  tenant, and the `Test-ApplicationAccessPolicy` output to ask back as evidence. Both new
+  tenants are on Microsoft 365, so it blocks both.
 - **08 / 09 (Animech, Spennare)** need each customer's real domains, mailboxes, Supabase and
   Vercel projects and their Microsoft tenants.
 - **10 A-C** are explicitly gated on customer knowledge by their own brief: "Get Animech's
