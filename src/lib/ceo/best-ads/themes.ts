@@ -100,6 +100,22 @@ export const COPY_THEMES: ThemeDef[] = [
 ];
 
 /**
+ * Copy that belongs in an angle, which means headlines and descriptions only.
+ *
+ * The `ad_group_ad` restriction is what makes the rest of this file honest. A
+ * sitelink is text, so "Demo" and "Pricing" would otherwise join the pool — and
+ * a campaign-level asset is reported with the WHOLE campaign's impressions and
+ * clicks, so the "Demo" sitelink alone would contribute 58,712 impressions at a
+ * 10.96% click-through to whichever angles its four characters happen to match.
+ * That is the campaign's performance wearing a sitelink's name, and it would
+ * distort every index on the playbook. Sitelinks are ranked on their own tab,
+ * where the counting is explained.
+ */
+function isRankableCopy(row: AssetRollupRow): boolean {
+  return row.kind === "text" && row.surface === "ad_group_ad" && row.impressions > 0;
+}
+
+/**
  * Score every theme against the pooled rate of all text assets in the window.
  *
  * Pooling volumes is legitimate for a ratio even though per-asset volumes are
@@ -108,9 +124,7 @@ export const COPY_THEMES: ThemeDef[] = [
  * ever presented as a count of real clicks.
  */
 export function summariseThemes(rows: AssetRollupRow[]): ThemeSummary[] {
-  const text = rows.filter(
-    (row) => row.kind === "text" && row.impressions > 0,
-  );
+  const text = rows.filter(isRankableCopy);
   if (text.length === 0) return [];
 
   const totalImpressions = text.reduce((sum, row) => sum + row.impressions, 0);
@@ -164,9 +178,16 @@ export function summariseThemes(rows: AssetRollupRow[]): ThemeSummary[] {
   return summaries;
 }
 
-/** Baseline rates for the whole text pool, for the playbook header. */
+/**
+ * Baseline rates for the whole copy pool, for the playbook header.
+ *
+ * Uses the same filter as the themes, so the header and the indexes below it
+ * are measured against the identical population. A header computed over a
+ * wider pool than the rows it sits above is the kind of small inconsistency
+ * that costs an hour to find later.
+ */
 export function textBaseline(rows: AssetRollupRow[]) {
-  const text = rows.filter((row) => row.kind === "text" && row.impressions > 0);
+  const text = rows.filter(isRankableCopy);
   const impressions = text.reduce((sum, row) => sum + row.impressions, 0);
   const clicks = text.reduce((sum, row) => sum + row.clicks, 0);
   const conversions = text.reduce((sum, row) => sum + row.conversions, 0);

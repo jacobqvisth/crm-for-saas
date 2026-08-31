@@ -101,6 +101,24 @@ describe("summariseThemes", () => {
     expect(audience).toBeLessThan(faultcode);
   });
 
+  it("ignores sitelink text, which carries the whole campaign's numbers", () => {
+    // A sitelink is text, but a campaign-level asset is reported with the
+    // campaign's impressions and clicks. Letting "Demo" into the pool would
+    // credit an angle with traffic the copy never earned.
+    const sitelink: AssetRollupRow = {
+      ...copy("Demo", 58_712, 6_437, 0),
+      surface: "campaign_asset",
+      fieldType: "SITELINK",
+    };
+    const headline = copy("AI for Car Mechanics", 10_000, 500, 20);
+
+    const withSitelink = summariseThemes([headline, sitelink]);
+    const withoutSitelink = summariseThemes([headline]);
+
+    expect(withSitelink).toEqual(withoutSitelink);
+    expect(textBaseline([headline, sitelink]).impressions).toBe(10_000);
+  });
+
   it("ignores images and video, which carry no copy to group", () => {
     const image: AssetRollupRow = {
       ...copy("unused", 50_000, 2_000),
