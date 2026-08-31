@@ -2,16 +2,54 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { insertActivity } from "@/lib/activities/insert";
 
+const PAGE_STYLE = `font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f8fafc;`;
+
 const UNSUBSCRIBE_HTML = `<!DOCTYPE html>
 <html>
   <head><title>Unsubscribed</title></head>
-  <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f8fafc;">
+  <body style="${PAGE_STYLE}">
     <div style="text-align: center; padding: 2rem;">
       <h1 style="color: #0f172a; font-size: 1.5rem;">You've been unsubscribed</h1>
       <p style="color: #64748b; margin-top: 0.5rem;">You will no longer receive emails from us.</p>
     </div>
   </body>
 </html>`;
+
+/**
+ * The page a human sees when they follow the unsubscribe link.
+ *
+ * GET must not unsubscribe anyone. It used to: the handler called
+ * `processUnsubscribe` directly, so any link scanner, security proxy or
+ * mail-client prefetcher that followed the List-Unsubscribe URL silently
+ * unsubscribed a real contact and cancelled every one of their enrollments.
+ * That is not hypothetical here, and it is consistent with click counts
+ * running at ~70% of opens, which is scanner traffic rather than people.
+ *
+ * So the confirmation button below POSTs, and only POST mutates. Gmail and
+ * Outlook one-click still work: RFC 8058 specifies a POST, which the other
+ * handler serves.
+ */
+function confirmHtml(trackingId: string): string {
+  // trackingId comes from the URL. It is only ever interpolated into an
+  // attribute here, and the route's own lookup treats it as an opaque key,
+  // but escape it anyway so a crafted URL cannot break out of the attribute.
+  const safeId = trackingId.replace(/[^A-Za-z0-9_-]/g, "");
+  return `<!DOCTYPE html>
+<html>
+  <head><title>Unsubscribe</title><meta name="robots" content="noindex"></head>
+  <body style="${PAGE_STYLE}">
+    <div style="text-align: center; padding: 2rem;">
+      <h1 style="color: #0f172a; font-size: 1.5rem;">Unsubscribe from these emails?</h1>
+      <p style="color: #64748b; margin-top: 0.5rem;">You will no longer receive emails from us.</p>
+      <form method="POST" action="/api/tracking/unsubscribe/${safeId}" style="margin-top: 1.5rem;">
+        <button type="submit" style="background: #E67E22; color: #fff; border: 0; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; cursor: pointer;">
+          Yes, unsubscribe me
+        </button>
+      </form>
+    </div>
+  </body>
+</html>`;
+}
 
 async function processUnsubscribe(trackingId: string) {
   const supabase = createAdminClient();
@@ -167,18 +205,20 @@ export async function GET(
 ) {
   const { trackingId } = await params;
 
-  try {
-    await processUnsubscribe(trackingId);
-  } catch (err) {
-    console.error("Unsubscribe error:", err);
-  }
-
-  return new NextResponse(UNSUBSCRIBE_HTML, {
-    headers: { "Content-Type": "text/html" },
+  // Deliberately read-only: see confirmHtml. A GET is issued by every link
+  // scanner that touches the message, so it must never unsubscribe anyone.
+  return new NextResponse(confirmHtml(trackingId), {
+    headers: {
+      "Content-Type": "text/html",
+      // Keep the confirmation page out of caches and search indexes.
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex",
+    },
   });
 }
 
-// POST handler for one-click unsubscribe (RFC 8058)
+// POST handler: the confirmation button above, and RFC 8058 one-click
+// unsubscribe from Gmail/Outlook. This is the only handler that mutates.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ trackingId: string }> }
@@ -191,5 +231,10 @@ export async function POST(
     console.error("One-click unsubscribe error:", err);
   }
 
-  return new NextResponse(null, { status: 200 });
+  // A one-click POST from a mail client ignores the body; a human arriving
+  // from the confirmation form should see that it worked. Same 200 either way.
+  return new NextResponse(UNSUBSCRIBE_HTML, {
+    status: 200,
+    headers: { "Content-Type": "text/html", "Cache-Control": "no-store" },
+  });
 }
