@@ -2,10 +2,33 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { peekFlags } from "@/lib/tenant-config/runtime";
 import { featureForPath, isCronPath } from "@/config/features";
-import { CONTROL_PLANE_PREFIX } from "@/lib/control-plane/routes";
+import {
+  CONTROL_PLANE_PREFIX,
+  isControlPlaneDeployment,
+  isControlPlaneSurface,
+} from "@/lib/control-plane/routes";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // The mirror of the gate below: on the deployment that IS the control plane,
+  // nothing but the console's own surface exists.
+  //
+  // Without this the control-plane build serves the entire CRM — every page and
+  // every cron route — against the control-plane database. No customer data is
+  // reachable that way, because that database holds none, but a CRM-shaped
+  // shell on the admin hostname is worse than a 404 for anyone probing it.
+  //
+  // `/` redirects instead of 404ing: the bare hostname means "take me to the
+  // console".
+  if (isControlPlaneDeployment()) {
+    if (pathname === "/") {
+      return NextResponse.redirect(new URL(CONTROL_PLANE_PREFIX, request.url));
+    }
+    if (!isControlPlaneSurface(pathname)) {
+      return new NextResponse(null, { status: 404 });
+    }
+  }
 
   // Feature gating, before auth.
   //

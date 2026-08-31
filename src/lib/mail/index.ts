@@ -1,4 +1,5 @@
 import { GoogleMailProvider } from "./google/provider";
+import { MicrosoftMailProvider } from "./microsoft/provider";
 import type { MailAccount, MailProvider, MailProviderName } from "./provider";
 
 export type {
@@ -24,12 +25,21 @@ export type {
 
 const google = new GoogleMailProvider();
 
+// Constructed eagerly, configured lazily. Both providers are instantiated on
+// every deployment, Wrenchlane's included, so neither constructor may need
+// credentials it does not have: the Microsoft one resolves its config on first
+// use and reports a missing-config error instead of throwing at import time.
+const microsoft = new MicrosoftMailProvider();
+
 const PROVIDERS: Record<MailProviderName, MailProvider | null> = {
   google,
-  // Phase 07. Deliberately null rather than absent: the type stays exhaustive,
-  // so adding "microsoft" to MailProviderName was already a compile error here
-  // until this line existed.
-  microsoft: null,
+  // Phase 07. The implementation is complete but has NOT been run against a
+  // real Microsoft 365 tenant — the four-check spike in the phase 07 brief
+  // needs a mailbox and an admin-consented app registration that do not exist
+  // yet. It is registered here rather than left null so the spike script can
+  // drive the real class; no account has provider='microsoft', so nothing
+  // reaches it in production until one is connected deliberately.
+  microsoft,
 };
 
 /**

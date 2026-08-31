@@ -7,6 +7,10 @@ import {
   decodeNextCookie,
   safeNextPath,
 } from "@/lib/auth/next-path";
+import {
+  CONTROL_PLANE_PREFIX,
+  isControlPlaneDeployment,
+} from "@/lib/control-plane/routes";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -34,6 +38,25 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // The control-plane console signs in through this same callback, but it
+      // must not run a line of the tenant onboarding below.
+      //
+      // On that deployment NEXT_PUBLIC_SUPABASE_URL points at the control-plane
+      // database, which has no `workspace_members` and no `workspaces`. The
+      // membership lookup would error, the empty result would be read as "new
+      // user", the workspace insert would fail against a table that does not
+      // exist, and a legitimate super admin would be bounced to
+      // /login?error=onboarding with nothing in the UI explaining why.
+      //
+      // Authorisation for the console is by email in requireSuperAdmin(), which
+      // the page and every server action re-check. There is no workspace to
+      // join, so there is nothing to do here but go to it.
+      if (isControlPlaneDeployment()) {
+        return clearNextCookie(
+          NextResponse.redirect(`${origin}${CONTROL_PLANE_PREFIX}`),
+        );
+      }
+
       // Check if user has a workspace, create one if not
       const {
         data: { user },

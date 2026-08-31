@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { FEATURES, FEATURE_KEYS } from "@/config/features";
 import { isSuperAdminEmail, superAdminAllowList, isControlPlane } from "./auth";
 import { resolveEffectiveFlags, type OverrideRow } from "./db";
+import { isControlPlaneDeployment, isControlPlaneSurface } from "./routes";
 
 const saved = {
   admins: process.env.CONTROL_PLANE_ADMIN_EMAILS,
@@ -151,3 +152,56 @@ describe("effective flags", () => {
 function featureDefault(key: string): boolean {
   return FEATURES.find((f) => f.key === key)!.enabledByDefault;
 }
+
+describe("the control-plane deployment surface", () => {
+  it("serves the console and the four paths it needs", () => {
+    expect(isControlPlaneSurface("/admin")).toBe(true);
+    expect(isControlPlaneSurface("/admin/tenants")).toBe(true);
+    expect(isControlPlaneSurface("/api/config")).toBe(true);
+    expect(isControlPlaneSurface("/login")).toBe(true);
+    expect(isControlPlaneSurface("/auth/callback")).toBe(true);
+  });
+
+  it("serves no CRM route, including every cron the tenant runs", () => {
+    // vercel.json registers 18 schedules. They must not exist on this
+    // deployment: a cron firing here would run tenant code against the
+    // control-plane database.
+    for (const p of [
+      "/contacts",
+      "/dashboard",
+      "/sequences",
+      "/forums",
+      "/inbox",
+      "/api/cron/process-emails",
+      "/api/cron/mailbox-sync",
+      "/api/sequences/enroll",
+      "/api/tracking/open",
+    ]) {
+      expect(isControlPlaneSurface(p), p).toBe(false);
+    }
+  });
+
+  it("does not let an /admin-lookalike prefix through", () => {
+    // startsWith("/admin") alone would admit these.
+    expect(isControlPlaneSurface("/administration")).toBe(false);
+    expect(isControlPlaneSurface("/admin-tools")).toBe(false);
+  });
+
+  it("matches the config and auth paths exactly, not by prefix", () => {
+    // /api/configuration is not /api/config, and a prefix match here would
+    // widen the surface every time a route is added under a similar name.
+    expect(isControlPlaneSurface("/api/config/tenants")).toBe(false);
+    expect(isControlPlaneSurface("/api/configuration")).toBe(false);
+    expect(isControlPlaneSurface("/auth/callback/extra")).toBe(false);
+    expect(isControlPlaneSurface("/logins")).toBe(false);
+  });
+
+  it("reads the deployment mode from the environment", () => {
+    process.env.IS_CONTROL_PLANE = "1";
+    expect(isControlPlaneDeployment()).toBe(true);
+    process.env.IS_CONTROL_PLANE = "0";
+    expect(isControlPlaneDeployment()).toBe(false);
+    delete process.env.IS_CONTROL_PLANE;
+    expect(isControlPlaneDeployment()).toBe(false);
+  });
+});

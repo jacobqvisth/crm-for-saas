@@ -7795,3 +7795,126 @@ Phases 01-06 merged. **07, 08, 09 and 10 A-C are blocked on inputs, not effort:*
 - **The control plane is not deployed to Vercel** (steps in the phase 04 entry). Until it is,
   `CONTROL_PLANE_URL` is unset and Wrenchlane runs on compiled defaults — a supported state.
 - **The seven Gmail call sites** still call Gmail directly (phase 06 entry).
+
+## 2026-08-31 — Control plane deployed to Vercel, and the Graph provider built ahead of the spike — `feature/prod-control-plane-deploy-and-graph`
+
+**Phases:** the deploy half of 04, and the part of 07 that does not need a Microsoft tenant.
+**Visible change for Wrenchlane:** none. Verified after every step, not assumed.
+
+### The control plane is live
+
+https://wrenchlane-control-plane.vercel.app · project `prj_8LG0FKZfeugFtiK8tuMcXQN9Oj2h` ·
+database `ktkuwmuhhrbwzysuxfzi`. Operating instructions are in
+`docs/plans/productisation/CONTROL-PLANE-RUNBOOK.md`, which is the durable artifact from
+this session; the notes below are only what was surprising.
+
+### TWO THINGS THE PHASE 04 DEPLOY STEPS WOULD HAVE WALKED INTO
+
+Both were found by reading the code before deploying, not by deploying and watching it fail.
+
+**1. `vercel.json` registers 18 cron schedules.** A control-plane project connected to this
+repo inherits every one of them, so `/api/cron/process-emails`, `mailbox-sync` and
+`check-replies` would fire against a database with no CRM tables, every few minutes, for
+ever. Hence `vercel.control-plane.json` with `"crons": []`, and a CLI deploy rather than a
+Git connection. This is also why the console does not redeploy itself, which is the right
+trade for something that changes rarely and governs three businesses.
+
+**2. `/auth/callback` would have made sign-in impossible.** It runs the tenant workspace
+onboarding: it queries `workspace_members`, gets an error because that table does not exist
+in the control-plane database, reads the empty result as "new user", tries to create a
+workspace, fails again, and redirects to `/login?error=onboarding`. Step 4 of the phase 04
+plan is "sign in and confirm the console lists Wrenchlane", and it could not have succeeded.
+The callback now short-circuits to `/admin` on the control-plane deployment.
+
+### A third one, found by deploying
+
+The first deploy reported **READY with a 0 ms build** and every route 404ing. `vercel project
+add` creates a project with no framework preset, and `--local-config` replaces framework
+auto-detection, so the repo was published as a directory of static files. `"framework":
+"nextjs"` in `vercel.control-plane.json` fixes it. Worth knowing generally: **a Vercel
+deployment can be READY and still be nothing at all.** Check that the build took time and
+produced lambdas.
+
+### The deployment serves the console and nothing else
+
+`IS_CONTROL_PLANE=1` now makes `src/middleware.ts` enforce a deny-by-default allow-list —
+`/admin`, `/api/config`, `/login`, `/auth/callback`, and `/` redirecting to the console.
+Without it the control-plane build serves the entire CRM against the control-plane database.
+No customer data is reachable that way, because that database holds none, but a CRM-shaped
+shell on the admin hostname is a better phishing surface than a 404. An allow-list rather
+than a block-list so a route added to the CRM tomorrow is closed without anyone remembering.
+
+Probed on the live deployment: `/admin` 307, `/login` 200, `/` 307 to `/admin`, `/api/config`
+401 with no token and 401 with a bad one, and **404 on all eight tenant pages and all four
+tenant cron paths** tested. Wrenchlane production re-probed afterwards and unchanged:
+`/login` 200, `/contacts` `/forums` `/dtc-lookup` `/dashboard` 307, `/admin` 404,
+`/api/config` 404.
+
+### Auth is locked down, and deliberately has no way in yet
+
+On `ktkuwmuhhrbwzysuxfzi`: **zero providers enabled**, sign-up disabled, `site_url` set, and
+the redirect allow-list holding exactly one entry with no query string.
+
+Google is **not** enabled, because it needs an OAuth client and the only one available is the
+CRM's. Reusing it would be a credential belonging to the Wrenchlane tenant crossing into the
+control plane, which R7 forbids. (The auto-mode classifier independently blocked the read of
+that secret, which is the ground rule being enforced by something other than my judgment.)
+So the console currently has no sign-in path at all. That is the correct direction to fail,
+and the one manual step is in the runbook: create a Web-application OAuth client with
+redirect URI `https://ktkuwmuhhrbwzysuxfzi.supabase.co/auth/v1/callback`.
+
+### No tenant is wired to it
+
+Minting a config-pull token was classifier-blocked, and on reflection that is the right line:
+it wires a live business to a new runtime dependency during business hours, which is more
+than "set up Vercel". It also turns out not to need a script — the console already has
+`rotateTenantToken`, which shows the plaintext once, stores only a SHA-256, and writes an
+audit row. That is the intended path and it is better than SQL.
+
+**Consequence: the deployed `/api/config` happy path is unverified.** Its 401s are verified
+on the live deployment; the 200 was verified in phase 05 against a local instance with a real
+token. Wiring steps and the pre-flight check are in the runbook.
+
+### Phase 07: everything that does not need Microsoft
+
+`src/lib/mail/microsoft/` — `client.ts` (app-only client-credentials token, cached with a
+60-second margin, concurrent requests collapsed, 401 invalidates the cache, `Retry-After`
+surfaced) and `provider.ts` (`MicrosoftMailProvider`, all seven interface methods). Registered
+in `lib/mail/index.ts`; `providerFor` now returns it for a `microsoft` account.
+
+**It has never touched a real tenant.** The four-check spike needs a Microsoft 365 mailbox and
+an admin-consented Entra app registration. `scripts/graph-spike.mjs` runs all four checks
+against the real provider class in two phases (`send`, then `watch` after you reply) and
+prints what it observed, including how long the sent item took to appear.
+
+The three places Graph is not Gmail, each of which is a silent breakage if got wrong:
+
+- **Sending is draft-then-send.** `/sendMail` is fire-and-forget: 202, no id, nothing to
+  thread from and nothing to match a bounce against. Two round trips, on purpose.
+- **Exchange rewrites `Message-ID`.** Reply detection, the sequence stop rules and bounce
+  matching all key off the id the CRM believes it sent, so the real one is read back from
+  Sent Items with a bounded retry. If that read fails the send is **still reported ok** —
+  the mail has gone, and a retry would send it twice.
+- **A delta listing ends with a `deltaLink`, and that link is the resume point.** A Gmail
+  page token is null when the listing ends. Returning null there, by analogy, would turn
+  every poll into a full mailbox resync. There is a test named after this.
+
+`replyToThreadKey` is accepted and deliberately unused: Graph decides conversation membership
+from `In-Reply-To` and `References` in the MIME, and inventing a use for that argument would
+produce threading that looks right in tests and wrong in a customer's inbox.
+
+### Checks
+
+tsc clean · lint 0 errors (1 pre-existing warning) · **1101 tests across 83 files, 0
+failing** (up from 1066/82; 43 new) · `npm run build` green with real tenant env · control-
+plane build green with control-plane env only, which was tested locally first because this
+repo's builds fail at prerender when Supabase vars are absent.
+
+### Still outstanding
+
+- **Google sign-in for the console** — the one thing between here and using it.
+- **No tenant wired** to the control plane; all tenants on compiled defaults.
+- **The Graph spike has not been run.** Nothing in `lib/mail/microsoft/` is trustworthy until
+  it has.
+- **The seven Gmail call sites** still call Gmail directly (phase 06 entry).
+- **A custom domain** for the console; it is on a `.vercel.app` hostname.
