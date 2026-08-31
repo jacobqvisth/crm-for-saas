@@ -32,9 +32,12 @@ describe("getTenant", () => {
   // Failing to boot is loud and safe. Booting as the wrong company would send
   // another customer's outbound from Wrenchlane's domains, with Wrenchlane's
   // internal-domain exclusions and Wrenchlane's AI copy. Ground rule R7.
+  // Was "animech" until phase 08a registered it. Uses a slug that is genuinely
+  // unknown, so the test keeps testing the throw rather than quietly becoming a
+  // test that a real tenant exists.
   it("throws on an unknown slug rather than falling back to Wrenchlane", () => {
-    process.env.TENANT_SLUG = "animech";
-    expect(() => getTenant()).toThrow(/Unknown TENANT_SLUG "animech"/);
+    process.env.TENANT_SLUG = "acme";
+    expect(() => getTenant()).toThrow(/Unknown TENANT_SLUG "acme"/);
   });
 
   it("names the known tenants in the error, so the fix is obvious", () => {
@@ -44,8 +47,22 @@ describe("getTenant", () => {
 });
 
 describe("the tenant registry", () => {
-  it("knows only Wrenchlane; Animech and Spennare arrive in phases 08 and 09", () => {
-    expect(knownTenantSlugs()).toEqual(["wrenchlane"]);
+  it("knows Wrenchlane and Animech; Spennare arrives in phase 09", () => {
+    expect(knownTenantSlugs()).toEqual(["wrenchlane", "animech"]);
+  });
+
+  // Animech is a real customer on a real deployment, so the things that would
+  // leak Wrenchlane into it are worth asserting rather than trusting to review.
+  it("gives Animech nothing of Wrenchlane's", () => {
+    const a = getTenantBySlug("animech")!;
+    expect(a.identity.slug).toBe("animech");
+    expect(a.domains.internalDomains).not.toContain("wrenchlane.com");
+    expect(a.domains.brandHostTokens).not.toContain("wrenchlane");
+    expect(a.ai.knowledge).not.toMatch(/wrenchlane/i);
+    expect(a.ai.icpDescription).not.toMatch(/workshop|fault code/i);
+    // No sending domain until one is bought and warmed: animech.com publishes
+    // SPF ending in -all, so sending from it would be rejected outright.
+    expect(a.domains.sendingDomains).toEqual([]);
   });
 
   it("looks a tenant up by slug and returns undefined for a stranger", () => {
