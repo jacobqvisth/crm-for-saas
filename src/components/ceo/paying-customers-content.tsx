@@ -321,10 +321,13 @@ function ReconciliationTab({ data }: { data: PayingCustomersData }) {
           </div>
         </div>
         <p className="panel-description">
-          Google Ads has a conversion action called <code>WrenchLane (web) purchase</code>.
-          Month by month its counts track the moment a card is entered, not the moment
-          money moves. Compare the last two columns: the middle one is card entries and
-          the right one is Stripe charges.
+          Google Ads had a conversion action called{" "}
+          <code>WrenchLane (web) purchase</code> whose counts tracked the moment a card is
+          entered, not the moment money moves. It has been renamed to{" "}
+          <code>WrenchLane (web) checkout started (card entered)</code> so it stops being
+          read as revenue, but the numbers below are unchanged — the rename fixed the
+          label, not the underlying event, which is fired by the app. Compare the last two
+          columns: the middle one is card entries and the right one is Stripe charges.
         </p>
         <div className="table-wrap">
           <table className="data-table best-ads-table">
