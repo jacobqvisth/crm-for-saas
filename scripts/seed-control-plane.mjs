@@ -116,8 +116,33 @@ console.log(`Tenants: ${TENANTS.map((t) => t.slug).join(", ")}\n`);
 
 if (!APPLY) {
   const { data: existing } = await db.from("features").select("key");
+  const have = new Set((existing ?? []).map((r) => r.key));
+  const want = features.map((f) => f.key);
+  const missing = want.filter((k) => !have.has(k));
+  const extra = [...have].filter((k) => !want.includes(k));
+
   console.log(`Control plane currently holds ${existing?.length ?? 0} feature rows.`);
-  console.log("Re-run with --apply to write.");
+
+  // Name the drift rather than leaving two counts to be compared by eye.
+  //
+  // A missing row is invisible from the outside: /api/config resolves against
+  // the FEATURES constant, not this table, so the endpoint keeps answering
+  // correctly while the console renders one toggle fewer and the feature
+  // cannot be switched on for any tenant. That happened once already, with
+  // linkedin_steps, and went unnoticed because the endpoint looked fine.
+  if (missing.length || extra.length) {
+    console.log("\nDRIFT between the registry and the control plane:");
+    if (missing.length) {
+      console.log(`  MISSING from the table (console cannot toggle these): ${missing.join(", ")}`);
+    }
+    if (extra.length) {
+      console.log(`  in the table but no longer in the registry: ${extra.join(", ")}`);
+    }
+    console.log("\nRe-run with --apply to fix.");
+  } else {
+    console.log("No drift: the table matches the registry.");
+    console.log("Re-run with --apply to rewrite anyway.");
+  }
   process.exit(0);
 }
 

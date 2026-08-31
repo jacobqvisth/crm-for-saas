@@ -8138,3 +8138,59 @@ verification review entirely.
 
 `control-plane.test.ts` no longer names the Wrenchlane address in the multi-entry test. It
 was testing the PARSER, but read as though two admins were policy.
+
+## 2026-08-31 — The deployed config endpoint is verified, and a missing feature row is fixed
+
+### The deployed `/api/config` happy path is now proved, not assumed
+
+Its 401s were verified when it went live; the 200 had only ever been proved against a local
+instance in phase 05. Closed by minting a token in the CONTROL-PLANE database (which holds no
+customer data), calling the live endpoint, and revoking it. Wrenchlane was not wired to
+anything: no env var was set, production stayed on compiled defaults throughout.
+
+Returned `slug: wrenchlane`, `status: active`, `release_channel: stable`, 20 features with 19
+enabled, empty settings, **no keys beyond the contract and no credential-shaped strings in
+the body**. Revoked token → 401. Live token count 0 before and 0 after.
+
+**The one disabled feature is `linkedin_steps`, and its compiled default is also false.** So
+the control plane's answer matches the compiled defaults exactly, which is the pre-flight
+check `CONTROL-PLANE-RUNBOOK.md` demands before wiring a live tenant: wiring Wrenchlane would
+change nothing. That is the green light, whenever it is wanted.
+
+### THE REAL FIND: the control plane was a feature short
+
+The registry has **20** features. The control plane's `features` table had **19**.
+`linkedin_steps` was added to `src/config/features.ts` after the phase 04 seed and the seed
+was never re-run.
+
+Consequence: the console renders its toggles from that TABLE, so it would have shown 19
+toggles and `linkedin_steps` could not have been switched on for Animech or Spennare from the
+UI at all.
+
+**Why it was invisible:** `/api/config` resolves against the `FEATURES` constant, not the
+table, so the endpoint returned all 20 correctly the whole time. Checking the endpoint does
+not check the table. Fixed with `node scripts/seed-control-plane.mjs --apply`; re-verified 20
+= 20 with nothing missing and nothing orphaned.
+
+### So it cannot recur quietly
+
+- `seed-control-plane.mjs` dry run now **names the drift** — which keys are missing from the
+  table and which are orphaned in it — instead of printing two counts to be compared by eye.
+- `CONTROL-PLANE-RUNBOOK.md` has an "Adding a feature to the registry" section saying the
+  seed must be re-run, and why the endpoint looking fine proves nothing.
+- The comment in `features.ts` said "19 toggles" and was wrong the moment a twentieth was
+  added. It no longer states a count. This is the same rot phase 10D found in CLAUDE.md,
+  which claimed 18 tables when there were 101, so the fix is to stop writing counts in prose
+  rather than to correct this one.
+
+### Google sign-in: I cannot create the OAuth client, and this is now settled
+
+Jacob asked whether I could do it from the Google Cloud Console. Checked empirically rather
+than assumed: `gcloud` is authenticated for both accounts and the personal one lists projects
+fine, but **there is no API for creating an OAuth 2.0 Web-application client**. The one CLI
+path that came close, `gcloud alpha iap oauth-brands` / `oauth-clients`, now prints that the
+IAP OAuth Admin APIs were **permanently shut down on 19 March 2026**. `gcloud auth` manages
+only the CLI's own credentials.
+
+So the four Console steps in the runbook are genuinely manual. Everything after them is not:
+the client id and secret can go into Supabase through the Management API in seconds.

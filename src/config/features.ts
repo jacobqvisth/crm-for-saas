@@ -43,7 +43,13 @@ export type FeatureKey =
   | "dealer_network"
   | "linkedin_steps";
 
-/** Grouping for the phase 04 admin console, so 19 toggles are not one flat list. */
+/**
+ * Grouping for the phase 04 admin console, so the toggles are not one flat list.
+ *
+ * Deliberately does not say how many there are. The previous version of this
+ * line said nineteen and was wrong the moment a twentieth was added, which is
+ * the same rot that left CLAUDE.md claiming 18 tables when there were 101.
+ */
 export type FeatureCategory =
   | "content"
   | "outbound"

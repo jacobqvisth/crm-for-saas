@@ -65,6 +65,29 @@ curl -s -o /dev/null -w '%{http_code}\n' https://jacobs-crm-control.vercel.app/c
 curl -s https://jacobs-crm-control.vercel.app/api/config                                  # 401
 ```
 
+## Adding a feature to the registry: re-run the seed, or it will not appear
+
+`src/config/features.ts` is the single definition, but the console renders its toggles from
+the control plane's `features` TABLE. Adding a feature to the registry does **not** add the
+row. Until it is seeded, the console shows one toggle fewer and the new feature cannot be
+switched on for any tenant from the UI.
+
+```bash
+export CONTROL_PLANE_SUPABASE_URL=... CONTROL_PLANE_SERVICE_ROLE_KEY=...
+node scripts/seed-control-plane.mjs            # dry run, reports the drift
+node scripts/seed-control-plane.mjs --apply
+```
+
+It parses `features.ts`, so the registry stays the single definition, and it refuses to run
+against any database with a `contacts` table.
+
+**This has already happened once.** `linkedin_steps` was added to the registry after the
+phase 04 seed, so the control plane sat at 19 rows against a registry of 20, found and fixed
+on 2026-08-31. The reason it was invisible is worth knowing: `/api/config` resolves against
+the `FEATURES` constant rather than the table, so the endpoint returned all 20 correctly the
+whole time. Only the console's own list was short. **Checking the endpoint does not check the
+table.**
+
 ## What this deployment serves, and what it must not
 
 `IS_CONTROL_PLANE=1` flips the app into console mode, and `src/middleware.ts` then serves a
