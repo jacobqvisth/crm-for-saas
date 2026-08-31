@@ -8757,3 +8757,55 @@ the EU**, with `url_passthrough: false`. That confirms leaving upload consent at
   ~30 conversions a month).
 - **Match rate unknown.** Hashed-email matching is probabilistic; how many of
   the 16 Google actually resolves to a click will show in a few hours.
+
+## 2026-08-31 — Animech's sign-up was open to the internet, and other sessions' work merged
+
+### THE URGENT ONE: a new Supabase project ships with sign-up open
+
+Phase 11's commit message recorded that Animech's project had `disable_signup: false`,
+`external_email_enabled: true` and `site_url: http://localhost:3000` — **anyone who found
+animech-crm.vercel.app could create an account on a deployment carrying a customer's name.**
+That session found it and could not apply the fix; its sandbox blocked the call.
+
+Closed here with one Management API PATCH: `disable_signup: true`, real `site_url`, and a
+`uri_allow_list` with no query string.
+
+**Two traps in proving it, both of which bit.** The first re-test, seconds after the PATCH,
+returned **200 and really did create a user** — the setting had not propagated. That user was
+deleted; Animech is back to zero. The second returned `429 over_email_send_rate_limit`, which
+is not evidence either way, because the request was throttled before it was judged. The
+answer that counts is **`422 signup_disabled`**, and that is what it now gives.
+
+Generalise it: **close sign-up before the first deploy, not after**, and a single probe is not
+proof when the thing you changed is eventually consistent.
+
+### Merged two other sessions' work
+
+Checked what else was running before deciding anything (both job roots, per
+`reference_session_inspection`). Found the phase 11 session **finished with PR #777 open and
+unmerged**, and a live ads session still working.
+
+PR #777 was rebased on top of 08a and extended `animech.ts` from 191 to 234 lines, so it
+built on this session's work rather than colliding. Merged. Wrenchlane's production deploy for
+`9dd9c5d` verified **READY**, and its `/login` still renders "Sign in with Google Workspace"
+with its assets at the root of `public/` — R1 holds.
+
+**The two sessions caught each other's mistakes, which is the interesting part.** Phase 11
+made `branding` a required field on `TenantIdentity`; that broke 08a's `animech.ts` at `tsc`
+within minutes of both existing. The mechanism designed for exactly this worked on a real
+second tenant on its first day.
+
+### Animech after both landed
+
+Live, branded as Animech, with its own database and its own twenty flags. `/dtc-lookup` is
+**404 on Animech and 307 on Wrenchlane** from the same commit. 16/16 probes.
+
+Still cannot be signed into: its Supabase project has no Google or Microsoft provider, so
+`auth` is `{ google: false, microsoft: false, email: true }` — what is actually enabled rather
+than what the brief wants. That is the next step and it is the same Console click Jacob
+already did once for the control plane.
+
+### Also worth knowing
+
+`disable_signup` was **already true** on the control plane and is unchanged on Wrenchlane,
+which was checked rather than assumed.

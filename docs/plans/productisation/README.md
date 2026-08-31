@@ -104,7 +104,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [05](05-config-pull.md) | Tenants pull their config, with cache and fallback | **Done** 2026-08-30 | None |
 | [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | **Partial** 2026-08-30 | None |
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
-| [08](08-tenant-animech.md) | Stand up Animech as tenant two | Not started — **08a needs no customer** | None |
+| [08](08-tenant-animech.md) | Stand up Animech as tenant two | **08a DONE** 2026-08-31 (#775) · 08b blocked | None |
 | [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
 | [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | **D+E partial** 2026-08-30 | Additive |
 | [11](11-tenant-bring-up.md) | Branding, env manifest, tenant bootstrap, per-tenant defaults | **A-E done** 2026-08-31 | None (proved by diff) |
@@ -181,6 +181,24 @@ obtained from a code session**, not on effort:
 no longer documents a deleted feature, a dependency that is not installed, or an RLS claim
 that was wrong by 83 tables.
 
+## Where it actually stands, 2026-08-31
+
+**Animech is live at https://animech-crm.vercel.app**, on its own Supabase project
+(`hnriqsnenyzmlctkkdmi`), with its own schema, branding and feature set. The same commit
+serves Wrenchlane, and `/dtc-lookup` is 404 on one and 307 on the other.
+
+08a and phase 11 landed within an hour of each other, from two sessions, and each caught
+something in the other's work. 11 made branding a required field, which broke 08a's
+`animech.ts` at `tsc` — the mechanism doing its job on a real second tenant within minutes of
+both existing.
+
+**A new Supabase project ships with sign-up OPEN, and Animech's was.** `disable_signup:
+false`, email enabled, `site_url` still `http://localhost:3000`: anyone who found the URL
+could create an account on a deployment carrying a customer's name. Now closed and **proved**
+closed — `422 signup_disabled`, zero users left behind. Two things worth keeping from it:
+the fix takes a minute and **belongs before the first deploy, not after**, and a `200` on the
+first re-test was propagation delay rather than success, so a single probe is not evidence.
+
 ## What is NOT blocked, in the order it should be done
 
 The list above is what needs someone else. This is what needs us, and none of it is waiting
@@ -198,7 +216,10 @@ on a customer.
 2. **Close [issue #747](https://github.com/jacobqvisth/crm-for-saas/issues/747)** —
    `discovered_shops` has RLS disabled and holds ~42k scraped contacts. Five discovery routes
    use the user-session client, so a policy has to be written and verified against a real
-   login rather than switched on blind. The brief says close it before a second tenant exists.
+   login rather than switched on blind. **The brief said close it before a second tenant
+   exists, and a second tenant now exists**, so this is overdue rather than upcoming. The
+   exposure is Wrenchlane's own database, not Animech's — Animech holds no rows — but that is
+   luck rather than design.
 3. **Phase 06 part 2** — the seven live Gmail call sites. Not blocked on a customer, blocked
    on supervision: it changes live outbound and inbox-sync, and its "done when" requires
    watching a real send and reply in production.
