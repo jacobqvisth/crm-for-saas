@@ -10,8 +10,10 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { Plus, Mail, Clock, GitBranch, Phone, CheckSquare } from "lucide-react";
+import { Plus, Mail, Clock, GitBranch, Phone, CheckSquare, UserPlus, MessageSquare } from "lucide-react";
 import toast from "react-hot-toast";
+import { useFeature } from "@/lib/hooks/use-features";
+import { isLinkedInStepType } from "@/lib/sequences/linkedin";
 import type { Tables } from "@/lib/database.types";
 
 type Step = Tables<"sequence_steps">;
@@ -22,16 +24,31 @@ const STEP_LABELS: Record<string, string> = {
   condition: "Condition",
   call: "Follow-up call",
   task: "Task",
+  linkedin_invite: "LinkedIn invite",
+  linkedin_message: "LinkedIn message",
 };
+
+/** Steps that produce a task row, and so carry their own due offset. */
+function isTaskLikeStep(type: Step["type"]): boolean {
+  return type === "call" || type === "task" || isLinkedInStepType(type);
+}
 
 interface AddStepButtonProps {
   index: number;
   addMenuIndex: number | null;
   setAddMenuIndex: (i: number | null) => void;
   addStep: (type: Step["type"], afterIndex: number) => void;
+  /** Tenant has the `linkedin_steps` feature. Hides two menu entries when off. */
+  linkedinEnabled: boolean;
 }
 
-function AddStepButton({ index, addMenuIndex, setAddMenuIndex, addStep }: AddStepButtonProps) {
+function AddStepButton({
+  index,
+  addMenuIndex,
+  setAddMenuIndex,
+  addStep,
+  linkedinEnabled,
+}: AddStepButtonProps) {
   return (
     <div className="flex items-center justify-center py-2 relative">
       <div className="w-0.5 h-4 bg-slate-200" />
@@ -75,6 +92,23 @@ function AddStepButton({ index, addMenuIndex, setAddMenuIndex, addStep }: AddSte
               >
                 <CheckSquare className="w-3.5 h-3.5 text-sky-500" /> Create task
               </button>
+              {linkedinEnabled && (
+                <>
+                  <div className="my-1 border-t border-slate-100" />
+                  <button
+                    onClick={() => addStep("linkedin_invite", index)}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-blue-600" /> LinkedIn invite
+                  </button>
+                  <button
+                    onClick={() => addStep("linkedin_message", index)}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600" /> LinkedIn message
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -91,6 +125,11 @@ interface SequenceBuilderProps {
 export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
+  // Hides the two menu entries. Steps a sequence already holds still render and
+  // stay editable if the flag is later turned off, because silently swallowing
+  // part of a saved sequence would be worse than showing it: the enrollment
+  // side already refuses to act on them.
+  const linkedinEnabled = useFeature("linkedin_steps");
 
   const [steps, setSteps] = useState<Step[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,10 +197,11 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
       delay_days: type === "delay" ? 3 : null,
       delay_hours: type === "delay" ? 0 : null,
       condition_type: type === "condition" ? ("opened" as const) : null,
-      // Call/task steps carry their own offset ("due in N days") rather than
-      // needing a Delay step in front, which would push the next email too.
-      task_due_days: type === "call" || type === "task" ? 0 : null,
-      task_priority: type === "call" || type === "task" ? "medium" : null,
+      // Call/task/LinkedIn steps carry their own offset ("due in N days")
+      // rather than needing a Delay step in front, which would push the next
+      // email too.
+      task_due_days: isTaskLikeStep(type) ? 0 : null,
+      task_priority: isTaskLikeStep(type) ? "medium" : null,
     });
 
     if (error) {
@@ -280,7 +320,7 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
         </div>
       ) : (
         <>
-          <AddStepButton index={-1} addMenuIndex={addMenuIndex} setAddMenuIndex={setAddMenuIndex} addStep={addStep} />
+          <AddStepButton index={-1} addMenuIndex={addMenuIndex} setAddMenuIndex={setAddMenuIndex} addStep={addStep} linkedinEnabled={linkedinEnabled} />
 
           <DragDropContext onDragEnd={onDragEnd}>
             <Droppable droppableId="steps">
@@ -311,7 +351,7 @@ export function SequenceBuilder({ sequenceId, sequenceName }: SequenceBuilderPro
                           </div>
                         )}
                       </Draggable>
-                      <AddStepButton index={index} addMenuIndex={addMenuIndex} setAddMenuIndex={setAddMenuIndex} addStep={addStep} />
+                      <AddStepButton index={index} addMenuIndex={addMenuIndex} setAddMenuIndex={setAddMenuIndex} addStep={addStep} linkedinEnabled={linkedinEnabled} />
                     </div>
                   ))}
                   {provided.placeholder}
