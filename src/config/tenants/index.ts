@@ -15,6 +15,7 @@
 //   3. the compiled default, here                     [now]
 
 import type { TenantConfig } from "./types";
+import { animech } from "./animech";
 import { wrenchlane } from "./wrenchlane";
 
 export type { TenantConfig } from "./types";
@@ -32,12 +33,18 @@ export type {
 /**
  * Every tenant this codebase knows how to be.
  *
- * Animech (phase 08) and Spennare (phase 09) are deliberately absent. Adding
- * them now would mean guessing at values nobody has gathered yet, and a wrong
- * committed guess is worse than an obvious gap.
+ * Spennare (phase 09) is deliberately absent. Adding a tenant before its values
+ * have been gathered would mean committing guesses, and a wrong committed guess
+ * is worse than an obvious gap: it gets read once, believed, and never
+ * questioned again.
+ *
+ * Animech was added in phase 08a. Its config is real but incomplete by design —
+ * it cannot send mail, because it has no sending domain and no Entra consent.
+ * The gaps are marked TODO(animech) in that file rather than filled in.
  */
 const TENANTS: Record<string, TenantConfig> = {
   wrenchlane,
+  animech,
 };
 
 export const DEFAULT_TENANT_SLUG = "wrenchlane";

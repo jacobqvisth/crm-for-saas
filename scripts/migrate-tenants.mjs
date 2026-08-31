@@ -79,8 +79,28 @@ const TENANTS = [
       passwordEnv: "SUPABASE_DB_PASSWORD",
     },
   },
-  // Phase 08 adds animech, phase 09 adds spennare. Each gets its OWN connection
-  // string in its own environment: no shared credentials, ever.
+  {
+    slug: "animech",
+    label: "Animech",
+    urlEnv: "ANIMECH_SUPABASE_DB_URL",
+    fallback: {
+      // NOTE THE SHARD. Wrenchlane is on aws-1; this project was created in
+      // 2026 and is on aws-0. Both are eu-north-1. Assuming the shard from the
+      // other tenant produces a connection that times out rather than one that
+      // says anything useful, so it is read from
+      // GET /v1/projects/<ref>/config/database/pooler and pinned here.
+      //
+      // Port 5432 is the SESSION pooler. The API advertises 6543, which is
+      // transaction mode: fine for the app, wrong for migrations.
+      host: "aws-0-eu-north-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.hnriqsnenyzmlctkkdmi",
+      database: "postgres",
+      passwordEnv: "ANIMECH_SUPABASE_DB_PASSWORD",
+    },
+  },
+  // Phase 09 adds spennare. Each gets its OWN connection string in its own
+  // environment: no shared credentials, ever.
 ];
 
 // --- arguments -------------------------------------------------------------
