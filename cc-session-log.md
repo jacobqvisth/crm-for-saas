@@ -8469,6 +8469,98 @@ is the real blocker on 08 — not the Microsoft consent everyone is waiting for.
 
 ---
 
+## 2026-08-31 — Phase 08a: Animech has a live URL and a live database
+
+**https://animech-crm.vercel.app** · Supabase `hnriqsnenyzmlctkkdmi` (`animech-crm`,
+eu-north-1, $10/month, approved by Jacob). Vercel `prj_FEVDHbskOsmBoEhivx9x5vjnTM4q`.
+
+Not git-connected, deployed with `-A vercel.animech.json`, which sets `"crons": []`. A tenant
+with no mail, no users and no data should be running nothing on a schedule; step 5 of the
+brief turns on what it needs.
+
+### THE BLOCKER FOUND ON THE WAY: the phase 01 desync had already come back
+
+The dry run against Animech listed **two migrations sharing the prefix `20260831180000`**
+(`ad_conversion_stats` and `linkedin_sequence_steps`). `version` is the PRIMARY KEY of
+`supabase_migrations.schema_migrations`, so both could never be recorded — the identical
+fault phase 01 found seven instances of, four days after it was cleaned up.
+
+Checking Wrenchlane was worse: its recorded versions matched **no filename on main**.
+
+| recorded | file on main |
+| --- | --- |
+| 20260831091241 | 20260831140000_google_ads_asset_performance |
+| 20260831122837 | 20260831180000_linkedin_sequence_steps |
+| 20260831130047 | 20260831180000_ad_conversion_stats |
+| 20260831134140 | 20260831210000_ad_conversion_uploads |
+
+`migrate-tenants.mjs` compares filenames to recorded versions, so it reported **four
+migrations as pending on a database where they were already applied**. Several of their
+statements are unguarded, so `--apply` would have failed part way rather than harmlessly.
+
+Fixed: `ad_conversion_stats` renamed to `...180001` so it still sorts after
+`linkedin_sequence_steps` (the real apply order, 122837 before 130047), and
+`scripts/reconcile-migration-history-2.sql` realigned Wrenchlane's seven rows. Verified: 7
+files, 7 rows, **identical sets, nothing pending either way**. Metadata only; no application
+table touched.
+
+### The baseline round-trips onto a real fresh project
+
+Animech's database against Wrenchlane's, after `migrate-tenants.mjs --tenant=animech
+--apply` ran all seven cleanly: **108 tables, 104 with RLS, 7 migrations — identical on
+both** — and `contacts`, `workspaces`, `email_queue` all zero. That is phase 01's acceptance
+test passing in production rather than against a scratch project.
+
+Note the pooler shard: Wrenchlane is `aws-1-eu-north-1`, this project is **`aws-0`**. Read
+from the API and pinned in the script, because assuming it from the other tenant gives a
+connection that times out rather than one that says anything useful. Port 5432 (session), not
+the 6543 the API advertises, which is transaction mode and wrong for migrations.
+
+### Two tenants, one codebase, different products — proven live
+
+16/16 probes. The same path on both deployments:
+
+- `/contacts`, `/companies`, `/sequences`, `/inbox`, `/login` — alive on both.
+- `/dtc-lookup`, `/forums`, `/videos`, `/reviews`, `/journey`, `/funnel`, `/roadmap` — **404
+  on Animech, 307 on Wrenchlane.**
+- `/admin`, `/api/config` — 404 on both; control-plane surfaces exist on neither tenant.
+
+### A CONCURRENT SESSION IS WRITING TO THE SAME CONTROL PLANE
+
+Setting Animech's overrides revealed rows stamped `updated_by: phase-11-tenant-bring-up` —
+the session running the phase 11 prompt. It had already set all 20 of Spennare's flags and
+set Animech's `calling`, `discovery` and `deals` to **false**.
+
+The phase 08 brief says "Expected on: everything core, plus `calling` and `discovery`", and
+names `deals` as Animech's core need. So the two disagree on exactly three flags.
+
+**Resolved by not resolving it.** `animech.ts` was changed to match the LIVE control plane
+rather than the brief, because the property that matters more than either answer is that the
+compiled config and the control plane agree — `/api/config` never reads the tenant config, so
+a disagreement would surface as Animech's features changing the moment it is wired. Starting
+closed costs nothing: core CRM is not feature-gated. The disagreement is written into
+`animech.ts` where whoever settles it will see it.
+
+**The general lesson: two agent sessions can now write to one control plane, and the audit
+log is the only thing that made it visible.** Check `updated_by` before assuming a row is
+yours.
+
+### Deliberately not done
+
+No login. Animech's Supabase project has no auth provider enabled, so the login page renders
+and nobody can sign in — that is phase 11 E. No branding, so it still shows Wrenchlane's
+wordmark once past login — phase 11 A. No workspace or owner row — phase 11 C. No mail — 08b,
+blocked on their Entra consent and a sending domain that must not be `animech.com` (SPF
+`-all`).
+
+### Checks
+
+tsc clean · lint 0 errors · **1210 tests across 93 files** · 16/16 live probes · Wrenchlane
+re-probed and unchanged throughout.
+
+
+---
+
 ## 2026-08-31 — Phase 11 A-E: tenant bring-up
 
 **Branch:** `feature/prod-11-tenant-bring-up` · **Phase:** 11 (all five sections)

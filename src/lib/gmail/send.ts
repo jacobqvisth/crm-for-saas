@@ -37,6 +37,14 @@ interface SendEmailParams {
   /** Earlier `email_queue` row ids in this thread, oldest first. */
   referenceQueueRowIds?: string[];
   /**
+   * Real RFC 5322 identifiers for earlier messages in this thread, oldest
+   * first. For replies to *inbound* mail, where the identifiers belong to the
+   * other party and so cannot be minted from a row id — see
+   * `fetch-threading-headers.ts`. Appended after `referenceQueueRowIds`;
+   * anything malformed is dropped.
+   */
+  referenceMessageIds?: string[];
+  /**
    * Optional single address to Bcc. Set per sequence via
    * SequenceSettings.bcc_email; see that field for why (Trustpilot AFS).
    * Invalid or blank values are dropped rather than sent, because a malformed
@@ -332,9 +340,12 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     messageIdForQueueRow(params.replyToQueueRowId, senderEmail) ??
     normalizeMessageId(params.replyToMessageId) ??
     undefined;
-  const references = (params.referenceQueueRowIds ?? [])
-    .map((rowId) => messageIdForQueueRow(rowId, senderEmail))
-    .filter((id): id is string => Boolean(id));
+  const references = [
+    ...(params.referenceQueueRowIds ?? []).map((rowId) =>
+      messageIdForQueueRow(rowId, senderEmail),
+    ),
+    ...(params.referenceMessageIds ?? []).map(normalizeMessageId),
+  ].filter((id): id is string => Boolean(id));
 
   const mimeMessage = buildMimeMessage({
     from: fromAddress,
