@@ -8695,3 +8695,65 @@ tenant token being used at 13:39 today nothing was persisted into its production
 is still on compiled defaults, and the `forums: false` class of accident did not recur.
 Animech has **zero active tokens**, so the eighteen flags switched off for it are inert
 until somebody wires it deliberately.
+## 2026-08-31 — Paid conversions are LIVE: 16 real payments uploaded to Google Ads
+
+Completion of items 2 and 3 from PR #769. Jacob granted the OAuth scope and
+enabled the API; both were the only steps that genuinely needed a human.
+
+### The upload is live
+
+- OAuth consent granted for `.../auth/datamanager` — a SEPARATE refresh token,
+  `GOOGLE_DATAMANAGER_REFRESH_TOKEN`, not a re-consent of the shared one.
+- Conversion action created: **7741205982**, `WrenchLane paid subscription
+  (offline, from Stripe)`, type `UPLOAD_CLICKS`, category `SUBSCRIBE_PAID`,
+  `primary_for_goal: false` and `include_in_conversions_metric: false` — it
+  cannot influence bidding.
+- Both env vars in Vercel production.
+- **16 real first payments uploaded, 0 failed**, keyed on hashed email, values
+  in EUR/SEK/USD, spanning 2026-06-27 to 2026-08-31. 3 were outside Google's
+  90-day window and were skipped rather than sent.
+- Re-run immediately after: `eligible: 0, alreadyUploaded: 16`. The ledger and
+  the derived `transaction_id` both hold.
+
+### Two blockers found in sequence, both human-gated
+
+1. **OAuth scope.** Fixed by the consent flow. The first attempt timed out after
+   five minutes while Jacob was reading the message telling him to click; window
+   raised to twenty minutes (PR #773).
+2. **`SERVICE_DISABLED`.** The Data Manager API had never been enabled on GCP
+   project 35909374983. Not discoverable from the scope error — it only appears
+   once the scope is right. Enabled from the console.
+
+Worth keeping: the scope error and the service-disabled error are sequential,
+not simultaneous. Fixing the first reveals the second.
+
+### Marketing site
+
+`wrenchlane-site` PR #31: the click id was forwarded by `SignupCta` on
+fault-code pages ONLY. Fifteen files link to app.wrenchlane.com and fourteen
+dropped it — header, footer, home hero, final CTA, pricing. Now site-wide from
+BaseLayout, carrying `lp` too, with build-time `lp` never overwritten.
+
+**Astro is not live.** The live marketing site is still Webflow; Astro ships
+October at the earliest. The live Webflow site was read but deliberately NOT
+changed: it is inert until the app persists the params, and it would need a full
+site publish that pushes whatever else is staged in the Designer. When it is
+done, it cannot decorate hrefs on load there — the pricing-cards footer script
+rewrites CTA hrefs from a MutationObserver and would undo it, so it has to hook
+the click.
+
+Also read off the live head, and relevant to the upload: Consent Mode v2 has
+`ad_storage` / `ad_user_data` / `ad_personalization` **denied by default across
+the EU**, with `url_passthrough: false`. That confirms leaving upload consent at
+`CONSENT_STATUS_UNSPECIFIED` was right rather than cautious.
+
+### Still open
+
+- **The app change.** `gclid` / `lp` persistence at signup is the last missing
+  piece and is not in any repo here. Slack brief written for Matteo; spec at
+  `docs/gclid-capture-spec.md`.
+- **PMax goal switch**, still gated on the budget decision (cut to 300 SEK/day
+  on 2026-08-31; the card-entry goal needs ~900/day to clear Smart Bidding's
+  ~30 conversions a month).
+- **Match rate unknown.** Hashed-email matching is probabilistic; how many of
+  the 16 Google actually resolves to a click will show in a few hours.
