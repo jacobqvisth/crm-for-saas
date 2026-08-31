@@ -122,6 +122,21 @@ project and redeploy. Keep that in mind rather than adding a spare admin.
 **The super-admin Google account controls feature access for three paying customers. It
 needs a hardware key or a passkey, not SMS.**
 
+## Deciding a tenant's twenty flags
+
+Do not click twenty toggles. `scripts/decide-tenant-features.mjs` holds the decision table
+in code, with a note per flag, and writes one `audit_log` entry per tenant:
+
+```bash
+export CONTROL_PLANE_SUPABASE_URL=... CONTROL_PLANE_SERVICE_ROLE_KEY=...
+node scripts/decide-tenant-features.mjs            # dry run, reports the drift
+node scripts/decide-tenant-features.mjs --apply
+```
+
+It **refuses to write Wrenchlane's flags**, which are the baseline (R2). Animech and
+Spennare were decided this way on 2026-08-31: 17 and 16 of their twenty respectively
+differed from the registry default, i.e. would have been inherited wrongly.
+
 ## Wiring a tenant to it
 
 A tenant runs on compiled defaults until it is given a URL and a token. That is a supported
@@ -156,7 +171,11 @@ one click to create — which is the point.
 
 ## Still to do
 
-- **Google sign-in is not enabled yet, and this is why the login button hangs.**
+- ~~**Google sign-in is not enabled yet, and this is why the login button hangs.**~~
+  **Done.** Confirmed on 2026-08-31: the `audit_log` carries a write by actor
+  `jacob.qvisth@gmail.com`, which only a completed Google sign-in through
+  `requireSuperAdmin` can produce. The setup steps below are kept because they are the
+  recovery procedure if the OAuth client is ever lost.
 
   The sign-in page calls `signInWithOAuth({ provider: "google" })`. With no provider enabled
   Supabase returns "provider is not enabled", and the button sits on "Redirecting..." for

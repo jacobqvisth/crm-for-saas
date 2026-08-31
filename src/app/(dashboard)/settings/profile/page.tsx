@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { useTenantBrand } from "@/lib/hooks/use-tenant-brand";
 import {
   ChevronLeft,
   Loader2,
@@ -73,6 +74,7 @@ type UnavailableEntry = {
 type EditorMode = "rich" | "html";
 
 export default function ProfileSettingsPage() {
+  const brand = useTenantBrand();
   const { workspaceId } = useWorkspace();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState("");
@@ -329,7 +331,7 @@ export default function ProfileSettingsPage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Founder, Wrenchlane"
+            placeholder={`Founder, ${brand.displayName}`}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
           />
         </div>
@@ -495,7 +497,7 @@ export default function ProfileSettingsPage() {
             value={signatureHtml}
             onChange={setSignatureHtml}
             workspaceId={workspaceId ?? undefined}
-            placeholder="Best,&#10;Jacob Qvisth&#10;Founder, Wrenchlane"
+            placeholder={`Best,\nJacob Qvisth\nFounder, ${brand.displayName}`}
             variables={[]}
           />
         ) : (
@@ -504,7 +506,7 @@ export default function ProfileSettingsPage() {
               value={signatureHtml}
               onChange={(e) => setSignatureHtml(e.target.value)}
               rows={10}
-              placeholder='<p>Best,</p>&#10;<p><strong>Jacob Qvisth</strong><br>Founder, Wrenchlane</p>'
+              placeholder={`<p>Best,</p>\n<p><strong>Jacob Qvisth</strong><br>Founder, ${brand.displayName}</p>`}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
             />
             <div>

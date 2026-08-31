@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useTenantBrand } from "@/lib/hooks/use-tenant-brand";
 
 interface SignatureEditorModalProps {
   userId: string;
@@ -21,6 +22,10 @@ export function SignatureEditorModal({
   onClose,
   onSaved,
 }: SignatureEditorModalProps) {
+  // Only the company name and domain are tenant-derived. Wrenchlane's values
+  // reproduce the previous literal exactly, so its placeholder is unchanged.
+  const brand = useTenantBrand();
+  const brandDomain = brand.supportEmail.split("@")[1] ?? "example.com";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [signature, setSignature] = useState("");
@@ -120,7 +125,7 @@ export function SignatureEditorModal({
                   onChange={(e) => setSignature(e.target.value)}
                   rows={10}
                   spellCheck={false}
-                  placeholder={`<p>Best,<br>Jacob</p>\n<p style="color:#666;font-size:12px;">Wrenchlane · jacob@wrenchlane.com</p>`}
+                  placeholder={`<p>Best,<br>Jacob</p>\n<p style="color:#666;font-size:12px;">${brand.displayName} · jacob@${brandDomain}</p>`}
                   className="w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                 />
                 <p className="mt-1 text-[11px] text-slate-400">

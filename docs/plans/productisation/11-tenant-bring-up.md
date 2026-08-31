@@ -206,3 +206,214 @@ control plane holds flags and counts, never keys.
 
 **Backups and cost per tenant.** Real, and out of scope here. Worth a decision before the
 first customer is billed, not before they are stood up.
+
+---
+
+# What was actually done, 2026-08-31
+
+Sections A to E, one branch, one PR. **Wrenchlane is unchanged, and that was proved by
+diff rather than asserted**: `/login` is prerendered at build time, so a copy was taken
+before any edit and compared after every one. With build-internal chunk hashes and the RSC
+flight payload stripped (both change on any edit at all, including a comment), the
+user-visible DOM is **byte-for-byte identical at 1961 bytes**, and that file carries the
+root layout's `<title>` and `<meta description>` as well as the whole login form. The
+sidebar is behind auth and is not prerendered, so `src/config/tenants/branding.test.ts`
+pins its four previously-hardcoded strings instead.
+
+## A. Branding
+
+`TenantBranding` is a **required** block on `TenantIdentity`: mark, wordmark, both alt
+strings, browser title and description. `tsc` now names any tenant that has not filled it
+in. The sidebar takes it as a prop from the dashboard layout, the same route the feature
+flags already take, because it is a client component and cannot read `TENANT_SLUG`.
+
+Two deliberate choices worth knowing:
+
+- **Wrenchlane's `browserTitle` is still `"CRM for SaaS"`,** not `"Wrenchlane"`. That
+  string is what its tabs say today and R1 forbids changing it here. Renaming it is a
+  product decision and a one-line one.
+- **Wrenchlane's assets stay at the root of `public/`** rather than moving to
+  `public/tenants/wrenchlane/`. Moving them would change the URL of a live asset for no
+  benefit. New tenants use `public/tenants/<slug>/`.
+
+`getTenant()` is **not safe in a client component**: Next.js only inlines `NEXT_PUBLIC_`
+variables into the browser bundle, so `TENANT_SLUG` is `undefined` there and getTenant()
+silently returns the DEFAULT tenant, which is Wrenchlane. A client component calling it
+would have rendered "Wrenchlane" for every customer while type-checking perfectly. That is
+why `useTenantBrand()` exists and why it falls back to "your company" rather than to
+Wrenchlane.
+
+### Walked as a customer, and what still says Wrenchlane
+
+69 files under `src/app` and `src/components` mention Wrenchlane. Almost all of them sit
+behind features that are now **off** for both new tenants (the whole `ceo/*` dashboard
+suite, forums, videos, dtc-lookup, reviews, mockup, pricing-options, routes, call-agent).
+Those are unreachable rather than fixed, which is the right trade.
+
+Fixed, because they are on **always-on** surfaces a customer reaches on day one:
+
+| Where | Was |
+| --- | --- |
+| `settings/page.tsx` | "What the AI knows about Wrenchlane..." |
+| `settings/ai-knowledge` | "What the AI is told about Wrenchlane..." |
+| `settings/profile` (x3) | "Founder, Wrenchlane" placeholders |
+| `settings/exclusions` | `someone@wrenchlane.com` placeholder |
+| `settings/signature-editor-modal` | "Wrenchlane, jacob@wrenchlane.com" placeholder |
+| `companies/detail/statuses-tab` | "signed up in the Wrenchlane app" |
+| `sequences/email-preview-frame` | `sender_company: "WrenchLane"` |
+
+**Left, with a note, because fixing them would change what Wrenchlane sees:** the signature
+placeholders in `settings/profile` still read "Jacob Qvisth". Making them generic is a
+visible change to a live business, so it is Jacob's call, not a refactor's.
+
+**One intentional one-character change:** the sequence preview's sample sender company was
+the literal `"WrenchLane"`, which is a misspelling of the company's own name. It now comes
+from `displayName`, so it reads `"Wrenchlane"`. Revert by dropping the second argument at
+the two `previewInterpolate` call sites.
+
+## B. Environment manifest
+
+`src/config/env-manifest.ts` is the single definition; `.env.local.example` is generated
+from it by `scripts/env-manifest.mts`, and `--check` runs in the **Build & Lint** job. A
+generated file cannot drift.
+
+**The brief's measurements here were wrong, and the correction matters:**
+
+| | Brief said | Actually |
+| --- | --- | --- |
+| Variables read by `src/` | 67 | **100** |
+| Documented | 32 | 32 |
+| Documented but never read | 9, "delete them" | **0. All nine are read.** |
+
+The brief measured with a `process.env.` search. That misses `getEnv("NAME")` and
+`getRequiredEnv("NAME")`, which is how roughly a third of the configuration is read, and it
+misses `process.env[SOME_CONSTANT]` entirely. Every one of the nine allegedly stale
+entries, the `TRUSTPILOT_*`, `GBP_*` and `GOOGLE_OAUTH_*` sets, is read through `getEnv()`.
+**Deleting them as instructed would have removed live documentation for working
+configuration**, which is a worse version of the very problem this section exists to fix.
+The scanner therefore understands all three access patterns, and reports computed reads it
+cannot resolve rather than staying silent about them.
+
+Each variable is grouped by the integration flag or feature that gates it, and marked
+required / required-for-feature / optional / platform. A tenant with `integrations.elks:
+false` can see at a glance that it needs none of the eleven `ELKS_*` variables.
+
+## C. Tenant bootstrap
+
+`scripts/bootstrap-tenant.mjs`, dry-run by default. Creates the workspace with the right
+name and domain, the owner as a confirmed auth user plus an owner membership, three
+deliberately generic starter templates and one **draft** three-step sequence.
+
+- **None of Wrenchlane's templates are copied.** They are about fault codes and would be
+  actively misleading in a configurator company's account. The starters are written to be
+  rewritten.
+- **The sequence is a draft,** so bootstrapping a tenant can never start outbound at
+  somebody.
+- It **refuses to run against a database that already has a workspace**. Every table is
+  scoped by `workspace_id`, so a second workspace does not error, it silently splits the
+  customer's data in half.
+
+Proved as far as it can be without a fresh Supabase project: the guard fires, and the
+config parsing is correct. Running it against Wrenchlane's own database (a read-only
+`SELECT`) turned up the reason this section exists. That database holds **three**
+workspaces, and the real one is called **"My Workspace"**. That is exactly the
+`/auth/callback` onboarding artefact section C predicts, sitting in production.
+
+**Not proved end to end:** nobody has pointed this at an empty project yet, because there
+is no second Supabase project to point it at. The `--apply` path is unexercised.
+
+## D. Per-tenant features
+
+Decided in `scripts/decide-tenant-features.mjs` (dry-run by default), which **refuses to
+write Wrenchlane's flags at all**. It is the baseline, and a session has already once put
+`forums: false` into its production config from a local run.
+
+All twenty flags are now written explicitly for each new tenant with a note, rather than
+left to inherit. An absent row is a real state ("inheriting"), but the brief asks for the
+reasons to be answerable from the console in six months, and only a row carries a reason.
+
+| | On | Off |
+| --- | --- | --- |
+| **Animech** | articles, domain_portfolio | the other 18 |
+| **Spennare** | articles, domain_portfolio, discovery | the other 17 |
+
+**17 of Animech's twenty and 16 of Spennare's differed from the registry default**, which
+is the size of the problem R2 predicted. Both audit entries are in `audit_log` under actor
+`phase-11-tenant-bring-up`. Wrenchlane still has exactly its one pre-existing override.
+
+The two tenants differ on exactly one flag: **discovery**. Google Maps discovery finds
+Spennare's exhibition and signage resellers, and does not find Animech's manufacturers.
+
+Switching eighteen of twenty off does not leave a stub. Contacts, companies, sequences,
+lists, inbox, tasks, templates and settings are not feature-gated at all.
+
+`appliesTo` was added to every registry entry, one sentence on who the feature is for, so
+the question is asked at bring-up rather than discovered by a customer finding a page about
+fault codes.
+
+## E. Sign-in per tenant
+
+`TenantAuth { google, microsoft, email }` is a required block. `/login` is now a server
+component that reads it and renders `login-form.tsx`; Wrenchlane's
+`{ google: true, microsoft: false, email: false }` emits exactly the single Google button
+it emitted before, which is what the byte-identical diff above proves.
+
+Verified for a non-Wrenchlane tenant by building with a throwaway tenant slug (created,
+built, inspected, deleted, not committed): three buttons render, the title is the tenant's,
+and **the string "wrenchlane" appears nowhere in the login DOM**.
+
+- **`auth` is compiled, never pulled from the control plane.** A remotely toggleable
+  sign-in flag could lock every user out of a tenant, and the value has to agree with a
+  Supabase dashboard setting the control plane cannot see.
+- **Email sign-in is admin-invited, never open.** `shouldCreateUser: false` on the client,
+  `disable_signup` on the project, and an unknown address gets the same neutral
+  confirmation as a known one so the page cannot be used to test whether an account exists.
+- **The type's doc comment carries the warning in full:** a `true` here for a provider the
+  tenant's Supabase project has not had enabled produces "provider is not enabled" after
+  the user has clicked, which is worse than no button.
+- `requireSuperAdmin` was **not** loosened. The console stays Google-only.
+- The `/auth/callback` onboarding was hardened for Entra identities, which can omit `email`
+  (when the account has no `mail` attribute) and send `name` where Google sends
+  `full_name`. Without the fallbacks such a user silently lands alone in a new "My
+  Workspace" instead of joining their colleagues. **Google always sends both, so every
+  fallback is dead code for Wrenchlane.**
+
+## URGENT, found while merging phase 08a: Animech's sign-up is open to the internet
+
+Phase 08a stood up `animech-crm.vercel.app` on Supabase project `hnriqsnenyzmlctkkdmi`
+while this branch was in flight. Its auth config, read from the Management API on
+2026-08-31 rather than assumed:
+
+```
+disable_signup:           false   <-- ANYONE CAN CREATE AN ACCOUNT
+external_email_enabled:   true
+external_google_enabled:  false
+external_azure_enabled:   false
+site_url:                 http://localhost:3000
+```
+
+This is exactly the failure section E predicts in writing: *"a tenant created with it left
+on default is open to the internet."* Email sign-up is on, sign-up is not disabled, and the
+deployment carries a real customer's name.
+
+**Two one-line fixes, both in the Supabase dashboard for that project, neither made here**
+(the change was blocked by the sandbox and is Jacob's to approve):
+
+1. Authentication -> Providers -> **turn `disable_signup` on**. Authorise people by creating
+   them through the admin API instead — `scripts/bootstrap-tenant.mjs --owner=` does it.
+2. Set **`site_url`** to `https://animech-crm.vercel.app` and add
+   `https://animech-crm.vercel.app/auth/callback` to the redirect allow-list. While it is
+   `http://localhost:3000`, a completed sign-in redirects the user to their own machine —
+   the same class of failure as the OAuth `redirectTo` trap in the ground rules.
+
+`animech.ts` records `auth: { google: false, microsoft: false, email: true }`, which is what
+that project actually has enabled today rather than what section E wants it to have. The two
+`false`s flip in the same change that enables the providers, not before.
+
+## Still not done after this phase
+
+- **The two Animech auth fixes above.** They are the highest-priority item in this document.
+- `scripts/bootstrap-tenant.mjs --apply` has never run against an empty database.
+- Neither new tenant has a config in `src/config/tenants/`. That is phase 08/09's job and
+  needs facts about the customers; the flags decided in D are waiting for them.
+- The residual "Jacob Qvisth" signature placeholders (see A).

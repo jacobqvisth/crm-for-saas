@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { Sparkles, RefreshCw, Save, ArrowLeft, Info } from "lucide-react";
+import { useTenantBrand } from "@/lib/hooks/use-tenant-brand";
 
 type LoadResponse = {
   content_md: string;
@@ -14,6 +15,7 @@ type LoadResponse = {
 };
 
 export function AiKnowledgeClient() {
+  const brand = useTenantBrand();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [content, setContent] = useState("");
@@ -100,7 +102,7 @@ export function AiKnowledgeClient() {
           <h1 className="text-2xl font-bold text-slate-900">AI Product Knowledge</h1>
         </div>
         <p className="text-sm text-slate-500">
-          What the AI is told about Wrenchlane when it drafts inbox replies and generates cold emails. Edit anything here and the next AI call will use the updated text — no deploy needed.
+          What the AI is told about {brand.displayName} when it drafts inbox replies and generates cold emails. Edit anything here and the next AI call will use the updated text — no deploy needed.
         </p>
       </div>
 

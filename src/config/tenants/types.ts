@@ -61,6 +61,34 @@ export interface TenantIntegrations {
   stripe: boolean;
 }
 
+/**
+ * The logos, alt text and browser title a customer sees.
+ *
+ * This block is REQUIRED rather than optional on purpose. Before phase 11 the
+ * sidebar hardcoded `/wrenchlane-mark.png`, so any second customer would have
+ * signed in and seen another company's logo above their own pipeline. An
+ * optional block would have preserved exactly that failure for whoever forgot
+ * to fill it in; a required one means `tsc` names them instead.
+ *
+ * The assets are plain files under `public/tenants/<slug>/`. There is no CDN
+ * and no upload flow, because a logo changes about once a year and a deploy is
+ * a perfectly good way to change one.
+ */
+export interface TenantBranding {
+  /** Square mark, shown when the sidebar is collapsed. Path under `public/`. */
+  markSrc: string;
+  /** Alt text for the mark. Usually just the company name. */
+  markAlt: string;
+  /** Full wordmark, shown when the sidebar is expanded. Path under `public/`. */
+  wordmarkSrc: string;
+  /** Alt text for the wordmark. Screen readers read this, so it is a phrase. */
+  wordmarkAlt: string;
+  /** `<title>` for the whole app. */
+  browserTitle: string;
+  /** `<meta name="description">` for the whole app. */
+  browserDescription: string;
+}
+
 /** Who the tenant is, in the words the product and its emails use. */
 export interface TenantIdentity {
   /** Stable machine identifier. Matches the filename and TENANT_SLUG. */
@@ -73,6 +101,8 @@ export interface TenantIdentity {
   productDescription: string;
   /** Where a recipient's reply-to-a-human should land. */
   supportEmail: string;
+  /** Logos, alt text and browser title. Required; see TenantBranding. */
+  branding: TenantBranding;
 }
 
 /** Every hostname the tenant owns or treats specially. */
@@ -147,9 +177,48 @@ export interface TenantAi {
   toneNotes: string;
 }
 
+/**
+ * Which sign-in buttons `/login` renders for this tenant.
+ *
+ * THIS MUST MATCH WHAT THE TENANT'S SUPABASE PROJECT HAS ENABLED.
+ * ---------------------------------------------------------------
+ * These booleans do not enable anything. They only decide which buttons are
+ * drawn. The provider itself is switched on in that tenant's Supabase project
+ * (Authentication -> Providers), which is a dashboard setting rather than code
+ * and therefore cannot be verified by the compiler.
+ *
+ * Setting one of these true for a provider Supabase has NOT had enabled
+ * produces a button that fails with "provider is not enabled" after the user
+ * has already committed to clicking it. That is strictly worse than no button:
+ * it looks like the product is broken rather than like the option does not
+ * exist. That exact error already cost a round trip on the control plane, so it
+ * is written down here rather than rediscovered.
+ *
+ * `email` means ADMIN-INVITED email, never open sign-up. The tenant's Supabase
+ * project must have `disable_signup` on, and a person is authorised by being
+ * created through the admin API with `email_confirm: true`. They then sign in
+ * with a magic link or a password. An open email button on a CRM is an
+ * invitation to the internet.
+ */
+export interface TenantAuth {
+  /** Google / Google Workspace. */
+  google: boolean;
+  /** Microsoft Entra ID, the Supabase `azure` provider. */
+  microsoft: boolean;
+  /** Admin-invited email (magic link or password). Never open sign-up. */
+  email: boolean;
+}
+
 /** One customer's complete configuration. */
 export interface TenantConfig {
   identity: TenantIdentity;
+  /**
+   * Sign-in options. Deliberately NOT pulled from the control plane: a flag
+   * that could be toggled remotely could lock every user out of a tenant, and
+   * the value has to agree with a Supabase dashboard setting that the control
+   * plane cannot see. Deploy-time truth belongs in a deploy-time file.
+   */
+  auth: TenantAuth;
   domains: TenantDomains;
   mail: TenantMail;
   locale: TenantLocale;

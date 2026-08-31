@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTenantBrand } from "@/lib/hooks/use-tenant-brand";
 import {
   AtSign,
   Building2,
@@ -590,6 +591,11 @@ const INTERNAL_SUB_TABS: { key: InternalKind; label: string }[] = [
 ];
 
 function InternalTestersTab() {
+  // The domain half of the tenant's support address, so the example pattern is
+  // one of THEIR addresses. Wrenchlane's supportEmail is support@wrenchlane.com,
+  // so this still reads "someone@wrenchlane.com" for the live business.
+  const brand = useTenantBrand();
+  const brandDomain = brand.supportEmail.split("@")[1] ?? "example.com";
   const [kind, setKind] = useState<InternalKind>("users");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -729,7 +735,9 @@ function InternalTestersTab() {
             type="text"
             value={patternValue}
             onChange={(e) => setPatternValue(e.target.value)}
-            placeholder={patternKind === "email" ? "someone@wrenchlane.com" : "test-account"}
+            placeholder={
+              patternKind === "email" ? `someone@${brandDomain}` : "test-account"
+            }
             className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <button

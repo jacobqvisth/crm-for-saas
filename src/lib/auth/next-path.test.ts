@@ -66,8 +66,12 @@ describe("post-login destination cookie", () => {
  * The destination must travel by cookie, never on `redirectTo`.
  */
 describe("login page OAuth redirectTo", () => {
+  // Phase 11 split /login into a server page (which decides WHICH providers a
+  // tenant gets) and this client form (which performs the sign-in). The trap
+  // this suite guards lives with the signInWithOAuth call, so it followed the
+  // logic into login-form.tsx.
   const source = readFileSync(
-    join(process.cwd(), "src/app/(auth)/login/page.tsx"),
+    join(process.cwd(), "src/app/(auth)/login/login-form.tsx"),
     "utf8",
   );
 

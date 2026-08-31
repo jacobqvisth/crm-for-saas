@@ -70,6 +70,19 @@ export interface FeatureDefinition {
    * phase 08 (R2). `false` here would mean Wrenchlane lost a feature.
    */
   enabledByDefault: boolean;
+  /**
+   * Who this feature is actually FOR, in one sentence.
+   *
+   * Required so that standing up a customer asks the question rather than
+   * letting them discover the answer. Nineteen of these default to on, and
+   * most of them assume the customer sells car diagnostics, so a 3D
+   * configurator company would otherwise inherit fault-code dashboards and
+   * Reddit car-forum answering.
+   *
+   * This is documentation, not a gate. Nothing reads it at runtime; it is read
+   * by whoever is deciding a new tenant's twenty flags.
+   */
+  appliesTo: string;
   /** Sidebar hrefs removed when the feature is off. */
   navHrefs: readonly string[];
   /**
@@ -94,6 +107,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "content",
     description: "Fault-code lookup and the diagnostic-code dashboards.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes the customer sells car diagnostics. Fault codes are " +
+      "meaningless to anyone else.",
     navHrefs: ["/dtc-lookup"],
     routePrefixes: [
       "/dtc-lookup",
@@ -109,6 +125,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "content",
     description: "The DTC-code YouTube gallery.",
     enabledByDefault: true,
+    appliesTo: "Assumes car diagnostics: the gallery is indexed by fault code.",
     navHrefs: ["/videos"],
     routePrefixes: ["/videos", "/api/videos"],
     cronPaths: [],
@@ -119,6 +136,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "content",
     description: "Reddit answering, mention tracking and the candidate queue.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes car diagnostics, and specifically that the customer's buyers " +
+      "ask questions in car forums.",
     navHrefs: ["/forums"],
     routePrefixes: ["/forums", "/api/forums"],
     cronPaths: ["/api/forums/mentions/scan", "/api/forums/candidates/scan"],
@@ -129,6 +149,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "content",
     description: "The content studio and Webflow publishing.",
     enabledByDefault: true,
+    appliesTo:
+      "General purpose. Any customer doing content marketing can use it; " +
+      "publishing needs Webflow credentials.",
     navHrefs: ["/articles"],
     routePrefixes: ["/articles", "/api/articles", "/api/landing-pages"],
     cronPaths: [],
@@ -139,6 +162,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "content",
     description: "App-store, Google and Trustpilot review collection.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes the customer has a consumer app or a public review profile " +
+      "to collect from.",
     navHrefs: ["/reviews"],
     routePrefixes: ["/reviews"],
     cronPaths: ["/api/cron/sync-reviews"],
@@ -149,6 +175,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "outbound",
     description: "Map-planned visit routes for reps in the field.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes a dense local territory of small sites worth driving " +
+      "between. Wrong for enterprise accounts and for a reseller network.",
     navHrefs: ["/routes"],
     routePrefixes: ["/routes", "/api/routes", "/settings/field-visits"],
     cronPaths: [],
@@ -159,6 +188,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "outbound",
     description: "Scraped-prospect staging, promotion and contact enrichment.",
     enabledByDefault: true,
+    appliesTo:
+      "General purpose, but only where the customer's buyers appear in " +
+      "Google Maps. Confirm that per customer before switching it on.",
     navHrefs: ["/discovery"],
     routePrefixes: ["/discovery", "/api/discovery", "/api/enrich"],
     cronPaths: ["/api/cron/phone-enrichment"],
@@ -169,6 +201,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "telephony",
     description: "Click-to-call, the call worklist, transcription and logging.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes the customer has bought 46elks telephony. Needs " +
+      "integrations.elks.",
     navHrefs: ["/calls"],
     routePrefixes: ["/calls", "/api/calls", "/settings/calls", "/settings/phone-system"],
     cronPaths: ["/api/cron/sweep-stuck-calls"],
@@ -179,6 +214,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "telephony",
     description: "The autonomous voice agent and the inbound receptionist.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes a high-volume, low-value calling motion. Wrong for " +
+      "consultative enterprise sales.",
     navHrefs: ["/call-agent", "/receptionist"],
     routePrefixes: [
       "/call-agent",
@@ -195,6 +233,10 @@ export const FEATURES: readonly FeatureDefinition[] = [
     description:
       "The whole /dashboard suite and the hourly syncs that feed it (Stripe, GA4, PostHog, Search Console, App Store, core app).",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes the customer sells a self-serve product with its own signup " +
+      "funnel, and that we have its Stripe, GA4 and PostHog. Wrong for a " +
+      "consultancy or a physical-product business.",
     navHrefs: ["/dashboard"],
     routePrefixes: ["/dashboard", "/api/dashboard", "/api/ceo-sync"],
     cronPaths: [
@@ -213,6 +255,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "analytics",
     description: "The Miro-style journey canvas.",
     enabledByDefault: true,
+    appliesTo: "Part of the product-analytics suite. Same assumption.",
     navHrefs: ["/journey"],
     routePrefixes: ["/journey", "/api/journey"],
     cronPaths: [],
@@ -223,6 +266,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "analytics",
     description: "The full-funnel analysis page.",
     enabledByDefault: true,
+    appliesTo: "Part of the product-analytics suite. Same assumption.",
     navHrefs: ["/funnel"],
     routePrefixes: ["/funnel"],
     cronPaths: [],
@@ -233,6 +277,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "analytics",
     description: "Activation scenarios and the Customer.io campaign plan.",
     enabledByDefault: true,
+    appliesTo:
+      "Part of the product-analytics suite. Assumes an app with an " +
+      "activation moment.",
     navHrefs: ["/activation"],
     routePrefixes: ["/activation", "/api/activation"],
     cronPaths: [],
@@ -243,6 +290,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "analytics",
     description: "Pricing-model drafts and their supporting evidence.",
     enabledByDefault: true,
+    appliesTo: "Part of the product-analytics suite. Assumes self-serve pricing.",
     navHrefs: ["/pricing-options"],
     routePrefixes: ["/pricing-options"],
     cronPaths: [],
@@ -253,6 +301,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "outbound",
     description: "Sending-domain inventory and the daily deliverability checks.",
     enabledByDefault: true,
+    appliesTo:
+      "General purpose. Any customer sending outbound wants its sending " +
+      "domains watched.",
     navHrefs: ["/domain-portfolio"],
     routePrefixes: ["/domain-portfolio"],
     cronPaths: ["/api/cron/domain-health"],
@@ -263,6 +314,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "internal",
     description: "The Gantt-style product roadmap.",
     enabledByDefault: true,
+    appliesTo: "Internal to Jacob's own planning. Not a customer-facing feature.",
     navHrefs: ["/roadmap"],
     routePrefixes: ["/roadmap", "/api/roadmap"],
     cronPaths: [],
@@ -273,6 +325,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "internal",
     description: "Internal home for design drafts awaiting review.",
     enabledByDefault: true,
+    appliesTo: "Internal. Embeds one specific Wrenchlane prototype.",
     navHrefs: ["/mockup"],
     routePrefixes: ["/mockup"],
     cronPaths: [],
@@ -288,6 +341,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "planned",
     description: "Opportunity pipeline and stages. Built in phase 10.",
     enabledByDefault: true,
+    appliesTo:
+      "General purpose once built (phase 10A). Do not switch on before " +
+      "then: the routes do not exist and the nav item would lead nowhere.",
     navHrefs: [],
     routePrefixes: [],
     cronPaths: [],
@@ -298,6 +354,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: "planned",
     description: "Reseller and dealer hierarchy. Built in phase 10.",
     enabledByDefault: true,
+    appliesTo:
+      "Assumes the customer sells through a reseller or dealer network. " +
+      "Built for Spennare (phase 10C) and not yet shipped.",
     navHrefs: [],
     routePrefixes: [],
     cronPaths: [],
@@ -321,6 +380,9 @@ export const FEATURES: readonly FeatureDefinition[] = [
     description:
       "Connection-request and message steps inside sequences. Creates a task for a rep; nothing is sent automatically.",
     enabledByDefault: false,
+    appliesTo:
+      "General purpose, but useless until contacts actually have " +
+      "linkedin_url populated.",
     navHrefs: [],
     routePrefixes: [],
     cronPaths: [],

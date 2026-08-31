@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 import { RichEmailEditor } from "@/components/sequences/rich-email-editor";
 import { EmailPreviewFrame, previewInterpolate } from "@/components/sequences/email-preview-frame";
+import { useTenantBrand } from "@/lib/hooks/use-tenant-brand";
 
 type Template = Tables<"email_templates">;
 
@@ -40,6 +41,7 @@ const TEMPLATE_VARIABLES = [
 ];
 
 export function TemplateEditor({ template, onSave, onCancel, onDelete }: TemplateEditorProps) {
+  const brand = useTenantBrand();
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
 
@@ -238,7 +240,7 @@ export function TemplateEditor({ template, onSave, onCancel, onDelete }: Templat
               <Eye className="w-3 h-3" />
               Gmail preview — sample values shown
             </div>
-            <EmailPreviewFrame html={previewInterpolate(bodyHtml)} minHeight={240} />
+            <EmailPreviewFrame html={previewInterpolate(bodyHtml, brand.displayName)} minHeight={240} />
           </div>
         ) : (
           <RichEmailEditor

@@ -61,6 +61,49 @@ export const animech: TenantConfig = {
     // TODO(animech): replace with a real support mailbox before 08b turns mail
     // on, because this is where a recipient's reply to a human would land.
     supportEmail: "it@animech.com",
+
+    // Added by phase 11, which made this block required precisely so a new
+    // tenant cannot quietly inherit Wrenchlane's logo. `tsc` failed on this
+    // file the moment the two branches met, which is the mechanism working.
+    //
+    // TODO(animech): BOTH IMAGES ARE BLANK PLACEHOLDERS, not a design. They are
+    // flat grey rectangles generated to keep the sidebar from rendering a
+    // broken image, and inventing a visual identity for a real company would be
+    // worse than an obvious gap — someone would see it and assume it had been
+    // approved. Replace both files with Animech's own assets before anybody
+    // from Animech signs in.
+    branding: {
+      markSrc: "/tenants/animech/mark.png",
+      markAlt: "Animech",
+      wordmarkSrc: "/tenants/animech/wordmark.png",
+      wordmarkAlt: "Animech",
+      browserTitle: "Animech CRM",
+      browserDescription: "Animech's sales CRM.",
+    },
+  },
+
+  // WHAT ANIMECH'S SUPABASE PROJECT ACTUALLY HAS ENABLED, read from the
+  // Management API on 2026-08-31 rather than assumed:
+  //
+  //   external_google_enabled  false
+  //   external_azure_enabled   false
+  //   external_email_enabled   TRUE
+  //
+  // So email is the only honest value here today. Section E of the phase 11
+  // brief requires every non-Wrenchlane tenant to offer Google, Microsoft and
+  // email, and Animech is on Microsoft 365 — but a button for a provider the
+  // project has not had enabled fails with "provider is not enabled" AFTER the
+  // user has clicked it, which is worse than no button. So these two stay false
+  // until the providers are actually switched on, and then they flip in the
+  // same change.
+  //
+  // TODO(animech): enable the `azure` provider (delegated sign-in: openid,
+  // profile, email — NOT the app-only mail registration from
+  // ENTRA-APP-SETUP.md, which is a different app), then set microsoft: true.
+  auth: {
+    google: false,
+    microsoft: false,
+    email: true,
   },
 
   domains: {

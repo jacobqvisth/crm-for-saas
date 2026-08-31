@@ -103,15 +103,18 @@ const PREVIEW_VALUES: Record<string, string> = {
  * Interpolates {{variable}} and <span data-variable="...">...</span> patterns
  * with sample preview values for the in-editor preview pane.
  */
-export function previewInterpolate(html: string): string {
+export function previewInterpolate(html: string, senderCompany?: string): string {
+  const values = senderCompany
+    ? { ...PREVIEW_VALUES, sender_company: senderCompany }
+    : PREVIEW_VALUES;
   // Replace span-wrapped variables: <span data-variable="x">{{x}}</span>
   let result = html.replace(
     /<span[^>]+data-variable="([a-z_]+)"[^>]*>(?:[^<]*)<\/span>/g,
-    (_, key) => PREVIEW_VALUES[key] ?? `[${key}]`
+    (_, key) => values[key] ?? `[${key}]`
   );
   // Replace bare {{variable}} patterns
   result = result.replace(/\{\{([a-z_]+(?:\.[a-z_]+)?)\}\}/g, (_, key) => {
-    return PREVIEW_VALUES[key] ?? `[${key}]`;
+    return values[key] ?? `[${key}]`;
   });
   return result;
 }

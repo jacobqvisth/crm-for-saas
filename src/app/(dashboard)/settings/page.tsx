@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Mail, MapPin, Phone, PhoneCall, ShieldAlert, ShieldCheck, ShieldOff, Sparkles, Users, User as UserIcon } from 'lucide-react';
 import { TeamSettings } from '@/components/settings/team-settings';
 import { SenderAccountsSummary } from '@/components/settings/sender-accounts-summary';
+import { useTenantBrand } from '@/lib/hooks/use-tenant-brand';
 
 const settingsItems = [
   {
@@ -50,7 +51,10 @@ const settingsItems = [
   },
   {
     title: 'AI Product Knowledge',
-    description: 'What the AI knows about Wrenchlane when drafting inbox replies and cold emails',
+    // `{brand}` is substituted at render with the tenant's display name. For
+    // Wrenchlane that is the literal "Wrenchlane", so this line is unchanged
+    // for the live business.
+    description: 'What the AI knows about {brand} when drafting inbox replies and cold emails',
     href: '/settings/ai-knowledge',
     icon: Sparkles,
   },
@@ -63,6 +67,7 @@ const settingsItems = [
 ];
 
 export default function SettingsPage() {
+  const brand = useTenantBrand();
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-10">
       <div>
@@ -114,7 +119,9 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600">{item.title}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {item.description.replace("{brand}", brand.displayName)}
+                    </p>
                   </div>
                 </div>
               </Link>

@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import type { Tables } from "@/lib/database.types";
 import { RichEmailEditor } from "./rich-email-editor";
 import { EmailPreviewFrame, previewInterpolate } from "./email-preview-frame";
+import { useTenantBrand } from "@/lib/hooks/use-tenant-brand";
 import { GenerateVariantsModal } from "./generate-variants-modal";
 
 type Step = Tables<"sequence_steps">;
@@ -299,6 +300,7 @@ export function EmailStepEditor({
 }: EmailStepEditorProps) {
   const { workspaceId } = useWorkspace();
   const supabase = createClient();
+  const brand = useTenantBrand();
 
   const [subject, setSubject] = useState(step.subject_override || "");
   const [bodyHtml, setBodyHtml] = useState(step.body_override || "");
@@ -878,8 +880,8 @@ export function EmailStepEditor({
             <EmailPreviewFrame
               html={
                 includeSignature && signatureHtml?.trim()
-                  ? `${previewInterpolate(bodyHtml)}${signatureHtml}`
-                  : previewInterpolate(bodyHtml)
+                  ? `${previewInterpolate(bodyHtml, brand.displayName)}${signatureHtml}`
+                  : previewInterpolate(bodyHtml, brand.displayName)
               }
             />
           </div>
