@@ -3,6 +3,39 @@
 **Depends on:** 08.
 **Visible change for Wrenchlane:** none.
 
+## 09a is DONE (2026-08-31)
+
+**https://spennare-crm.vercel.app** · Supabase `cuzbkkmqyyvjcuoofzvm` · Vercel `spennare-crm`,
+not git-connected, deploy with `-A vercel.spennare.json`.
+
+What exists: its own database (121 public tables, 108 with RLS, 8 migrations, identical to the
+other two, zero rows), its own tenant config, its own branding, a workspace "K G Spennare AB"
+on domain `spennare.com`, generic starter templates and a DRAFT sequence, and its own twenty
+flags already decided in the control plane.
+
+What does not: **no user can sign in yet**, exactly as on Animech, and for the same reason —
+no provider is enabled, and `email: true` is not a sign-in path without custom SMTP.
+
+**Sign-up was closed BEFORE the deploy** and proved with `422 signup_disabled`, with zero
+users created in the window. Two notes for the next tenant, both learned here rather than
+from the phase 08 write-up:
+
+- The create-project call died with `ECONNRESET` **after the project had been created**. The
+  response was lost and the generated database password with it. Write the intended password
+  to disk BEFORE issuing the create call, and treat a dropped connection as "unknown" rather
+  than "failed" — check whether the project exists before retrying, or you will make two.
+- There **is** an endpoint to set the database password:
+  `PATCH /v1/projects/{ref}/database/password`. `PUT` and `POST` on the same path both 404,
+  which is what makes it look absent. Knowing it avoided deleting and recreating the project.
+
+The acceptance-test verdict, and the list of five things that needed code rather than config,
+is in `README.md` under "Acceptance test for the whole programme".
+
+**09b**, like 08b, is the mail half: a sending domain and Entra consent. Blocked on the same
+external step, plus one extra of Spennare's own — `spennare.com` publishes **two conflicting
+`v=spf1` records**, which is invalid and can make receivers return permerror. Fixing that is
+a free opening gift and should happen before any volume is added.
+
 ## This phase is the acceptance test for the whole programme
 
 **It should take about one day.** Follow the same six steps as phase 08 with a different

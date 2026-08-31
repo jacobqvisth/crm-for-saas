@@ -16,6 +16,7 @@
 
 import type { TenantConfig } from "./types";
 import { animech } from "./animech";
+import { spennare } from "./spennare";
 import { wrenchlane } from "./wrenchlane";
 
 export type { TenantConfig } from "./types";
@@ -33,18 +34,22 @@ export type {
 /**
  * Every tenant this codebase knows how to be.
  *
- * Spennare (phase 09) is deliberately absent. Adding a tenant before its values
- * have been gathered would mean committing guesses, and a wrong committed guess
- * is worse than an obvious gap: it gets read once, believed, and never
- * questioned again.
+ * Animech was added in phase 08a and Spennare in phase 09. Both configs are
+ * real but incomplete BY DESIGN: neither can send mail, because neither has a
+ * sending domain or Entra consent. The gaps are marked TODO(animech) and
+ * TODO(spennare) in those files rather than filled in, because a wrong
+ * committed guess is worse than an obvious gap — it gets read once, believed,
+ * and never questioned again.
  *
- * Animech was added in phase 08a. Its config is real but incomplete by design —
- * it cannot send mail, because it has no sending domain and no Entra consent.
- * The gaps are marked TODO(animech) in that file rather than filled in.
+ * Spennare's values come from a research pass held outside this repository, at
+ * `~/Documents/Spennare/research/`. Its feature flags deliberately match the
+ * live control plane rather than that research draft; the reasoning is in
+ * spennare.ts and it is mechanical, not a matter of taste.
  */
 const TENANTS: Record<string, TenantConfig> = {
   wrenchlane,
   animech,
+  spennare,
 };
 
 export const DEFAULT_TENANT_SLUG = "wrenchlane";
