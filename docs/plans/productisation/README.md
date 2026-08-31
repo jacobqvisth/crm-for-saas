@@ -14,7 +14,7 @@ One phase per Claude Code session, one branch, one PR.
 |---|---|---|---|
 | **Wrenchlane** | Self-serve diagnostics for car workshops | High-volume outbound + PLG | Google Workspace |
 | **Animech** | 3D configurators + CPQ (Volkswagen, SKF, Cytiva, Fjällräven), ~40 people, Uppsala | Enterprise consultative, buying committee | Microsoft 365 |
-| **Spennare** | Portable exhibition systems, sold via resellers in 50+ countries | Reseller / dealer network, international | Microsoft (confirm) |
+| **Spennare** | Portable exhibition systems, sold via resellers in 30+ countries | Reseller / dealer network, international | Microsoft 365 (confirmed by MX) |
 
 Three motions that overlap in the middle and diverge at the edges. That is what a
 configurable product handles well and a fork handles badly.
@@ -105,7 +105,7 @@ Run in order. Do not start a phase before the previous one is merged.
 | [06](06-mail-provider-interface.md) | Move Gmail behind a `MailProvider` interface | **Partial** 2026-08-30 | None |
 | [07](07-microsoft-graph.md) | Add the Microsoft Graph provider | Not started | None |
 | [08](08-tenant-animech.md) | Stand up Animech as tenant two | **08a DONE** 2026-08-31 (#775) · 08b blocked | None |
-| [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | Not started | None |
+| [09](09-tenant-spennare.md) | Stand up Spennare as tenant three | **09a DONE** 2026-08-31 · 09b blocked | None |
 | [10](10-per-tenant-features.md) | Deal pipeline, discovery sources, dealer hierarchy | **D+E partial** 2026-08-30 | Additive |
 | [11](11-tenant-bring-up.md) | Branding, env manifest, tenant bootstrap, per-tenant defaults | **A-E done** 2026-08-31 | None (proved by diff) |
 
@@ -183,9 +183,27 @@ that was wrong by 83 tables.
 
 ## Where it actually stands, 2026-08-31
 
-**Animech is live at https://animech-crm.vercel.app**, on its own Supabase project
-(`hnriqsnenyzmlctkkdmi`), with its own schema, branding and feature set. The same commit
-serves Wrenchlane, and `/dtc-lookup` is 404 on one and 307 on the other.
+**There are three live tenants on one commit.**
+
+| Tenant | URL | Supabase | Vercel |
+|---|---|---|---|
+| Wrenchlane | https://crm-for-saas.vercel.app | `wdgiwuhehqpkhpvdzzzl` | `crm-for-saas` |
+| Animech | https://animech-crm.vercel.app | `hnriqsnenyzmlctkkdmi` | `animech-crm` |
+| Spennare | https://spennare-crm.vercel.app | `cuzbkkmqyyvjcuoofzvm` | `spennare-crm` |
+
+All three databases are identical where they should be — **121 public tables, 108 with RLS,
+0 without, 8 migrations** — and genuinely different where they should be. From the same
+commit, `/login` renders "CRM for SaaS", "Animech CRM" and "Spennare CRM"; `/dtc-lookup` is
+307 on Wrenchlane and 404 on the other two; and `/articles` and `/discovery` are **307 on
+Spennare but 404 on Animech**, which is what makes Spennare a third tenant rather than a copy
+of the second.
+
+Neither new tenant can be signed into yet. Both have `auth` = `{ google: false,
+microsoft: false, email: true }`, which is what their Supabase projects actually have
+enabled rather than what phase 11 section E wants. **`email: true` alone is not a sign-in
+path**: neither project has custom SMTP, and Supabase's shared sender only delivers to
+members of the Supabase organisation, at two messages an hour. Jacob is supplying Microsoft
+details, and the two flags flip in the same change that enables the provider.
 
 08a and phase 11 landed within an hour of each other, from two sessions, and each caught
 something in the other's work. 11 made branding a required field, which broke 08a's
@@ -213,13 +231,21 @@ on a customer.
    also corrects two of the measurements above: the code reads **100** environment
    variables, not 67, and the nine "documented but never read" entries **are** read, through
    `getEnv()`.
-2. **Close [issue #747](https://github.com/jacobqvisth/crm-for-saas/issues/747)** —
-   `discovered_shops` has RLS disabled and holds ~42k scraped contacts. Five discovery routes
-   use the user-session client, so a policy has to be written and verified against a real
-   login rather than switched on blind. **The brief said close it before a second tenant
-   exists, and a second tenant now exists**, so this is overdue rather than upcoming. The
-   exposure is Wrenchlane's own database, not Animech's — Animech holds no rows — but that is
-   luck rather than design.
+2. ~~**Close [issue #747](https://github.com/jacobqvisth/crm-for-saas/issues/747)**~~
+   **Done 2026-08-31 (PR #782), and the issue was wrong about why.** It describes a
+   cross-workspace leak scoped by `workspace_id`; `discovered_shops` has 52 columns and none
+   of them is `workspace_id`, so that policy could not be written as described.
+
+   The real exposure was larger. With RLS off, GRANTs govern, and Supabase grants `anon`
+   SELECT — and `anon` is the publishable key that ships in the browser bundle. With that key
+   and **no session at all**, production returned **HTTP 200 and 43,272 rows** of real names,
+   emails and phone numbers. `contacts` and `companies` returned `[]` to the same probe,
+   which is how we know RLS genuinely works elsewhere.
+
+   Closed on all three tenants and verified against a real login rather than switched on
+   blind: every user-session read path returns its original count, the update path still
+   returns 200, and `anon` now reads 0. Supabase's advisor reports zero
+   `rls_disabled_in_public` findings.
 3. **Phase 06 part 2** — the seven live Gmail call sites. Not blocked on a customer, blocked
    on supervision: it changes live outbound and inbox-sync, and its "done when" requires
    watching a real send and reply in production.
@@ -241,3 +267,28 @@ phase 11 brief). Nothing in this repository is in the way any more.
 **Standing up Spennare (phase 09) should take about one day.** If it takes a week, the
 generalisation in phases 02 to 05 was not finished, and the fix is to go back rather than
 to push through.
+
+### It passed, 2026-08-31
+
+**09a took one session, not a week.** Nothing in phases 02 to 05 had to be redesigned, and
+the mail layer needed no work at all because Spennare is Microsoft 365 — confirmed by MX
+rather than assumed, so the brief's "if they are on something else, that is a third provider"
+did not fire.
+
+The brief asks for every moment code had to change rather than config, "honestly, including
+the small ones". Five, and only the first one matters:
+
+1. **`scripts/migrate-tenants.mjs`.** The tenant list is a hardcoded constant, so adding a
+   tenant means editing code and hardcoding a project ref, a pooler host and a shard. Phase
+   04 was supposed to move this list to the control plane and it did not happen. **This is
+   the thing to fix before tenant four**, because it is the only step in the whole recipe
+   that cannot be done by someone who is not editing the repository.
+2. `src/config/tenants/index.ts` — an import and a map entry. Arguably by design: the config
+   is typed and exhaustive, which is what makes a new feature a compile error.
+3. `src/config/tenants/index.test.ts` — two tests asserted Spennare's absence. One had
+   quietly become a test that a real tenant does not exist.
+4. `vercel.spennare.json` — byte-identical to `vercel.animech.json`. Three copies of four
+   lines; could be one shared file plus a slug.
+5. `public/tenants/spennare/*.png` — branding assets generated by hand.
+
+Everything else was config, which is the result this phase existed to measure.

@@ -99,8 +99,34 @@ const TENANTS = [
       passwordEnv: "ANIMECH_SUPABASE_DB_PASSWORD",
     },
   },
-  // Phase 09 adds spennare. Each gets its OWN connection string in its own
-  // environment: no shared credentials, ever.
+  {
+    slug: "spennare",
+    label: "Spennare",
+    urlEnv: "SPENNARE_SUPABASE_DB_URL",
+    fallback: {
+      // Same shard as Animech (aws-0) rather than Wrenchlane's (aws-1), read
+      // from GET /v1/projects/<ref>/config/database/pooler rather than assumed.
+      // Guessing the shard from another tenant produces a connection that times
+      // out instead of one that says anything useful.
+      //
+      // Port 5432 is the SESSION pooler. The API advertises 6543 for this
+      // project, which is transaction mode: fine for the app, wrong for
+      // migrations.
+      host: "aws-0-eu-north-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.cuzbkkmqyyvjcuoofzvm",
+      database: "postgres",
+      passwordEnv: "SPENNARE_SUPABASE_DB_PASSWORD",
+    },
+  },
+  // Each tenant gets its OWN connection string in its own environment: no
+  // shared credentials, ever (R5).
+  //
+  // NOTE FOR THE GENERALISATION BACKLOG: adding a tenant here is a CODE change,
+  // not a config one. Phase 04 was supposed to move this list to the control
+  // plane, fetched over HTTP with a token scoped to the caller, and it has not
+  // happened. Standing up Spennare needed exactly this edit, which is the kind
+  // of thing phase 09 exists to surface.
 ];
 
 // --- arguments -------------------------------------------------------------
