@@ -7918,3 +7918,98 @@ repo's builds fail at prerender when Supabase vars are absent.
   it has.
 - **The seven Gmail call sites** still call Gmail directly (phase 06 entry).
 - **A custom domain** for the console; it is on a `.vercel.app` hostname.
+
+## 2026-08-31 — Best Performing Ads: asset-level Google Ads ranking — PR #759 — `best-performing-ads`
+
+Jacob asked for a top list of the best-performing creative in Google Ads — text,
+images, video — so more of what works can be written. New page at
+`/dashboard/best-ads`, plus the data path to feed it.
+
+### Why this could not come from the existing campaigns page
+
+`/dashboard/campaigns` reads GA4's linked-Ads dimensions, and GA4 has no concept
+of an asset. It stops at the campaign. The Google Ads API's
+`ad_group_ad_asset_view` is the only source that knows a headline exists, and
+the developer token that reaches it has been in Vercel prod since PR #736.
+
+### Three things that had to be right
+
+**Asset metrics are not additive.** Google credits every asset that served in an
+impression with that impression and its click, so three headlines in one
+responsive search ad each book the same click. On `us-codes+make` that is 51,411
+asset-clicks against 13,505 real ones. Only rates are used anywhere on the page;
+nothing is summed across assets and shown as traffic or spend. This is written
+into the migration comment, because it is the first thing a future reader will
+get wrong.
+
+**Small samples had to stop winning.** An asset with 8 impressions and 1 click
+scores a 12.5% CTR and tops any naive sort. Rates are shrunk toward the baseline
+for their own field type — 800 pseudo-impressions, 40 pseudo-clicks — so a
+no-evidence asset scores exactly average and long-running ones barely move.
+
+**Clicks are not the goal.** Measured over the account's history, the angles
+that pull clicks hardest convert worst:
+
+| Angle | Assets | CTR vs avg | Signups vs avg |
+|---|---|---|---|
+| Free or trial offer | 14 | 1.36x | 2.04x |
+| Money and margin | 9 | 1.61x | 1.22x |
+| Second person (you/your) | 12 | 0.74x | 1.72x |
+| Names the reader (mechanic/workshop) | 29 | 0.67x | 1.48x |
+| OEM data and depth | 24 | 0.54x | 1.67x |
+| AI framing | 25 | 1.21x | 0.53x |
+| Speed and immediacy | 24 | 1.28x | 0.50x |
+| Right first time | 20 | 1.40x | 0.45x |
+| Against the old way (forums) | 4 | 1.46x | 0.25x |
+
+A CTR-only ranking would have recommended writing more of the bottom four.
+Click lift and signup lift are scored separately; the default rank is their
+product.
+
+### Shape
+
+- Migration `20260831140000`: `dashboard_ad_assets`, `dashboard_ad_asset_metrics`
+  (daily grain, ~13k rows), `dashboard_ad_asset_placements`, and
+  `dashboard_ad_asset_rollup(date, date)`. Aggregation is in SQL because
+  PostgREST truncates any response at 1000 rows, RPCs included, with no error —
+  19k daily rows would have arrived as an arbitrary 5%. The rollup returns 239.
+- `/api/cron/sync-google-ads-assets`, daily 05:20 UTC, registered under
+  `product_analytics` so it switches with the `/dashboard` suite it feeds.
+  Exports GET, because Vercel cron only issues GET.
+- `src/lib/ceo/best-ads/` — ranking, themes, sync, types. Ranking and themes are
+  pure and unit tested.
+- Page has five tabs and four date windows, with image and YouTube thumbnails
+  rendered inline from the Google CDN URLs the API returns.
+
+### Two leakage bugs, both found by checking against live data
+
+Neither would have failed a test written from the code alone.
+
+- **The PMax campaign logo led the image gallery** at 89,804 impressions and 11%
+  CTR. A logo attached to a *campaign* rather than an ad is reported with the
+  whole campaign's numbers — the campaign's result wearing an image's name. The
+  image grid is now `ad_group_ad` only.
+- **Sitelink text was inflating the copy playbook.** A sitelink is text, so
+  "Demo" was contributing 58,712 campaign-level impressions at 10.96% CTR to
+  whichever angles its four characters matched. Themes and their baseline now
+  share one filter. Fixed in the second commit.
+
+### What the page deliberately cannot answer
+
+- **Performance Max asset performance.** API v25 exposes no metrics and no
+  performance label on `asset_group_asset` — verified against the live account.
+  Those creatives are listed as inventory with an honest "no data" rather than
+  omitted, since PMax carries most of the spend. The Google Ads UI does show
+  Best / Good / Low for them.
+- **Google's own performance labels.** Present on the API, but every asset in
+  this account reads `NOT_APPLICABLE` or `PENDING`.
+- **Which landing page converted.** Still no landing-page or gclid column
+  anywhere in the schema, so an asset's signups are Google's conversion count,
+  not one traced to a payer. Same gap the campaigns briefing has flagged twice.
+
+### Checks
+
+tsc clean · lint clean · **1158 tests across 88 files, 0 failing** (26 new) ·
+`npm run build` green · first sync loaded 288 assets, 12,932 metric rows, 185
+placements with no warnings · prod deploy `25cb0a4` READY, both new routes in
+the deployed route manifest.
