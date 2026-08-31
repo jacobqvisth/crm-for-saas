@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { FEATURES, type FeatureKey } from "@/config/features";
+import { isStale, sinceText } from "./stats";
 
 // The control-plane database client, and the queries the console runs.
 //
@@ -30,6 +31,8 @@ export interface TenantRow {
   app_url: string | null;
   notes: string | null;
   created_at: string;
+  /** Last heartbeat. Null means it has never reported, normal while provisioning. */
+  last_seen_at: string | null;
 }
 
 export interface OverrideRow {
@@ -104,6 +107,61 @@ export async function listTenants(db: SupabaseClient): Promise<TenantRow[]> {
   const { data, error } = await db.from("tenants").select("*").order("created_at");
   if (error) throw new Error(`control plane: listing tenants failed: ${error.message}`);
   return (data ?? []) as TenantRow[];
+}
+
+export interface StatsRow {
+  tenant_id: string;
+  day: string;
+  reported_at: string;
+  metrics: Record<string, number>;
+}
+
+/**
+ * The most recent report from each tenant.
+ *
+ * Deliberately tolerant: a control plane whose console 500s because the stats
+ * table is missing or empty is worse than one that shows no numbers. This
+ * returns an empty map on any failure, and every caller must render without it.
+ */
+export async function latestStats(db: SupabaseClient): Promise<Map<string, StatsRow>> {
+  const { data, error } = await db
+    .from("tenant_stats")
+    .select("tenant_id, day, reported_at, metrics")
+    .order("day", { ascending: false });
+  if (error || !data) return new Map();
+
+  const out = new Map<string, StatsRow>();
+  for (const row of data as StatsRow[]) {
+    // Ordered newest first, so the first row seen for a tenant is its latest.
+    if (!out.has(row.tenant_id)) out.set(row.tenant_id, row);
+  }
+  return out;
+}
+
+export interface TenantOverview {
+  tenant: TenantRow;
+  stats: StatsRow | null;
+  seenText: string | null;
+  stale: boolean;
+}
+
+/**
+ * Tenants with their latest report, ready to render.
+ *
+ * The clock is read HERE, once for the whole page, rather than in the console.
+ * `Date.now()` during render is impure — React's purity rule rejects it, and a
+ * relative time computed on the server and again on the client is a hydration
+ * mismatch. This is a data-layer function, so it is the right place for it.
+ */
+export async function tenantOverview(db: SupabaseClient): Promise<TenantOverview[]> {
+  const [tenants, stats] = await Promise.all([listTenants(db), latestStats(db)]);
+  const now = Date.now();
+  return tenants.map((t) => ({
+    tenant: t,
+    stats: stats.get(t.id) ?? null,
+    seenText: sinceText(t.last_seen_at, now),
+    stale: isStale(t.last_seen_at, now),
+  }));
 }
 
 export async function listOverrides(db: SupabaseClient): Promise<OverrideRow[]> {

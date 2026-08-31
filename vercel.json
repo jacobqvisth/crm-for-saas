@@ -73,6 +73,10 @@
       "schedule": "45 5 * * *"
     },
     {
+      "path": "/api/cron/report-to-control-plane",
+      "schedule": "20 6 * * *"
+    },
+    {
       "path": "/api/cron/sync-google-ads-assets",
       "schedule": "20 5 * * *"
     }

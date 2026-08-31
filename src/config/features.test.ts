@@ -157,6 +157,10 @@ describe("crons", () => {
       "/api/cron/reset-daily-sends",
       "/api/cron/auto-enroll",
       "/api/cron/security-scan",
+      // Reports aggregate counts to the control plane. Core rather than gated:
+      // it belongs to no feature, and a tenant that has gone quiet is exactly
+      // what you want to still hear about when features are switched off.
+      "/api/cron/report-to-control-plane",
     ]);
 
     const registered = new Set(FEATURES.flatMap((f) => f.cronPaths));

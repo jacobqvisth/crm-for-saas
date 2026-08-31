@@ -1,8 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { FEATURES } from "@/config/features";
 import { isControlPlane } from "@/lib/control-plane/auth";
 import { controlPlaneClient } from "@/lib/control-plane/db";
+import { authenticateTenant, bearerToken, touchToken } from "@/lib/control-plane/token-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,18 +23,9 @@ export const dynamic = "force-dynamic";
 // It is deliberately boring. The interesting failure modes live on the calling
 // side, where a tenant must survive this endpoint being slow, wrong or gone.
 
-/** Hash comparison that does not leak the answer through timing. */
-function hashMatches(presented: string, storedHex: string): boolean {
-  const a = createHash("sha256").update(presented).digest();
-  let b: Buffer;
-  try {
-    b = Buffer.from(storedHex, "hex");
-  } catch {
-    return false;
-  }
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
+// The token lookup lives in lib/control-plane/token-auth.ts, shared with
+// /api/heartbeat. Two hand-rolled copies of "hash the bearer token and look it
+// up" is how one of them ends up subtly weaker than the other.
 
 function unauthorized() {
   // Deliberately identical for "no token", "unknown token" and "revoked
@@ -50,8 +41,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 
-  const header = request.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const token = bearerToken(request.headers.get("authorization"));
   if (!token) return unauthorized();
 
   const db = controlPlaneClient();
@@ -59,29 +49,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Control plane not configured" }, { status: 500 });
   }
 
-  // Look the token up by its hash. Only live tokens (never revoked) count.
-  const presentedHash = createHash("sha256").update(token).digest("hex");
-  const { data: row, error } = await db
-    .from("tenant_tokens")
-    .select("id, tenant_id, token_hash, revoked_at")
-    .eq("token_hash", presentedHash)
-    .is("revoked_at", null)
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
-  }
-  // The equality above is already an exact index match; the constant-time
-  // compare is belt and braces for the day this becomes a scan.
-  if (!row || !hashMatches(token, row.token_hash)) {
+  const auth = await authenticateTenant(db, token);
+  if (!auth) {
     console.warn("[control-plane/config] rejected token", {
-      prefix: presentedHash.slice(0, 8),
       ip: request.headers.get("x-forwarded-for") ?? "unknown",
     });
     return unauthorized();
   }
 
-  const tenantId: string = row.tenant_id;
+  const tenantId: string = auth.tenantId;
 
   const [{ data: tenant }, { data: overrides }, { data: settings }] = await Promise.all([
     db.from("tenants").select("slug, status, release_channel").eq("id", tenantId).maybeSingle(),
@@ -99,11 +75,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Best effort: a failed last_used_at write must not fail the pull.
-  void db
-    .from("tenant_tokens")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", row.id)
-    .then(undefined, () => {});
+  touchToken(db, auth.tokenId);
 
   return NextResponse.json(
     {

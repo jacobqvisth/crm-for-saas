@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { AuditRow, EffectiveFlag, TenantRow } from "@/lib/control-plane/db";
+import type { AuditRow, EffectiveFlag, StatsRow, TenantRow } from "@/lib/control-plane/db";
+import { METRIC_KEYS, METRIC_LABEL, type MetricKey } from "@/lib/control-plane/stats";
 import {
   clearTenantFeature,
   rotateTenantToken,
@@ -9,7 +10,14 @@ import {
   updateTenant,
 } from "@/app/(control-plane)/admin/actions";
 
-type Cell = { tenant: TenantRow; flags: EffectiveFlag[] };
+type Cell = {
+  tenant: TenantRow;
+  flags: EffectiveFlag[];
+  stats: StatsRow | null;
+  /** Server-computed, so rendering stays pure. */
+  seenText: string | null;
+  stale: boolean;
+};
 
 // The console: features down the side, tenants across, a toggle at each
 // intersection.
@@ -157,6 +165,21 @@ export function AdminConsole({
             and will apply the first time it comes up.
           </li>
         </ul>
+      </section>
+
+      <section className="mb-6">
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Customers</h2>
+          <p className="text-xs text-slate-500">
+            Reported by each tenant once a day, not read from it. The control plane holds no
+            key to any customer database, and these are counts only.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {grid.map((c) => (
+            <TenantStatsCard key={c.tenant.id} cell={c} />
+          ))}
+        </div>
       </section>
 
       {error && (
@@ -334,6 +357,56 @@ export function AdminConsole({
         </div>
       </section>
     </main>
+  );
+}
+
+function TenantStatsCard({ cell }: { cell: Cell }) {
+  // `seenText` and `stale` are computed on the server and passed in. Reading the
+  // clock during render would make this component impure, and a relative time
+  // computed twice is a hydration mismatch waiting to happen.
+  const { tenant, stats, seenText: seen, stale } = cell;
+
+  return (
+    <div className="rounded border border-slate-200 bg-white p-4">
+      <div className="flex items-baseline justify-between">
+        <div className="font-medium text-slate-900">{tenant.display_name}</div>
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            STATUS_STYLE[tenant.status] ?? "bg-slate-200 text-slate-700"
+          }`}
+        >
+          {tenant.status}
+        </span>
+      </div>
+
+      {!stats ? (
+        <p className="mt-3 text-xs text-slate-500">
+          {tenant.status === "provisioning"
+            ? "No deployment yet, so nothing has reported. Numbers appear once it is stood up and wired to this control plane."
+            : "Has never reported. Either it is not wired to this control plane (CONTROL_PLANE_URL and CONTROL_PLANE_TOKEN), or the daily report has not run yet."}
+        </p>
+      ) : (
+        <>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+            {METRIC_KEYS.filter((k) => stats.metrics[k] !== undefined).map((k: MetricKey) => (
+              <div key={k}>
+                <dt className="text-[11px] text-slate-500">{METRIC_LABEL[k]}</dt>
+                <dd className="text-lg font-semibold tabular-nums text-slate-900">
+                  {stats.metrics[k]!.toLocaleString("en-GB")}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p
+            className={`mt-3 text-[11px] ${stale ? "font-medium text-amber-800" : "text-slate-500"}`}
+          >
+            {stale ? "Last heard from " : "Reported "}
+            {seen}
+            {stale && " — it has stopped reporting"}
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 
