@@ -7,9 +7,9 @@ import {
 import {
   controlPlaneClient,
   listOverrides,
-  listTenants,
   recentAudit,
   resolveEffectiveFlags,
+  tenantOverview,
 } from "@/lib/control-plane/db";
 import { AdminConsole } from "@/components/control-plane/admin-console";
 
@@ -44,15 +44,15 @@ export default async function AdminPage() {
     );
   }
 
-  const [tenants, overrides, audit] = await Promise.all([
-    listTenants(db),
+  const [overview, overrides, audit] = await Promise.all([
+    tenantOverview(db),
     listOverrides(db),
     recentAudit(db, 40),
   ]);
 
-  const grid = tenants.map((t) => ({
-    tenant: t,
-    flags: resolveEffectiveFlags(overrides, t.id),
+  const grid = overview.map((o) => ({
+    ...o,
+    flags: resolveEffectiveFlags(overrides, o.tenant.id),
   }));
 
   return <AdminConsole admin={admin.email} grid={grid} audit={audit} />;

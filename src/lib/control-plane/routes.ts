@@ -26,12 +26,23 @@ export function isControlPlaneDeployment(): boolean {
 //
 //   /admin          the console itself
 //   /api/config     the endpoint tenants pull their config from (self-gated too)
+//   /api/heartbeat  where tenants report their own aggregate counts
 //   /login          the console signs in through Supabase Auth like any page
 //   /auth/callback  where Google returns
 //
 // `/` is handled separately: it redirects to the console rather than 404ing,
 // because someone opening the bare hostname wants the console.
-const CONTROL_PLANE_SURFACE = new Set(["/api/config", "/login", "/auth/callback"]);
+//
+// ADD A ROUTE HERE WHEN YOU ADD ONE TO THE CONSOLE. Deny-by-default means a new
+// control-plane endpoint 404s until it is listed, which is the right way round
+// but does not announce itself: the route works locally, and returns 404 in
+// production, with nothing in the logs to say why.
+const CONTROL_PLANE_SURFACE = new Set([
+  "/api/config",
+  "/api/heartbeat",
+  "/login",
+  "/auth/callback",
+]);
 
 export function isControlPlaneSurface(pathname: string): boolean {
   if (pathname === CONTROL_PLANE_PREFIX || pathname.startsWith(`${CONTROL_PLANE_PREFIX}/`)) {

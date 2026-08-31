@@ -98,6 +98,17 @@ const features = entries.map((m) => ({
 // --- tenants ----------------------------------------------------------------
 // Only Wrenchlane today. Animech and Spennare arrive in phases 08 and 09 with
 // real values; inventing rows for them now would be guessing.
+// The tenants this control plane knows about.
+//
+// A row here is only a BOOTSTRAP. Once a tenant exists, the console owns its
+// status, release channel and notes — see the insert below, which deliberately
+// does not overwrite an existing row.
+//
+// Animech and Spennare are `provisioning`: they are real customers with no
+// deployment yet. Listing them now is the point of a control plane. Their
+// feature set can be decided, and their overrides recorded, before either has a
+// database — and the day they are stood up they pull a config that is already
+// correct rather than one assembled in a hurry.
 const TENANTS = [
   {
     slug: "wrenchlane",
@@ -106,6 +117,24 @@ const TENANTS = [
     release_channel: "stable",
     supabase_project_ref: "wdgiwuhehqpkhpvdzzzl",
     app_url: "https://crm-for-saas.vercel.app",
+  },
+  {
+    slug: "animech",
+    display_name: "Animech",
+    status: "provisioning",
+    release_channel: "stable",
+    supabase_project_ref: null,
+    app_url: null,
+    notes: "Microsoft 365. No deployment yet.",
+  },
+  {
+    slug: "spennare",
+    display_name: "Spennare",
+    status: "provisioning",
+    release_channel: "stable",
+    supabase_project_ref: null,
+    app_url: null,
+    notes: "Microsoft 365. No deployment yet.",
   },
 ];
 
@@ -160,12 +189,28 @@ if (!APPLY) {
 }
 
 {
-  const { error } = await db.from("tenants").upsert(TENANTS, { onConflict: "slug" });
+  // INSERT-IF-ABSENT, not upsert.
+  //
+  // A plain upsert rewrote every column on every run, so suspending a tenant in
+  // the console and then re-seeding — which is now a routine step whenever a
+  // feature is added — silently set it back to active. Status, release channel
+  // and notes are operator state; this script only bootstraps a row that does
+  // not exist yet.
+  const { data: before } = await db.from("tenants").select("slug");
+  const had = new Set((before ?? []).map((r) => r.slug));
+
+  const { error } = await db
+    .from("tenants")
+    .upsert(TENANTS, { onConflict: "slug", ignoreDuplicates: true });
   if (error) {
-    console.error("tenants upsert failed:", error.message);
+    console.error("tenants insert failed:", error.message);
     process.exit(1);
   }
-  console.log(`tenants: ${TENANTS.length} upserted`);
+
+  const added = TENANTS.filter((t) => !had.has(t.slug)).map((t) => t.slug);
+  const kept = TENANTS.filter((t) => had.has(t.slug)).map((t) => t.slug);
+  console.log(`tenants: ${added.length} added${added.length ? ` (${added.join(", ")})` : ""}`);
+  if (kept.length) console.log(`         ${kept.length} left untouched (${kept.join(", ")})`);
 }
 
 // A feature removed from the registry keeps its row, deliberately: deleting it

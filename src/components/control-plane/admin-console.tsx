@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { AuditRow, EffectiveFlag, TenantRow } from "@/lib/control-plane/db";
+import type { AuditRow, EffectiveFlag, StatsRow, TenantRow } from "@/lib/control-plane/db";
+import { METRIC_KEYS, METRIC_LABEL, type MetricKey } from "@/lib/control-plane/stats";
 import {
   clearTenantFeature,
   rotateTenantToken,
@@ -9,9 +10,16 @@ import {
   updateTenant,
 } from "@/app/(control-plane)/admin/actions";
 
-type Cell = { tenant: TenantRow; flags: EffectiveFlag[] };
+type Cell = {
+  tenant: TenantRow;
+  flags: EffectiveFlag[];
+  stats: StatsRow | null;
+  /** Server-computed, so rendering stays pure. */
+  seenText: string | null;
+  stale: boolean;
+};
 
-// The console: tenants down the side, features across, a toggle at each
+// The console: features down the side, tenants across, a toggle at each
 // intersection.
 //
 // Three design rules from the phase 04 brief are load-bearing here:
@@ -23,6 +31,35 @@ type Cell = { tenant: TenantRow; flags: EffectiveFlag[] };
 //      the destructive direction.
 //   3. Nothing here claims to change code. Release channel is a record of which
 //      branch a deployment builds; promotion is a git push.
+//
+// A fourth rule earns its place from using it: the page must say what it does
+// NOT do. It is a pull, changes are not instant, a provisioning tenant is not
+// pulling anything at all, and none of this deploys code. Every one of those is
+// a reasonable thing to assume from a page of toggles, and every one is wrong.
+
+const CATEGORY_ORDER = [
+  "outbound",
+  "telephony",
+  "content",
+  "analytics",
+  "internal",
+  "planned",
+] as const;
+
+const CATEGORY_LABEL: Record<string, string> = {
+  outbound: "Outbound",
+  telephony: "Telephony",
+  content: "Content",
+  analytics: "Analytics",
+  internal: "Internal",
+  planned: "Planned",
+};
+
+const STATUS_STYLE: Record<string, string> = {
+  active: "bg-emerald-100 text-emerald-900",
+  provisioning: "bg-amber-100 text-amber-900",
+  suspended: "bg-red-100 text-red-900",
+};
 
 export function AdminConsole({
   admin,
@@ -38,6 +75,15 @@ export function AdminConsole({
   const [freshToken, setFreshToken] = useState<{ slug: string; token: string } | null>(null);
 
   const features = grid[0]?.flags ?? [];
+
+  // Group by category so twenty rows are not one flat list. Any category the
+  // registry gains later still renders, at the end, rather than vanishing.
+  const groups = [
+    ...CATEGORY_ORDER.filter((c) => features.some((f) => f.category === c)),
+    ...[...new Set(features.map((f) => f.category))].filter(
+      (c) => !CATEGORY_ORDER.includes(c as (typeof CATEGORY_ORDER)[number]),
+    ),
+  ];
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -76,16 +122,65 @@ export function AdminConsole({
 
   return (
     <main className="mx-auto max-w-[1400px] p-8">
-      <header className="mb-6 flex items-baseline justify-between">
+      <header className="mb-4 flex items-baseline justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Control plane</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Feature access across every tenant. Changes take effect on each tenant&apos;s next
-            config pull, within about five minutes. This is a pull, not a push.
+            Which features each customer gets. One row per feature, one column per tenant.
           </p>
         </div>
         <span className="text-xs text-slate-500">signed in as {admin}</span>
       </header>
+
+      {/* What this page does not do. Each line is something a page of toggles
+          invites you to assume, and each is wrong. */}
+      <section className="mb-6 rounded border border-slate-200 bg-white p-4 text-sm text-slate-700">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          How this works
+        </h2>
+        <ul className="grid gap-1.5 md:grid-cols-2">
+          <li>
+            <b>It is a pull, not a push.</b> Each tenant fetches its config on a timer, so a
+            change here lands within about five minutes rather than instantly.
+          </li>
+          <li>
+            <b>A tenant survives this being down.</b> If the pull fails it uses its own cached
+            copy, and failing that the defaults compiled into its build.
+          </li>
+          <li>
+            <b className="text-emerald-900">on</b> / <b>off</b> is the effective value. A
+            ringed chip was chosen for that tenant; a plain one is{" "}
+            <b>inherited</b> and will move if the registry default moves.
+          </li>
+          <li>
+            <b>Turning something off asks for a note.</b> Off is the direction that takes a
+            working surface away from someone.
+          </li>
+          <li>
+            <b>Nothing here deploys code.</b> Release channel records which branch a
+            deployment builds. Promotion is a git push.
+          </li>
+          <li>
+            <b>A provisioning tenant is not pulling anything yet.</b> Its settings are stored
+            and will apply the first time it comes up.
+          </li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Customers</h2>
+          <p className="text-xs text-slate-500">
+            Reported by each tenant once a day, not read from it. The control plane holds no
+            key to any customer database, and these are counts only.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {grid.map((c) => (
+            <TenantStatsCard key={c.tenant.id} cell={c} />
+          ))}
+        </div>
+      </section>
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -99,6 +194,11 @@ export function AdminConsole({
             New config token for {freshToken.slug}. It is shown once and never stored.
           </div>
           <code className="mt-1 block break-all font-mono text-xs">{freshToken.token}</code>
+          <p className="mt-1 text-xs">
+            Set it on that tenant&apos;s deployment as <code>CONTROL_PLANE_TOKEN</code>, with{" "}
+            <code>CONTROL_PLANE_URL</code>, then redeploy. Any previous token stopped working
+            the moment this one was created.
+          </p>
           <button
             className="mt-2 text-xs underline"
             onClick={() => setFreshToken(null)}
@@ -122,71 +222,48 @@ export function AdminConsole({
                 <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-left font-medium text-slate-700">
                   Feature
                 </th>
-                {grid.map((c) => (
-                  <th key={c.tenant.id} className="px-3 py-2 text-left font-medium text-slate-700">
-                    <div>{c.tenant.display_name}</div>
-                    <div className="font-normal text-xs text-slate-500">
-                      {c.tenant.status} · {c.tenant.release_channel}
-                    </div>
-                  </th>
-                ))}
+                {grid.map((c) => {
+                  const on = c.flags.filter((f) => f.enabled).length;
+                  const set = c.flags.filter((f) => f.source === "override").length;
+                  return (
+                    <th
+                      key={c.tenant.id}
+                      className="px-3 py-2 text-left font-medium text-slate-700"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{c.tenant.display_name}</span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                            STATUS_STYLE[c.tenant.status] ?? "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {c.tenant.status}
+                        </span>
+                      </div>
+                      <div className="font-normal text-xs text-slate-500">
+                        {on} of {c.flags.length} on
+                        {set > 0 && ` · ${set} set here`}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
-              {features.map((f) => (
-                <tr key={f.key} className="border-b border-slate-100 last:border-0">
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2 align-top">
-                    <div className="font-medium text-slate-900">{f.name}</div>
-                    <div className="text-xs text-slate-500">{f.description}</div>
-                  </td>
-                  {grid.map((c) => {
-                    const flag = c.flags.find((x) => x.key === f.key)!;
-                    return (
-                      <td key={c.tenant.id} className="px-3 py-2 align-top">
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => toggle(c, flag)}
-                          className={`rounded px-2 py-1 text-xs font-medium ${
-                            flag.enabled
-                              ? "bg-emerald-100 text-emerald-900"
-                              : "bg-slate-200 text-slate-700"
-                          } ${flag.source === "override" ? "ring-1 ring-slate-900" : ""}`}
-                          title={
-                            flag.source === "override"
-                              ? `Explicitly set by ${flag.updatedBy} — ${flag.note ?? "no note"}`
-                              : `Inheriting the default (${flag.defaultEnabled ? "on" : "off"})`
-                          }
-                        >
-                          {flag.enabled ? "on" : "off"}
-                        </button>
-                        {/* The distinction the brief insists on: a ringed chip
-                            was chosen for this tenant, a plain one is following
-                            the registry default and will move if it moves. */}
-                        <div className="mt-1 text-[10px] text-slate-500">
-                          {flag.source === "override" ? "set" : "inherited"}
-                        </div>
-                        {flag.source === "override" && (
-                          <button
-                            type="button"
-                            disabled={pending}
-                            className="mt-1 text-[10px] underline text-slate-500"
-                            onClick={() =>
-                              run(() =>
-                                clearTenantFeature({
-                                  tenantId: c.tenant.id,
-                                  featureKey: flag.key,
-                                }),
-                              )
-                            }
-                          >
-                            inherit
-                          </button>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
+              {groups.map((cat) => (
+                <FeatureGroup
+                  key={cat}
+                  label={CATEGORY_LABEL[cat] ?? cat}
+                  features={features.filter((f) => f.category === cat)}
+                  grid={grid}
+                  pending={pending}
+                  onToggle={toggle}
+                  onInherit={(cell, flag) =>
+                    run(() =>
+                      clearTenantFeature({ tenantId: cell.tenant.id, featureKey: flag.key }),
+                    )
+                  }
+                />
               ))}
             </tbody>
           </table>
@@ -208,7 +285,16 @@ export function AdminConsole({
                   <div>supabase ref: {c.tenant.supabase_project_ref ?? "not set"}</div>
                   {/* Displayed, never actioned. Promotion is a git push. */}
                   <div>channel: {c.tenant.release_channel} (promote with git, not here)</div>
+                  {c.tenant.notes && <div>note: {c.tenant.notes}</div>}
                 </dl>
+
+                {c.tenant.status === "provisioning" && (
+                  <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+                    No deployment yet, so nothing is pulling this config. Choices made here are
+                    stored and apply the first time it comes up.
+                  </p>
+                )}
+
                 <div className="mt-2 flex gap-3 text-xs">
                   <button
                     type="button"
@@ -247,6 +333,10 @@ export function AdminConsole({
 
         <div>
           <h2 className="mb-2 text-sm font-semibold text-slate-900">Audit</h2>
+          <p className="mb-2 text-xs text-slate-500">
+            Every change made through this console. With one operator it looks like ceremony;
+            it is exactly what you want the first day there are two.
+          </p>
           <div className="rounded border border-slate-200 bg-white">
             {audit.length === 0 ? (
               <p className="p-3 text-xs text-slate-500">Nothing yet.</p>
@@ -267,5 +357,138 @@ export function AdminConsole({
         </div>
       </section>
     </main>
+  );
+}
+
+function TenantStatsCard({ cell }: { cell: Cell }) {
+  // `seenText` and `stale` are computed on the server and passed in. Reading the
+  // clock during render would make this component impure, and a relative time
+  // computed twice is a hydration mismatch waiting to happen.
+  const { tenant, stats, seenText: seen, stale } = cell;
+
+  return (
+    <div className="rounded border border-slate-200 bg-white p-4">
+      <div className="flex items-baseline justify-between">
+        <div className="font-medium text-slate-900">{tenant.display_name}</div>
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            STATUS_STYLE[tenant.status] ?? "bg-slate-200 text-slate-700"
+          }`}
+        >
+          {tenant.status}
+        </span>
+      </div>
+
+      {!stats ? (
+        <p className="mt-3 text-xs text-slate-500">
+          {tenant.status === "provisioning"
+            ? "No deployment yet, so nothing has reported. Numbers appear once it is stood up and wired to this control plane."
+            : "Has never reported. Either it is not wired to this control plane (CONTROL_PLANE_URL and CONTROL_PLANE_TOKEN), or the daily report has not run yet."}
+        </p>
+      ) : (
+        <>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+            {METRIC_KEYS.filter((k) => stats.metrics[k] !== undefined).map((k: MetricKey) => (
+              <div key={k}>
+                <dt className="text-[11px] text-slate-500">{METRIC_LABEL[k]}</dt>
+                <dd className="text-lg font-semibold tabular-nums text-slate-900">
+                  {stats.metrics[k]!.toLocaleString("en-GB")}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p
+            className={`mt-3 text-[11px] ${stale ? "font-medium text-amber-800" : "text-slate-500"}`}
+          >
+            {stale ? "Last heard from " : "Reported "}
+            {seen}
+            {stale && " — it has stopped reporting"}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FeatureGroup({
+  label,
+  features,
+  grid,
+  pending,
+  onToggle,
+  onInherit,
+}: {
+  label: string;
+  features: EffectiveFlag[];
+  grid: Cell[];
+  pending: boolean;
+  onToggle: (cell: Cell, flag: EffectiveFlag) => void;
+  onInherit: (cell: Cell, flag: EffectiveFlag) => void;
+}) {
+  return (
+    <>
+      <tr className="border-b border-slate-200 bg-slate-50/70">
+        <th
+          colSpan={grid.length + 1}
+          className="sticky left-0 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          {label}
+        </th>
+      </tr>
+      {features.map((f) => (
+        <tr key={f.key} className="border-b border-slate-100 last:border-0">
+          <td className="sticky left-0 z-10 bg-white px-3 py-2 align-top">
+            <div className="font-medium text-slate-900">{f.name}</div>
+            <div className="text-xs text-slate-500">{f.description}</div>
+            {!f.defaultEnabled && (
+              // Worth showing: this one is off unless someone turns it on, so
+              // an "off" chip here is the intended state rather than a choice
+              // somebody made.
+              <div className="mt-0.5 text-[10px] text-slate-400">off by default</div>
+            )}
+          </td>
+          {grid.map((c) => {
+            const flag = c.flags.find((x) => x.key === f.key)!;
+            return (
+              <td key={c.tenant.id} className="px-3 py-2 align-top">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onToggle(c, flag)}
+                  className={`rounded px-2 py-1 text-xs font-medium ${
+                    flag.enabled
+                      ? "bg-emerald-100 text-emerald-900"
+                      : "bg-slate-200 text-slate-700"
+                  } ${flag.source === "override" ? "ring-1 ring-slate-900" : ""}`}
+                  title={
+                    flag.source === "override"
+                      ? `Explicitly set by ${flag.updatedBy} — ${flag.note ?? "no note"}`
+                      : `Inheriting the default (${flag.defaultEnabled ? "on" : "off"})`
+                  }
+                >
+                  {flag.enabled ? "on" : "off"}
+                </button>
+                {/* The distinction the brief insists on: a ringed chip was
+                    chosen for this tenant, a plain one is following the registry
+                    default and will move if it moves. */}
+                <div className="mt-1 text-[10px] text-slate-500">
+                  {flag.source === "override" ? "set" : "inherited"}
+                </div>
+                {flag.source === "override" && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    className="mt-1 text-[10px] underline text-slate-500"
+                    onClick={() => onInherit(c, flag)}
+                  >
+                    inherit
+                  </button>
+                )}
+              </td>
+            );
+          })}
+        </tr>
+      ))}
+    </>
   );
 }
