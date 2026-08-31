@@ -47,8 +47,8 @@ describe("getTenant", () => {
 });
 
 describe("the tenant registry", () => {
-  it("knows Wrenchlane and Animech; Spennare arrives in phase 09", () => {
-    expect(knownTenantSlugs()).toEqual(["wrenchlane", "animech"]);
+  it("knows all three tenants, Spennare having arrived in phase 09", () => {
+    expect(knownTenantSlugs()).toEqual(["wrenchlane", "animech", "spennare"]);
   });
 
   // Animech is a real customer on a real deployment, so the things that would
@@ -65,9 +65,43 @@ describe("the tenant registry", () => {
     expect(a.domains.sendingDomains).toEqual([]);
   });
 
+  // Spennare is a real customer on a real config, so the same leak checks that
+  // guard Animech guard it too. These are the assertions that would catch a
+  // copy-paste from wrenchlane.ts, which is the actual way this goes wrong.
+  it("gives Spennare nothing of Wrenchlane's", () => {
+    const s = getTenantBySlug("spennare")!;
+    expect(s.identity.slug).toBe("spennare");
+    expect(s.domains.internalDomains).not.toContain("wrenchlane.com");
+    expect(s.domains.brandHostTokens).not.toContain("wrenchlane");
+    expect(s.ai.knowledge).not.toMatch(/wrenchlane/i);
+    expect(s.ai.icpDescription).not.toMatch(/workshop|fault code/i);
+    // No sending domain until one is bought and warmed: spennare.com publishes
+    // two conflicting v=spf1 records, which is invalid and can make receivers
+    // return permerror.
+    expect(s.domains.sendingDomains).toEqual([]);
+  });
+
+  // The phase 09 brief singles this out: multi-language sequences are the
+  // strongest fit in the product for a reseller network across 30+ countries,
+  // and it warns specifically against copying Wrenchlane's Nordic list.
+  it("gives Spennare a European language set, not Wrenchlane's", () => {
+    const s = getTenantBySlug("spennare")!;
+    expect(s.locale.supportedLanguages).not.toEqual(
+      wrenchlane.locale.supportedLanguages,
+    );
+    // The large European display markets their named competitors operate in.
+    for (const lang of ["de", "nl", "fr", "es", "it", "pl"]) {
+      expect(s.locale.supportedLanguages).toContain(lang);
+    }
+  });
+
   it("looks a tenant up by slug and returns undefined for a stranger", () => {
     expect(getTenantBySlug(DEFAULT_TENANT_SLUG)).toBe(wrenchlane);
-    expect(getTenantBySlug("spennare")).toBeUndefined();
+    // A slug that is genuinely unknown, so this keeps testing the lookup miss
+    // rather than quietly becoming a test that a real tenant is absent — which
+    // is exactly what happened to the previous version of this line when
+    // Spennare was registered.
+    expect(getTenantBySlug("acme")).toBeUndefined();
   });
 });
 
