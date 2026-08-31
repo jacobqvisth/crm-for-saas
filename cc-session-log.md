@@ -8389,3 +8389,80 @@ authenticated after the rename, bidding table shows the renamed action as
 - **PMax goal switch**, gated on the budget decision above.
 - **Run `scripts/google-datamanager-setup.mjs`** to activate the upload.
 - **The app change** for gclid capture, per the spec.
+## 2026-08-31 — Google sign-in enabled, all three tenants in the console, stats reported inward, and the gap the plan never had
+
+Four things, ending with the one that matters most for what to do next.
+
+### The console can be signed into
+
+Jacob created the OAuth client (Console-only; see below). Client id and secret were read
+straight from the downloaded JSON rather than transcribed from a screenshot, after checking
+the file was a `web` client carrying the Supabase callback. Provider enabled through the
+Management API; `authorize` went from 400 to a 302 at accounts.google.com.
+
+**One trap caught before he hit it.** `disable_signup` is true and `auth.users` was empty, so
+his first Google sign-in would have been treated as a signup and refused with "Signups not
+allowed for this instance" — a second dead end that looks nothing like the first. Pre-created
+the user through the admin API, confirmed, so the callback links the Google identity to an
+existing user instead. Safe for `requireSuperAdmin`'s Google check, which collects
+`app_metadata.provider`, `app_metadata.providers[]` **and** `identities[].provider`.
+
+**An agent cannot create the OAuth client.** Checked rather than assumed: there is no API for
+OAuth 2.0 Web-application clients, and `gcloud alpha iap oauth-brands`/`oauth-clients` now
+reports the IAP OAuth Admin APIs were **permanently shut down on 19 March 2026**. A **service
+account is not a substitute** — Jacob created one first; its "OAuth 2 Client ID" column is
+the numeric id used for domain-wide delegation and Supabase rejects it.
+
+### All three customers, and the numbers (PR #767)
+
+Animech and Spennare seeded as `provisioning`. **A footgun fixed on the way:** the seed did a
+plain upsert, rewriting every column each run, so suspending a tenant and then re-seeding —
+now routine whenever a feature is added — silently set it back to active. Tenants are
+insert-if-absent; status, channel and notes are operator state.
+
+Per-customer stats are **reported inward, never read**. Reading would need a service-role key
+per tenant in the control plane: one credential that reads every customer's CRM, which is the
+thing this design exists to prevent. So each tenant POSTs counts on a daily cron using the
+config token it already has. The metric contract is a **closed list of eight integer-only
+keys, unknown keys rejected rather than dropped** — a free-form blob is how "just add recent
+contacts" happens. Verified live: `recent_contacts` rejected, a string in `users` rejected,
+real counts accepted and stored, then cleaned up.
+
+`token-auth.ts` was extracted because two endpoints now authenticate this way. `/api/config`
+was moved onto it and **re-verified against the deployed console** afterwards.
+
+### Jacob switched linkedin_steps on, which changes an earlier claim
+
+He toggled it for Wrenchlane at 13:13 UTC while exploring. It is the only override anywhere,
+recorded against his address and audited — the console working as designed.
+
+**It invalidates something recorded earlier in this log:** that the control plane's answer
+matched Wrenchlane's compiled defaults, so wiring Wrenchlane would change nothing. It would
+now turn LinkedIn steps **on** in production. Inert today only because Wrenchlane is not
+wired. Recorded in the runbook's pre-flight section.
+
+### THE FINDING: phases 01 to 10 cannot stand a customer up
+
+Asked what would actually happen if Animech signed in tomorrow, and measured rather than
+guessed. Four things, none of them in any of the ten phases, now written up as
+`11-tenant-bring-up.md`:
+
+- **The product is visibly Wrenchlane.** `sidebar.tsx` hardcodes `/wrenchlane-mark.png` and
+  `/wrenchlane-wordmark.png`. `TenantIdentity` carries no branding at all, so the sidebar
+  could not read the right logo even if it wanted to. 68 files under `src/app` and
+  `src/components` mention Wrenchlane; 11 files in all of `src` use the tenant config.
+- **No environment manifest.** 67 env vars are read by `src/`, 32 are in
+  `.env.local.example`, **43 are read and undocumented** (ANTHROPIC, DEEPGRAM, ELKS,
+  MILLIONVERIFIER, APIFY, all of `ELKS_WEBRTC_*`), and **9 are documented but never read**
+  (TRUSTPILOT, GBP, GOOGLE_OAUTH) — worse than missing, because someone will go and get a
+  Trustpilot key that nothing uses.
+- **A fresh tenant database has 101 tables and nothing in them.** No workspace, no owner, no
+  templates. No bootstrap script exists.
+- **Nineteen of twenty features default ON.** R2 already says new tenants get a config that
+  switches things off; that half has never been done, and until this week there were no
+  tenant rows to do it against. Animech would inherit fault-code dashboards, a car-fault
+  YouTube gallery and Reddit car-forum answering.
+
+**The honest summary: phases 01 to 10 made the codebase able to serve several customers.
+They did not make it able to stand one up.** Phase 11 is small, needs no customer input, and
+is the real blocker on 08 — not the Microsoft consent everyone is waiting for.

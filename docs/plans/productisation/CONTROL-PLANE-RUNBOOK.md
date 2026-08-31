@@ -147,6 +147,13 @@ So before wiring a live tenant, check that `/api/config` with that tenant's toke
 every feature the tenant already has. If the flags match the compiled defaults, wiring
 changes nothing, which is exactly the state to be in when you turn it on.
 
+**For Wrenchlane specifically, they no longer match.** `linkedin_steps` was switched on in
+the console on 2026-08-31 and is currently the only override anywhere. It is inert while
+Wrenchlane runs on compiled defaults, but **wiring Wrenchlane would turn that feature on in
+production**. Decide whether you want it before wiring, or clear the override back to
+inherited first. This is exactly the case the pre-flight check exists to catch, and it took
+one click to create — which is the point.
+
 ## Still to do
 
 - **Google sign-in is not enabled yet, and this is why the login button hangs.**
