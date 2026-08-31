@@ -13,6 +13,88 @@ updated: 2026-05-26
 
 ---
 
+## LinkedIn steps in sequences, behind a tenant flag — 2026-08-31 — PR #761 — worktree-linkedin-sequence-steps
+
+Jacob asked for research on adding LinkedIn connection requests and messages to
+sequences ("Lemlist kan det, så vi borde kunna fixa det"), then to build it for
+Spennare and Animech with Wrenchlane opted out.
+
+### What the research turned up
+
+The blocker is not the integration, it is the data. **`linkedin_url` is null for
+all 16,740 contacts and all 28,029 companies in prod.** The column exists on
+contacts, companies and discovered_shops and has never been populated. Same
+shape as the phone-coverage ceiling that limited Call Agent.
+
+LinkedIn's official API cannot send a connection request or a member-to-member
+message at any tier, to any partner, at any price, and SNAP has stopped taking
+new partners. Every tool that does it drives a real logged-in session outside
+LinkedIn's terms. Unipile (EUR 49/mo up to 10 accounts) is the right vendor
+*if* automated sending is ever wanted; Apify, which we already pay for, is a
+read tool and solves the profile-discovery half instead. They are complementary,
+not substitutes. Volumes are the other constraint: 100 invites per week per
+account across every subscription tier, so one sender reaches roughly 100
+prospects a month.
+
+Research artifact: https://claude.ai/code/artifact/6a038ce8-178a-4e0a-b085-c2fb0e56de10
+
+### What was built
+
+- **Two step types**, `linkedin_invite` and `linkedin_message`. Both are task
+  steps in the `step-walk` sense: they create a `tasks` row and let the sequence
+  carry on, so an unworked one cannot strand an enrollment. Nothing sends.
+- **`src/lib/sequences/linkedin.ts`** — target resolution, the 300-character
+  invite-note constant, and the task description a rep reads.
+- **`linkedin-step-editor.tsx`** — message body with a live character counter
+  that warns before 300 (variables expand at send time, so an exact block would
+  be wrong), plus a note about the weekly cap.
+- **`useFeature` hook** (`src/lib/hooks/use-features.tsx`) — the fourth gating
+  location phase 03 anticipated but could not serve: a control *inside* a page
+  every tenant can reach. Seeded from the same `(dashboard)/layout.tsx`
+  resolution the sidebar already gets.
+- **Migration** `20260831180000_linkedin_sequence_steps.sql` — widened CHECK,
+  one nullable `linkedin_body` column. Additive, applied to prod.
+
+### Decisions worth keeping
+
+- **`linkedinEnabled` is a required parameter on `createStepTasks`**, not an
+  optional one, so a third call site is a compile error rather than a tenant
+  silently getting a feature it did not buy. The builder hiding the menu is not
+  the gate; this is. A sequence saved while the flag was on keeps its LinkedIn
+  steps after the flag goes off.
+- **`linkedin_steps` is the first flag to ship `enabledByDefault: false`.** R2
+  exists so Wrenchlane never *loses* a surface it has, which cannot apply to one
+  it never had. `features.test.ts` now polices that through an explicit
+  `OFF_BY_DEFAULT` set, so a second exception is a deliberate test edit.
+- **A missing profile falls back to a LinkedIn people search** built from name
+  and company, and the task says outright that the link is a guess. Without it
+  the feature would produce nothing at all today, given 0% URL coverage.
+- **`tasks.type` already permitted `linkedin`** and `/tasks` already had the
+  icon, filter tab and manual-create option, so these land in an existing
+  workflow with zero changes there.
+
+### Not built, and why
+
+Automated sending (phase 3 of the research) is deliberately deferred. It needs
+`linkedin_accounts` mirroring `gmail_accounts`, a generalised queue, a walk that
+lets a non-email send advance the enrollment, a webhook feeding LinkedIn replies
+into `applyStopOnReply`, and `suppressions` extended beyond `email`/`domain` —
+today a contact who unsubscribed would still be eligible for a LinkedIn touch.
+Worth doing only after profile enrichment proves the audience exists.
+
+Animech and Spennare cannot have the flag turned on yet: `src/config/tenants/`
+holds only `wrenchlane.ts`, and their tenants are phases 08/09, blocked on real
+domains, mailboxes and Supabase projects.
+
+### Checks
+
+tsc clean · lint 0 errors (1 pre-existing warning in `call-provider.tsx`) ·
+**1179 tests across 90 files, 0 failing** (21 new) · `npm run build` green ·
+`tenant_config_cache` verified empty after the local build, so no repeat of the
+phase 05 pollution.
+
+---
+
 ## Tabbed Exclusion Lists settings page — 2026-08-19 — PR #692 (after a botched empty #691) — feature/exclusion-lists-tabs
 
 Jacob (with screenshots, same session as #686): add tabs to the partner page and host all the exclusion-type lists there — the Never-call list too, and (mid-turn) the Internal testers list — "so it is easy to edit all these lists in one place". Call it Exclusion List.
