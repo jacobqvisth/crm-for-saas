@@ -14,8 +14,11 @@
 // customer's tenant. This script is what turns that blocked step into one
 // command, so the day the credentials exist the answer takes minutes.
 //
-// It drives the REAL provider class, not a copy of it. If this passes, what
-// passed is the code that will send the mail.
+// It does NOT import GraphProvider. It reimplements the same Graph calls, so a
+// pass proves that Graph and Exchange behave as the provider assumes, not that
+// the provider is correct. The provider still needs its own test. This comment
+// previously claimed the opposite, which would have turned a green spike into
+// false confidence about `src/lib/mail/microsoft/`.
 //
 // THE FOUR CHECKS
 //   1. Graph accepts a full MIME message and sends it byte-faithfully:
@@ -29,13 +32,24 @@
 //
 // Checks 3 and 4 need a human to actually reply, so the run is in two phases.
 //
-// Usage:
+// Usage, the real thing (app-only, once the customer's IT has delivered):
 //   export MICROSOFT_TENANT_ID=... MICROSOFT_CLIENT_ID=... MICROSOFT_CLIENT_SECRET=...
 //   export GRAPH_SPIKE_MAILBOX=probe@customer.example      # the app-only mailbox
 //   export GRAPH_SPIKE_RECIPIENT=you@wherever.example      # somewhere you can reply from
 //
 //   node scripts/graph-spike.mjs send     # checks 1 and 2, then go and reply
 //   node scripts/graph-spike.mjs watch    # checks 3 and 4
+//
+// Usage, early (a token you already have, so the four checks stop waiting on
+// admin consent). Any delegated token with Mail.ReadWrite and Mail.Send works,
+// including one from an existing desktop tool the customer already runs:
+//   export GRAPH_SPIKE_ACCESS_TOKEN=eyJ0...       # see the note on token()
+//   export GRAPH_SPIKE_MAILBOX=that.same.user@customer.example   # THEIR OWN box
+//   export GRAPH_SPIKE_RECIPIENT=you@wherever.example
+//
+// MICROSOFT_TENANT_ID / _CLIENT_ID / _CLIENT_SECRET are not read at all in that
+// form. A delegated run answers the four questions; it does not stand in for the
+// app-only grant, and the log entry has to say which form was used.
 //
 // State between the two phases is kept in .graph-spike-state.json next to the
 // repo root. It holds no secret: ids and timestamps only.
@@ -65,6 +79,32 @@ function need(name) {
 }
 
 async function token() {
+  // A token handed in from outside, which is how the four checks get run before
+  // the customer's IT has produced anything.
+  //
+  // The checks are properties of Graph and Exchange Online, not of the grant
+  // that fetched the token: whether Graph re-encodes MIME, whether Exchange
+  // rewrites Message-ID and how fast Sent Items catches up, whether a reply
+  // threads on In-Reply-To/References, and whether a delta token survives.
+  // None of those change between app-only and delegated, so a delegated token
+  // for one real mailbox answers them just as well and needs no admin consent.
+  //
+  // WHAT A DELEGATED RUN DOES NOT PROVE, and do not let it be reported as if it
+  // did (R11): that the app-only grant works, that admin consent was given,
+  // that mailbox scoping is in force, or that the app can touch a mailbox other
+  // than the signed-in user's. Set GRAPH_SPIKE_MAILBOX to that user's OWN
+  // address; `/users/{their-own-upn}/...` resolves fine on a delegated token,
+  // while any other mailbox will 403 and that 403 means nothing about phase 07.
+  const supplied = process.env.GRAPH_SPIKE_ACCESS_TOKEN?.trim();
+  if (supplied) {
+    console.log(
+      "Using GRAPH_SPIKE_ACCESS_TOKEN. If that is a delegated token, this run\n" +
+        "proves how Graph and Exchange behave, NOT that the app-only grant works.\n" +
+        "Record it in cc-session-log.md as a delegated run.\n",
+    );
+    return supplied;
+  }
+
   const tenant = need("MICROSOFT_TENANT_ID");
   const res = await fetch(
     `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
