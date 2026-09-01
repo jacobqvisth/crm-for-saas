@@ -158,12 +158,73 @@ export const ENV_GROUPS: readonly EnvGroup[] = [
     gate: "core",
     note:
       "Reply drafting, cold-email generation, call summaries and the article studio " +
-      "all run through this. There is no fallback: without it those surfaces error.",
+      "all run through this. It is the primary AI provider. Gemini below is the " +
+      "fallback: set both and a credit or capacity failure here fails over instead " +
+      "of taking every AI surface down at once.",
     vars: [
       {
         name: "ANTHROPIC_API_KEY",
         requirement: "required",
         description: "Claude API key.",
+      },
+    ],
+  },
+
+  {
+    id: "ai-gemini",
+    title: "Gemini (fallback AI provider)",
+    gate: "optional",
+    note:
+      "Google's Generative Language API, billed to the Google account that holds the " +
+      "AI credits (jacob@wrenchlane.com, project crm-for-saas-491113). An exhausted " +
+      "Anthropic credit balance returns HTTP 400, not a 401 or a 429, so it does not " +
+      "read as a quota problem, and because credits are org-wide it took all ~20 AI " +
+      "call sites down at once (2026-07-02 and 2026-08-27). With GEMINI_API_KEY set, " +
+      "src/lib/ai/provider.ts fails those requests over to Gemini. Leave it blank and " +
+      "behaviour is exactly as before: Anthropic only. Verify a key with " +
+      "`node scripts/test-gemini.mjs`. NOT covered by the fallback, because Gemini's " +
+      "equivalents are a different contract: web-search enrichment (find-website, " +
+      "find-phone) and the article generator's prompt caching.",
+    vars: [
+      {
+        name: "GEMINI_API_KEY",
+        requirement: "optional",
+        description:
+          "API key from https://aistudio.google.com/apikey (pick the \"CRM for SaaS\" " +
+          "project so usage bills against the work account).",
+      },
+      {
+        name: "GOOGLE_AI_API_KEY",
+        requirement: "optional",
+        description: "Alias for GEMINI_API_KEY, the name AI Studio copies out.",
+      },
+      {
+        name: "AI_PRIMARY_PROVIDER",
+        requirement: "optional",
+        description:
+          "Which provider is tried first: anthropic (default) or gemini. Flip to " +
+          "gemini to spend Google credits ahead of Anthropic ones.",
+      },
+      {
+        name: "AI_FALLBACK_DISABLED",
+        requirement: "optional",
+        description: "Set to 1 to attempt only the primary provider and never fail over.",
+      },
+      {
+        name: "GEMINI_MODEL",
+        requirement: "optional",
+        description:
+          "Gemini model for haiku-class call sites. Defaults to gemini-3.6-flash. " +
+          "Note gemini-2.5-* are retired for new keys: they still appear in the " +
+          "model list but every call 404s.",
+      },
+      {
+        name: "GEMINI_MODEL_STRONG",
+        requirement: "optional",
+        description:
+          "Gemini model for call sites that ask Anthropic for a sonnet/opus-class " +
+          "model. Defaults to gemini-pro-latest, an alias rather than a pinned " +
+          "version because the only concrete pro model is a preview.",
       },
     ],
   },

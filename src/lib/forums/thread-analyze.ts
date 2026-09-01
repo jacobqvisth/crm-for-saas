@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { WRENCHLANE_KNOWLEDGE } from "@/lib/inbox/wrenchlane-knowledge";
 import { stripLongDashes } from "@/lib/ai/no-long-dash";
 import { buildStyleGuidance, normalizeOptions, type ForumGenerationOptions } from "./generation-options";
@@ -99,8 +99,6 @@ export async function analyzeThreadReplies(opts: {
   // Mention level stays model-chosen per comment, then clamped per persona.
   styleOptions?: Partial<ForumGenerationOptions> | null;
 }): Promise<AnalyzeThreadResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
   if (opts.members.length === 0) return { ok: false, reason: "no roster members to assign replies to" };
 
   const style = normalizeOptions(opts.styleOptions);
@@ -164,21 +162,16 @@ Order by priority, best first. Never invent a comment_index that isn't listed.`;
     opts.postBody?.trim() ? `Body:\n${opts.postBody.trim()}\n` : ""
   }\nComments on it (index in brackets):\n\n${commentList}\n\nReturn the JSON array now.`;
 
-  let raw = "";
-  try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4096,
-      system,
-      messages: [{ role: "user", content: user }],
-    });
-    raw = response.content[0]?.type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return { ok: false, reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}` };
-  }
+  const result = await generateText({
+    label: "forums/thread-analyze",
+    anthropicModel: MODEL,
+    system,
+    user,
+    maxTokens: 4096,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const parsed = parsePicks(raw);
+  const parsed = parsePicks(result.text);
   if (!parsed) return { ok: false, reason: "could not parse analysis from model" };
 
   const byName = new Map(opts.members.map((m) => [m.owner_label.trim().toLowerCase(), m]));
@@ -209,7 +202,7 @@ Order by priority, best first. Never invent a comment_index that isn't listed.`;
   }
 
   if (picks.length === 0) return { ok: false, reason: "the model returned no usable replies" };
-  return { ok: true, picks, model: MODEL };
+  return { ok: true, picks, model: result.model };
 }
 
 interface RawPick {

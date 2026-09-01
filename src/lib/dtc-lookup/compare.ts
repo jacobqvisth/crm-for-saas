@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateJson } from "@/lib/ai/provider";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
 const MODEL = "claude-sonnet-5";
@@ -80,8 +80,6 @@ export interface CompareInput {
  * what the code means, so where they disagree the manual wins by construction.
  */
 export async function compareDiagnoses(input: CompareInput): Promise<CompareVerdict> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const causeList = input.wrenchlaneCauses
     .map((c) => `- ${c.name ?? "unnamed"}${c.confidence != null ? ` (${c.confidence}%)` : ""}`)
     .join("\n");
@@ -110,17 +108,19 @@ Rules:
 - Be concrete. Name the control units and components.
 - ${NO_LONG_DASH_INSTRUCTION}`;
 
-  const res = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1500,
-    tools: [TOOL],
-    tool_choice: { type: "tool", name: TOOL.name },
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const block = res.content.find((c) => c.type === "tool_use");
-  if (!block || block.type !== "tool_use") throw new Error("no tool_use returned");
-  const v = block.input as CompareVerdict;
+  const result = await generateJson<CompareVerdict>(
+    {
+      label: "dtc-lookup/compare",
+      anthropicModel: MODEL,
+      user: prompt,
+      maxTokens: 1500,
+    },
+    TOOL,
+  );
+  // This one is called from a script and reports per-code, so a hard failure is
+  // the right signal rather than a silently degraded verdict.
+  if (!result.ok) throw new Error(result.reason);
+  const v = result.data;
 
   return {
     agreement: v.agreement,

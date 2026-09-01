@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 import { sameSubjectText } from "@/lib/inbox/translate-outbound";
@@ -44,34 +44,23 @@ Rules:
  * the retry itself fails, so the caller keeps the first pass.
  */
 async function retranslateSubject(
-  client: Anthropic,
   subject: string,
   targetLanguageLabel: string,
   targetLanguage: string
 ): Promise<string | null> {
-  try {
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
-      system: SUBJECT_ONLY_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Translate this email subject line to ${targetLanguageLabel} (locale code: ${targetLanguage}). It came back untranslated on the first attempt, so translate it now.\n\n${subject}`,
-        },
-      ],
-    });
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "";
-    const cleaned = stripLongDashes(text.trim().replace(/^["']|["']$/g, ""));
-    return cleaned || null;
-  } catch {
-    return null;
-  }
+  const result = await generateText({
+    label: "api/sequences/duplicate-subject-retry",
+    system: SUBJECT_ONLY_PROMPT,
+    user: `Translate this email subject line to ${targetLanguageLabel} (locale code: ${targetLanguage}). It came back untranslated on the first attempt, so translate it now.\n\n${subject}`,
+    maxTokens: 256,
+  });
+  if (!result.ok) return null;
+
+  const cleaned = stripLongDashes(result.text.trim().replace(/^["']|["']$/g, ""));
+  return cleaned || null;
 }
 
 async function translateStep(
-  client: Anthropic,
   subject: string,
   body: string,
   targetLanguageLabel: string,
@@ -84,17 +73,17 @@ Subject: ${subject}
 Body (HTML):
 ${body}`;
 
-  const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
+  const result = await generateText({
+    label: "api/sequences/duplicate-step",
     system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userMessage }],
+    user: userMessage,
+    maxTokens: 2048,
   });
+  // The caller wraps this in a try/catch and records a per-step warning, so a
+  // throw is the established way to report one failed step.
+  if (!result.ok) throw new Error(result.reason);
 
-  const rawText =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  const cleaned = rawText
+  const cleaned = result.text
     .replace(/^```(?:json)?\n?/i, "")
     .replace(/\n?```$/i, "")
     .trim();
@@ -108,7 +97,6 @@ ${body}`;
   let subjectUntranslated = false;
   if (subject.trim() && sameSubjectText(subject, outSubject)) {
     const retried = await retranslateSubject(
-      client,
       subject,
       targetLanguageLabel,
       targetLanguage
@@ -212,7 +200,6 @@ export async function POST(request: NextRequest) {
   }
 
   const warnings: string[] = [];
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   // Build translated steps
   const newSteps = await Promise.all(
@@ -257,7 +244,6 @@ export async function POST(request: NextRequest) {
 
       try {
         const translated = await translateStep(
-          client,
           subject,
           body,
           targetLanguageLabel,

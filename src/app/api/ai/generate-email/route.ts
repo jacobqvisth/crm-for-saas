@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import { loadWrenchlaneKnowledge } from "@/lib/inbox/load-knowledge";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
@@ -159,17 +159,20 @@ ${body.sequenceName ? `Sequence name: ${body.sequenceName}` : ""}
 Return the email as JSON: {"subject": "...", "body": "..."}`;
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+    const result = await generateText({
+      label: "api/ai/generate-email",
       system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      user: userMessage,
+      maxTokens: 1024,
     });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "AI service unavailable. Try again." },
+        { status: 500 }
+      );
+    }
 
-    const rawText =
-      response.content[0].type === "text" ? response.content[0].text : "";
+    const rawText = result.text;
 
     let parsed: { subject: string; body: string };
     try {

@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 import {
   buildStyleGuidance,
@@ -87,33 +87,22 @@ export async function generateForumPost(opts: {
   options: ForumGenerationOptions;
   language: string;
 }): Promise<GenerateForumPostResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   const options = normalizeOptions(opts.options);
-  const client = new Anthropic({ apiKey });
   const systemPrompt = buildSystemPrompt({ ...opts, options });
   const userPrompt = `Here is the real diagnostic scenario to base the post on:\n\n${describeScenario(
     opts.scenario,
   )}\n\nWrite the post now. Return only the JSON object.`;
 
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-    raw = response.content[0]?.type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+  const result = await generateText({
+    label: "forums/generate",
+    anthropicModel: MODEL,
+    system: systemPrompt,
+    user: userPrompt,
+    maxTokens: 2048,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const parsed = parseTitleBody(raw);
+  const parsed = parseTitleBody(result.text);
   if (!parsed) return { ok: false, reason: "could not parse model output" };
   if (!parsed.title.trim() || !parsed.body.trim()) {
     return { ok: false, reason: "empty title or body from model" };
@@ -122,7 +111,7 @@ export async function generateForumPost(opts: {
     ok: true,
     title: stripLongDashes(parsed.title.trim()),
     body: stripLongDashes(parsed.body.trim()),
-    model: MODEL,
+    model: result.model,
   };
 }
 

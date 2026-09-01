@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
+import { aiProviderStatus, generateText } from "@/lib/ai/provider";
 import { resolveWorkspace } from "@/lib/roadmap/server";
 import { gatherEvidence, formatEvidence } from "@/lib/roadmap/evidence";
 import { ITEM_STATUSES } from "@/lib/roadmap/types";
@@ -31,7 +31,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // Either provider is enough, so this gate asks the provider layer rather than
+  // checking one vendor's key.
+  if (aiProviderStatus().order.length === 0) {
     return NextResponse.json({ error: "AI is not configured" }, { status: 503 });
   }
 
@@ -92,19 +94,17 @@ ${evidenceText}
 
 Return the JSON array now.`;
 
-  let rawText: string;
-  try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4096,
-      system,
-      messages: [{ role: "user", content: userMessage }],
-    });
-    rawText = response.content[0]?.type === "text" ? response.content[0].text : "";
-  } catch {
+  const result = await generateText({
+    label: "api/roadmap/suggest-updates",
+    anthropicModel: MODEL,
+    system,
+    user: userMessage,
+    maxTokens: 4096,
+  });
+  if (!result.ok) {
     return NextResponse.json({ error: "AI service unavailable. Try again." }, { status: 502 });
   }
+  const rawText = result.text;
 
   let parsedArr: unknown;
   try {

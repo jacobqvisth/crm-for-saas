@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 import {
   buildStyleGuidance,
@@ -26,9 +26,6 @@ export async function generateForumComment(opts: {
   body?: string | null;
   options?: Partial<ForumGenerationOptions> | null;
 }): Promise<GenerateCommentResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   const options = normalizeOptions(opts.options);
   const system = `You write a single authentic reply to a car-forum post on ${opts.subreddit}. A real person on our team will paste it as a comment from their own account, so it must read exactly like a genuine community member replying, never like marketing.
 
@@ -50,23 +47,18 @@ ${mentionKnowledgeBlock(options.mentionLevel)}Return ONLY the reply text, no quo
     opts.body ? `Body:\n${opts.body}` : "(no body)"
   }\n\nWrite the reply now.`;
 
-  try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 512,
-      system,
-      messages: [{ role: "user", content: user }],
-    });
-    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
-    if (!text) return { ok: false, reason: "empty comment from model" };
-    return { ok: true, comment: stripLongDashes(text), model: MODEL };
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+  const result = await generateText({
+    label: "forums/comment",
+    anthropicModel: MODEL,
+    system,
+    user,
+    maxTokens: 512,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
+
+  const text = result.text.trim();
+  if (!text) return { ok: false, reason: "empty comment from model" };
+  return { ok: true, comment: stripLongDashes(text), model: result.model };
 }
 
 // --- Per-member comments -----------------------------------------------------
@@ -91,9 +83,6 @@ export async function generateForumComments(opts: {
   members: string[]; // owner labels, e.g. ["Hans", "Matteo", ...]
   options?: Partial<ForumGenerationOptions> | null;
 }): Promise<GenerateCommentsResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   const members = opts.members.filter((m) => m && m.trim()).map((m) => m.trim());
   if (members.length === 0) return { ok: false, reason: "no members" };
 
@@ -122,36 +111,29 @@ One object per person, in the order given.`;
     opts.body ? `Body:\n${opts.body}` : "(no body)"
   }\n\nWrite the ${members.length} replies now.`;
 
-  try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system,
-      messages: [{ role: "user", content: user }],
-    });
-    const raw = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
-    const parsed = parseCommentsJson(raw);
-    if (!parsed) return { ok: false, reason: "could not parse comments JSON from model" };
+  const result = await generateText({
+    label: "forums/comment-batch",
+    anthropicModel: MODEL,
+    system,
+    user,
+    maxTokens: 2048,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-    // Map back to the requested members by name (case-insensitive), falling back
-    // to positional order so a slightly-off name label still lands.
-    const byName = new Map(parsed.map((p) => [p.member.trim().toLowerCase(), p.comment]));
-    const comments: PerMemberComment[] = members.map((label, i) => {
-      const comment =
-        byName.get(label.toLowerCase()) ?? parsed[i]?.comment ?? "";
-      return { owner_label: label, comment: stripLongDashes(comment.trim()) };
-    });
-    if (comments.every((c) => !c.comment)) {
-      return { ok: false, reason: "empty comments from model" };
-    }
-    return { ok: true, comments, model: MODEL };
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
+  const parsed = parseCommentsJson(result.text.trim());
+  if (!parsed) return { ok: false, reason: "could not parse comments JSON from model" };
+
+  // Map back to the requested members by name (case-insensitive), falling back
+  // to positional order so a slightly-off name label still lands.
+  const byName = new Map(parsed.map((p) => [p.member.trim().toLowerCase(), p.comment]));
+  const comments: PerMemberComment[] = members.map((label, i) => {
+    const comment = byName.get(label.toLowerCase()) ?? parsed[i]?.comment ?? "";
+    return { owner_label: label, comment: stripLongDashes(comment.trim()) };
+  });
+  if (comments.every((c) => !c.comment)) {
+    return { ok: false, reason: "empty comments from model" };
   }
+  return { ok: true, comments, model: result.model };
 }
 
 function parseCommentsJson(

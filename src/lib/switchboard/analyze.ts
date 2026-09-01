@@ -1,5 +1,5 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateJson, type AiJsonSpec } from "@/lib/ai/provider";
 import { NO_LONG_DASH_INSTRUCTION } from "@/lib/ai/no-long-dash";
 import type { ProviderTranscriptTurn } from "@/lib/call-agent/elevenlabs";
 
@@ -24,7 +24,7 @@ export interface SwitchboardAnalysis {
   suspect_claims: string[];
 }
 
-const TOOL: Anthropic.Tool = {
+const TOOL: AiJsonSpec = {
   name: "record_switchboard_analysis",
   description:
     "Record what happened on a call to the AI receptionist, and specifically what it could not answer.",
@@ -78,13 +78,8 @@ export async function analyzeSwitchboardCall(ctx: {
   transcript: string;
   knowledgeMd: string;
 }): Promise<AnalyzeSwitchboardResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   const text = ctx.transcript.trim();
   if (!text) return { ok: false, reason: "empty transcript" };
-
-  const client = new Anthropic({ apiKey });
 
   const system = `You review calls to Wrenchlane's AI phone receptionist and report what it could not answer.
 
@@ -110,30 +105,25 @@ ${NO_LONG_DASH_INSTRUCTION}
 
 Call the record_switchboard_analysis tool exactly once. If the transcript is silence or a wrong number, say so in the summary and return empty arrays rather than inventing findings.`;
 
-  try {
-    const resp = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      tools: [TOOL],
-      tool_choice: { type: "tool", name: TOOL.name },
+  const result = await generateJson<Partial<SwitchboardAnalysis>>(
+    {
+      label: "switchboard/analyze",
+      anthropicModel: MODEL,
       system,
-      messages: [{ role: "user", content: `Transcript:\n${text}` }],
-    });
+      user: `Transcript:\n${text}`,
+      maxTokens: 1500,
+    },
+    TOOL,
+  );
+  if (!result.ok) return { ok: false, reason: result.reason };
 
-    const block = resp.content.find((c) => c.type === "tool_use");
-    if (!block || block.type !== "tool_use") {
-      return { ok: false, reason: "model did not call the tool" };
-    }
-    const input = block.input as Partial<SwitchboardAnalysis>;
-    return {
-      ok: true,
-      analysis: {
-        summary: (input.summary ?? "").trim(),
-        unanswered: (input.unanswered ?? []).map((s) => s.trim()).filter(Boolean),
-        suspect_claims: (input.suspect_claims ?? []).map((s) => s.trim()).filter(Boolean),
-      },
-    };
-  } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : "analysis failed" };
-  }
+  const input = result.data;
+  return {
+    ok: true,
+    analysis: {
+      summary: (input.summary ?? "").trim(),
+      unanswered: (input.unanswered ?? []).map((s) => s.trim()).filter(Boolean),
+      suspect_claims: (input.suspect_claims ?? []).map((s) => s.trim()).filter(Boolean),
+    },
+  };
 }

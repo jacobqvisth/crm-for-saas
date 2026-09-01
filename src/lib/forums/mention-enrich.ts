@@ -7,7 +7,7 @@
 // Only third-party hits need this. Our own posts are trusted (audience='us',
 // status='confirmed') and never enriched.
 
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { stripLongDashes } from "@/lib/ai/no-long-dash";
 
 const MODEL = "claude-sonnet-4-6";
@@ -69,10 +69,6 @@ export async function enrichMention(opts: {
   author: string | null;
   text: string;
 }): Promise<EnrichResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
-  const client = new Anthropic({ apiKey });
   const userPrompt = `Subreddit: ${opts.subreddit ? `r/${opts.subreddit}` : "unknown"}
 Author: ${opts.author ? `u/${opts.author}` : "unknown"}
 Text:
@@ -82,20 +78,16 @@ ${opts.text.slice(0, 4000)}
 
 Classify this mention. Return only the JSON object.`;
 
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 400,
-      system: SYSTEM,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-    raw = response.content[0]?.type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return { ok: false, reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}` };
-  }
+  const result = await generateText({
+    label: "forums/mention-enrich",
+    anthropicModel: MODEL,
+    system: SYSTEM,
+    user: userPrompt,
+    maxTokens: 400,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const enrichment = parse(raw);
+  const enrichment = parse(result.text);
   if (!enrichment) return { ok: false, reason: "could not parse model output" };
-  return { ok: true, enrichment, model: MODEL };
+  return { ok: true, enrichment, model: result.model };
 }

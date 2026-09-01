@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { WRENCHLANE_KNOWLEDGE } from "./wrenchlane-knowledge";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
@@ -54,11 +54,6 @@ export type DraftResult =
   | { ok: false; reason: string };
 
 export async function draftReplyInEnglish(ctx: DraftContext): Promise<DraftResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
-  const client = new Anthropic({ apiKey });
-
   const lines: string[] = [];
 
   if (ctx.contactFirstName || ctx.contactLastName || ctx.companyName) {
@@ -102,26 +97,21 @@ export async function draftReplyInEnglish(ctx: DraftContext): Promise<DraftResul
 
   const systemPrompt = buildSystemPrompt(ctx.knowledgeMd ?? WRENCHLANE_KNOWLEDGE);
 
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: "user", content: lines.join("\n") }],
-    });
-    raw = response.content[0].type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+  const result = await generateText({
+    label: "inbox/draft-reply",
+    anthropicModel: MODEL,
+    system: systemPrompt,
+    user: lines.join("\n"),
+    maxTokens: 1024,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const draft = stripLongDashes(raw.trim());
+  const draft = stripLongDashes(result.text.trim());
   if (!draft) return { ok: false, reason: "empty draft from model" };
 
-  return { ok: true, draft, model: MODEL };
+  // Report the model that actually served this, which may be the Gemini
+  // fallback rather than MODEL.
+  return { ok: true, draft, model: result.model };
 }
 
 function truncate(s: string, max: number): string {

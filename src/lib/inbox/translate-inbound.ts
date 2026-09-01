@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -39,9 +39,6 @@ export async function translateInboundMessage(input: {
   bodyHtml: string | null;
   bodyText: string | null;
 }): Promise<TranslationResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   // Need at least some content to work with.
   const subject = input.subject?.trim() ?? "";
   const bodyHtml = input.bodyHtml?.trim() ?? "";
@@ -64,35 +61,24 @@ export async function translateInboundMessage(input: {
   }
   void truncated; // for future telemetry; the translation still proceeds
 
-  const client = new Anthropic({ apiKey });
-
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      // 8192 gives ~2x headroom over realistic email lengths. 4096 truncated
-      // long Latvian replies mid-JSON during the historic backfill.
-      max_tokens: 8192,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Subject: ${subject || "(no subject)"}
+  const result = await generateText({
+    label: "inbox/translate-inbound",
+    anthropicModel: MODEL,
+    system: SYSTEM_PROMPT,
+    user: `Subject: ${subject || "(no subject)"}
 
 Body (HTML):
 ${bodyForModel}`,
-        },
-      ],
-    });
-    raw = response.content[0].type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+    // 8192 gives ~2x headroom over realistic email lengths. 4096 truncated
+    // long Latvian replies mid-JSON during the historic backfill.
+    maxTokens: 8192,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const cleaned = raw
+  // The model that actually served this, which may be the Gemini fallback.
+  const servedModel = result.model;
+
+  const cleaned = result.text
     .replace(/^```(?:json)?\n?/i, "")
     .replace(/\n?```$/i, "")
     .trim();
@@ -116,7 +102,7 @@ ${bodyForModel}`,
       language: "en",
       subjectEn: null,
       bodyHtmlEn: null,
-      model: MODEL,
+      model: servedModel,
     };
   }
 
@@ -132,7 +118,7 @@ ${bodyForModel}`,
     language,
     subjectEn,
     bodyHtmlEn,
-    model: MODEL,
+    model: servedModel,
   };
 }
 

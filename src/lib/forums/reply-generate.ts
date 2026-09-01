@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 import {
   buildStyleGuidance,
@@ -58,37 +58,27 @@ export async function generateForumReply(opts: {
   source: ReplySource;
   options: ForumGenerationOptions;
 }): Promise<GenerateReplyResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
   if (!opts.source.title?.trim()) return { ok: false, reason: "The post has no title/question to reply to" };
 
   const options = normalizeOptions(opts.options);
-  const client = new Anthropic({ apiKey });
   const systemPrompt = buildSystemPrompt(options, opts.source.subreddit ?? null);
   const userPrompt = `Here is the real post to reply to:\n\n${describeSource(
     opts.source,
   )}\n\nWrite your reply now. Return only the JSON object.`;
 
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1536,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-    raw = response.content[0]?.type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+  const result = await generateText({
+    label: "forums/reply-generate",
+    anthropicModel: MODEL,
+    system: systemPrompt,
+    user: userPrompt,
+    maxTokens: 1536,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const body = parseBody(raw);
+  const body = parseBody(result.text);
   if (!body) return { ok: false, reason: "could not parse model output" };
   if (!body.trim()) return { ok: false, reason: "empty reply from model" };
-  return { ok: true, body: stripLongDashes(body.trim()), model: MODEL };
+  return { ok: true, body: stripLongDashes(body.trim()), model: result.model };
 }
 
 // The model is told to return bare JSON; be defensive about fences.
