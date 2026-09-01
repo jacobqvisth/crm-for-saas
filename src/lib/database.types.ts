@@ -594,6 +594,131 @@ export type Database = {
           },
         ]
       }
+      article_autopilot_runs: {
+        Row: {
+          article_id: string | null
+          duration_ms: number | null
+          id: string
+          model: string | null
+          ran_at: string
+          reason: string | null
+          source_kind: string | null
+          source_ref: string | null
+          status: string
+          trigger: string
+          url: string | null
+          workspace_id: string
+        }
+        Insert: {
+          article_id?: string | null
+          duration_ms?: number | null
+          id?: string
+          model?: string | null
+          ran_at?: string
+          reason?: string | null
+          source_kind?: string | null
+          source_ref?: string | null
+          status: string
+          trigger?: string
+          url?: string | null
+          workspace_id: string
+        }
+        Update: {
+          article_id?: string | null
+          duration_ms?: number | null
+          id?: string
+          model?: string | null
+          ran_at?: string
+          reason?: string | null
+          source_kind?: string | null
+          source_ref?: string | null
+          status?: string
+          trigger?: string
+          url?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_autopilot_runs_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_autopilot_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      article_autopilot_settings: {
+        Row: {
+          allowed_categories: string[]
+          enabled: boolean
+          extra_tags: string[]
+          interval_hours: number
+          last_checked_at: string | null
+          options: Json
+          per_day: number
+          publish_mode: string
+          start_hour: number
+          stats_cooldown_days: number
+          stats_every: number
+          time_zone: string
+          updated_at: string
+          updated_by: string | null
+          weekdays_only: boolean
+          workspace_id: string
+        }
+        Insert: {
+          allowed_categories?: string[]
+          enabled?: boolean
+          extra_tags?: string[]
+          interval_hours?: number
+          last_checked_at?: string | null
+          options?: Json
+          per_day?: number
+          publish_mode?: string
+          start_hour?: number
+          stats_cooldown_days?: number
+          stats_every?: number
+          time_zone?: string
+          updated_at?: string
+          updated_by?: string | null
+          weekdays_only?: boolean
+          workspace_id: string
+        }
+        Update: {
+          allowed_categories?: string[]
+          enabled?: boolean
+          extra_tags?: string[]
+          interval_hours?: number
+          last_checked_at?: string | null
+          options?: Json
+          per_day?: number
+          publish_mode?: string
+          start_hour?: number
+          stats_cooldown_days?: number
+          stats_every?: number
+          time_zone?: string
+          updated_at?: string
+          updated_by?: string | null
+          weekdays_only?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_autopilot_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       articles: {
         Row: {
           body: string | null
