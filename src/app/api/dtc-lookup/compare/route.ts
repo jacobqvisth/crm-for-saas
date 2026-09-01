@@ -133,7 +133,8 @@ export async function POST(req: NextRequest) {
         only_wrenchlane: verdict.only_wrenchlane,
         risk_notes: verdict.risk_notes,
       },
-      model: "claude-sonnet-5",
+      // The model that actually served it, which may be the Gemini fallback.
+      model: verdict.model,
     })
     .select("id, code, agreement, score, verdict, model, created_at")
     .single();

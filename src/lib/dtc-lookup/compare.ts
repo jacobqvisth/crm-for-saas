@@ -21,6 +21,17 @@ export interface CompareVerdict {
   risk_notes: string[];
 }
 
+/**
+ * A verdict plus the model that actually produced it.
+ *
+ * The model is reported rather than assumed because the provider layer can
+ * serve this on Gemini instead of Anthropic. The comparison row stores it, and a
+ * stored verdict attributed to the wrong model is worse than no attribution:
+ * these rows exist to judge diagnosis quality, so the judge has to be named
+ * correctly.
+ */
+export type CompareResult = CompareVerdict & { model: string };
+
 const TOOL = {
   name: "record_comparison",
   description: "Record how the Wrenchlane diagnosis compares to the factory manual entry.",
@@ -79,7 +90,7 @@ export interface CompareInput {
  * code. The manual is the reference: it is the manufacturer's own definition of
  * what the code means, so where they disagree the manual wins by construction.
  */
-export async function compareDiagnoses(input: CompareInput): Promise<CompareVerdict> {
+export async function compareDiagnoses(input: CompareInput): Promise<CompareResult> {
   const causeList = input.wrenchlaneCauses
     .map((c) => `- ${c.name ?? "unnamed"}${c.confidence != null ? ` (${c.confidence}%)` : ""}`)
     .join("\n");
@@ -130,5 +141,6 @@ Rules:
     only_lemon: (v.only_lemon ?? []).map(stripLongDashes),
     only_wrenchlane: (v.only_wrenchlane ?? []).map(stripLongDashes),
     risk_notes: (v.risk_notes ?? []).map(stripLongDashes),
+    model: result.model,
   };
 }

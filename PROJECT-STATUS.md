@@ -36,6 +36,10 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 
 ## Architecture
 - **Stack**: Next.js 16 + Supabase + Tailwind CSS 4 + Vercel + Inngest + Gmail API
+- **AI**: all calls go through `src/lib/ai/provider.ts`. Gemini primary (free tokens on the
+  wrenchlane Google account), Anthropic fallback, either covering for the other. Three sites
+  are Anthropic-only because Gemini's equivalents are a different contract: `enrich/find-website`
+  and `enrich/find-phone` (server-side web_search) and `articles/generate` (prompt caching)
 - **Repo**: https://github.com/jacobqvisth/crm-for-saas.git
 - **Local path**: /Users/jacobqvisth/crm-for-saas/
 - **Supabase project**: wdgiwuhehqpkhpvdzzzl
@@ -176,7 +180,11 @@ Managed by Cowork — not exposed in the CRM UI yet. Stores shops found via Apif
 - ENCRYPTION_KEY ✅
 - CRON_SECRET ✅
 - SUPABASE_SERVICE_ROLE_KEY ✅ (added Phase 6)
-- ANTHROPIC_API_KEY ✅ (AI: inbox drafts, cold-email gen, call summaries)
+- ANTHROPIC_API_KEY ✅ (AI: inbox drafts, cold-email gen, call summaries) — now the FALLBACK provider
+- GEMINI_API_KEY ✅ (AI: primary provider as of 2026-09-01, PR #788. AI Studio key on the
+  `jacob@wrenchlane.com` project `crm-for-saas-491113`, so it spends the free Google tokens.
+  All AI goes through `src/lib/ai/provider.ts`; either provider covers for the other)
+- AI_PRIMARY_PROVIDER = `gemini` ✅ (which provider is tried first; unset means anthropic)
 - MILLIONVERIFIER_API_KEY ✅ (email verification)
 - TRACKING_DOMAIN / link.wrenchlane.se ✅ (outbound link wrapping)
 - ELKS_API_USERNAME / ELKS_API_PASSWORD ✅ (calling — 46elks; shared account with result-insurance)
