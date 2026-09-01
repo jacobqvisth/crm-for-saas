@@ -36,10 +36,13 @@ Jacob Qvisth (jacob@wrenchlane.com / jacob.qvisth@gmail.com)
 
 ## Architecture
 - **Stack**: Next.js 16 + Supabase + Tailwind CSS 4 + Vercel + Inngest + Gmail API
-- **AI**: all calls go through `src/lib/ai/provider.ts`. Gemini primary (free tokens on the
-  wrenchlane Google account), Anthropic fallback, either covering for the other. Three sites
-  are Anthropic-only because Gemini's equivalents are a different contract: `enrich/find-website`
-  and `enrich/find-phone` (server-side web_search) and `articles/generate` (prompt caching)
+- **AI**: all calls go through `src/lib/ai/provider.ts`. **Gemini primary** (promo credits on
+  the wrenchlane Google account, expiring 2026), Anthropic fallback, either covering for the
+  other. **Nothing is Anthropic-only** as of PR #792. The two web-search sites
+  (`enrich/find-website`, `enrich/find-phone`) run a different algorithm per provider, because
+  Anthropic searches inside the turn and Gemini needs two calls: see `src/lib/ai/grounded.ts`.
+  Verify with `scripts/test-gemini.mjs`, `test-ai-provider.mts`, `test-article-generator.mts`
+  and `test-web-search.mts`
 - **Repo**: https://github.com/jacobqvisth/crm-for-saas.git
 - **Local path**: /Users/jacobqvisth/crm-for-saas/
 - **Supabase project**: wdgiwuhehqpkhpvdzzzl
