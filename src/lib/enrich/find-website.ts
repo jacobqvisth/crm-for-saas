@@ -1,4 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+import { aiProviderStatus } from "@/lib/ai/provider";
+import { groundedExtract } from "@/lib/ai/grounded";
 
 // Auxiliary AI-helper endpoint — uses the project's standard helper model
 // (claude-sonnet-4-6, same as inbox drafts / call summaries / forums). This is
@@ -253,6 +256,26 @@ interface ReportInput {
 }
 
 /**
+ * The same shape for the Gemini path, which needs a Zod schema rather than an
+ * Anthropic tool. `website` is nullable here because Gemini will not reliably
+ * emit an empty string for "nothing found"; normalizeUrl() treats null and ""
+ * the same, so the loop below is unaffected.
+ */
+const reportSchema = z.object({
+  found: z
+    .boolean()
+    .describe("true only if a LIVE website was found that belongs to this exact business/person."),
+  website: z
+    .string()
+    .nullable()
+    .describe("The full website URL including https://, or null if not found."),
+  confidence: z
+    .enum(["high", "medium", "low"])
+    .describe("How confident this is the correct site for THIS specific entity."),
+  reasoning: z.string().describe("One short sentence on how it was matched, or why it was not."),
+});
+
+/**
  * Find a contact/company's website.
  *  1. If they have a custom (non-free) email domain, that domain IS the site —
  *     but only if it actually loads (verified live).
@@ -298,11 +321,17 @@ export async function findWebsite(input: FindWebsiteInput): Promise<FindWebsiteR
     return { found: false, website: null, confidence: null, reasoning: "No company name or custom email domain to search with.", source: null };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return { found: false, website: null, confidence: null, reasoning: "ANTHROPIC_API_KEY not set.", source: null };
+  // Either provider can search, so the gate asks the provider layer.
+  const providers = aiProviderStatus().order;
+  if (providers.length === 0) {
+    return {
+      found: false,
+      website: null,
+      confidence: null,
+      reasoning: "No AI provider is configured.",
+      source: null,
+    };
   }
-  const client = new Anthropic({ apiKey });
 
   const location = [input.city, input.country].filter(Boolean).join(", ");
   const emailHint = input.email ? ` Their email is ${input.email}.` : "";
@@ -322,7 +351,11 @@ export async function findWebsite(input: FindWebsiteInput): Promise<FindWebsiteR
     ? `\n- This contact uses a personal/free email provider and may simply be a private individual, not a business. A person's name on its own is NOT enough to claim a business website. Only return a site if the name, town${trade ? ", and trade" : ""} clearly line up; otherwise set found=false rather than guessing.`
     : "";
 
-  const system = `You find the official, CURRENTLY-LIVE website for a specific business or person. Use the web_search tool to look them up, then call report_website.
+  // The matching rules, which are about WHICH site counts and are identical
+  // whatever provider is asked. Kept separate from the output instruction
+  // because the providers need opposite things: Anthropic ends in a tool call,
+  // while Gemini's grounded step has to answer in prose.
+  const searchRules = `You find the official, CURRENTLY-LIVE website for a specific business or person.
 
 Rules:
 - Return the business's OWN live homepage — the page that actually loads with their real content.
@@ -333,6 +366,9 @@ Rules:
 - If you cannot find a live site for THIS specific business, set found=false rather than guessing.${tradeRule}${personalRule}
 - Keep reasoning to one short sentence.`;
 
+  const system = `${searchRules}
+- Use the web_search tool to look them up, then call report_website.`;
+
   const baseMsg =
     `Find the official live website for:\n` +
     `Name: ${name}\n` +
@@ -342,34 +378,90 @@ Rules:
 
   let fallback: FindWebsiteResult | null = null; // best "unknown"-liveness candidate
 
+  /**
+   * One candidate from Anthropic: its server-side web_search and the report tool
+   * resolve in a single call. Unchanged from before the Gemini path existed.
+   */
+  const proposeViaAnthropic = async (msg: string): Promise<ReportInput | null> => {
+    const resp = await new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }).messages.create({
+      model: MODEL,
+      max_tokens: 1500,
+      system,
+      tools: [
+        { type: "web_search_20260209", name: "web_search", max_uses: 4 } as unknown as Anthropic.Tool,
+        REPORT_TOOL,
+      ],
+      messages: [{ role: "user", content: msg }],
+    });
+
+    const report = resp.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_website",
+    );
+    // No tool call (e.g. pause_turn mid-search): the caller just tries again.
+    return report ? (report.input as ReportInput) : null;
+  };
+
+  /**
+   * One candidate from Gemini. Two calls, because asking Gemini for grounding
+   * and a schema together silently skips the search: see lib/ai/grounded.ts.
+   */
+  const proposeViaGemini = async (msg: string): Promise<ReportInput | null> => {
+    const out = await groundedExtract({
+      label: "enrich/find-website",
+      // The rules only: the Anthropic `system` names tools that do not exist in
+      // a Gemini request, and forbids the prose the grounded step needs.
+      searchSystem: `${searchRules}\n- Answer in plain prose: name the candidate sites you found and give their exact URLs.`,
+      searchPrompt: `${msg}\n\nSearch the web and report what you find, including the exact URLs.`,
+      extractSystem:
+        `${searchRules}\n\nPick the single best candidate from the findings and report it. ` +
+        `If the findings contain no live site that plausibly belongs to this exact business, set found=false.`,
+      schema: reportSchema,
+      strong: true,
+    });
+
+    if (!out.ok) return null;
+    return {
+      found: out.data.found,
+      website: out.data.website ?? "",
+      confidence: out.data.confidence,
+      reasoning: out.data.reasoning,
+    };
+  };
+
+  /** Try each configured provider in the layer's order until one proposes. */
+  const propose = async (msg: string): Promise<ReportInput | null> => {
+    for (const provider of providers) {
+      const out =
+        provider === "anthropic" ? await proposeViaAnthropic(msg) : await proposeViaGemini(msg);
+      if (out) return out;
+    }
+    return null;
+  };
+
+  // Wall-clock guard. The route's maxDuration is 180s and a search turn is not
+  // cheap: measured 2026-09-01, one Anthropic case took 197s across four turns,
+  // which would have 504'd rather than returning the answer it had. The Gemini
+  // path costs two calls per turn (ground, then extract), so the budget matters
+  // more, not less. Stop STARTING turns past this and return the best candidate
+  // so far.
+  const searchDeadline = Date.now() + 140_000;
+
   try {
     // Each attempt is an INDEPENDENT search (server-side web_search can't be
     // safely continued across turns). We bake the growing reject-list into the
     // prompt so the model avoids dead domains it already proposed.
     for (let turn = 0; turn < 4; turn++) {
+      if (turn > 0 && Date.now() > searchDeadline) break;
       const rejectNote = rejected.size
         ? `\n\nThese domains are dead/parked — do NOT return any of them, find a DIFFERENT live site: ${[...rejected].join(", ")}.`
         : "";
 
-      const resp = await client.messages.create({
-        model: MODEL,
-        max_tokens: 1500,
-        system,
-        tools: [
-          { type: "web_search_20260209", name: "web_search", max_uses: 4 } as unknown as Anthropic.Tool,
-          REPORT_TOOL,
-        ],
-        messages: [{ role: "user", content: baseMsg + rejectNote }],
-      });
+      const out = await propose(baseMsg + rejectNote);
 
-      const report = resp.content.find(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_website",
-      );
+      // Nothing proposed (a paused Anthropic turn, or a failed Gemini search):
+      // just try a fresh attempt.
+      if (!out) continue;
 
-      // No tool call (e.g. pause_turn mid-search) — just try a fresh attempt.
-      if (!report) continue;
-
-      const out = report.input as ReportInput;
       const url = out.found ? normalizeUrl(out.website) : null;
 
       // Model says not found.

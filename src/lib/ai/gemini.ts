@@ -326,6 +326,193 @@ async function geminiAttempt(
   return { ok: true, text, model, usage };
 }
 
+// ---------------------------------------------------------------------------
+// Grounded search (Google Search as a built-in tool)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the model actually looked at. Returned so callers can prove a search
+ * happened rather than trusting the prose.
+ *
+ * `sources` are domains, taken from each chunk's title. The chunk `uri` is a
+ * vertexaisearch.cloud.google.com redirect, NOT the real page, so it must never
+ * be stored or presented as the business's URL.
+ */
+export type GeminiGroundingEvidence = { queries: string[]; sources: string[] };
+
+export type GeminiGroundedResult =
+  | { ok: true; text: string; model: string; evidence: GeminiGroundingEvidence; usage: GeminiUsage }
+  | { ok: false; reason: string; status?: number; retryable: boolean };
+
+/**
+ * Ask Gemini something it has to look up, with Google Search enabled.
+ *
+ * THE TRAP THIS FUNCTION EXISTS TO AVOID: asking for grounding and a structured
+ * reply in the same call silently disables the grounding. Sending
+ * `responseSchema`, or function declarations, alongside `google_search` returns
+ * a perfectly-shaped answer with `webSearchQueries: []` and no grounding chunks,
+ * i.e. invented from parametric memory. Measured 2026-09-01 across five runs on
+ * gemini-3.6-flash: it never searched once, and in forced-function mode it
+ * produced a plausible-looking URL that was actually a site-search link.
+ *
+ * So this call takes NO schema, and the reply is prose. Turning that prose into
+ * a typed value is a second, unqrounded call: see src/lib/ai/grounded.ts.
+ *
+ * A reply with no grounding metadata is treated as a FAILURE, because an
+ * ungrounded answer to a "look this up" question is a fabrication, and for the
+ * enrichment call sites a fabricated phone number or URL is worse than none.
+ */
+export async function geminiGroundedSearch(req: {
+  model?: string;
+  system?: string;
+  user: string;
+  maxOutputTokens: number;
+  thinkingLevel?: GeminiThinkingLevel;
+  signal?: AbortSignal;
+}): Promise<GeminiGroundedResult> {
+  const apiKey = geminiApiKey();
+  if (!apiKey) return { ok: false, reason: "GEMINI_API_KEY not set", retryable: false };
+
+  const model = req.model || geminiModel();
+
+  // Same step-down ladder as geminiGenerate: support differs per model.
+  const ladder: Array<Record<string, unknown> | null> = usesLegacyThinkingBudget(model)
+    ? [null]
+    : (() => {
+        const preferred = req.thinkingLevel ?? "low";
+        const levels = preferred === "low" ? ["low"] : [preferred, "low"];
+        return [...levels.map((thinkingLevel) => ({ thinkingLevel })), null];
+      })();
+
+  let lastFailure: GeminiGroundedResult = {
+    ok: false,
+    reason: "gemini made no attempt",
+    retryable: false,
+  };
+
+  for (const thinkingConfig of ladder) {
+    const body: Record<string, unknown> = {
+      contents: [{ role: "user", parts: [{ text: req.user }] }],
+      // The built-in search tool. `google_search_retrieval` is the older name and
+      // is now rejected outright.
+      tools: [{ google_search: {} }],
+      generationConfig: {
+        maxOutputTokens: req.maxOutputTokens,
+        ...(thinkingConfig ? { thinkingConfig } : {}),
+      },
+    };
+    if (req.system) body.systemInstruction = { parts: [{ text: req.system }] };
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify(body),
+        signal: req.signal,
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return { ok: false, reason: `gemini grounded fetch failed: ${reason}`, retryable: true };
+    }
+
+    const raw = await res.text();
+
+    if (!res.ok) {
+      let detail = raw.slice(0, 400);
+      try {
+        const parsed = JSON.parse(raw) as { error?: { message?: string } };
+        if (parsed.error?.message) detail = parsed.error.message;
+      } catch {
+        // Keep the truncated body.
+      }
+      const failure: GeminiGroundedResult = {
+        ok: false,
+        reason: `gemini ${res.status}: ${detail}`,
+        status: res.status,
+        retryable: isRetryableStatus(res.status),
+      };
+      if (isUnsupportedThinkingLevel(res.status, detail)) {
+        lastFailure = failure;
+        continue;
+      }
+      return failure;
+    }
+
+    type GroundedResponse = {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        finishReason?: string;
+        groundingMetadata?: {
+          webSearchQueries?: string[];
+          groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+        };
+      }>;
+      promptFeedback?: { blockReason?: string };
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    };
+
+    let parsed: GroundedResponse;
+    try {
+      parsed = JSON.parse(raw) as GroundedResponse;
+    } catch {
+      return { ok: false, reason: "gemini returned a non-JSON body", retryable: true };
+    }
+
+    if (parsed.promptFeedback?.blockReason) {
+      return {
+        ok: false,
+        reason: `gemini blocked the prompt (${parsed.promptFeedback.blockReason})`,
+        retryable: false,
+      };
+    }
+
+    const candidate = parsed.candidates?.[0];
+    const text = (candidate?.content?.parts ?? [])
+      .map((p) => p.text ?? "")
+      .join("")
+      .trim();
+
+    const meta = candidate?.groundingMetadata ?? {};
+    const queries = meta.webSearchQueries ?? [];
+    const sources = (meta.groundingChunks ?? [])
+      .map((c) => (c.web?.title ?? "").trim())
+      .filter(Boolean);
+
+    if (!text) {
+      const finish = candidate?.finishReason ?? "unknown";
+      return {
+        ok: false,
+        reason: `gemini grounded search returned no text (finishReason=${finish})`,
+        retryable: finish === "MAX_TOKENS" || finish === "unknown",
+      };
+    }
+
+    // No queries and no sources means it answered from memory. Retryable,
+    // because a re-ask sometimes does search, but never acceptable as-is.
+    if (queries.length === 0 && sources.length === 0) {
+      return {
+        ok: false,
+        reason: "gemini answered without searching (no grounding metadata)",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      text,
+      model,
+      evidence: { queries, sources },
+      usage: {
+        inputTokens: parsed.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: parsed.usageMetadata?.candidatesTokenCount ?? 0,
+      },
+    };
+  }
+
+  return lastFailure;
+}
+
 /** List the models the key can actually reach. Used by the connection test. */
 export async function geminiListModels(): Promise<
   { ok: true; models: string[] } | { ok: false; reason: string }

@@ -1,5 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import { normalizePhone } from "@/lib/calls/phone";
+import { aiProviderStatus } from "@/lib/ai/provider";
+import { groundedExtract } from "@/lib/ai/grounded";
 import { findPhonesViaGoogleMaps } from "@/lib/enrich/find-phone-gmaps";
 
 // Auxiliary AI-helper endpoint — uses the project's standard helper model
@@ -306,6 +309,35 @@ interface ReportInput {
 }
 
 /**
+ * The same contract for the Gemini path, which needs a Zod schema rather than an
+ * Anthropic tool. Optional fields are nullable rather than absent because Gemini
+ * fills every property of a responseSchema; the ingest below already tolerates
+ * empty values.
+ */
+const reportSchema = z.object({
+  phones: z
+    .array(
+      z.object({
+        number: z
+          .string()
+          .describe("The phone number, ideally in full international form (e.g. +46 8 123 45 67)."),
+        label: z
+          .string()
+          .nullable()
+          .describe("Main, Mobile, Service, Reception, etc. Null if unknown."),
+        confidence: z
+          .enum(["high", "medium", "low"])
+          .describe("How sure this number belongs to THIS specific entity."),
+        source_url: z.string().nullable().describe("The page URL where the number was seen."),
+      }),
+    )
+    .describe("All distinct phone numbers found for THIS specific business/person."),
+  reasoning: z
+    .string()
+    .describe("One short sentence on how the business was matched, or why nothing was found."),
+});
+
+/**
  * Find all phone numbers linked to a contact and/or their company.
  *  1. Scrape the known website(s) — contact pages, `tel:` links, visible text.
  *  2. Run a Claude web search by name + company + location for any others.
@@ -477,13 +509,17 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     input.companyName ||
     input.name ||
     "";
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // Which providers can run the search, in the layer's preferred order. Either
+  // one can do it, so the gates below ask this rather than one vendor's key.
+  const providers = aiProviderStatus().order;
+  const aiConfigured = providers.length > 0;
   let searchReasoning: string | null = null;
 
   // Diagnostics for this run.
   const debug: FindPhonesDebug = {
     fetchLog,
-    apiKeyPresent: !!apiKey,
+    // Named for the Anthropic-only era; now means "some AI provider is usable".
+    apiKeyPresent: aiConfigured,
     webSearchTurns: 0,
     reportCalled: false,
     webPhoneCount: 0,
@@ -500,14 +536,14 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
   // If the site already gave us a number, returning it in ~2s beats spending up
   // to a minute of web search — and, critically, avoids the 180s function
   // timeout that was killing the request and discarding the scraped number.
-  if (searchSubject && apiKey && byNumber.size === 0 && webBudget < WEB_SEARCH_MIN_MS) {
+  if (searchSubject && aiConfigured && byNumber.size === 0 && webBudget < WEB_SEARCH_MIN_MS) {
     // Not enough left to complete even one search turn. Bail out cleanly rather
     // than start work the function timeout will throw away.
     skippedForTime.push("web-search");
     tick("web-search", "skip", "Out of time for the web search");
     searchReasoning =
       "Ran out of time before the web search could run. Try again, the website and Google Maps results are saved.";
-  } else if (searchSubject && apiKey && byNumber.size === 0) {
+  } else if (searchSubject && aiConfigured && byNumber.size === 0) {
     tick("web-search", "start", `Searching the web for ${searchSubject}`);
     // Hard wall-clock budget for the web-search phase, taken from the time that
     // is actually left rather than a fixed 90s that could overrun the function.
@@ -517,7 +553,7 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     // forced report) run past the budget and 504 the whole request.
     const webController = new AbortController();
     const webTimer = setTimeout(() => webController.abort(), webBudget);
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const location = [input.city, input.country].filter(Boolean).join(", ");
 
     const trade = [input.category, input.industry]
@@ -530,15 +566,24 @@ export async function findPhones(input: FindPhonesInput): Promise<FindPhonesResu
     // Guard the hardest case: a person's name with no real business behind it.
     const personalRule = `\n- If this is a private individual and you cannot find a genuine business${trade ? ` in ${trade}` : ""} matching the name and town, report an EMPTY list — never guess a stranger's personal number.`;
 
-    const system = `You find ALL the phone numbers for a specific business (and the person, if named). Use the web_search tool to look them up, then call report_phones with every number you find.
+    // The matching rules, which are about WHICH numbers count and are the same
+    // whatever provider is asked. Kept separate from the output instruction
+    // because the two providers need opposite things: Anthropic must end in a
+    // tool call, while Gemini's grounded step must answer in prose (a system
+    // prompt forbidding plain text made it return nothing at all).
+    const searchRules = `You find ALL the phone numbers for a specific business (and the person, if named).
 
 Rules:
 - Return numbers that belong to THIS specific business/person — match on name, town, and trade.
 - Prefer the business's own website, then reputable directories (hitta.se, eniro, Google Business). Avoid unrelated listings.
 - Include all distinct lines: main/reception, mobile, service desk, etc. Label them when the source says what they are.
 - Give each a confidence based on how sure you are it's the right entity.${tradeRule}${personalRule}
+- If you genuinely can't find any, say so plainly rather than offering a number you are unsure of.
+- Keep reasoning to one short sentence.`;
+
+    const system = `${searchRules}
+- Use the web_search tool to look them up, then call report_phones with every number you find.
 - If you genuinely can't find any, call report_phones with an empty phones array and explain in reasoning.
-- Keep reasoning to one short sentence.
 - You MUST finish by calling report_phones — do not answer in plain text.`;
 
     const msg =
@@ -559,9 +604,8 @@ Rules:
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_phones",
       );
 
-    const ingestReport = (report: Anthropic.ToolUseBlock) => {
+    const ingestReport = (out: ReportInput) => {
       debug.reportCalled = true;
-      const out = report.input as ReportInput;
       searchReasoning = out.reasoning ?? searchReasoning;
       for (const p of out.phones ?? []) {
         const e164 = normalizePhone(p.number, hint);
@@ -579,7 +623,12 @@ Rules:
       }
     };
 
-    try {
+    /**
+     * Anthropic: its server-side web_search runs inside the turn loop, so the
+     * research and the structured report resolve in one conversation. Unchanged
+     * from before the Gemini path existed.
+     */
+    const runAnthropicSearch = async (): Promise<boolean> => {
       const messages: Anthropic.MessageParam[] = [{ role: "user", content: msg }];
       let report: Anthropic.ToolUseBlock | undefined;
 
@@ -629,7 +678,62 @@ Rules:
         skippedForTime.push("web-search");
       }
 
-      if (report) ingestReport(report);
+      if (!report) return false;
+      ingestReport(report.input as ReportInput);
+      return true;
+    };
+
+    /**
+     * Gemini: grounding and structured output cannot be requested together
+     * without the search being silently skipped, so this is two calls (ground,
+     * then extract) and an answer with no grounding evidence is rejected rather
+     * than ingested. A fabricated phone number on a real contact is worse than
+     * an empty field. See src/lib/ai/grounded.ts.
+     */
+    const runGeminiSearch = async (): Promise<boolean> => {
+      const out = await groundedExtract({
+        label: "enrich/find-phone",
+        // The rules only. The Anthropic `system` forbids plain-text answers,
+        // which makes the grounded step return nothing at all.
+        searchSystem: `${searchRules}\n- Answer in plain prose: list each number you found and the page it came from.`,
+        searchPrompt: `${msg}\nSearch the web and report every phone number you find, with the page it came from.`,
+        extractSystem:
+          `${searchRules}\n\nList every distinct number that appears in the findings and belongs to ` +
+          `THIS entity. If the findings contain none, return an empty phones array and say so.`,
+        schema: reportSchema,
+        strong: true,
+        searchMaxTokens: 2500,
+        signal: webController.signal,
+      });
+
+      debug.webSearchTurns++;
+      if (!out.ok) {
+        debug.searchError = out.reason;
+        return false;
+      }
+
+      ingestReport({
+        phones: out.data.phones.map((p) => ({
+          number: p.number,
+          label: p.label ?? undefined,
+          confidence: p.confidence,
+          source_url: p.source_url ?? undefined,
+        })),
+        reasoning: out.data.reasoning,
+      });
+      return true;
+    };
+
+    try {
+      // Try each configured provider in the layer's order, stopping as soon as
+      // one produces numbers. A provider that reports an empty list has still
+      // done the job, so only an outright failure moves to the next one.
+      for (const provider of providers) {
+        if (Date.now() > webDeadline) break;
+        const served =
+          provider === "anthropic" ? await runAnthropicSearch() : await runGeminiSearch();
+        if (served) break;
+      }
     } catch (err) {
       const aborted =
         webController.signal.aborted || (err instanceof Error && err.name === "AbortError");
@@ -652,7 +756,7 @@ Rules:
     );
   } else if (byNumber.size > 0) {
     tick("web-search", "skip", "Not needed, already found a number");
-  } else if (!apiKey) {
+  } else if (!aiConfigured) {
     tick("web-search", "skip", "Web search is not configured");
   } else {
     tick("web-search", "skip", "Nothing searchable on this record");

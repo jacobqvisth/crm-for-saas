@@ -43,10 +43,17 @@ describe("findPhones time budget", () => {
     createMock.mockReset();
     gmapsMock.mockResolvedValue(null);
     process.env.ANTHROPIC_API_KEY = "test-key";
+    // The web-search leg now picks its provider from aiProviderStatus(). Pin
+    // Gemini off so a real key in the developer's shell cannot add a second
+    // provider and turn these budget assertions into live HTTP calls.
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("GOOGLE_AI_API_KEY", "");
+    vi.stubEnv("AI_PRIMARY_PROVIDER", "");
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("skips every external leg when the deadline has already passed", async () => {

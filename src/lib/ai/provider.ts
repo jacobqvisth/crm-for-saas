@@ -20,11 +20,11 @@
  *                       Also supports a cached system prefix (systemBlocks) and
  *                       a capacity-fallback Anthropic model.
  *
- * Not covered on purpose: Anthropic's server-side `web_search` tool
- * (`enrich/find-website`, `enrich/find-phone`). Gemini's grounding is a
- * different contract with a different result shape, so those two sites stay
- * Anthropic-only rather than being silently downgraded. They are the only
- * remaining single-provider AI features.
+ * EVERY AI call site in the CRM now goes through this module. The two that need
+ * to search the web (`enrich/find-website`, `enrich/find-phone`) cannot use one
+ * generic call, because Anthropic does the search inside the turn and Gemini
+ * cannot; they pick a provider from `aiProviderStatus().order` and run one of
+ * two strategies. See src/lib/ai/grounded.ts.
  *
  * Configuration (all optional):
  *   GEMINI_API_KEY          Enables the Gemini side. Without it this module
