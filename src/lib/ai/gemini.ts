@@ -113,17 +113,42 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status === 500 || status === 503 || status === 504;
 }
 
+/** Is this schema node just the JSON Schema null type? */
+function isNullBranch(node: unknown): boolean {
+  return (node as { type?: unknown } | null)?.type === "null";
+}
+
 /** Convert an Anthropic-style JSON Schema into the subset Gemini accepts. */
 export function toGeminiSchema(input: unknown): GeminiSchema {
-  const node = (input ?? {}) as Record<string, unknown>;
+  let node = (input ?? {}) as Record<string, unknown>;
 
-  // Gemini has no union types, so JSON Schema's ["string","null"] collapses to
-  // a nullable scalar.
+  // Gemini has no union types, and there are two ways a nullable field reaches
+  // us. `z.string().nullable()` compiles to anyOf [string, null], NOT to
+  // type: ["string","null"], so an anyOf that is only "X or null" has to be
+  // unwrapped to X plus the nullable flag.
+  //
+  // Getting this wrong is quiet and expensive: an unhandled anyOf leaves no
+  // `type` at all, the fallback below reads it as an object, and Gemini then
+  // returns {} where the caller wanted a string. That is exactly how the
+  // article generator's `title` and `seo.metaTitle` came back as objects.
+  let unwrappedNullable = false;
+  const branches = node.anyOf ?? node.oneOf;
+  if (Array.isArray(branches)) {
+    const concreteBranches = branches.filter((b) => !isNullBranch(b));
+    unwrappedNullable = concreteBranches.length !== branches.length;
+
+    // A genuine multi-type union cannot be expressed, so the first branch wins
+    // and the schema is narrowed. Callers of generateStructured re-validate with
+    // Zod, so a reply that needed another branch is rejected rather than stored.
+    const chosen = concreteBranches[0];
+    node = { ...(chosen as Record<string, unknown> | undefined), ...(node.description ? { description: node.description } : {}) };
+  }
+
   const typeList = Array.isArray(node.type)
     ? (node.type as string[])
     : [typeof node.type === "string" ? node.type : "object"];
   const concrete = typeList.find((t) => t !== "null") ?? "string";
-  const nullable = typeList.includes("null") || node.nullable === true;
+  const nullable = unwrappedNullable || typeList.includes("null") || node.nullable === true;
 
   const out: GeminiSchema = { type: concrete.toUpperCase() };
   if (nullable) out.nullable = true;

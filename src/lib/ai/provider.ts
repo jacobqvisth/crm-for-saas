@@ -8,21 +8,23 @@
  * 400 `invalid_request_error`, not a 401, so it does not read as an auth or
  * quota problem in the logs.
  *
- * So call sites ask for a completion, not for a vendor. This module keeps
- * Anthropic as the primary (same models, same prompts, same output as before)
- * and fails over to Gemini, billed to the Google account that holds the AI
- * credits, when Anthropic cannot serve the request.
+ * So call sites ask for a completion, not for a vendor. Whichever provider is
+ * primary, the other covers for it when it cannot serve the request. Gemini is
+ * billed to the Google account that holds the AI credits.
  *
- * Two entry points cover every CRM pattern:
- *   generateText  - system + one user turn, text back.
- *   generateJson  - same, but the reply is constrained to a schema. On Anthropic
- *                   that is a forced tool call; on Gemini it is responseSchema.
+ * Three entry points cover every CRM pattern:
+ *   generateText        system + one user turn, text back.
+ *   generateJson        constrained to a JSON Schema. On Anthropic that is a
+ *                       forced tool call; on Gemini it is responseSchema.
+ *   generateStructured  same from a Zod schema, re-validated before returning.
+ *                       Also supports a cached system prefix (systemBlocks) and
+ *                       a capacity-fallback Anthropic model.
  *
  * Not covered on purpose: Anthropic's server-side `web_search` tool
- * (`enrich/find-website`, `enrich/find-phone`) and prompt caching
- * (`articles/generate`). Gemini's grounding is a different contract with a
- * different result shape, so those sites stay Anthropic-only rather than being
- * silently downgraded. They are the only remaining single-provider features.
+ * (`enrich/find-website`, `enrich/find-phone`). Gemini's grounding is a
+ * different contract with a different result shape, so those two sites stay
+ * Anthropic-only rather than being silently downgraded. They are the only
+ * remaining single-provider AI features.
  *
  * Configuration (all optional):
  *   GEMINI_API_KEY          Enables the Gemini side. Without it this module
@@ -50,7 +52,22 @@ export type AiProvider = "anthropic" | "gemini";
 /** Model used when a call site does not name one. */
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-export type AiAttempt = { provider: AiProvider; reason: string };
+export type AiAttempt = {
+  provider: AiProvider;
+  reason: string;
+  /** HTTP status when the provider gave one. Lets callers classify capacity vs content. */
+  status?: number;
+};
+
+/**
+ * One segment of a multi-block system prompt.
+ *
+ * Only worth using when a leading chunk is identical across calls: mark it
+ * `cache: true` and Anthropic caches that prefix. Gemini's generateContent has
+ * no equivalent, so there the blocks are simply concatenated. Caching is
+ * therefore a provider-specific optimisation, never a behavioural difference.
+ */
+export type AiSystemBlock = { text: string; cache?: boolean };
 
 export type AiRequest = {
   /**
@@ -59,15 +76,62 @@ export type AiRequest = {
    */
   label: string;
   system?: string;
+  /**
+   * Multi-block system prompt, used instead of `system` when a leading chunk is
+   * stable enough to cache. See AiSystemBlock.
+   */
+  systemBlocks?: AiSystemBlock[];
   user: string;
   maxTokens: number;
   temperature?: number;
   /** Anthropic model, when Anthropic serves the request. */
   anthropicModel?: string;
+  /**
+   * A second Anthropic model to try when the first fails on CAPACITY (429/529)
+   * rather than on content. A 529 is a signal about one model's pool, so another
+   * model can serve where a retry of the same one keeps failing. Tried before
+   * failing over to Gemini.
+   */
+  anthropicFallbackModel?: string;
   /** Gemini model override, when Gemini serves it. */
   geminiModel?: string;
+  /**
+   * Anthropic SDK retry count. The SDK retries 408/409/429/5xx with exponential
+   * backoff and honours retry-after; its default is 2. Raise it for low-volume
+   * interactive work where waiting beats failing.
+   */
+  anthropicMaxRetries?: number;
   signal?: AbortSignal;
 };
+
+/** The Anthropic client, honouring a call site's retry preference. */
+function anthropicClient(req: AiRequest): Anthropic {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(typeof req.anthropicMaxRetries === "number"
+      ? { maxRetries: req.anthropicMaxRetries }
+      : {}),
+  });
+}
+
+/** Flatten system blocks for a provider with no notion of caching. */
+function flattenSystem(req: AiRequest): string | undefined {
+  if (req.systemBlocks?.length) {
+    return req.systemBlocks.map((b) => b.text).join("\n\n");
+  }
+  return req.system;
+}
+
+/** True when this error is a capacity signal about one model's pool. */
+function isCapacityError(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status;
+  const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return status === 429 || status === 529 || message.includes("overloaded");
+}
+
+function errorStatus(err: unknown): number | undefined {
+  return (err as { status?: number } | null)?.status;
+}
 
 export type AiTextResult =
   | { ok: true; text: string; provider: AiProvider; model: string }
@@ -86,7 +150,17 @@ export type AiJsonSpec = {
 
 export type AiJsonResult<T> =
   | { ok: true; data: T; provider: AiProvider; model: string }
-  | { ok: false; reason: string; attempts: AiAttempt[] };
+  | {
+      ok: false;
+      reason: string;
+      attempts: AiAttempt[];
+      /**
+       * The model declined the content. Not a capacity problem, so another model
+       * or another provider would almost certainly decline too: callers should
+       * surface it rather than retry.
+       */
+      refusal?: boolean;
+    };
 
 // ---------------------------------------------------------------------------
 // Policy
@@ -167,15 +241,28 @@ function logFailover(label: string, from: AiProvider, reason: string) {
 // Text
 // ---------------------------------------------------------------------------
 
+/** System field in the shape the Anthropic SDK wants, caching where asked. */
+function anthropicSystem(req: AiRequest): Anthropic.MessageCreateParams["system"] | undefined {
+  if (req.systemBlocks?.length) {
+    return req.systemBlocks.map((block) => ({
+      type: "text" as const,
+      text: block.text,
+      ...(block.cache ? { cache_control: { type: "ephemeral" as const } } : {}),
+    }));
+  }
+  return req.system;
+}
+
 async function anthropicText(req: AiRequest): Promise<{ text: string; model: string }> {
   const model = req.anthropicModel ?? DEFAULT_ANTHROPIC_MODEL;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(req);
+  const system = anthropicSystem(req);
 
   const response = await client.messages.create(
     {
       model,
       max_tokens: req.maxTokens,
-      ...(req.system ? { system: req.system } : {}),
+      ...(system ? { system } : {}),
       ...(typeof req.temperature === "number" ? { temperature: req.temperature } : {}),
       messages: [{ role: "user", content: req.user }],
     },
@@ -223,7 +310,7 @@ export async function generateText(req: AiRequest): Promise<AiTextResult> {
 
     const result = await geminiGenerate({
       model: mapToGeminiModel(req),
-      system: req.system,
+      system: flattenSystem(req),
       user: req.user,
       maxOutputTokens: req.maxTokens,
       temperature: req.temperature,
@@ -232,7 +319,7 @@ export async function generateText(req: AiRequest): Promise<AiTextResult> {
 
     if (result.ok) return { ok: true, text: result.text, provider, model: result.model };
 
-    attempts.push({ provider, reason: result.reason });
+    attempts.push({ provider, reason: result.reason, status: result.status });
     if (isLast || !result.retryable) break;
     logFailover(req.label, provider, result.reason);
   }
@@ -253,13 +340,13 @@ async function anthropicJson<T>(
   spec: AiJsonSpec,
 ): Promise<{ data: T; model: string }> {
   const model = req.anthropicModel ?? DEFAULT_ANTHROPIC_MODEL;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(req);
 
   const response = await client.messages.create(
     {
       model,
       max_tokens: req.maxTokens,
-      ...(req.system ? { system: req.system } : {}),
+      ...(anthropicSystem(req) ? { system: anthropicSystem(req) } : {}),
       ...(typeof req.temperature === "number" ? { temperature: req.temperature } : {}),
       tools: [
         {
@@ -317,7 +404,7 @@ export async function generateJson<T>(
 
     const result = await geminiGenerate({
       model: mapToGeminiModel(req),
-      system: req.system,
+      system: flattenSystem(req),
       user: req.user,
       maxOutputTokens: req.maxTokens,
       temperature: req.temperature,
@@ -326,7 +413,7 @@ export async function generateJson<T>(
     });
 
     if (!result.ok) {
-      attempts.push({ provider, reason: result.reason });
+      attempts.push({ provider, reason: result.reason, status: result.status });
       if (isLast || !result.retryable) break;
       logFailover(req.label, provider, result.reason);
       continue;
@@ -384,37 +471,73 @@ export async function generateStructured<S extends z.ZodType>(
     const isLast = provider === order[order.length - 1];
 
     if (provider === "anthropic") {
-      const model = req.anthropicModel ?? DEFAULT_ANTHROPIC_MODEL;
-      try {
-        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-        const response = await client.messages.parse(
-          {
-            model,
-            max_tokens: req.maxTokens,
-            ...(req.system ? { system: req.system } : {}),
-            ...(typeof req.temperature === "number" ? { temperature: req.temperature } : {}),
-            messages: [{ role: "user", content: req.user }],
-            output_config: { format: zodOutputFormat(schema) },
-          },
-          req.signal ? { signal: req.signal } : undefined,
-        );
+      // Anthropic may get two models: the requested one, then a capacity
+      // fallback in a separate pool. Only a 429/529 justifies the second.
+      const models = [req.anthropicModel ?? DEFAULT_ANTHROPIC_MODEL];
+      if (req.anthropicFallbackModel) models.push(req.anthropicFallbackModel);
 
-        const parsed = response.parsed_output;
-        if (!parsed) throw new Error("anthropic returned no parsed_output");
+      let anthropicExhausted = false;
 
-        return { ok: true, data: parsed as z.infer<S>, provider, model };
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        attempts.push({ provider, reason });
-        if (isLast || !shouldFailoverFromAnthropic(err)) break;
-        logFailover(req.label, provider, reason);
-        continue;
+      for (const model of models) {
+        const isLastModel = model === models[models.length - 1];
+        try {
+          const client = anthropicClient(req);
+          const response = await client.messages.parse(
+            {
+              model,
+              max_tokens: req.maxTokens,
+              ...(anthropicSystem(req) ? { system: anthropicSystem(req) } : {}),
+              ...(typeof req.temperature === "number" ? { temperature: req.temperature } : {}),
+              messages: [{ role: "user", content: req.user }],
+              output_config: { format: zodOutputFormat(schema) },
+            },
+            req.signal ? { signal: req.signal } : undefined,
+          );
+
+          // A refusal is about the content. Another model, or another provider,
+          // would decline the same text, so stop rather than burn more calls.
+          if (response.stop_reason === "refusal") {
+            return {
+              ok: false,
+              reason: "the model declined to write this",
+              attempts: [...attempts, { provider, reason: "refusal" }],
+              refusal: true,
+            };
+          }
+
+          const parsed = response.parsed_output;
+          if (!parsed) throw new Error("anthropic returned no parsed_output");
+
+          return { ok: true, data: parsed as z.infer<S>, provider, model };
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          attempts.push({ provider, reason, status: errorStatus(err) });
+
+          // Try the sibling model only for capacity. Anything else would fail
+          // the same way on it.
+          if (!isLastModel && isCapacityError(err)) {
+            logFailover(req.label, provider, `${model} at capacity, trying ${models[1]}`);
+            continue;
+          }
+          if (isLast || !shouldFailoverFromAnthropic(err)) {
+            anthropicExhausted = true;
+            break;
+          }
+          logFailover(req.label, provider, reason);
+          anthropicExhausted = false;
+          break;
+        }
       }
+
+      // Either every Anthropic model failed unrecoverably, or this was the last
+      // provider in the order.
+      if (anthropicExhausted) break;
+      continue;
     }
 
     const result = await geminiGenerate({
       model: mapToGeminiModel(req),
-      system: req.system,
+      system: flattenSystem(req),
       user: req.user,
       maxOutputTokens: req.maxTokens,
       temperature: req.temperature,
@@ -423,7 +546,7 @@ export async function generateStructured<S extends z.ZodType>(
     });
 
     if (!result.ok) {
-      attempts.push({ provider, reason: result.reason });
+      attempts.push({ provider, reason: result.reason, status: result.status });
       if (isLast || !result.retryable) break;
       logFailover(req.label, provider, result.reason);
       continue;

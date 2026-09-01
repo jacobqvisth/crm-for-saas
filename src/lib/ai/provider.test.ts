@@ -1,19 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { toGeminiSchema } from "./gemini";
 import {
   aiProviderStatus,
   generateJson,
+  generateStructured,
   generateText,
   shouldFailoverFromAnthropic,
 } from "./provider";
 
 // The Anthropic SDK is the one external call a unit test must not make. Same
-// stubbing shape as src/lib/enrich/find-phone.test.ts.
+// stubbing shape as src/lib/enrich/find-phone.test.ts, extended with
+// messages.parse (the structured-output path) and a record of the constructor
+// options so the retry-count wiring can be asserted.
 const anthropicCreate = vi.fn();
+const anthropicParse = vi.fn();
+const anthropicOptions: unknown[] = [];
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
-    messages = { create: (...args: unknown[]) => anthropicCreate(...args) };
+    constructor(opts: unknown) {
+      anthropicOptions.push(opts);
+    }
+    messages = {
+      create: (...args: unknown[]) => anthropicCreate(...args),
+      parse: (...args: unknown[]) => anthropicParse(...args),
+    };
   },
+}));
+
+// zodOutputFormat is a thin schema wrapper; the real one needs no stubbing, but
+// the mocked default export above replaces the package, so the helper subpath
+// is stubbed to match.
+vi.mock("@anthropic-ai/sdk/helpers/zod", () => ({
+  zodOutputFormat: (schema: unknown) => ({ schema }),
 }));
 
 /** Shape of a successful Anthropic text reply. */
@@ -58,6 +77,8 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   anthropicCreate.mockReset();
+  anthropicParse.mockReset();
+  anthropicOptions.length = 0;
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
@@ -113,6 +134,47 @@ describe("toGeminiSchema", () => {
     expect(toGeminiSchema({ type: "array", items: { type: "object", properties: {} } })).toEqual({
       type: "ARRAY",
       items: { type: "OBJECT", properties: {} },
+    });
+  });
+
+  it("unwraps an anyOf that is only 'X or null' into nullable X", () => {
+    // This is the shape z.string().nullable() actually compiles to, and getting
+    // it wrong is silent: an unhandled anyOf leaves no `type`, the fallback
+    // reads it as an object, and Gemini returns {} where a string was wanted.
+    // That is how the article generator's title and seo.metaTitle came back as
+    // objects on the first live run.
+    expect(
+      toGeminiSchema({
+        type: "object",
+        properties: {
+          title: { anyOf: [{ type: "string" }, { type: "null" }] },
+        },
+        required: ["title"],
+      }),
+    ).toEqual({
+      type: "OBJECT",
+      properties: { title: { type: "STRING", nullable: true } },
+      required: ["title"],
+    });
+  });
+
+  it("keeps the description when unwrapping a nullable anyOf", () => {
+    // The description sits on the wrapper, not the branch, so a naive unwrap
+    // throws away the instruction that tells the model what the field is for.
+    expect(
+      toGeminiSchema({
+        anyOf: [{ type: "string" }, { type: "null" }],
+        description: "The Swedish headline.",
+      }),
+    ).toEqual({ type: "STRING", nullable: true, description: "The Swedish headline." });
+  });
+
+  it("narrows a genuine multi-type union to its first branch", () => {
+    // Gemini cannot express a union. Narrowing is safe because
+    // generateStructured re-validates with Zod, so a reply that needed the other
+    // branch is rejected rather than stored.
+    expect(toGeminiSchema({ anyOf: [{ type: "string" }, { type: "number" }] })).toEqual({
+      type: "STRING",
     });
   });
 
@@ -390,6 +452,153 @@ describe("generateJson", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toContain("unparseable");
+  });
+});
+
+describe("generateStructured", () => {
+  const schema = z.object({ title: z.string(), body: z.string() });
+  const req = {
+    label: "test/structured",
+    user: "write it",
+    maxTokens: 500,
+    anthropicModel: "claude-opus-5",
+  };
+
+  /** Shape of a successful messages.parse reply. */
+  function parsedReply(data: unknown, stop_reason = "end_turn") {
+    return { parsed_output: data, stop_reason };
+  }
+
+  it("caches the marked system block on Anthropic and joins them for Gemini", async () => {
+    anthropicParse.mockRejectedValue(anthropicError(429, "rate_limit_error"));
+    fetchMock.mockResolvedValue(geminiReply('{"title":"T","body":"B"}'));
+
+    const result = await generateStructured(
+      {
+        ...req,
+        systemBlocks: [
+          { text: "STABLE PREFIX", cache: true },
+          { text: "volatile style" },
+        ],
+      },
+      schema,
+    );
+
+    expect(result).toMatchObject({ ok: true, provider: "gemini" });
+
+    // Anthropic gets real cache_control on the stable block only.
+    const sent = anthropicParse.mock.calls[0][0];
+    expect(sent.system).toEqual([
+      { type: "text", text: "STABLE PREFIX", cache_control: { type: "ephemeral" } },
+      { type: "text", text: "volatile style" },
+    ]);
+
+    // Gemini has no caching on this endpoint, so the blocks arrive joined
+    // rather than dropped.
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.systemInstruction).toEqual({
+      parts: [{ text: "STABLE PREFIX\n\nvolatile style" }],
+    });
+  });
+
+  it("tries the sibling Anthropic model when the first is at capacity", async () => {
+    // Opus and Sonnet are separate pools, so a 529 on one is worth trying the
+    // other before leaving Anthropic entirely.
+    anthropicParse
+      .mockRejectedValueOnce(anthropicError(529, "Overloaded"))
+      .mockResolvedValueOnce(parsedReply({ title: "T", body: "B" }));
+
+    const result = await generateStructured(
+      { ...req, anthropicFallbackModel: "claude-sonnet-5" },
+      schema,
+    );
+
+    expect(result).toMatchObject({ ok: true, provider: "anthropic", model: "claude-sonnet-5" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(anthropicParse.mock.calls.map((c) => c[0].model)).toEqual([
+      "claude-opus-5",
+      "claude-sonnet-5",
+    ]);
+  });
+
+  it("does NOT try the sibling model for a non-capacity failure", async () => {
+    // A malformed request or a content problem fails identically on the sibling.
+    anthropicParse.mockRejectedValue(anthropicError(400, "max_tokens: must be greater than 0"));
+
+    const result = await generateStructured(
+      { ...req, anthropicFallbackModel: "claude-sonnet-5" },
+      schema,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(anthropicParse).toHaveBeenCalledTimes(1);
+  });
+
+  it("reaches Gemini only after both Anthropic models are exhausted", async () => {
+    anthropicParse
+      .mockRejectedValueOnce(anthropicError(529, "Overloaded"))
+      .mockRejectedValueOnce(anthropicError(529, "Overloaded"));
+    fetchMock.mockResolvedValue(geminiReply('{"title":"T","body":"B"}'));
+
+    const result = await generateStructured(
+      { ...req, anthropicFallbackModel: "claude-sonnet-5" },
+      schema,
+    );
+
+    expect(result).toMatchObject({ ok: true, provider: "gemini" });
+    expect(anthropicParse).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a refusal without spending another model or provider", async () => {
+    // A refusal is about the content, so retrying elsewhere just burns calls
+    // and would most likely refuse again.
+    anthropicParse.mockResolvedValue(parsedReply(null, "refusal"));
+
+    const result = await generateStructured(
+      { ...req, anthropicFallbackModel: "claude-sonnet-5" },
+      schema,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal).toBe(true);
+    expect(anthropicParse).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("re-validates the Gemini reply against the schema", async () => {
+    // responseSchema is honoured well but not perfectly, and callers of this
+    // write the result to Webflow or the database.
+    vi.stubEnv("AI_PRIMARY_PROVIDER", "gemini");
+    vi.stubEnv("AI_FALLBACK_DISABLED", "1");
+    fetchMock.mockResolvedValue(geminiReply('{"title":"T"}')); // body missing
+
+    const result = await generateStructured(req, schema);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("schema validation");
+  });
+
+  it("passes a raised retry count to the Anthropic SDK", async () => {
+    anthropicParse.mockResolvedValue(parsedReply({ title: "T", body: "B" }));
+
+    await generateStructured({ ...req, anthropicMaxRetries: 4 }, schema);
+
+    // Constructed per call, so the assertion is on the recorded option.
+    expect(anthropicOptions.at(-1)).toMatchObject({ maxRetries: 4 });
+  });
+
+  it("records the HTTP status on each attempt so callers can classify", async () => {
+    anthropicParse.mockRejectedValue(anthropicError(529, "Overloaded"));
+    fetchMock.mockResolvedValue(geminiErrorReply(429, "Resource exhausted"));
+
+    const result = await generateStructured(req, schema);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.attempts.map((a) => a.status)).toEqual([529, 429]);
+    }
   });
 });
 

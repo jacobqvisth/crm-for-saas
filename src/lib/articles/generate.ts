@@ -1,4 +1,10 @@
-// The Anthropic call behind the Articles studio.
+// The AI call behind the Articles studio.
+//
+// Routes through src/lib/ai/provider.ts, so a draft can be written by Claude or
+// by Gemini and the row records which one did it. That matters beyond
+// resilience: the Autopilot publishes unattended, so a single-provider outage
+// would silently stop it, and the Anthropic exhaustion mode is a 400 that does
+// not read as a quota problem.
 //
 // Two deliberate differences from src/lib/forums/generate.ts, which this is
 // otherwise modelled on:
@@ -18,9 +24,8 @@
 // generated Wrenchlane copy. Worth noting the competitor post that inspired this
 // feature is full of them.
 
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { aiProviderStatus, generateStructured, type AiAttempt } from "@/lib/ai/provider";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 import { decodeStrayUnicodeEscapes } from "./sanitize";
 import {
@@ -285,7 +290,10 @@ export interface GeneratedArticle {
   claims: ArticleClaim[];
   seo: ArticleSeo;
   model: string;
-  /** True when the primary model was unavailable and the fallback wrote this. */
+  /**
+   * True when the preferred model did not write this: either the Anthropic
+   * capacity fallback or Gemini did. `model` names which.
+   */
   usedFallbackModel: boolean;
 }
 
@@ -306,8 +314,15 @@ export interface GenerateArticleInput {
 export async function generateArticle(
   input: GenerateArticleInput,
 ): Promise<GenerateArticleResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, kind: "not_configured", reason: "ANTHROPIC_API_KEY is not set" };
+  // Either provider can write an article, so the gate asks the provider layer
+  // rather than checking one vendor's key.
+  if (aiProviderStatus().order.length === 0) {
+    return {
+      ok: false,
+      kind: "not_configured",
+      reason: "No AI provider is configured (set ANTHROPIC_API_KEY or GEMINI_API_KEY)",
+    };
+  }
 
   const spec = getFormatSpec(input.format);
   if (!spec) return { ok: false, kind: "unknown", reason: `Unknown format: ${input.format}` };
@@ -315,63 +330,41 @@ export async function generateArticle(
   const grounding = buildGrounding(input);
   if (!grounding) return { ok: false, kind: "unknown", reason: "No grounding supplied" };
 
-  const client = new Anthropic({ apiKey, maxRetries: MAX_RETRIES });
+  const result = await generateStructured(
+    {
+      label: "articles/generate",
+      // The stable block is identical across drafts of the same format, so it is
+      // the cached prefix on the Anthropic path. Volatile per-request content
+      // lives after it. Gemini has no equivalent and receives them joined.
+      systemBlocks: [
+        { text: buildStablePrompt(input.format, input.options), cache: true },
+        { text: buildStylePrompt(input.options, input.format) },
+      ],
+      user: grounding,
+      maxTokens: MAX_TOKENS,
+      anthropicModel: MODEL,
+      // Opus and Sonnet are separate capacity pools, so a 529 on one is worth
+      // trying the other for. Only then does it fall over to Gemini.
+      anthropicFallbackModel: FALLBACK_MODEL,
+      anthropicMaxRetries: MAX_RETRIES,
+    },
+    draftSchema,
+  );
 
-  const request = {
-    max_tokens: MAX_TOKENS,
-    system: [
-      {
-        type: "text" as const,
-        text: buildStablePrompt(input.format, input.options),
-        // Stable across drafts of the same format, so this is the cached
-        // prefix. Volatile per-request content all lives after it.
-        cache_control: { type: "ephemeral" as const },
-      },
-      { type: "text" as const, text: buildStylePrompt(input.options, input.format) },
-    ],
-    messages: [{ role: "user" as const, content: grounding }],
-    output_config: { format: zodOutputFormat(draftSchema) },
-  };
-
-  // Try the primary model, then the fallback pool if the primary is overloaded.
-  // The SDK already retried MAX_RETRIES times with backoff before we get here, so
-  // reaching the fallback means the pool is genuinely saturated, not flaky.
-  let draft: Draft | null = null;
-  let usedModel = MODEL;
-  let lastFailure: { reason: string; kind: GenerateFailureKind } | null = null;
-
-  for (const model of [MODEL, FALLBACK_MODEL]) {
-    try {
-      const response = await client.messages.parse({ ...request, model });
-      if (response.stop_reason === "refusal") {
-        // A refusal is about the content, not capacity, so the fallback would
-        // almost certainly refuse too. Stop here.
-        return {
-          ok: false,
-          kind: "refusal",
-          reason: "The model declined to write this. Try a different angle or source.",
-        };
-      }
-      draft = response.parsed_output ?? null;
-      usedModel = model;
-      break;
-    } catch (err) {
-      lastFailure = classifyError(err);
-      // Only capacity problems are worth trying another model for.
-      if (lastFailure.kind !== "overloaded") return { ok: false, ...lastFailure };
-      if (model === FALLBACK_MODEL) return { ok: false, ...lastFailure };
+  if (!result.ok) {
+    if (result.refusal) {
+      return {
+        ok: false,
+        kind: "refusal",
+        reason: "The model declined to write this. Try a different angle or source.",
+      };
     }
+    return { ok: false, ...classifyAttempts(result.attempts, result.reason) };
   }
 
-  if (!draft) {
-    return (
-      (lastFailure && { ok: false as const, ...lastFailure }) ?? {
-        ok: false as const,
-        kind: "bad_output" as const,
-        reason: "The model returned nothing usable. Try again.",
-      }
-    );
-  }
+  const draft: Draft = result.data;
+  const usedModel = result.model;
+
   if (!draft.body.trim()) {
     return { ok: false, kind: "bad_output", reason: "The model returned an empty draft. Try again." };
   }
@@ -410,38 +403,54 @@ export async function generateArticle(
 }
 
 /**
- * Turn an SDK error into something a human can act on. The raw shape is a JSON
- * blob ("anthropic error: 529 {\"type\":\"error\"...") which was being
- * surfaced straight into a toast.
+ * Turn the provider layer's attempt list into something a human can act on.
+ *
+ * The raw reasons are JSON blobs ("anthropic error: 529 {\"type\":\"error\"...")
+ * which were previously surfaced straight into a toast. Both providers have now
+ * been tried, so the copy must not blame one of them by name: "give it a minute"
+ * is only honest advice when every provider is saturated, which is exactly what
+ * an exhausted attempt list means.
  */
-function classifyError(err: unknown): { reason: string; kind: GenerateFailureKind } {
-  const status =
-    err instanceof Anthropic.APIError ? err.status : undefined;
-  const type = err instanceof Anthropic.APIError ? err.type : undefined;
+export function classifyAttempts(
+  attempts: AiAttempt[],
+  rawReason: string,
+): { reason: string; kind: GenerateFailureKind } {
+  const statuses = attempts.map((a) => a.status).filter((s): s is number => s !== undefined);
+  const text = attempts.map((a) => a.reason.toLowerCase()).join(" | ");
 
-  if (status === 529 || type === "overloaded_error") {
+  const capacity =
+    statuses.some((s) => s === 429 || s === 529 || s >= 500) ||
+    text.includes("overloaded") ||
+    text.includes("rate limit") ||
+    text.includes("resource exhausted") ||
+    text.includes("quota");
+
+  if (capacity) {
     return {
       kind: "overloaded",
       reason:
-        "Claude is overloaded right now. Nothing is wrong with your setup, give it a minute and press Write it again.",
+        "Every AI provider is busy or rate limited right now. Nothing is wrong with your setup, give it a minute and press Write it again.",
     };
   }
-  if (status === 429 || type === "rate_limit_error") {
+
+  // Funds, not capacity. Worth naming, because it needs a human to top up
+  // rather than a retry.
+  if (text.includes("credit balance")) {
     return {
-      kind: "overloaded",
-      reason: "Rate limited by the Claude API. Wait a moment and try again.",
+      kind: "not_configured",
+      reason:
+        "The Anthropic credit balance is empty and Gemini could not serve this either. Top up, or check GEMINI_API_KEY.",
     };
   }
-  if (status === 401 || status === 403) {
-    return { kind: "not_configured", reason: "The Claude API key was rejected. Check ANTHROPIC_API_KEY." };
+
+  if (statuses.some((s) => s === 401 || s === 403)) {
+    return {
+      kind: "not_configured",
+      reason: "An AI API key was rejected. Check ANTHROPIC_API_KEY and GEMINI_API_KEY.",
+    };
   }
-  if (status && status >= 500) {
-    return { kind: "overloaded", reason: "The Claude API had a server error. Try again in a moment." };
-  }
-  return {
-    kind: "unknown",
-    reason: err instanceof Error ? err.message : String(err),
-  };
+
+  return { kind: "unknown", reason: rawReason };
 }
 
 function buildGrounding(input: GenerateArticleInput): string | null {
