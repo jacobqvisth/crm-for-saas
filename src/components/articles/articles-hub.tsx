@@ -1,15 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { Newspaper, PenLine, Library, Globe, Rocket } from "lucide-react";
+import { Newspaper, PenLine, Library, Globe, Rocket, Radio } from "lucide-react";
 import { StudioClient } from "./studio-client";
 import { LibraryClient } from "./library-client";
 import { ReleasesClient } from "./releases-client";
+import { AutopilotClient } from "./autopilot-client";
 
-export type ArticlesView = "studio" | "releases" | "library" | "published";
+export type ArticlesView = "studio" | "autopilot" | "releases" | "library" | "published";
 
 const VIEWS: Array<{ key: ArticlesView; label: string; icon: typeof PenLine; hint: string }> = [
   { key: "studio", label: "Studio", icon: PenLine, hint: "Write something new" },
+  {
+    key: "autopilot",
+    label: "Autopilot",
+    icon: Radio,
+    hint: "Publish articles to the site on a schedule, unattended",
+  },
   {
     key: "releases",
     label: "Releases",
@@ -66,6 +73,8 @@ export function ArticlesHub({ initialView = "studio" }: { initialView?: Articles
       <div className="mt-6">
         {view === "studio" ? (
           <StudioClient onSaved={() => setLibraryKey((k) => k + 1)} />
+        ) : view === "autopilot" ? (
+          <AutopilotClient />
         ) : view === "releases" ? (
           <ReleasesClient />
         ) : (

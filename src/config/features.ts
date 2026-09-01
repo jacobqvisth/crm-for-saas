@@ -154,7 +154,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
       "publishing needs Webflow credentials.",
     navHrefs: ["/articles"],
     routePrefixes: ["/articles", "/api/articles", "/api/landing-pages"],
-    cronPaths: [],
+    cronPaths: ["/api/cron/publish-articles"],
   },
   {
     key: "reviews",
