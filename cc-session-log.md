@@ -8932,3 +8932,107 @@ already did once for the control plane.
 
 `disable_signup` was **already true** on the control plane and is unchanged on Wrenchlane,
 which was checked rather than assumed.
+
+## 2026-09-01 — Gemini connected as a failover AI provider — PR #788 — `worktree-gemini-provider`
+
+Jacob asked to "add our connection to gemini" so the AI credits on the
+`jacob@wrenchlane.com` Google account get used. Built as a provider layer rather
+than a second set of call sites.
+
+### Why it was worth doing properly
+
+Every AI feature called `new Anthropic(...)` directly, so one org-wide event on
+the Anthropic side took all of them down at once. That already happened twice
+(2026-07-02, 2026-08-27). The tell is nasty: an exhausted credit balance returns
+**HTTP 400**, not a 401 or a 429, so it does not read as a quota problem in the
+logs.
+
+### What was built
+
+`src/lib/ai/provider.ts`, three entry points covering every pattern in the repo:
+
+- `generateText` — system + one user turn, text back
+- `generateJson` — constrained to a JSON Schema; an existing Anthropic tool
+  object can be passed unchanged (forced tool on Anthropic, `responseSchema` on
+  Gemini)
+- `generateStructured` — same from a Zod schema, and the Gemini reply is
+  re-validated through Zod before it is returned
+
+`src/lib/ai/gemini.ts` is the REST client (no new dependency: one method needed).
+
+Failover fires on 429, 529, 5xx, 401/403, network faults, and the
+credit-balance 400. It deliberately does **not** fire on an ordinary malformed
+400, which Gemini would reject identically. Every failover logs
+`[ai] <label>: anthropic failed, failing over.` — the line to grep in Vercel
+logs when an outage starts.
+
+**19 of 22 call sites migrated.** Left Anthropic-only on purpose, because
+Gemini's equivalents are a different contract rather than a drop-in:
+`enrich/find-website.ts` and `enrich/find-phone.ts` (server-side `web_search`
+tool loop) and `articles/generate.ts` (`cache_control` prompt caching). Those
+are now the only single-provider AI features, stated in the module docs and the
+env manifest rather than left to be discovered. The roadmap route's hard
+`ANTHROPIC_API_KEY` gate now asks the provider layer instead, so Gemini alone
+satisfies it.
+
+### Two things the docs do not tell you
+
+Both found by testing against a live key, both would have shipped broken:
+
+1. **`gemini-2.5-flash` and `gemini-2.5-pro` are retired for new keys.** They
+   still appear in `ListModels` but every `generateContent` call 404s with "no
+   longer available to new users". The model list is not proof a model works.
+   Defaults are `gemini-3.6-flash` and `gemini-pro-latest`.
+2. **Gemini 3.x replaced `thinkingBudget` with a named `thinkingLevel`**, and
+   support differs per model with no way to ask in advance: flash accepts
+   `"minimal"`, pro and the `-latest` aliases reject it and need `"low"`, and
+   `"none"`/`"off"` are invalid everywhere. Sending the old field gets a bare
+   `400 "Request contains an invalid argument."` naming nothing. Requests now
+   walk a ladder and step down only on that specific rejection. It is a cost
+   issue, not cosmetic: with no thinking config, `gemini-3.6-flash` spent **122
+   thinking tokens on a 3-token answer**; at `"minimal"` it spends 0.
+
+### Verification
+
+- `npx vitest run` — 1261 passed (97 files), 28 new for this layer
+- `npx tsc --noEmit` exit 0; `npx eslint src scripts` exit 0
+- `npx tsx scripts/env-manifest.mts --check` ok (`.env.local.example` is
+  generated, so the vars went into `src/config/env-manifest.ts`)
+- `node scripts/test-gemini.mjs` — 4/4 against the live key on both
+  `gemini-3.6-flash` and `gemini-pro-latest`
+- `npx tsx scripts/test-ai-provider.mts` — all three entry points, the
+  sonnet-to-pro tier routing, and a **real Anthropic-to-Gemini failover**
+  induced with an invalid Anthropic key
+
+Unit tests cover the failures that are silent when wrong: the credit-balance 400
+failing over, a malformed 400 *not* failing over, the thinking-level step-down,
+the schema keywords Gemini rejects (`$schema`, `additionalProperties`, union
+types), and an empty Gemini reply surfacing as a failure rather than being
+written out as a blank draft.
+
+The PR's Vercel check failed, as it does on every PR here: `/login` prerender
+dies on missing Supabase env vars in preview. Read its logs to confirm rather
+than assuming. **Build & Lint** passed in 3m24s and is the gate.
+
+### Live in production
+
+Merged as `20cf7ad`, production deploy verified **READY**. `GEMINI_API_KEY` set
+on the Vercel production env and redeployed (`dpl_BM3RApwq5sJ85uyVNkJ1JeBTV61j`,
+READY, holding all four production aliases). The Vercel env write was blocked by
+the auto-mode classifier first time and needed a plain "yes" to retry, same
+pattern as the DDL block.
+
+With `GEMINI_API_KEY` unset the behaviour is Anthropic-only exactly as before,
+so this was safe to merge ahead of arming it.
+
+Optional knobs, all in `.env.local.example`: `AI_PRIMARY_PROVIDER` (flip to
+`gemini` to spend Google credits first), `AI_FALLBACK_DISABLED`, `GEMINI_MODEL`,
+`GEMINI_MODEL_STRONG`.
+
+### Worth knowing for next time
+
+Gemini API keys are minted at <https://aistudio.google.com/apikey>, picking the
+existing **CRM for SaaS** (`crm-for-saas-491113`) Cloud project so it bills the
+work account and enables `generativelanguage.googleapis.com` in one step. It is
+an **API key, not an OAuth client** — the Google Auth Platform / Clients page is
+the wrong screen. New-format keys look like `AQ.Ab8RN6...`, not `AIza...`.
