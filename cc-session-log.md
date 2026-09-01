@@ -9036,3 +9036,99 @@ existing **CRM for SaaS** (`crm-for-saas-491113`) Cloud project so it bills the
 work account and enables `generativelanguage.googleapis.com` in one step. It is
 an **API key, not an OAuth client** — the Google Auth Platform / Clients page is
 the wrong screen. New-format keys look like `AQ.Ab8RN6...`, not `AIza...`.
+
+## 2026-09-01 — Every AI call site can now run on Gemini — PRs #791, #792
+
+Continuation of the same session as the #788 entry above. Jacob: *"we shuld use
+Gemini via the wrenchlane account for all we can. becasue we have free tokens
+from it"* and *"we need to use them this year."* The credits are promo credits on
+the **WL billing account** (`01A82B-DD507A-EE2C28`), and `crm-for-saas-491113` is
+linked to it, so this is the **paid** Gemini tier: Google does not use the
+content to improve their products, which matters because this pipes customer
+emails, inbox replies and call transcripts through it.
+
+Production is now **Gemini-first** (`AI_PRIMARY_PROVIDER=gemini` in the Vercel
+env), with Anthropic as the fallback.
+
+### PR #791 — the article generator
+
+Cleared the gate that Articles Autopilot (#789) was deliberately held behind.
+`articles/generate.ts` was the site #788 skipped: a cached multi-block system
+prompt, a 16k budget, its own opus->sonnet capacity ladder, refusal handling and
+`maxRetries: 4`. Rather than drop any of it, the provider layer gained three
+general capabilities: `systemBlocks` (blocks marked `cache` get real
+`cache_control` on Anthropic and are joined for Gemini), `anthropicFallbackModel`
+(a sibling model tried ONLY on 429/529, since Opus and Sonnet are separate
+pools), and `anthropicMaxRetries`.
+
+**A bug only a live run found.** `toGeminiSchema` turned
+`anyOf: [{string},{null}]` into `OBJECT`. That is what `z.string().nullable()`
+actually compiles to, NOT `type: ["string","null"]`, so an unhandled `anyOf` left
+no `type`, the object fallback took over, and Gemini returned `{}` where a string
+was wanted. The generator's `title` and `seo.metaTitle` both came back as
+objects. **The unit suite was green the whole time.**
+
+Verified by generating a real article on both providers: opus-5 1975 chars / 18
+claims, gemini-pro-latest 1891 chars / 12 claims.
+
+### PR #792 — the last two, find-website and find-phone
+
+**The trap worth remembering: Gemini's Google Search grounding and structured
+output are mutually exclusive, and the failure is silent.** `google_search` plus
+`responseSchema` (or function declarations) returns HTTP 200 with a
+perfectly-shaped answer and `webSearchQueries: []`, i.e. invented from memory.
+Five runs, never searched once; in forced-function mode it produced a confident
+URL that was really a site-search link. A fabricated phone number on a real
+contact row is worse than an empty field.
+
+So `src/lib/ai/grounded.ts` splits it: **ground** (google_search, no schema,
+prose) then **extract** (schema, no tools). An answer carrying no grounding
+metadata is **rejected rather than used**, which is what makes fabrication
+impossible rather than merely unlikely. Each call site keeps its Anthropic
+strategy untouched and picks by `aiProviderStatus().order`.
+
+Two things that bit:
+
+- Both files' system prompts named the Anthropic tools, and find-phone's said
+  "You MUST finish by calling report_phones, do not answer in plain text".
+  Reused for the grounded step, that made Gemini return **no text at all**. The
+  matching rules are now separate from the output instruction.
+- find-website had no wall-clock guard, and one Anthropic case measured **197s**
+  against a 180s `maxDuration`, which 504s and discards the answer it already
+  had. Added a 140s deadline on the turn loop.
+
+Measured on real Swedish workshops, both providers, no cross-cover:
+
+| | Anthropic | Gemini |
+|---|---|---|
+| findWebsite (Motorkonsult) | 44.3s, `autoexperten.se` (franchise page) | **15.7s, `motorkonsult.net`** (own site) |
+| findWebsite (invented business) | 131.5s, correctly nothing | 38.8s, correctly nothing |
+| findPhones (Motorkonsult) | 28.2s, 2 numbers | 15.2s, 2 numbers |
+
+Gemini picked the better site and ran ~3x faster; both agreed on the main number
+`+46155283500`. The **negative control is an invented business**: if it ever
+returns found=true, grounding has stopped being enforced. An earlier fixture
+asserted a second real brand and both providers "failed" it. They were right and
+the fixture was wrong: that business was acquired in 2021 and its domain is gone.
+Do not pin expected domains.
+
+### Also fixed
+
+`api/dtc-lookup/compare` hardcoded `model: "claude-sonnet-5"` into the
+comparison row, so a Gemini-produced verdict would be attributed to Claude
+(PR #790). `compareDiagnoses` now returns the served model.
+
+### Verification and state
+
+1293 tests (98 files), `tsc` exit 0, `eslint` exit 0, `env-manifest --check` ok.
+Four on-demand scripts: `test-gemini.mjs` (key/model/API),
+`test-ai-provider.mts` (the module, incl. a real failover),
+`test-article-generator.mts` (a real article per provider),
+`test-web-search.mts` (both enrichment functions per provider).
+
+Prod deploys verified READY for `c2fed6e` and `48c63fc`. The Vercel `env add`
+calls are blocked by the auto-mode classifier every time and need a plain "yes"
+to retry.
+
+Articles Autopilot remains **switched off**; its prerequisite is met but flipping
+`enabled` is Jacob's call.
