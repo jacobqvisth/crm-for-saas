@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateJson, type AiJsonSpec } from "@/lib/ai/provider";
 import { CALL_OUTCOMES, type CallOutcome } from "./decision";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
@@ -73,7 +73,7 @@ export type AnalyzeResult =
   | { ok: true; analysis: CallAnalysis; model: string }
   | { ok: false; reason: string };
 
-const ANALYSIS_TOOL: Anthropic.Tool = {
+const ANALYSIS_TOOL: AiJsonSpec = {
   name: "record_call_analysis",
   description: "Record the structured analysis of a sales/customer phone call.",
   input_schema: {
@@ -169,11 +169,6 @@ const ANALYSIS_TOOL: Anthropic.Tool = {
 };
 
 export async function analyzeCall(ctx: AnalyzeCallContext): Promise<AnalyzeResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
-  const client = new Anthropic({ apiKey });
-
   const contactSwedishness =
     ctx.languageHint === "sv"
       ? "The contact IS Swedish."
@@ -208,47 +203,42 @@ Today's date is ${ctx.today}. Call the record_call_analysis tool exactly once wi
   }
   userParts.push("Transcript:\n" + (ctx.transcript || "(no speech detected)"));
 
-  try {
-    const resp = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2000,
-      tools: [ANALYSIS_TOOL],
-      tool_choice: { type: "tool", name: "record_call_analysis" },
+  const result = await generateJson<CallAnalysis>(
+    {
+      label: "calls/ai-summary",
+      anthropicModel: MODEL,
       system,
-      messages: [{ role: "user", content: userParts.join("\n\n") }],
-    });
+      user: userParts.join("\n\n"),
+      maxTokens: 2000,
+    },
+    ANALYSIS_TOOL,
+  );
+  if (!result.ok) return { ok: false, reason: result.reason };
 
-    const toolUse = resp.content.find((b) => b.type === "tool_use");
-    if (!toolUse || toolUse.type !== "tool_use") {
-      return { ok: false, reason: "model did not return tool output" };
-    }
-    const analysis = toolUse.input as CallAnalysis;
+  const analysis = result.data;
 
-    // Defensive: ensure the outcome is in our taxonomy.
-    if (!CALL_OUTCOMES.includes(analysis.suggested_outcome)) {
-      analysis.suggested_outcome = "interested";
-    }
-    if (typeof analysis.summary_native !== "string") analysis.summary_native = "";
-    // Normalize the language code to a 2-letter lowercase ISO; default to the
-    // hint (or English) if the model omitted or malformed it.
-    const rawLang =
-      typeof analysis.contact_language === "string"
-        ? analysis.contact_language.slice(0, 2).toLowerCase()
-        : "";
-    analysis.contact_language =
-      rawLang || (ctx.languageHint === "sv" ? "sv" : "en");
-    // Strip long dashes from every human-facing text field the CRM will show or
-    // send. The suggested follow-up email is the one that gets sent to a contact.
-    const email = analysis.suggested_followup_email;
-    if (email) {
-      if (typeof email.subject === "string") email.subject = stripLongDashes(email.subject);
-      if (typeof email.body === "string") email.body = stripLongDashes(email.body);
-    }
-    if (typeof analysis.summary === "string") analysis.summary = stripLongDashes(analysis.summary);
-    if (typeof analysis.summary_native === "string")
-      analysis.summary_native = stripLongDashes(analysis.summary_native);
-    return { ok: true, analysis, model: MODEL };
-  } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : "analyzeCall failed" };
+  // Defensive: ensure the outcome is in our taxonomy.
+  if (!CALL_OUTCOMES.includes(analysis.suggested_outcome)) {
+    analysis.suggested_outcome = "interested";
   }
+  if (typeof analysis.summary_native !== "string") analysis.summary_native = "";
+  // Normalize the language code to a 2-letter lowercase ISO; default to the
+  // hint (or English) if the model omitted or malformed it.
+  const rawLang =
+    typeof analysis.contact_language === "string"
+      ? analysis.contact_language.slice(0, 2).toLowerCase()
+      : "";
+  analysis.contact_language = rawLang || (ctx.languageHint === "sv" ? "sv" : "en");
+  // Strip long dashes from every human-facing text field the CRM will show or
+  // send. The suggested follow-up email is the one that gets sent to a contact.
+  const email = analysis.suggested_followup_email;
+  if (email) {
+    if (typeof email.subject === "string") email.subject = stripLongDashes(email.subject);
+    if (typeof email.body === "string") email.body = stripLongDashes(email.body);
+  }
+  if (typeof analysis.summary === "string") analysis.summary = stripLongDashes(analysis.summary);
+  if (typeof analysis.summary_native === "string")
+    analysis.summary_native = stripLongDashes(analysis.summary_native);
+
+  return { ok: true, analysis, model: result.model };
 }

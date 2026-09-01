@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { TARGET_LANGUAGE_LABELS } from "@/lib/i18n/languages";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
@@ -42,37 +42,21 @@ export async function translateOutboundReply(input: {
     return { ok: true, translated: bodyEn, targetLanguage: "en", model: "identity" };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   const label = TARGET_LANGUAGE_LABELS[targetLanguage] ?? targetLanguage.toUpperCase();
-  const client = new Anthropic({ apiKey });
 
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Translate this English reply to ${label} (ISO code: ${targetLanguage}). Plain text out.\n\n${bodyEn}`,
-        },
-      ],
-    });
-    raw = response.content[0].type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+  const result = await generateText({
+    label: "inbox/translate-outbound-text",
+    anthropicModel: MODEL,
+    system: SYSTEM_PROMPT,
+    user: `Translate this English reply to ${label} (ISO code: ${targetLanguage}). Plain text out.\n\n${bodyEn}`,
+    maxTokens: 2048,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const translated = stripLongDashes(raw.trim());
+  const translated = stripLongDashes(result.text.trim());
   if (!translated) return { ok: false, reason: "empty translation from model" };
 
-  return { ok: true, translated, targetLanguage, model: MODEL };
+  return { ok: true, translated, targetLanguage, model: result.model };
 }
 
 const HTML_EMAIL_SYSTEM_PROMPT = `You translate a full B2B outreach email (subject line + HTML body) into the recipient's native language for a SaaS called Wrenchlane.
@@ -118,30 +102,22 @@ export function sameSubjectText(a: string, b: string): boolean {
  * the caller keeps the first pass rather than losing the translation.
  */
 async function retranslateSubject(
-  client: Anthropic,
   subject: string,
   sourceLabel: string,
   targetLabel: string,
   targetLanguage: string,
 ): Promise<string | null> {
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 256,
-      system: SUBJECT_ONLY_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Translate this ${sourceLabel} email subject line to ${targetLabel} (ISO code: ${targetLanguage}). It came back untranslated on the first attempt, so translate it now.\n\n${subject}`,
-        },
-      ],
-    });
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
-    const cleaned = stripLongDashes(text.trim().replace(/^["']|["']$/g, ""));
-    return cleaned || null;
-  } catch {
-    return null;
-  }
+  const result = await generateText({
+    label: "inbox/translate-outbound-subject-retry",
+    anthropicModel: MODEL,
+    system: SUBJECT_ONLY_SYSTEM_PROMPT,
+    user: `Translate this ${sourceLabel} email subject line to ${targetLabel} (ISO code: ${targetLanguage}). It came back untranslated on the first attempt, so translate it now.\n\n${subject}`,
+    maxTokens: 256,
+  });
+  if (!result.ok) return null;
+
+  const cleaned = stripLongDashes(result.text.trim().replace(/^["']|["']$/g, ""));
+  return cleaned || null;
 }
 
 export type OutboundEmailTranslationResult =
@@ -190,36 +166,20 @@ export async function translateOutboundEmail(input: {
     return { ok: true, subject, bodyHtml, targetLanguage, model: "identity" };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, reason: "ANTHROPIC_API_KEY not set" };
-
   const label = TARGET_LANGUAGE_LABELS[targetLanguage] ?? targetLanguage.toUpperCase();
   const sourceLabel =
     TARGET_LANGUAGE_LABELS[sourceLanguage] ?? sourceLanguage.toUpperCase();
-  const client = new Anthropic({ apiKey });
 
-  let raw = "";
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: HTML_EMAIL_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Translate this ${sourceLabel} email to ${label} (ISO code: ${targetLanguage}).\n\nSubject: ${subject}\n\nBody (HTML):\n${bodyHtml}`,
-        },
-      ],
-    });
-    raw = response.content[0].type === "text" ? response.content[0].text : "";
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
+  const result = await generateText({
+    label: "inbox/translate-outbound-email",
+    anthropicModel: MODEL,
+    system: HTML_EMAIL_SYSTEM_PROMPT,
+    user: `Translate this ${sourceLabel} email to ${label} (ISO code: ${targetLanguage}).\n\nSubject: ${subject}\n\nBody (HTML):\n${bodyHtml}`,
+    maxTokens: 2048,
+  });
+  if (!result.ok) return { ok: false, reason: `ai error: ${result.reason}` };
 
-  const cleaned = raw
+  const cleaned = result.text
     .replace(/^```(?:json)?\n?/i, "")
     .replace(/\n?```$/i, "")
     .trim();
@@ -244,7 +204,6 @@ export async function translateOutboundEmail(input: {
   let subjectUntranslated = false;
   if (subject.trim() && sameSubjectText(subject, outSubject)) {
     const retried = await retranslateSubject(
-      client,
       subject,
       sourceLabel,
       label,
@@ -262,7 +221,7 @@ export async function translateOutboundEmail(input: {
     subject: stripLongDashes(outSubject),
     bodyHtml: stripLongDashes(outBody),
     targetLanguage,
-    model: MODEL,
+    model: result.model,
     subjectUntranslated,
   };
 }

@@ -9,9 +9,8 @@
 // create a thin taxonomy page with one article on it, so a name that does not
 // match an existing term is dropped rather than created.
 
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { generateStructured } from "@/lib/ai/provider";
 import type { TaxonomyTerm } from "./webflow";
 
 // Classification is a short, well-bounded judgement, so it does not need Opus.
@@ -51,10 +50,7 @@ export async function classifyArticle(input: {
   tags: TaxonomyTerm[];
 }): Promise<ClassifyResult> {
   const empty: ClassifyResult = { categoryIds: [], tagIds: [], reasoning: "" };
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || !input.categories.length) return empty;
-
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  if (!input.categories.length) return empty;
 
   const system = `You file automotive-trade articles into an existing taxonomy on a workshop-software company's website.
 
@@ -74,26 +70,26 @@ ${input.summary ? `Summary: ${input.summary}\n` : ""}
 Article:
 ${excerpt}`;
 
-  try {
-    const res = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 2000,
+  const result = await generateStructured(
+    {
+      label: "articles/classify",
+      anthropicModel: MODEL,
       system,
-      messages: [{ role: "user", content: user }],
-      output_config: { format: zodOutputFormat(schema) },
-    });
-    const out = res.parsed_output;
-    if (!out) return empty;
+      user,
+      maxTokens: 2000,
+    },
+    schema,
+  );
+  if (!result.ok) return empty;
 
-    // Only ids that actually exist survive, so a hallucinated id cannot reach the CMS.
-    const validCategories = new Set(input.categories.map((c) => c.id));
-    const validTags = new Set(input.tags.map((t) => t.id));
-    return {
-      categoryIds: out.categoryIds.filter((id) => validCategories.has(id)).slice(0, 2),
-      tagIds: out.tagIds.filter((id) => validTags.has(id)).slice(0, 6),
-      reasoning: out.reasoning,
-    };
-  } catch {
-    return empty;
-  }
+  const out = result.data;
+
+  // Only ids that actually exist survive, so a hallucinated id cannot reach the CMS.
+  const validCategories = new Set(input.categories.map((c) => c.id));
+  const validTags = new Set(input.tags.map((t) => t.id));
+  return {
+    categoryIds: out.categoryIds.filter((id) => validCategories.has(id)).slice(0, 2),
+    tagIds: out.tagIds.filter((id) => validTags.has(id)).slice(0, 6),
+    reasoning: out.reasoning,
+  };
 }

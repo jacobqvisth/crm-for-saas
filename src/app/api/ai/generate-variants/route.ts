@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import { NO_LONG_DASH_INSTRUCTION, stripLongDashes } from "@/lib/ai/no-long-dash";
 
@@ -190,22 +190,19 @@ ${existingBlock ? `## Existing variants (do NOT repeat or near-repeat any of the
 
 Return the JSON array now.`;
 
-  let rawText: string;
-  try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    });
-    rawText = response.content[0].type === "text" ? response.content[0].text : "";
-  } catch {
+  const result = await generateText({
+    label: "api/ai/generate-variants",
+    system: systemPrompt,
+    user: userMessage,
+    maxTokens: 4096,
+  });
+  if (!result.ok) {
     return NextResponse.json(
       { error: "AI service unavailable. Try again." },
       { status: 500 },
     );
   }
+  const rawText = result.text;
 
   let parsed: GeneratedVariant[];
   try {

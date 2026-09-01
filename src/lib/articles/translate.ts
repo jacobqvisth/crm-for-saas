@@ -11,9 +11,8 @@
 // afterwards rather than trusting it, because a dropped <figure> is invisible
 // until someone opens the Swedish page.
 
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { generateStructured } from "@/lib/ai/provider";
 import { stripLongDashes } from "@/lib/ai/no-long-dash";
 
 // A careful translation, not a hard reasoning problem.
@@ -68,9 +67,6 @@ export async function translateReleaseToSwedish(input: {
   summary: string | null;
   bodyHtml: string;
 }): Promise<SwedishArticle | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  const client = new Anthropic();
-
   const user = `Translate this release article into Swedish.
 
 TITLE:
@@ -82,28 +78,29 @@ ${input.summary ?? ""}
 BODY HTML:
 ${input.bodyHtml}`;
 
-  try {
-    const res = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 8000,
+  const result = await generateStructured(
+    {
+      label: "articles/translate-sv",
+      anthropicModel: MODEL,
       system: SYSTEM,
-      messages: [{ role: "user", content: user }],
-      output_config: { format: zodOutputFormat(schema) },
-    });
-    const out = res.parsed_output;
-    if (!out?.bodyHtml?.trim() || !out.title?.trim()) return null;
+      user,
+      maxTokens: 8000,
+    },
+    schema,
+  );
+  if (!result.ok) return null;
 
-    if (!preservesStructure(input.bodyHtml, out.bodyHtml)) return null;
+  const out = result.data;
+  if (!out.bodyHtml?.trim() || !out.title?.trim()) return null;
 
-    return {
-      title: stripLongDashes(out.title),
-      slug: asciiSlug(out.slug || out.title),
-      summary: stripLongDashes(out.summary ?? ""),
-      bodyHtml: stripLongDashes(out.bodyHtml),
-    };
-  } catch {
-    return null;
-  }
+  if (!preservesStructure(input.bodyHtml, out.bodyHtml)) return null;
+
+  return {
+    title: stripLongDashes(out.title),
+    slug: asciiSlug(out.slug || out.title),
+    summary: stripLongDashes(out.summary ?? ""),
+    bodyHtml: stripLongDashes(out.bodyHtml),
+  };
 }
 
 /**
