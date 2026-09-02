@@ -1,15 +1,14 @@
+import { GARAGET_BOARDS, garagetBoardUrl } from "./garaget";
 import type { ForumTarget } from "./types";
 
-// The forums we seed posts into. Phase 1 = English Reddit (decided 2026-06-16).
-// Reference data only — like the video channels / reviews platform lists, this
-// is NOT in the DB. `tone` is handed to the model; `rulesNote` is the human
-// reminder of each community's posting norms (most ban overt self-promotion,
-// hence the mention-level toggle in the UI).
+// The forums we seed posts into. Reference data only — like the video channels
+// / reviews platform lists, this is NOT in the DB. `tone` is handed to the
+// model; `rulesNote` is the human reminder of each community's posting norms
+// (most ban overt self-promotion, hence the mention-level toggle in the UI).
 //
-// Nordic/Swedish forums (Garaget.org etc.) are a planned phase-2 addition; add
-// them here with language: "sv" and they flow through the rest of the UI
-// unchanged.
-export const FORUM_TARGETS: ForumTarget[] = [
+// Phase 1 was English Reddit (decided 2026-06-16). Phase 2 adds Garaget.org,
+// Sweden's largest motor community, composed in below with language: "sv".
+const REDDIT_TARGETS: ForumTarget[] = [
   {
     key: "reddit:MechanicAdvice",
     platform: "reddit",
@@ -65,6 +64,32 @@ export const FORUM_TARGETS: ForumTarget[] = [
     rulesNote: "Genuine repair questions and write-ups only. No advertising.",
   },
 ];
+
+/**
+ * Garaget.org boards, generated from the same board list the scanner uses so
+ * the two can never drift apart.
+ *
+ * The tone note matters more here than on Reddit: Garaget is Swedish, and a
+ * reply that reads as translated English is worse than no reply. The rulesNote
+ * is not invented, it is the board's own pinned "LÄS DETTA INNAN DU POSTAR"
+ * guide, which asks for the full model designation, the engine, whether the car
+ * is modified, and when the fault appears. Threads without a clear title stating
+ * the fault and the model get locked.
+ */
+const GARAGET_TARGETS: ForumTarget[] = GARAGET_BOARDS.map((board) => ({
+  key: `garaget:${board.name}`,
+  platform: "garaget" as const,
+  name: `Garaget › ${board.label}`,
+  url: garagetBoardUrl(board.id),
+  language: "sv",
+  blurb: board.blurb,
+  tone:
+    "Swedish, written the way Swedish car people actually write on a forum: direct, practical, no marketing register. Use ordinary workshop vocabulary (felkod, felsökning, tomgång, lambdasond, kamrem) rather than translated English. Informal 'du'. Never translate an English reply, write it in Swedish from the start.",
+  rulesNote:
+    "Answer in Swedish. The board's own posting guide asks for the full model designation, engine, any modifications and when the fault appears, so ask for whatever is missing before guessing. No advertising and no self-promotion: keep any tool mention incidental and put links in your profile, not the post.",
+}));
+
+export const FORUM_TARGETS: ForumTarget[] = [...REDDIT_TARGETS, ...GARAGET_TARGETS];
 
 export function getForumTarget(key: string): ForumTarget | undefined {
   return FORUM_TARGETS.find((t) => t.key === key);

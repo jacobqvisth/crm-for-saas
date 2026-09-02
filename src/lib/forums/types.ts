@@ -27,12 +27,20 @@ export interface ForumGenerationOptions {
 
 export type ForumPostStatus = "idea" | "drafted" | "posted" | "archived";
 
+/**
+ * Every forum the CRM can discover questions on and draft answers for.
+ *
+ * Lives here, in the leaf module, so both the reference data (targets.ts) and
+ * the queue (candidates.ts) can name a platform without importing each other.
+ */
+export type ForumPlatform = "reddit" | "garaget";
+
 // A target forum. Reference data only (no DB row) — lives in
 // src/lib/forums/targets.ts. `tone` is fed to the model so the post matches
 // the community's norms; `rulesNote` is a human reminder shown in the UI.
 export interface ForumTarget {
-  key: string; // e.g. "reddit:MechanicAdvice"
-  platform: "reddit"; // only Reddit for phase 1
+  key: string; // e.g. "reddit:MechanicAdvice" or "garaget:42"
+  platform: ForumPlatform;
   name: string; // e.g. "r/MechanicAdvice"
   url: string;
   language: string; // ISO-2 of the language posts should be written in
