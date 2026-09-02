@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classifyArticle } from "./classify";
 import { pickBadge, renderArticleImage } from "./og-image";
+import { checkVehicleClaims } from "./vehicle-guard";
 import type { ArticleSeo } from "./types";
 import {
   articleUrl,
@@ -179,6 +180,30 @@ export async function publishArticleRow(opts: PublishOptions): Promise<PublishRe
   const seo = (row.seo ?? {}) as Partial<ArticleSeo>;
   const title = row.title?.trim() || seo.metaTitle?.trim() || "Untitled";
   const summary = seo.metaDescription ?? null;
+
+  /**
+   * Refuse to publish an invented vehicle.
+   *
+   * Checked here rather than at generation time so it guards every route to the
+   * site, the Studio button and the Autopilot cron alike, and so a resync cannot
+   * quietly push a bad body over a good one. The draft stays in the Library, so
+   * this loses nothing but the publish. See vehicle-guard.ts for why a prompt
+   * rule alone was not enough.
+   */
+  const vehicleCheck = checkVehicleClaims({
+    sourceKind: row.source_kind,
+    snapshot: (row.source_snapshot ?? null) as { carMake?: string | null; carModel?: string | null } | null,
+    title: row.title,
+    body: row.body,
+  });
+  if (!vehicleCheck.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: vehicleCheck.reason!,
+      extra: { offences: vehicleCheck.offences },
+    };
+  }
 
   /**
    * Release articles are imported by /api/articles/releases, which already

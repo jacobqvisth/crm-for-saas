@@ -129,6 +129,65 @@ describe("decideRun", () => {
   });
 });
 
+describe("decideRun, the enable-day back-fill", () => {
+  // What actually happened on 2026-09-01: switched on at ~14:00 Stockholm with
+  // slots at 08/10/12/14/16, it saw four slots elapsed and nothing published and
+  // fired at 15:00, 16:00 and 17:00 to make up a morning it was switched off for.
+  const enabledAt2pm = { ...base, enabledAt: "2026-07-01T12:00:00Z" }; // 14:00 Stockholm
+
+  it("does not back-fill the morning it was switched on", () => {
+    // 15:00 Stockholm, one published (the 14:00 slot). Only 14 and 16 count
+    // today, so 15:00 owes nothing.
+    const d = decideRun({
+      settings: enabledAt2pm,
+      now: utc("2026-07-01T13:00:00Z"),
+      publishedToday: 1,
+    });
+    expect(d.run).toBe(false);
+    expect(d.nextSlotHour).toBe(16);
+  });
+
+  it("still serves the slots that come after it was switched on", () => {
+    // 16:00 Stockholm, one published. The 16:00 slot is genuinely due.
+    const d = decideRun({
+      settings: enabledAt2pm,
+      now: utc("2026-07-01T14:00:00Z"),
+      publishedToday: 1,
+    });
+    expect(d.run).toBe(true);
+    expect(d.reason).toBe("Slot 2 of 2");
+  });
+
+  it("does nothing when switched on after the last slot", () => {
+    const lateEvening = { ...base, enabledAt: "2026-07-01T18:00:00Z" }; // 20:00 Stockholm
+    const d = decideRun({
+      settings: lateEvening,
+      now: utc("2026-07-01T19:00:00Z"),
+      publishedToday: 0,
+    });
+    expect(d.run).toBe(false);
+    expect(d.reason).toMatch(/after today's last slot/i);
+  });
+
+  it("goes back to the full day once the enable day is over", () => {
+    // Next morning at 10:00 Stockholm, nothing published: 08 and 10 are both
+    // owed again, so the ordinary catch-up applies.
+    const d = decideRun({
+      settings: enabledAt2pm,
+      now: utc("2026-07-02T08:00:00Z"),
+      publishedToday: 0,
+    });
+    expect(d.run).toBe(true);
+    expect(d.slotsElapsed).toBe(2);
+  });
+
+  it("keeps the old behaviour when no enable was ever recorded", () => {
+    const d = decideRun({ settings: base, now: utc("2026-07-01T12:00:00Z"), publishedToday: 0 });
+    expect(d.run).toBe(true);
+    expect(d.slotsElapsed).toBe(4);
+  });
+});
+
 describe("settingsFromRow", () => {
   it("falls back to the defaults for a missing row", () => {
     expect(settingsFromRow(null)).toEqual(DEFAULT_AUTOPILOT_SETTINGS);
