@@ -4,7 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { SHARED_FORUMS_WORKSPACE_ID } from "@/lib/forums/server";
 import { REPLY_SUBREDDITS } from "@/lib/forums/replies";
 import { isApifyConfigured, apifySearchRedditPosts } from "@/lib/forums/reddit-apify";
-import { upsertCandidates } from "@/lib/forums/candidates";
+import { fromRedditPost, upsertCandidates, type DiscoveredPost } from "@/lib/forums/candidates";
+import { fetchGaragetBoards, GARAGET_BOARDS } from "@/lib/forums/garaget";
 import { cronGate } from "@/lib/features";
 
 export const runtime = "nodejs";
@@ -19,6 +20,11 @@ const PRUNE_AFTER_DAYS = 30;
 
 // How many posts to pull per scan, spread across the subreddits.
 const SCAN_LIMIT = 25;
+
+// Garaget serves 60 topics on a board's first page and orders by latest
+// activity, so 30 is a full day's worth on even the busiest board with room to
+// spare. Costs nothing either way; the cap just keeps the upsert payload sane.
+const GARAGET_LIMIT_PER_BOARD = 30;
 
 // Same SYNC_SECRET / CRON_SECRET Bearer auth as the rest of the cron routes —
 // the scan spends Apify credits, so it must not be publicly triggerable.
@@ -37,13 +43,20 @@ function isAuthorized(request: NextRequest): boolean {
 // GET /api/forums/candidates/scan
 //
 // Vercel Cron hits this daily (crons are GET, and Vercel sends the CRON_SECRET
-// bearer). Browses the diagnostic subreddits for new questions and banks them in
+// bearer). Browses the diagnostic boards for new questions and banks them in
 // forum_candidates, so /forums/answers already has a fresh queue when someone
 // opens it instead of making them sit through a ~2 min scrape.
 //
-// Gated behind FORUM_CANDIDATE_SCAN_ENABLED because each firing is one Apify
-// actor run per subreddit (5 today) and the Apify account runs on a $5/month
-// cap. Unset the flag to stop spending without touching the cron schedule.
+// Two sources, with very different costs:
+//   Garaget  plain HTTP reads, no token, no spend. Always attempted.
+//   Reddit   one Apify actor run per subreddit (5 today) against a $5/month
+//            cap, which is why FORUM_CANDIDATE_SCAN_ENABLED exists.
+//
+// The flag still gates the whole route rather than just the Reddit half. It
+// reads as "should the daily scan run at all", and someone switching it off to
+// stop the spend would not expect a scan to keep writing rows. Turning Garaget
+// on therefore means setting FORUM_CANDIDATE_SCAN_ENABLED=true, even though
+// Garaget itself costs nothing.
 //
 // Uses the service-role client so the cron isn't tied to a user session; all
 // forum tables share one workspace (SHARED_FORUMS_WORKSPACE_ID).
@@ -59,24 +72,45 @@ export async function GET(request: NextRequest) {
   if (process.env.FORUM_CANDIDATE_SCAN_ENABLED !== "true") {
     return NextResponse.json({ ok: true, skipped: "FORUM_CANDIDATE_SCAN_ENABLED is not 'true'" });
   }
-  if (!isApifyConfigured()) {
-    return NextResponse.json({ ok: false, reason: "APIFY_TOKEN is not set" }, { status: 503 });
-  }
 
   const supabase = createServiceClient() as unknown as SupabaseClient;
   const workspaceId = SHARED_FORUMS_WORKSPACE_ID;
 
-  // No keyword: we want whatever is newly asked, and keyword filtering now
-  // happens locally over the persisted queue instead of costing another scrape.
-  const { posts, failed, timedOut } = await apifySearchRedditPosts({
-    subreddits: REPLY_SUBREDDITS.map((s) => s.name),
-    sort: "new",
-    limit: SCAN_LIMIT,
-  });
+  const posts: DiscoveredPost[] = [];
 
-  if (failed) {
+  // Garaget first, and unconditionally: it is a plain HTTP read with no token,
+  // no actor run and no spend, so it must not be skipped just because the paid
+  // Reddit path is unavailable. A forum that fails here is reported, not fatal.
+  const garaget = await fetchGaragetBoards({
+    boardIds: GARAGET_BOARDS.map((b) => b.id),
+    limitPerBoard: GARAGET_LIMIT_PER_BOARD,
+  });
+  posts.push(...garaget.posts);
+
+  // Reddit costs one Apify actor run per subreddit against a $5/month cap, so
+  // a missing token degrades the scan to Garaget-only rather than failing it.
+  let redditSkipped: string | null = null;
+  if (!isApifyConfigured()) {
+    redditSkipped = "APIFY_TOKEN is not set";
+  } else {
+    // No keyword: we want whatever is newly asked, and keyword filtering now
+    // happens locally over the persisted queue instead of costing another scrape.
+    const reddit = await apifySearchRedditPosts({
+      subreddits: REPLY_SUBREDDITS.map((s) => s.name),
+      sort: "new",
+      limit: SCAN_LIMIT,
+    });
+    if (reddit.failed) {
+      redditSkipped = reddit.timedOut ? "Apify scrape timed out" : "Apify scrape failed";
+    } else {
+      posts.push(...reddit.posts.map(fromRedditPost));
+    }
+  }
+
+  // Every source failing is a real failure; one failing is a degraded run.
+  if (posts.length === 0 && redditSkipped && garaget.failedBoards.length > 0) {
     return NextResponse.json(
-      { ok: false, reason: timedOut ? "Apify scrape timed out" : "Apify scrape failed" },
+      { ok: false, reason: `no source returned posts (reddit: ${redditSkipped})` },
       { status: 503 },
     );
   }
@@ -114,5 +148,14 @@ export async function GET(request: NextRequest) {
     found: posts.length,
     saved,
     pruned: (prunedDated ?? 0) + (prunedUndated ?? 0),
+    sources: {
+      garaget: {
+        found: garaget.posts.length,
+        failedBoards: garaget.failedBoards,
+      },
+      reddit: redditSkipped
+        ? { skipped: redditSkipped }
+        : { found: posts.length - garaget.posts.length },
+    },
   });
 }

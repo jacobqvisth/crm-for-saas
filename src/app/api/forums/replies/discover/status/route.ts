@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { resolveWorkspace } from "@/lib/forums/server";
 import { pollApifySearchRuns } from "@/lib/forums/reddit-apify";
-import { upsertCandidates } from "@/lib/forums/candidates";
+import { fromRedditPost, upsertCandidates } from "@/lib/forums/candidates";
 
 // Polling is a couple of quick Apify status/dataset reads — fast.
 export const maxDuration = 60;
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   const { saved, error } = await upsertCandidates({
     supabase: supabase as unknown as SupabaseClient,
     workspaceId,
-    posts: progress.posts,
+    posts: progress.posts.map(fromRedditPost),
     via: "search",
     query: parsed.data.query ?? null,
     sort: parsed.data.sort ?? null,

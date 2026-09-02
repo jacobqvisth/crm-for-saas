@@ -25,7 +25,13 @@ import {
   CheckCircle2,
   Inbox,
 } from "lucide-react";
-import { REPLY_SUBREDDITS, type ForumReply, type ReplySource } from "@/lib/forums/replies";
+import {
+  REPLY_SOURCES,
+  boardLabel,
+  type ForumReply,
+  type ReplySource,
+} from "@/lib/forums/replies";
+import type { ForumPlatform } from "@/lib/forums/types";
 import type { RedditPost } from "@/lib/forums/reddit";
 import {
   CANDIDATE_SORTS,
@@ -112,7 +118,8 @@ function timeAgoIso(iso: string | null): string {
 interface QueueCard {
   key: string;
   id: string | null;
-  subreddit: string | null;
+  platform: ForumPlatform;
+  board: string | null;
   title: string;
   body: string | null;
   author: string | null;
@@ -128,7 +135,8 @@ function cardFromCandidate(c: ForumCandidate): QueueCard {
   return {
     key: c.id,
     id: c.id,
-    subreddit: c.subreddit,
+    platform: c.platform ?? "reddit",
+    board: c.board ?? c.subreddit,
     title: c.title,
     body: c.body,
     author: c.author,
@@ -145,7 +153,8 @@ function cardFromPost(p: RedditPost): QueueCard {
   return {
     key: `unsaved:${p.id}`,
     id: null,
-    subreddit: p.subreddit,
+    platform: "reddit",
+    board: p.subreddit,
     title: p.title,
     body: p.body,
     author: p.author,
@@ -182,7 +191,7 @@ export function AnswersClient() {
 
   // Discovery state.
   const [subs, setSubs] = useState<Set<string>>(
-    () => new Set(REPLY_SUBREDDITS.map((s) => s.name)),
+    () => new Set(REPLY_SOURCES.map((s) => s.key)),
   );
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"new" | "hot">("new");
@@ -309,7 +318,7 @@ export function AnswersClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subreddits: Array.from(subs),
+          sources: Array.from(subs),
           query: query.trim() || undefined,
           sort,
         }),
@@ -324,6 +333,24 @@ export function AnswersClient() {
       }
       const data = await res.json();
       setRedditConfigured(data.redditConfigured ?? null);
+
+      // Garaget resolves server-side and is already in the queue by now, so
+      // show it straight away rather than making it wait behind Reddit's
+      // multi-minute poll. Without this a Swedish-only search would look like
+      // it did nothing until the Apify runs finished.
+      const garaget = data.garaget as
+        | { found: number; saved: number; failedBoards: string[] }
+        | null
+        | undefined;
+      if (garaget) {
+        setFoundSoFar((n) => Math.max(n, garaget.found));
+        if (garaget.found > 0) await loadCandidatesRef.current();
+        if (garaget.failedBoards.length > 0) {
+          setDiscoverError(
+            `Couldn't read ${garaget.failedBoards.length} Garaget board(s). The rest of the search went through.`,
+          );
+        }
+      }
 
       // Async Apify path: poll for progress, streaming posts in as each
       // subreddit's run finishes.
@@ -513,7 +540,7 @@ export function AnswersClient() {
     const q = queueQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((c) =>
-      `${c.title} ${c.body ?? ""} ${c.subreddit ?? ""}`.toLowerCase().includes(q),
+      `${c.title} ${c.body ?? ""} ${c.board ?? ""}`.toLowerCase().includes(q),
     );
   }, [candidates, unsavedPosts, saveError, queueQuery]);
 
@@ -564,22 +591,47 @@ export function AnswersClient() {
           <Search className="h-4 w-4 text-orange-600" /> Find posts to answer
         </h2>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {REPLY_SUBREDDITS.map((s) => (
-            <button
-              key={s.name}
-              onClick={() => toggleSub(s.name)}
-              title={s.blurb}
-              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                subs.has(s.name)
-                  ? "border-orange-300 bg-orange-50 text-orange-700"
-                  : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {/* Grouped by platform, because the two behave differently enough that
+            the distinction is worth showing: Reddit costs an Apify run per
+            board and streams in over a couple of minutes, Garaget is a free
+            read that has already landed in the queue by the time the search
+            returns. The language tag matters too, since a Garaget draft comes
+            back in Swedish. */}
+        {(["reddit", "garaget"] as const).map((platform) => {
+          const boards = REPLY_SOURCES.filter((s) => s.platform === platform);
+          if (boards.length === 0) return null;
+          return (
+            <div key={platform} className="mt-3">
+              <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                {platform === "reddit" ? "Reddit" : "Garaget.org"}
+                <span className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] tracking-normal text-slate-500">
+                  {platform === "reddit" ? "EN" : "SV"}
+                </span>
+                {platform === "garaget" && (
+                  <span className="normal-case tracking-normal text-slate-400">
+                    free to scan, no Apify run
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {boards.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => toggleSub(s.key)}
+                    title={s.blurb}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      subs.has(s.key)
+                        ? "border-orange-300 bg-orange-50 text-orange-700"
+                        : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 min-w-[220px]">
@@ -919,7 +971,7 @@ function QueueCardView({
     >
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
         <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
-          r/{card.subreddit ?? "unknown"}
+          {boardLabel(card.platform, card.board)}
         </span>
         <span className="inline-flex items-center gap-1">
           <ArrowUpToLine className="h-3 w-3" />
@@ -980,7 +1032,9 @@ function QueueCardView({
                 onRequestDraft(
                   {
                     url: card.url,
-                    subreddit: card.subreddit,
+                    platform: card.platform,
+                    board: card.board,
+                    subreddit: card.platform === "reddit" ? card.board : null,
                     title: card.title,
                     body: card.body,
                     author: card.author,
