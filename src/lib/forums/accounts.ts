@@ -44,9 +44,10 @@ export const ACCOUNT_SEED: AccountSeed[] = [
   { username: "Minimum-Fig-2004", owner_label: "Mech Macai", notes: "mechmacai@gmail.com (Jacob)", turns_wrenches: true, uses_ai_tools: true, persona_note: "Wrenches-in-the-bay voice; talks from hands-on experience." },
   { username: "Franqer", owner_label: "Francis", notes: "francis.qvisth@gmail.com", uses_ai_tools: true },
   // Teammates — fill in each Reddit handle + persona via the roster once shared.
-  { username: null, owner_label: "Hans", notes: "Pending Reddit username." },
+  { username: null, owner_label: "Hans", notes: "hans@wrenchlane.com / hans.markebrant@gmail.com. Pending Reddit username." },
   { username: null, owner_label: "Hasse", notes: "Pending Reddit username." },
   { username: null, owner_label: "Magnus", notes: "Pending Reddit username." },
   { username: null, owner_label: "Matteo", notes: "Pending Reddit username." },
   { username: null, owner_label: "Dogu", notes: "Pending Reddit username." },
+  { username: null, owner_label: "Valdemar", notes: "eklund.valdemar@gmail.com. Pending Reddit username." },
 ];
