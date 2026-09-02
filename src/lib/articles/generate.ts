@@ -148,6 +148,7 @@ Things that make it read like AI, all forbidden: opening with "In today's fast-p
 HONESTY RULES, these override style
 - Never invent a number. Not a percentage, not a currency amount, not a time saving, not an industry statistic. If you were not given it, it does not go in.
 - Never invent a customer, a workshop name, a person, or a quote. The facts you are given are anonymised on purpose. Do not add a plausible name or location to make the story concrete.
+- Never name a manufacturer, model, engine family or engine code that you were not given. This includes marketing engine names such as EcoBlue, EcoBoost, TDI, TSI, BlueHDi, dCi, CDI, HDi, CRDi, MultiJet, SkyActiv, VTEC and D4D. A fault code plus a year does not tell you the marque, and inferring one from the codes is inventing it. If the manufacturer is not recorded, write about the vehicle without ever naming it: "the vehicle", "this van", "a 2016 diesel".
 - Where a fact is marked as not recorded, it genuinely does not exist in our data. Write around the gap. Do not fill it with a realistic-sounding value, and do not gesture at one ("a high-mileage example", "a well-used car") when you were not told. A piece with one fewer detail is fine; a piece with one invented detail is not publishable.
 - Data you are given is Wrenchlane's own platform data. Describe it as that. It is not an industry survey and not market-wide.
 - Do not imply a causal outcome the facts do not support. That a diagnosis ranked a cause first does not mean it was confirmed, and does not mean anyone saved money.
@@ -193,9 +194,19 @@ function describeDiagnostic(s: ArticleDiagnosticSnapshot): string {
   // the gap. Same reasoning for every other optional field.
   const missing: string[] = [];
 
+  // Each vehicle field is judged on its own.
+  //
+  // Joining them first and testing the join was a real bug: a job with only a
+  // year produced the line "Vehicle: 2016" and NO mention that the make and
+  // model were missing, because the else branch fired only when all three were
+  // absent. Handed a case-study shape with a nameless vehicle, the model filled
+  // it in, and published "A 2016 Ford rolled into a German workshop" plus four
+  // paragraphs about a "2.0 EcoBlue" engine on a row whose make and model were
+  // both null. Partial data is the dangerous case, not empty data.
   const car = [s.carYear, s.carMake, s.carModel].filter(Boolean).join(" ");
   if (car) lines.push(`Vehicle: ${car}`);
-  else missing.push("the vehicle make, model and year");
+  if (!s.carMake) missing.push("the vehicle manufacturer");
+  if (!s.carModel) missing.push("the model name");
   if (!s.carYear) missing.push("the model year");
 
   if (s.mileage) lines.push(`Odometer reading: ${s.mileage} (unit not recorded, so do not write "miles" or "km", either say "on the clock" or leave the reading out)`);

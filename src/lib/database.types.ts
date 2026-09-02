@@ -658,6 +658,7 @@ export type Database = {
         Row: {
           allowed_categories: string[]
           enabled: boolean
+          enabled_at: string | null
           extra_tags: string[]
           interval_hours: number
           last_checked_at: string | null
@@ -676,6 +677,7 @@ export type Database = {
         Insert: {
           allowed_categories?: string[]
           enabled?: boolean
+          enabled_at?: string | null
           extra_tags?: string[]
           interval_hours?: number
           last_checked_at?: string | null
@@ -694,6 +696,7 @@ export type Database = {
         Update: {
           allowed_categories?: string[]
           enabled?: boolean
+          enabled_at?: string | null
           extra_tags?: string[]
           interval_hours?: number
           last_checked_at?: string | null

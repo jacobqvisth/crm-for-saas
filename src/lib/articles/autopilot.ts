@@ -75,6 +75,12 @@ export interface AutopilotSettings {
   statsEvery: number;
   statsCooldownDays: number;
   options: Partial<ArticleGenerationOptions>;
+  /**
+   * When `enabled` last went false->true, ISO. Slots earlier than this on the
+   * same local day are not treated as missed, because the feature was not
+   * running for them. Null means no enable was recorded.
+   */
+  enabledAt: string | null;
 }
 
 export const DEFAULT_AUTOPILOT_SETTINGS: AutopilotSettings = {
@@ -90,6 +96,7 @@ export const DEFAULT_AUTOPILOT_SETTINGS: AutopilotSettings = {
   statsEvery: 7,
   statsCooldownDays: 60,
   options: {},
+  enabledAt: null,
 };
 
 /** Map a DB row onto the settings shape, filling anything absent. */
@@ -116,6 +123,7 @@ export function settingsFromRow(row: Record<string, unknown> | null): AutopilotS
       row.options && typeof row.options === "object"
         ? (row.options as Partial<ArticleGenerationOptions>)
         : {},
+    enabledAt: typeof row.enabled_at === "string" ? row.enabled_at : null,
   };
 }
 
@@ -203,9 +211,24 @@ export function decideRun(input: {
 }): RunDecision {
   const { settings, now, publishedToday } = input;
   const slots = slotHours(settings);
-  const { hour, weekday } = localParts(now, settings.timeZone);
-  const elapsed = slots.filter((h) => h <= hour).length;
-  const next = slots.find((h) => h > hour) ?? null;
+  const { hour, weekday, dateKey } = localParts(now, settings.timeZone);
+
+  /**
+   * On the day it was switched on, slots before that moment were never missed.
+   *
+   * Without this, enabling at 14:00 with slots at 08/10/12/14/16 saw four slots
+   * elapsed and nothing published, and fired three times in three consecutive
+   * hours to make up a morning that happened while the feature was off. Catch-up
+   * should cover failures, not the period before it existed.
+   */
+  let active = slots;
+  if (settings.enabledAt) {
+    const on = localParts(new Date(settings.enabledAt), settings.timeZone);
+    if (on.dateKey === dateKey) active = slots.filter((h) => h >= on.hour);
+  }
+
+  const elapsed = active.filter((h) => h <= hour).length;
+  const next = active.find((h) => h > hour) ?? null;
   const base = { slotsElapsed: elapsed, nextSlotHour: next, slots };
 
   if (!settings.enabled) return { run: false, reason: "Autopilot is off", ...base };
@@ -216,8 +239,12 @@ export function decideRun(input: {
   if (publishedToday >= settings.perDay) {
     return { run: false, reason: `Today's ${settings.perDay} are done`, ...base };
   }
+  if (!active.length) {
+    // Switched on after the day's last slot. Nothing owed until tomorrow.
+    return { run: false, reason: "Switched on after today's last slot", ...base };
+  }
   if (elapsed === 0) {
-    return { run: false, reason: `Before the first slot (${pad(slots[0])}:00)`, ...base };
+    return { run: false, reason: `Before the first slot (${pad(active[0])}:00)`, ...base };
   }
   if (publishedToday >= elapsed) {
     return {
@@ -228,7 +255,7 @@ export function decideRun(input: {
   }
   return {
     run: true,
-    reason: `Slot ${publishedToday + 1} of ${settings.perDay}`,
+    reason: `Slot ${publishedToday + 1} of ${active.length}`,
     ...base,
   };
 }

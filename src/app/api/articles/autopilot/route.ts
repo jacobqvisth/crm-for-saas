@@ -112,6 +112,21 @@ export async function PUT(request: NextRequest) {
   // Column names, not the camelCase the UI speaks.
   const update: Record<string, unknown> = { updated_by: userId };
   if (p.enabled !== undefined) update.enabled = p.enabled;
+
+  /**
+   * Stamp the moment it goes on, so catch-up cannot back-fill slots from before
+   * it was running. Only on a false->true transition: re-saving other settings
+   * while it is already on must not move the mark, or every save would suppress
+   * a legitimate catch-up for the rest of the day.
+   */
+  if (p.enabled === true) {
+    const { data: current } = await supabase
+      .from("article_autopilot_settings")
+      .select("enabled")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (!current?.enabled) update.enabled_at = new Date().toISOString();
+  }
   if (p.perDay !== undefined) update.per_day = p.perDay;
   if (p.intervalHours !== undefined) update.interval_hours = p.intervalHours;
   if (p.startHour !== undefined) update.start_hour = p.startHour;
