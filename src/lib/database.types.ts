@@ -5704,6 +5704,219 @@ export type Database = {
           },
         ]
       }
+      school_programs: {
+        Row: {
+          admission_points_average: string | null
+          admission_points_min: string | null
+          admission_points_semester: string | null
+          created_at: string | null
+          credits: string | null
+          credits_system: string | null
+          description: string | null
+          distance: boolean | null
+          education_event_id: string
+          id: string
+          orientations: string[]
+          pace_of_study: string | null
+          program_code: string | null
+          program_kind: string | null
+          program_name: string
+          program_url: string | null
+          raw: Json | null
+          relevance_reason: string | null
+          relevance_tier: string
+          school_form: string | null
+          school_id: string
+          source: string | null
+          start_date: string | null
+          updated_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          admission_points_average?: string | null
+          admission_points_min?: string | null
+          admission_points_semester?: string | null
+          created_at?: string | null
+          credits?: string | null
+          credits_system?: string | null
+          description?: string | null
+          distance?: boolean | null
+          education_event_id: string
+          id?: string
+          orientations?: string[]
+          pace_of_study?: string | null
+          program_code?: string | null
+          program_kind?: string | null
+          program_name: string
+          program_url?: string | null
+          raw?: Json | null
+          relevance_reason?: string | null
+          relevance_tier?: string
+          school_form?: string | null
+          school_id: string
+          source?: string | null
+          start_date?: string | null
+          updated_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          admission_points_average?: string | null
+          admission_points_min?: string | null
+          admission_points_semester?: string | null
+          created_at?: string | null
+          credits?: string | null
+          credits_system?: string | null
+          description?: string | null
+          distance?: boolean | null
+          education_event_id?: string
+          id?: string
+          orientations?: string[]
+          pace_of_study?: string | null
+          program_code?: string | null
+          program_kind?: string | null
+          program_name?: string
+          program_url?: string | null
+          raw?: Json | null
+          relevance_reason?: string | null
+          relevance_tier?: string
+          school_form?: string | null
+          school_id?: string
+          source?: string | null
+          start_date?: string | null
+          updated_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_programs_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "school_programs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schools: {
+        Row: {
+          address: string | null
+          city: string | null
+          company_id: string | null
+          contact_count: number
+          corporation_name: string | null
+          county: string | null
+          created_at: string | null
+          email: string | null
+          external_key: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          municipality: string | null
+          municipality_code: string | null
+          name: string
+          notes: string | null
+          org_number: string | null
+          orientations: string[]
+          phone: string | null
+          postal_code: string | null
+          principal_organizer_type: string | null
+          program_count: number
+          raw: Json | null
+          relevance_tier: string
+          school_type: string
+          school_unit_code: string | null
+          source: string | null
+          updated_at: string | null
+          website: string | null
+          workspace_id: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          company_id?: string | null
+          contact_count?: number
+          corporation_name?: string | null
+          county?: string | null
+          created_at?: string | null
+          email?: string | null
+          external_key: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          municipality?: string | null
+          municipality_code?: string | null
+          name: string
+          notes?: string | null
+          org_number?: string | null
+          orientations?: string[]
+          phone?: string | null
+          postal_code?: string | null
+          principal_organizer_type?: string | null
+          program_count?: number
+          raw?: Json | null
+          relevance_tier?: string
+          school_type: string
+          school_unit_code?: string | null
+          source?: string | null
+          updated_at?: string | null
+          website?: string | null
+          workspace_id: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          company_id?: string | null
+          contact_count?: number
+          corporation_name?: string | null
+          county?: string | null
+          created_at?: string | null
+          email?: string | null
+          external_key?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          municipality?: string | null
+          municipality_code?: string | null
+          name?: string
+          notes?: string | null
+          org_number?: string | null
+          orientations?: string[]
+          phone?: string | null
+          postal_code?: string | null
+          principal_organizer_type?: string | null
+          program_count?: number
+          raw?: Json | null
+          relevance_tier?: string
+          school_type?: string
+          school_unit_code?: string | null
+          source?: string | null
+          updated_at?: string | null
+          website?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schools_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schools_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       security_findings: {
         Row: {
           affected_path: string | null

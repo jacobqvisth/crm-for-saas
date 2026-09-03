@@ -41,6 +41,7 @@ import {
   MonitorPlay,
   Bot,
   Headphones,
+  GraduationCap,
 } from "lucide-react";
 
 type NavItem = {
@@ -57,6 +58,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/discovery", label: "Discovery", icon: MapPin },
+  { href: "/schools", label: "Fordonsutbildningar", icon: GraduationCap },
   { href: "/routes", label: "Field routes", icon: MapIcon },
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/call-agent", label: "Call Agent", icon: Bot },
