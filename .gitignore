@@ -74,3 +74,4 @@ supabase/.temp/
 .graph-spike-state.json
 .env*.local
 scripts/schools/data/adult_pool.json
+scripts/schools/data/scrape_contexts.json
