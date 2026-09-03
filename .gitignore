@@ -73,3 +73,4 @@ supabase/.temp/
 # phase 07 Graph spike scratch state (ids and timestamps, no secrets)
 .graph-spike-state.json
 .env*.local
+scripts/schools/data/adult_pool.json
