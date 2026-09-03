@@ -193,7 +193,7 @@ type PlanSchool = {
   latitude: number | null; longitude: number | null; orientations: string[];
   source: string; notes: string | null;
   programs: Record<string, unknown>[];
-  people: { email: string; name: string | null; title: string | null; role: string | null; priority: number }[];
+  people: { email: string; name: string | null; title: string | null; role: string | null; source_url: string | null; priority: number }[];
 };
 
 const plan: PlanSchool[] = [];
@@ -214,6 +214,7 @@ for (const s of gym) {
         name: p.name,
         title: p.title,
         role: r.role,
+        source_url: p.source_url ?? null,
         // Someone listed on the vehicle programme's own page is more likely to be the
         // person who teaches or runs it, whatever their generic title says.
         priority: onFordonPage ? r.priority - 1.5 : r.priority,
@@ -280,7 +281,7 @@ for (const [key, rows] of adultGroups) {
     .map((p) => {
       const r = roleFor(p.title);
       if (!r) return null;
-      return { email: p.email.toLowerCase(), name: p.name, title: p.title, role: r.role, priority: r.priority };
+      return { email: p.email.toLowerCase(), name: p.name, title: p.title, role: r.role, source_url: p.source_url ?? null, priority: r.priority };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
@@ -315,18 +316,70 @@ for (const [key, rows] of adultGroups) {
 }
 
 // ---- contact selection --------------------------------------------------------
-// One contact row per address. A person listed at several school units (shared
-// municipal staff, or a school split into several units) is attached to the school
-// where they rank highest.
+// One contact row per address, because a contact belongs to exactly one company.
+//
+// Which school gets a shared address is not a detail. 154 of the 259 gymnasium units
+// sit on a domain shared with another unit (praktiska.se carries 25, yrkesgymnasiet.se
+// 16), and every one of those crawls sees the whole chain's staff page. Awarding ties
+// to whichever school happened to be processed first made one unit hoard the lot:
+// Bergstrands Märsta ended up owning syv.stockholm@ and syv.uppsala@ and 12 contacts,
+// while Stockholm and Uppsala got one each.
+//
+// Claims are therefore ranked, strongest first.
 const MAX_CONTACTS_PER_SCHOOL = 12;
-const contactOwner = new Map<string, { school: PlanSchool; p: PlanSchool["people"][number] }>();
+
+// 1. The person was listed on a page under this school's own URL path. On a chain
+//    site each campus has its own page (beut.se/gymnasium-uppsala/), so this is a
+//    direct statement that they work at THAT unit.
+function claimsByPage(school: PlanSchool, sourceUrl: string | null): boolean {
+  if (!sourceUrl || !school.website) return false;
+  try {
+    const own = new URL(school.website);
+    const src = new URL(sourceUrl);
+    if (own.host !== src.host) return false;
+    const ownPath = own.pathname.replace(/\/+$/, "");
+    return ownPath.length > 1 && src.pathname.startsWith(ownPath);
+  } catch { return false; }
+}
+
+// 2. The address itself names the campus (syv.uppsala@beut.se at the Uppsala unit).
+function claimsByTown(school: PlanSchool, email: string): boolean {
+  const local = email.split("@")[0].toLowerCase();
+  for (const hint of [school.municipality, school.city]) {
+    if (!hint) continue;
+    const h = hint.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (h.length >= 4 && local.normalize("NFD").replace(/[̀-ͯ]/g, "").includes(h)) return true;
+  }
+  return false;
+}
+
+const contactOwner = new Map<string, { school: PlanSchool; p: PlanSchool["people"][number]; claim: number }>();
+const ownedCount = new Map<PlanSchool, number>();
 
 for (const s of plan) {
   const ranked = [...s.people].sort((a, b) => a.priority - b.priority || a.email.localeCompare(b.email));
   for (const p of ranked.slice(0, MAX_CONTACTS_PER_SCHOOL)) {
+    const claim = claimsByPage(s, p.source_url) ? 0 : claimsByTown(s, p.email) ? 1 : 2;
     const prev = contactOwner.get(p.email);
-    if (!prev || p.priority < prev.p.priority) contactOwner.set(p.email, { school: s, p });
+    if (!prev) { contactOwner.set(p.email, { school: s, p, claim }); continue; }
+    if (claim !== prev.claim) {
+      if (claim < prev.claim) contactOwner.set(p.email, { school: s, p, claim });
+      continue;
+    }
+    if (p.priority !== prev.p.priority) {
+      if (p.priority < prev.p.priority) contactOwner.set(p.email, { school: s, p, claim });
+      continue;
+    }
+    // 3. Equal claim and equal role: give it to whichever unit currently holds
+    //    fewer contacts, so a shared staff page spreads across the chain's schools
+    //    instead of piling onto the first one processed.
+    const mine = ownedCount.get(s) ?? 0;
+    const theirs = ownedCount.get(prev.school) ?? 0;
+    if (mine < theirs) contactOwner.set(p.email, { school: s, p, claim });
   }
+  // Recount after each school so the spread tie-break sees current totals.
+  ownedCount.clear();
+  for (const o of contactOwner.values()) ownedCount.set(o.school, (ownedCount.get(o.school) ?? 0) + 1);
 }
 // The registry address itself is a contact when nothing better exists for that school.
 for (const s of plan) {
