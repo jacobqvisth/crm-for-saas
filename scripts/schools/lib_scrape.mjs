@@ -56,6 +56,34 @@ export function stripTags(html) {
     .trim();
 }
 
+// Take `chars` of visible TEXT ending at raw-HTML offset `idx`.
+//
+// Reads a generous raw slice, drops the partial tag the slice starts inside (any
+// leading fragment up to the first ">"), strips the rest, then trims to the last
+// `chars` of actual text. The raw budget is deliberately large: themes that inline
+// their whole CSS need thousands of raw characters to yield a few hundred of text.
+export function textBefore(html, idx, chars, rawBudget = 12000) {
+  const start = Math.max(0, idx - rawBudget);
+  let slice = html.slice(start, idx);
+  // Drop the partial tag the slice STARTS inside.
+  if (start > 0) {
+    const firstGt = slice.indexOf(">");
+    if (firstGt !== -1) slice = slice.slice(firstGt + 1);
+  }
+  // Drop the partial tag the slice ENDS inside. A mailto offset sits in the middle
+  // of `<a style="..." href="`, so without this the anchor's own attributes survive
+  // stripTags as text and eat the window from the near end, which is the end that
+  // matters most.
+  const lastLt = slice.lastIndexOf("<");
+  if (lastLt !== -1 && slice.indexOf(">", lastLt) === -1) slice = slice.slice(0, lastLt);
+  return stripTags(slice).slice(-chars);
+}
+
+export function textAfter(html, idx, chars, rawBudget = 8000) {
+  const text = stripTags(html.slice(idx, Math.min(html.length, idx + rawBudget)));
+  return text.slice(0, chars);
+}
+
 export function extractEmails(html) {
   return [...new Set((html.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase().replace(/\.$/, "")))]
     .filter((e) => !EMAIL_JUNK.test(e) && !EMAIL_JUNK_DOMAIN.test(e) && e.length < 80);
@@ -136,10 +164,20 @@ export function extractPeople(html, pageUrl, contexts = null) {
     if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email) || EMAIL_JUNK.test(email)) continue;
 
     const linkText = m[2] ? stripTags(m[2]).trim() : "";
-    // Tight windows. The first crawl used 700 chars back and reliably crossed into the
-    // neighbouring person's record in staff tables.
-    const before = stripTags(html.slice(Math.max(0, m.index - 260), m.index));
-    const after = stripTags(html.slice(m.index, Math.min(html.length, m.index + 160)));
+    // Window in TEXT characters, not raw HTML characters.
+    //
+    // Measuring the window in raw HTML makes its meaning depend on the theme. On
+    // beut.se (Avada/Fusion) every element carries a ~600-char inline style
+    // attribute, so a 260-char raw window did not even escape one style="" and
+    // "Programansvarig personbilsteknik" sat 1150 raw chars away, unseen. That one
+    // page cost us the single best contact in the whole dataset, and 1382 of 4112
+    // scraped people came back with neither a name nor a title for the same reason.
+    //
+    // Slicing raw HTML also cuts mid-tag, and stripTags only removes complete
+    // <...> pairs, so the leftover attribute soup survives as fake "text" and fills
+    // the window. textBefore() drops that partial leading tag first.
+    const before = textBefore(html, m.index, 300);
+    const after = textAfter(html, m.index, 200);
     const ctx = `${before}\n${after}`;
     if (contexts) contexts.push({ email, page: pageUrl, link_text: linkText.slice(0, 120), ctx: ctx.slice(0, 700) });
 
