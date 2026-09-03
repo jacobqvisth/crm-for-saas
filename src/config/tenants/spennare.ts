@@ -262,6 +262,9 @@ export const spennare: TenantConfig = {
     // Planned, not shipped. Spennare is the customer phase 10C is being built
     // FOR, so this is the first row to flip when it ships.
     dealer_network: false,
+    // The Swedish vehicle-education directory. Built around Skolverket's register
+    // and car workshops; Spennare sell large-format print.
+    schools: false,
     // Planned, not shipped. Phase 10A. A second pipeline for the direct
     // FaberExposize side is the eventual shape.
     deals: false,

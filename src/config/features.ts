@@ -41,6 +41,7 @@ export type FeatureKey =
   | "mockup"
   | "deals"
   | "dealer_network"
+  | "schools"
   | "linkedin_steps";
 
 /**
@@ -359,6 +360,21 @@ export const FEATURES: readonly FeatureDefinition[] = [
       "Built for Spennare (phase 10C) and not yet shipped.",
     navHrefs: [],
     routePrefixes: [],
+    cronPaths: [],
+  },
+  {
+    key: "schools",
+    name: "Fordonsutbildningar",
+    category: "outbound",
+    description:
+      "Directory of every Swedish school teaching vehicle mechanics — gymnasium, " +
+      "yrkeshögskola, komvux and adult training — with their programmes and staff.",
+    enabledByDefault: true,
+    appliesTo:
+      "Assumes a Swedish market and that schools are a buyer: the whole " +
+      "directory is built from Skolverket's register and is Sweden-only.",
+    navHrefs: ["/schools"],
+    routePrefixes: ["/schools"],
     cronPaths: [],
   },
 
