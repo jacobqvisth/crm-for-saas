@@ -9132,3 +9132,83 @@ to retry.
 
 Articles Autopilot remains **switched off**; its prerequisite is met but flipping
 `enabled` is Jacob's call.
+
+---
+
+## 2026-09-03 — Swedish vehicle-education directory + /schools (PR #797)
+
+Branch `feat/schools-fordon-directory`, merged as `b7a4d5f`, prod deploy verified
+READY for that SHA.
+
+Jacob asked for every school and college programme in Sweden related to car
+mechanics — Fordonsprogram, yrkeshögskola, gymnasium — as CRM contacts and
+profiles plus a page to see it all.
+
+### What landed
+
+327 schools, 752 programmes, 327 company profiles and 1251 contacts (944 with a
+real name). Source: Skolverket's open planned-educations API plus a two-level
+crawl of the schools' own websites (558 of 610 sites reachable).
+
+| Skolform | Schools | Programmes |
+|---|---|---|
+| Gymnasieskola | 216 | 358 |
+| Anpassad gymnasieskola | 43 | 43 |
+| Yrkeshögskola | 36 | 75 |
+| Komvux | 18 | 60 |
+| Högskola | 7 | 24 |
+| Nationell yrkesutbildning | 6 | 12 |
+| Arbetsmarknadsutbildning | 1 | 180 |
+
+New tables `schools` and `school_programs` (migration
+`20260903120000_schools_and_school_programs.sql`, applied to prod, types spliced
+into `database.types.ts` by hand). New page `/schools`, new feature key `schools`
+(on for Wrenchlane, off for Animech and Spennare). Scripts under
+`scripts/schools/`, runnable in order 01 → 04.
+
+### Three things the next session should not relearn
+
+**Skolverket's planned-educations API cannot be paged.** It reorders results
+between page requests, so page 0..N returns the advertised row count while
+repeating some rows and silently dropping others. Measured: the unfiltered
+gymnasium sweep gives 6046 rows but 4780 distinct; `studyPathCode=FT25` gives 201
+rows but 137 distinct. Partition every query into slices that fit inside one
+100-row request and check the union against the advertised total. Partitioning by
+kommun is lossless (verified against `ny`, 78/78). Ignoring this costs 25 schools.
+
+Also: the pre-Gy25 codes (`FT`, `FTPER`) return zero rows. Everything is suffixed
+`25` now — `FT25`, `FG25`, and the `IMVFT*`/`IMYFT*` intro variants.
+
+**Scraped names must be corroborated against the email address.** Staff
+directories list people in sequence, so a window around a `mailto:` link lands on
+the neighbouring person about as often as its own: the first pass attached
+`Anne-Maj Videnord` to `petra.smith@uppsala.se` and produced names like
+`Rektor Erika` and `Samuelsson Rektor`. Requiring both name tokens to appear in
+the email local part removes the whole class of error; `parseNameFromEmail` fills
+the rest.
+
+**`companies.domain` must stay NULL for schools.** `companies_domain_workspace_unique`
+is a unique index on `(workspace_id, domain)` and municipal schools share one
+domain (`halmstad.se`, `uppsala.se`), so setting it collapses every school in a
+municipality into one company row. The URL goes in `companies.website`.
+
+### Scope calls, open items
+
+- Arbetsförmedlingen commissions all 147 arbetsmarknadsutbildning rows and the
+  delivering contractor is never named in the feed, so they collapse into one
+  national record instead of 147 identical "schools", and get no contacts.
+- The 82k individual komvux subject courses (`vuxgy`) are not swept in full.
+  Komvux is represented by its 1841 yrkespaket plus keyword/direction net hits.
+- Skolverket does not expose which FT25 inriktningar a unit runs. Those are read
+  off the school's own programme page: found for 115 of 259 gymnasium schools.
+  The remaining 144 need either a deeper crawl or a manual pass.
+- 78 of 259 gymnasium schools have no named contact person, only the registry
+  address. Their sites are JS-rendered or blocked the crawler.
+- Nothing has been enrolled in a sequence. These are leads, not outreach.
+
+### Verification
+
+`npm run build`, `npm run lint`, `npx tsc --noEmit` all clean. Importer is
+idempotent — a second `--commit` run reported 0 created, 327 companies and 1251
+contacts updated, row counts unchanged. `/schools` returns 307 to `/login` in
+prod, identical to the `/companies` control.
