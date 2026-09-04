@@ -9212,3 +9212,75 @@ municipality into one company row. The URL goes in `companies.website`.
 idempotent — a second `--commit` run reported 0 created, 327 companies and 1251
 contacts updated, row counts unchanged. `/schools` returns 307 to `/login` in
 prod, identical to the `/companies` control.
+
+---
+
+## 2026-09-04 — European industry-organisation directory + /organisations (PR #801)
+
+Branch `feat/industry-orgs`, merged as `92ce27a`.
+
+Jacob asked for the same treatment as the schools directory, but for industry
+bodies: Transportföretagen and everything like it, across Sweden and Europe,
+divided by country. Mid-task he added trade fairs and the companies behind them
+(Automässan, Motordagarna/MotorMagasinet, Automechanika), so `org_type` covers
+associations, umbrellas, fairs, fair organisers and trade press.
+
+### What landed
+
+127 organisations across 23 countries plus EU level, 233 contacts, new table
+`industry_orgs` (migration `20260904100000_industry_orgs.sql`, applied to prod,
+types spliced by hand), page `/organisations`, feature key `industry_orgs`.
+Scripts in `scripts/orgs/`, run 01 → 03.
+
+| Type | Count |
+|---|---|
+| Branschorganisation | 78 |
+| Paraplyorganisation (EU) | 15 |
+| Mässa | 15 |
+| Branschmedia | 14 |
+| Mässarrangör | 5 |
+
+Sweden 21 orgs / 43 contacts, Germany 16 / 39, EU-level 15 / 21, UK 10 / 18.
+
+### Things the next session should not relearn
+
+**There is no registry, so the seed must be verified.** The source is the umbrella
+bodies' own member directories plus per-country research, which carries recall
+risk in both directions. Every website is fetched before the entry is believed,
+and that gate caught: ADIRA (IT) dead but still listed by FIGIEFA, FOCWA (NL)
+merged into BOVAG, AIRC moved to airc-int.com, ETRMA renamed to Tyres Europe,
+De Danske Bilimportører renamed Mobility Denmark, and five URLs with no DNS.
+
+**CECRA is not the only umbrella.** Its public list omits Germany, France, Italy
+and the UK because ZDK, Federauto and NFDA sit in the rival AECDR instead. Use
+both, plus FIGIEFA for parts distribution.
+
+**A verifier without retries lies.** At concurrency 6 with no retry, mrf.se,
+sbrservice.se, akeri.se and me.se all reported dead; all four answer 200 a second
+later. Retry with backoff before believing a failure.
+
+**Split contacts by domain.** MRF's regional-board page lists branch chairs who
+work at member dealerships: 45 of MRF's 47 apparent contacts were other companies'
+staff. They go to `industry_orgs.affiliated_contacts` (179 in total), shown on the
+page but outside the contact count and not imported as contacts.
+
+**Associations publish role inboxes on purpose.** 205 of the addresses found are
+single words (info@, kansli@, presse@); only 17 orgs yielded a personally-named
+contact, against 54% for schools. Not an extraction failure. Titles are dropped on
+role inboxes because the nearest-title heuristic labelled info@transportforetagen.se
+"branschchef".
+
+### Shared with the schools crawler
+
+`extractPeople` now takes a title vocabulary, so schools keep Swedish school roles
+while orgs use `scripts/orgs/lib_org_roles.mjs` (a dozen languages). The name
+pattern was widened past the Nordic letters. `lib_scrape.test.mjs` still passes.
+
+### Open
+
+- Automässan and Autopromotec published no address at all (contact forms only).
+- Six sites block automated requests (Elmia, Auto Infos, GarageWire, Motormännen,
+  Motor-magasinet, RAI). Flagged `blocked`, kept, not crawled.
+- Contacts are NOT verified and NOT enrolled anywhere. Run a scoped
+  MillionVerifier pass before any outreach, as with the schools list.
+- Countries with thin coverage: Baltics, Balkans, Greece, Romania, Bulgaria.
