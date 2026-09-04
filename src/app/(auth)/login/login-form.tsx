@@ -9,7 +9,7 @@ import {
   safeNextPath,
 } from "@/lib/auth/next-path";
 import type { TenantAuth } from "@/config/tenants/types";
-import { Chrome, Mail } from "lucide-react";
+import { Chrome, LogIn, Mail } from "lucide-react";
 
 /**
  * The sign-in buttons.
@@ -28,8 +28,11 @@ export function LoginForm({ auth }: { auth: TenantAuth }) {
   // Which provider is mid-redirect, or null. A string rather than a boolean
   // because with three buttons "something is loading" is not enough to know
   // which one to put the spinner on.
-  const [pending, setPending] = useState<"google" | "azure" | "email" | null>(null);
+  const [pending, setPending] = useState<
+    "google" | "azure" | "email" | "password" | null
+  >(null);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
@@ -75,13 +78,44 @@ export function LoginForm({ auth }: { auth: TenantAuth }) {
   };
 
   /**
+   * Email + password. The only sign-in that works on a tenant whose Supabase
+   * project has neither an OAuth provider nor custom SMTP yet: the shared
+   * Supabase sender delivers magic links to project team members only, so a
+   * customer address never receives one. Accounts are still admin-created
+   * (sign-up is disabled on the project); this only checks a password the
+   * admin has set.
+   *
+   * The error is deliberately the same for "no such user" and "wrong
+   * password", so the form cannot be used to test whether an address has an
+   * account.
+   */
+  const handlePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPending("password");
+    setError(null);
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error("Login error:", error.message);
+      setError("Wrong email or password.");
+      setPending(null);
+      return;
+    }
+    // No /auth/callback round-trip here: the browser client has already
+    // written the session cookies. "/" resolves to the tenant's home route on
+    // the server, and a stashed deep link wins over it.
+    const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
+    window.location.assign(next ?? "/");
+  };
+
+  /**
    * Magic link. This does NOT create accounts: the tenant's Supabase project
    * has sign-up disabled, and a person is authorised by Jacob creating them
    * through the admin API. An unknown address gets the same neutral
    * confirmation as a known one, because saying "no such user" here would turn
    * the login page into a way to test whether an address has an account.
    */
-  const handleEmail = async (e: React.FormEvent) => {
+  const handleEmail = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setPending("email");
     setError(null);
@@ -142,13 +176,25 @@ export function LoginForm({ auth }: { auth: TenantAuth }) {
             If that address has an account, a sign-in link is on its way.
           </p>
         ) : (
-          <form onSubmit={handleEmail} className="space-y-3">
+          <form onSubmit={handlePassword} className="space-y-3">
             <input
               type="email"
+              name="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
               className="w-full px-4 py-3 border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button
@@ -156,8 +202,17 @@ export function LoginForm({ auth }: { auth: TenantAuth }) {
               disabled={pending !== null}
               className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-indigo-600 rounded-lg text-white font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Mail className="w-5 h-5" />
-              {pending === "email" ? "Sending..." : "Email me a sign-in link"}
+              <LogIn className="w-5 h-5" />
+              {pending === "password" ? "Signing in..." : "Sign in"}
+            </button>
+            <button
+              type="button"
+              onClick={handleEmail}
+              disabled={pending !== null || email.length === 0}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Mail className="w-4 h-4" />
+              {pending === "email" ? "Sending..." : "Email me a sign-in link instead"}
             </button>
           </form>
         ))}
