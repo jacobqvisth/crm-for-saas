@@ -63,11 +63,21 @@ describe("the feature registry still describes who each feature is for", () => {
     expect(missing).toEqual([]);
   });
 
-  it("still defaults every feature but linkedin_steps to on (R2)", () => {
+  it("defaults every feature to on except the declared opt-ins (R2)", () => {
     // R2: Wrenchlane's config is the baseline and must never lose a feature to
     // a registry default. New tenants are switched off per tenant in the
     // control plane instead — see scripts/decide-tenant-features.mjs.
+    //
+    // `configurators` is Animech's European configurator prospect directory. It
+    // is opt-in rather than default-on because Wrenchlane never had it and R2
+    // only protects what Wrenchlane already uses; shipping it default-on would
+    // put a list of German window manufacturers in a car-diagnostics CRM.
+    //
+    // The authoritative copy of this list is OFF_BY_DEFAULT in
+    // src/config/features.test.ts, which also checks that Wrenchlane's own
+    // config agrees with it. This assertion is the second reader; keep them in
+    // step.
     const off = FEATURES.filter((f) => !f.enabledByDefault).map((f) => f.key);
-    expect(off).toEqual(["linkedin_steps"]);
+    expect(off.sort()).toEqual(["configurators", "linkedin_steps"]);
   });
 });

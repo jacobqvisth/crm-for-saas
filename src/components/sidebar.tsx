@@ -43,6 +43,7 @@ import {
   Headphones,
   GraduationCap,
   Landmark,
+  Boxes,
 } from "lucide-react";
 
 type NavItem = {
@@ -61,6 +62,7 @@ const staticNavItems: Omit<NavItem, "badge">[] = [
   { href: "/discovery", label: "Discovery", icon: MapPin },
   { href: "/schools", label: "Fordonsutbildningar", icon: GraduationCap },
   { href: "/organisations", label: "Branschorganisationer", icon: Landmark },
+  { href: "/configurators", label: "Configurators", icon: Boxes },
   { href: "/routes", label: "Field routes", icon: MapIcon },
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/call-agent", label: "Call Agent", icon: Bot },

@@ -168,6 +168,11 @@ export const animech: TenantConfig = {
     schools: false,
     // Automotive trade bodies and fairs. Not Animech's sector.
     industry_orgs: false,
+    // THE ONE FEATURE ANIMECH HAS AND THE OTHER TWO DO NOT. European companies
+    // already running a product configurator, with a link to the live one and
+    // the platform behind it. Opt-in in the registry (enabledByDefault: false)
+    // precisely so turning it on here cannot leak it to Wrenchlane.
+    configurators: true,
     // Product analytics and everything downstream of it measures a freemium
     // self-serve app with a Stripe funnel. Animech sell enterprise projects.
     product_analytics: false,

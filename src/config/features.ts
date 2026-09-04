@@ -43,6 +43,7 @@ export type FeatureKey =
   | "dealer_network"
   | "schools"
   | "industry_orgs"
+  | "configurators"
   | "linkedin_steps";
 
 /**
@@ -361,6 +362,23 @@ export const FEATURES: readonly FeatureDefinition[] = [
       "Built for Spennare (phase 10C) and not yet shipped.",
     navHrefs: [],
     routePrefixes: [],
+    cronPaths: [],
+  },
+  {
+    key: "configurators",
+    name: "Configurators",
+    category: "outbound",
+    description:
+      "Directory of European companies already running a product configurator, " +
+      "the platform behind each one and a link to the live configurator, plus the " +
+      "configurator and CPQ vendors the list was assembled from.",
+    enabledByDefault: false,
+    appliesTo:
+      "Assumes the customer sells configuration software or 3D product " +
+      "visualisation. Built for Animech, whose pitch is a 3D layer over an " +
+      "existing CPQ, so 'already has a configurator' is the qualifying fact.",
+    navHrefs: ["/configurators"],
+    routePrefixes: ["/configurators"],
     cronPaths: [],
   },
   {

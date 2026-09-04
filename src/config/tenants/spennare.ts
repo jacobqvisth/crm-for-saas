@@ -267,6 +267,9 @@ export const spennare: TenantConfig = {
     schools: false,
     // Automotive trade bodies and fairs. Spennare sell large-format print.
     industry_orgs: false,
+    // Animech's configurator prospect directory. Spennare sell large-format print
+    // through resellers; nothing in that list is a buyer of theirs.
+    configurators: false,
     // Planned, not shipped. Phase 10A. A second pipeline for the direct
     // FaberExposize side is the eventual shape.
     deals: false,

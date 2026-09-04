@@ -1,0 +1,493 @@
+{
+  "note": "Configurator and CPQ vendors: Animech's competitors, and the discovery vector for the prospect list. Each vendor publishes references; those references are companies running a configurator today, which is exactly Animech's pitch surface (a 3D layer over an existing CPQ). `hq` is where the vendor is headquartered, not where its customers are. `kind` separates a visual/3D configurator vendor from a rules/CPQ vendor from a vertical (furniture, kitchen, window) specialist: Animech competes head-on with the first, and sells ON TOP of the second. Every website here is verified by 01_verify_vendors.mjs before it is believed; nothing in this file is treated as fact until then.",
+  "vendors": [
+    {
+      "name": "Configura",
+      "hq": "Sweden",
+      "hq_code": "SE",
+      "website": "https://www.configura.com",
+      "kind": "vertical",
+      "segment": "Space planning and configuration (CET), office furniture and material handling"
+    },
+    {
+      "name": "Tacton",
+      "hq": "Sweden",
+      "hq_code": "SE",
+      "website": "https://www.tacton.com",
+      "kind": "cpq",
+      "segment": "Rules-driven CPQ for industrial manufacturers"
+    },
+    {
+      "name": "DynaMaker",
+      "hq": "Sweden",
+      "hq_code": "SE",
+      "website": "https://www.dynamaker.com",
+      "kind": "visual",
+      "segment": "Parametric sales CAD and web configurators"
+    },
+    {
+      "name": "Configit",
+      "hq": "Denmark",
+      "hq_code": "DK",
+      "website": "https://configit.com",
+      "kind": "cpq",
+      "segment": "Configuration Lifecycle Management, automotive and industrial"
+    },
+    {
+      "name": "Cylindo",
+      "hq": "Denmark",
+      "hq_code": "DK",
+      "website": "https://www.cylindo.com",
+      "kind": "visual",
+      "segment": "3D furniture visualisation and configuration"
+    },
+    {
+      "name": "VividWorks",
+      "hq": "Finland",
+      "hq_code": "FI",
+      "website": "https://www.vividworks.com",
+      "kind": "visual",
+      "segment": "3D/AR configuration for furniture and interiors"
+    },
+    {
+      "name": "Sayduck",
+      "hq": "Finland",
+      "hq_code": "FI",
+      "website": "https://www.sayduck.com",
+      "kind": "visual",
+      "segment": "3D and AR product visualisation"
+    },
+    {
+      "name": "Elfsquad",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://www.elfsquad.io",
+      "kind": "cpq",
+      "segment": "CPQ for manufacturers of customer-specific products"
+    },
+    {
+      "name": "Expivi",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://www.expivi.com",
+      "kind": "visual",
+      "segment": "3D CPQ and visual commerce"
+    },
+    {
+      "name": "Quootz",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://www.quootz.nl",
+      "kind": "cpq",
+      "segment": "Merkato configurator and quotation software"
+    },
+    {
+      "name": "Sofon",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://www.sofon.com",
+      "kind": "cpq",
+      "segment": "Guided Selling CPQ (Revalize)"
+    },
+    {
+      "name": "Combeenation",
+      "hq": "Austria",
+      "hq_code": "AT",
+      "website": "https://www.combeenation.com",
+      "kind": "visual",
+      "segment": "Horizontal configurator platform"
+    },
+    {
+      "name": "Roomle",
+      "hq": "Austria",
+      "hq_code": "AT",
+      "website": "https://www.roomle.com",
+      "kind": "visual",
+      "segment": "3D/AR furniture configuration and room planning"
+    },
+    {
+      "name": "camos",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.camos.de",
+      "kind": "cpq",
+      "segment": "CPQ for machinery and plant engineering"
+    },
+    {
+      "name": "encoway",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.encoway.de",
+      "kind": "cpq",
+      "segment": "CPQ and product configuration, Bremen"
+    },
+    {
+      "name": "Revalize (speedmaxx / ACATEC)",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.revalizesoftware.com",
+      "kind": "cpq",
+      "segment": "speedmaxx CPQE, formerly ACATEC, acquired by Revalize"
+    },
+    {
+      "name": "Lino",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.lino.de",
+      "kind": "cpq",
+      "segment": "DriveWorks and Tacton implementation, CAD automation"
+    },
+    {
+      "name": "CADclick",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.cadclick.de",
+      "kind": "cpq",
+      "segment": "CAD-based product configurators"
+    },
+    {
+      "name": "trinckle",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.trinckle.com",
+      "kind": "visual",
+      "segment": "paramate automated 3D design and configuration"
+    },
+    {
+      "name": "Threedy",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.threedy.io",
+      "kind": "visual",
+      "segment": "instant3Dhub, industrial 3D web visualisation"
+    },
+    {
+      "name": "EasternGraphics",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.easterngraphics.com",
+      "kind": "vertical",
+      "segment": "pCon furniture configuration and planning"
+    },
+    {
+      "name": "Palette CAD",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.palettecad.com",
+      "kind": "vertical",
+      "segment": "3D planning for interiors, tiles and joinery"
+    },
+    {
+      "name": "Perspectix",
+      "hq": "Switzerland",
+      "hq_code": "CH",
+      "website": "https://www.perspectix.com",
+      "kind": "cpq",
+      "segment": "P'X5 sales and engineering configurator"
+    },
+    {
+      "name": "DriveWorks",
+      "hq": "United Kingdom",
+      "hq_code": "GB",
+      "website": "https://www.driveworks.co.uk",
+      "kind": "cpq",
+      "segment": "Design automation and web configurators on SOLIDWORKS"
+    },
+    {
+      "name": "Threedium",
+      "hq": "United Kingdom",
+      "hq_code": "GB",
+      "website": "https://www.threedium.co.uk",
+      "kind": "visual",
+      "segment": "3D/AR product visualisation and configuration"
+    },
+    {
+      "name": "Cyncly",
+      "hq": "United Kingdom",
+      "hq_code": "GB",
+      "website": "https://www.cyncly.com",
+      "kind": "vertical",
+      "segment": "Kitchen, bathroom and window design software (Compusoft + 2020)"
+    },
+    {
+      "name": "Zakeke",
+      "hq": "Italy",
+      "hq_code": "IT",
+      "website": "https://www.zakeke.com",
+      "kind": "visual",
+      "segment": "Visual product customisation for ecommerce"
+    },
+    {
+      "name": "Emersya",
+      "hq": "France",
+      "hq_code": "FR",
+      "website": "https://emersya.com",
+      "kind": "visual",
+      "segment": "Interactive 3D and AR product experiences"
+    },
+    {
+      "name": "Hapticmedia",
+      "hq": "France",
+      "hq_code": "FR",
+      "website": "https://hapticmedia.com",
+      "kind": "visual",
+      "segment": "3D configurators for luxury, watches and jewellery"
+    },
+    {
+      "name": "LS Group (SmartPixels / V-COMMERCE)",
+      "hq": "France",
+      "hq_code": "FR",
+      "website": "https://www.smartpixels.fr",
+      "kind": "visual",
+      "segment": "V-COMMERCE 3D product experiences, formerly SmartPixels"
+    },
+    {
+      "name": "Simplio3D",
+      "hq": "Romania",
+      "hq_code": "RO",
+      "website": "https://www.simplio3d.com",
+      "kind": "visual",
+      "segment": "Modular web product configurators"
+    },
+    {
+      "name": "Salesqueze",
+      "hq": "Slovenia",
+      "hq_code": "SI",
+      "website": "https://salesqueze.com",
+      "kind": "cpq",
+      "segment": "CPQ for manufacturers of configurable products"
+    },
+    {
+      "name": "Kickflip",
+      "hq": "Canada",
+      "hq_code": "CA",
+      "website": "https://gokickflip.com",
+      "kind": "visual",
+      "segment": "Product customiser for ecommerce"
+    },
+    {
+      "name": "Threekit",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://www.threekit.com",
+      "kind": "visual",
+      "segment": "3D configuration and visual commerce"
+    },
+    {
+      "name": "3D Cloud",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://3dcloud.com",
+      "kind": "visual",
+      "segment": "3D configurators and room planners for retail"
+    },
+    {
+      "name": "Epicor CPQ",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://www.epicor.com/en-uk/erp-software/epicor-cpq/",
+      "kind": "cpq",
+      "segment": "KBMax visual CPQ"
+    },
+    {
+      "name": "Configure One",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://www.configureone.com",
+      "kind": "cpq",
+      "segment": "Revalize CPQ for manufacturers"
+    },
+    {
+      "name": "Revalize",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://www.revalizesoftware.com",
+      "kind": "cpq",
+      "segment": "CPQ and design software group, many European brands"
+    },
+    {
+      "name": "Zilliant (In Mind Cloud)",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://www.zilliant.com",
+      "kind": "cpq",
+      "segment": "Manufacturing sales CPQ, formerly In Mind Cloud"
+    },
+    {
+      "name": "Bimobject",
+      "hq": "Sweden",
+      "hq_code": "SE",
+      "website": "https://www.bimobject.com",
+      "kind": "vertical",
+      "segment": "BIM object library with product configuration for construction"
+    },
+    {
+      "name": "Sedeo",
+      "hq": "Belgium",
+      "hq_code": "BE",
+      "website": "https://www.sedeo.io",
+      "kind": "visual",
+      "segment": "Product configuration and visualisation"
+    },
+    {
+      "name": "Kreativ",
+      "hq": "United Kingdom",
+      "hq_code": "GB",
+      "website": "https://www.kreativ.ai",
+      "kind": "visual",
+      "segment": "AI and 3D configuration for interiors"
+    },
+    {
+      "name": "Zoovu",
+      "hq": "Austria",
+      "hq_code": "AT",
+      "website": "https://zoovu.com",
+      "kind": "cpq",
+      "segment": "Guided selling and product discovery, configurator-adjacent"
+    },
+    {
+      "name": "CADENAS",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.cadenas.de",
+      "kind": "cpq",
+      "segment": "eCATALOGsolutions product catalogues and configurators for component makers"
+    },
+    {
+      "name": "ORISA Software",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.orisa.de",
+      "kind": "cpq",
+      "segment": "PIA product configurator and guided selling"
+    },
+    {
+      "name": "AICOMP",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.aicomp.com",
+      "kind": "cpq",
+      "segment": "SAP variant configuration and CPQ for packaging and manufacturing"
+    },
+    {
+      "name": "e-Con Solutions",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://www.e-consolutions.com",
+      "kind": "cpq",
+      "segment": "Configurator for Microsoft Dynamics 365 Business Central"
+    },
+    {
+      "name": "iONE360",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://www.ione360.com",
+      "kind": "visual",
+      "segment": "3D configuration and planning for kitchens and interiors"
+    },
+    {
+      "name": "Cadesign form",
+      "hq": "Denmark",
+      "hq_code": "DK",
+      "website": "https://www.cadesignform.com",
+      "kind": "visual",
+      "segment": "3D visualisation and product configurators"
+    },
+    {
+      "name": "Vertex Systems",
+      "hq": "Finland",
+      "hq_code": "FI",
+      "website": "https://www.vertex.fi",
+      "kind": "cpq",
+      "segment": "CAD and product configuration for manufacturers"
+    },
+    {
+      "name": "Vention",
+      "hq": "Canada",
+      "hq_code": "CA",
+      "website": "https://vention.io",
+      "kind": "visual",
+      "segment": "Online machine-design configurator for industrial automation"
+    },
+    {
+      "name": "3D Source",
+      "hq": "United States",
+      "hq_code": "US",
+      "website": "https://www.3dsource.com",
+      "kind": "visual",
+      "segment": "3D product configurators for furniture and equipment"
+    },
+    {
+      "name": "Orgadata",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.orgadata.com",
+      "kind": "vertical",
+      "segment": "LogiKal window, door and facade configuration"
+    },
+    {
+      "name": "Klaes",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.klaes.com",
+      "kind": "vertical",
+      "segment": "Window and door configuration and ERP"
+    },
+    {
+      "name": "SoftTech",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.softtech.de",
+      "kind": "vertical",
+      "segment": "CAD and configuration for windows and joinery"
+    },
+    {
+      "name": "Rubens",
+      "hq": "Netherlands",
+      "hq_code": "NL",
+      "website": "https://rubens.io",
+      "kind": "visual",
+      "segment": "Rubens 3D interior configuration"
+    },
+    {
+      "name": "Configura CET marketplace",
+      "hq": "Sweden",
+      "hq_code": "SE",
+      "website": "https://cet.configura.com",
+      "kind": "vertical",
+      "segment": "CET marketplace of manufacturer extensions, one entry per manufacturer"
+    },
+    {
+      "name": "Sapphire Systems",
+      "hq": "United Kingdom",
+      "hq_code": "GB",
+      "website": "https://www.sapphiresystems.com",
+      "kind": "cpq",
+      "segment": "ERP and CPQ implementation partner"
+    },
+    {
+      "name": "3D-Konfigurator",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.3d-konfigurator.de",
+      "kind": "visual",
+      "segment": "3D configurator development"
+    },
+    {
+      "name": "Visard",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://www.visard.io",
+      "kind": "visual",
+      "segment": "3D product configuration"
+    },
+    {
+      "name": "pCon solutions",
+      "hq": "Germany",
+      "hq_code": "DE",
+      "website": "https://pcon-solutions.com",
+      "kind": "vertical",
+      "segment": "pCon planning and configuration network, one entry per manufacturer"
+    }
+  ]
+}

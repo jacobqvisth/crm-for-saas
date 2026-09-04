@@ -27,7 +27,7 @@ describe("the registry itself", () => {
    * in a registry entry. Everything a Wrenchlane user can see today must stay
    * off this list forever.
    */
-  const OFF_BY_DEFAULT = new Set<string>(["linkedin_steps"]);
+  const OFF_BY_DEFAULT = new Set<string>(["linkedin_steps", "configurators"]);
 
   it("defaults every feature to enabled, except the declared opt-ins", () => {
     for (const f of FEATURES) {
