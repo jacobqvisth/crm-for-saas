@@ -9284,3 +9284,92 @@ pattern was widened past the Nordic letters. `lib_scrape.test.mjs` still passes.
 - Contacts are NOT verified and NOT enrolled anywhere. Run a scoped
   MillionVerifier pass before any outreach, as with the schools list.
 - Countries with thin coverage: Baltics, Balkans, Greece, Romania, Bulgaria.
+
+---
+
+## 2026-09-04 — European configurator prospect directory for Animech (PR #804) — `worktree-animech-configurators`
+
+Axel's brief: list every company in Europe selling with a configurator, link to
+their live one, find a contact, and offer an upgrade. Built as `/configurators`,
+mirroring `/organisations`, and imported into **Animech's** database only.
+
+### Result
+
+550 companies and 614 contacts in Animech's CRM, across 27 countries. 469
+prospects (run a configurator), 81 vendors (sell them). 201 rows carry a live
+configurator URL; 54 have the platform read off that page. 265 have a phone.
+Germany 127, UK 35, Italy 31, Netherlands 28, Sweden 14.
+
+### Why the qualifying fact is inverted
+
+`animech.ts` already says it: the pitch is a 3D layer built OVER an existing CPQ,
+as done for Piab on top of Tacton. So "already has a configurator" makes a company
+a lead, not a lost deal — which makes every competitor's customer page a prospect
+list. 61 vendors seeded and verified, 1041 reference pages found from their own
+sitemaps and navigation, 1748 pages read.
+
+### Evidence is a column, not a footnote
+
+`platform_source` records how the platform was learned: read off the live
+configurator (54, decisive), detected on the homepage (strong), or claimed by a
+vendor's marketing page (weak — vendors leave churned logos up for years).
+`country_source` does the same for geography: ccTLD > phone prefix > legal form >
+country named in a footer. An opener that says "we saw you are running Roomle" has
+to be right. The weak case is not a defect: a company that has LEFT a vendor is a
+better prospect, but must be approached as a question.
+
+### Three things the crawl got wrong first
+
+**Frequency is inverted for this problem.** A real customer is named on ONE case
+page; a G2 badge or a sibling product is on all of them. Ranking by mentions put
+Capterra, G2, GetApp and Revalize's own portfolio in the top twenty "customers".
+Stripping header/footer/nav, then dropping any domain seen on more than a third of
+one vendor's pages, fixed it — and Siemens and ABB, each linked once as "Company
+website", came through instead.
+
+**Half the European vendors render their case lists client-side.** Roomle, Expivi,
+Combeenation and pCon link to nothing from the homepage and name nothing in the
+sitemap. Probing the obvious paths in six languages, then following the index one
+level down, took Expivi 5 → 37 pages and Roomle 2 → 37.
+
+**199 companies were named after the link that pointed at them** — "Go to
+Website", "View Live App", "JETZT LIVE ANSEHEN" — and were sitting in the CRM
+under those names. The harvester only ever sees one anchor; at import the whole
+row is available, so the candidate name is checked against the domain. Ordering
+matters as much as the filter: trying the page title before the domain gave
+heroal.de the name "Fenster, Türen, Rollläden & Co. » Qualität Made in Germany".
+
+### Two fixes outside the feature, both surfaced by running it
+
+**`scripts/migrate-tenants.mjs` could only ever reach Wrenchlane.** It needs a
+DATABASE password and only Wrenchlane's is on this machine, so R4's "one script,
+never by hand" was in practice "one script for Wrenchlane, by hand for the
+customers". It now falls back to the Management API with the PAT, which exists for
+every project. **Animech was six migrations behind**; all six applied and recorded.
+
+**`20260901120000_article_autopilot.sql` hardcodes Wrenchlane's workspace id** and
+fails the foreign key on every other tenant, taking the whole migration run down
+with it. Now a guarded `SELECT` — same row on Wrenchlane, no-op elsewhere. Worth
+grepping for other literal workspace ids in migrations before the next tenant.
+
+### The smoke test had never seen a gated route
+
+`e2e/smoke.spec.ts` asserts every directory under `(dashboard)` redirects to
+/login. A feature switched off for the tenant 404s instead. Until now every
+off-by-default feature happened to have no route, so the case never arose. Now
+split by tenant config: gated sections must 404, the rest must redirect, both
+asserted.
+
+### Open
+
+- **The tenant Vercel projects are not git-connected**, so merging does not deploy
+  Animech. Needs a CLI deploy that an agent session cannot run.
+- 151 rows have no country: `.com` domains where the TLD, phone, legal form and
+  footer all said nothing. Kept, and shown as unknown rather than guessed.
+- Only 20 companies yielded a personally-named contact against 276 with any
+  contact. European manufacturers publish `info@` and `sales@` on purpose; this is
+  the same pattern as the associations, not an extraction failure.
+- Contacts are NOT verified and NOT enrolled anywhere. Run a scoped
+  MillionVerifier pass before any outreach.
+- Thin coverage: Iberia, Poland, the Baltics and the Balkans. The vendor seed is
+  the lever — add vendors headquartered there and their customers follow.
