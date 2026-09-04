@@ -4590,6 +4590,129 @@ export type Database = {
           },
         ]
       }
+      configurator_prospects: {
+        Row: {
+          blocked: boolean
+          cited_by: string[]
+          company_id: string | null
+          configurator_candidates: Json | null
+          configurator_score: number
+          configurator_url: string | null
+          contact_count: number
+          country: string | null
+          country_code: string | null
+          country_source: string | null
+          created_at: string | null
+          description: string | null
+          domain: string | null
+          email: string | null
+          entry_type: string
+          external_key: string
+          http_status: string | null
+          id: string
+          industry: string | null
+          name: string
+          notes: string | null
+          page_title: string | null
+          phone: string | null
+          platform_source: string | null
+          platforms: string[]
+          raw: Json | null
+          resolved_website: string | null
+          source: string | null
+          updated_at: string | null
+          vendor_kind: string | null
+          verified: boolean
+          website: string | null
+          workspace_id: string
+        }
+        Insert: {
+          blocked?: boolean
+          cited_by?: string[]
+          company_id?: string | null
+          configurator_candidates?: Json | null
+          configurator_score?: number
+          configurator_url?: string | null
+          contact_count?: number
+          country?: string | null
+          country_code?: string | null
+          country_source?: string | null
+          created_at?: string | null
+          description?: string | null
+          domain?: string | null
+          email?: string | null
+          entry_type?: string
+          external_key: string
+          http_status?: string | null
+          id?: string
+          industry?: string | null
+          name: string
+          notes?: string | null
+          page_title?: string | null
+          phone?: string | null
+          platform_source?: string | null
+          platforms?: string[]
+          raw?: Json | null
+          resolved_website?: string | null
+          source?: string | null
+          updated_at?: string | null
+          vendor_kind?: string | null
+          verified?: boolean
+          website?: string | null
+          workspace_id: string
+        }
+        Update: {
+          blocked?: boolean
+          cited_by?: string[]
+          company_id?: string | null
+          configurator_candidates?: Json | null
+          configurator_score?: number
+          configurator_url?: string | null
+          contact_count?: number
+          country?: string | null
+          country_code?: string | null
+          country_source?: string | null
+          created_at?: string | null
+          description?: string | null
+          domain?: string | null
+          email?: string | null
+          entry_type?: string
+          external_key?: string
+          http_status?: string | null
+          id?: string
+          industry?: string | null
+          name?: string
+          notes?: string | null
+          page_title?: string | null
+          phone?: string | null
+          platform_source?: string | null
+          platforms?: string[]
+          raw?: Json | null
+          resolved_website?: string | null
+          source?: string | null
+          updated_at?: string | null
+          vendor_kind?: string | null
+          verified?: boolean
+          website?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configurator_prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "configurator_prospects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       industry_orgs: {
         Row: {
           acronym: string | null

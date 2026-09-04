@@ -42,6 +42,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -181,7 +182,22 @@ function localMigrations() {
     });
 }
 
-// --- psql helpers ----------------------------------------------------------
+// --- drivers ---------------------------------------------------------------
+// Two ways to reach a tenant, behind one interface, because the credential that
+// exists differs per tenant and per machine.
+//
+// `psql` is the primary and stays the documented tool. But it needs a DATABASE
+// password, and the productisation work has only ever put Wrenchlane's on this
+// machine -- Animech and Spennare were stood up through the Management API and
+// their database passwords live nowhere here. Without a fallback, R4's "one
+// script, never by hand" quietly becomes "one script for Wrenchlane, by hand for
+// the customers", which is exactly the drift R4 exists to prevent.
+//
+// So when no password is configured, the same migration is applied over the
+// Management API with the personal access token, which is the credential that
+// DOES exist for every project. The semantics are identical and slightly
+// stronger: the migration and its history row go in ONE transaction, so a failed
+// apply cannot leave a recorded version behind.
 function psqlQuery(conn, sql) {
   return execFileSync(PSQL, [conn, "-v", "ON_ERROR_STOP=1", "-At", "-c", sql], {
     encoding: "utf8",
@@ -196,36 +212,100 @@ function psqlFile(conn, file) {
   });
 }
 
-function appliedVersions(conn) {
+function managementToken() {
+  const fromEnv = env("SUPABASE_ACCESS_TOKEN");
+  if (fromEnv) return fromEnv;
+  const secrets = join(homedir(), ".secrets/keys.env");
+  if (!existsSync(secrets)) return null;
+  const m = readFileSync(secrets, "utf8").match(/^SUPABASE_ACCESS_TOKEN=(.+)$/m);
+  return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
+}
+
+async function apiQuery(ref, token, sql) {
+  // Cloudflare answers a bare fetch from some runtimes with error 1010, so the
+  // User-Agent is set explicitly. Documented in the Supabase access notes.
+  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "User-Agent": "Mozilla/5.0 (migrate-tenants)",
+    },
+    body: JSON.stringify({ query: sql }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Management API ${res.status}: ${text.slice(0, 400)}`);
+  return text ? JSON.parse(text) : [];
+}
+
+function psqlDriver(conn) {
+  return {
+    kind: "psql",
+    query: async (sql) => psqlQuery(conn, sql),
+    // psql's -1 already wraps the file; the history row follows it.
+    applyMigration: async (m) => {
+      psqlFile(conn, m.path);
+      psqlQuery(
+        conn,
+        `INSERT INTO supabase_migrations.schema_migrations (version, name)
+         VALUES ('${m.version}', '${m.name.replace(/'/g, "''")}')
+         ON CONFLICT (version) DO NOTHING`,
+      );
+    },
+  };
+}
+
+function apiDriver(ref, token) {
+  return {
+    kind: "management API",
+    query: async (sql) => {
+      const rows = await apiQuery(ref, token, sql);
+      // Match psql -At: one scalar per line, no headers.
+      return rows.map((r) => Object.values(r)[0]).join("\n");
+    },
+    applyMigration: async (m) => {
+      const body = readFileSync(m.path, "utf8");
+      await apiQuery(
+        ref,
+        token,
+        `BEGIN;\n${body}\n` +
+          "INSERT INTO supabase_migrations.schema_migrations (version, name)\n" +
+          `VALUES ('${m.version}', '${m.name.replace(/'/g, "''")}')\n` +
+          "ON CONFLICT (version) DO NOTHING;\nCOMMIT;",
+      );
+    },
+  };
+}
+
+/** The best available way to reach this tenant, or null if there is none. */
+function driverFor(tenant) {
+  const conn = connectionFor(tenant);
+  if (conn) return psqlDriver(conn);
+  const ref = tenant.fallback?.user?.split(".")[1];
+  const token = managementToken();
+  if (ref && token) return apiDriver(ref, token);
+  return null;
+}
+
+async function appliedVersions(driver) {
   // The history table does not exist on a brand new project until something
   // creates it; treat "no table" as "nothing applied".
-  const exists = psqlQuery(
-    conn,
+  const exists = await driver.query(
     "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL",
   );
-  if (exists !== "t") return null;
-  const rows = psqlQuery(conn, "SELECT version FROM supabase_migrations.schema_migrations");
+  if (exists !== "t" && exists !== "true") return null;
+  const rows = await driver.query("SELECT version FROM supabase_migrations.schema_migrations");
   return new Set(rows ? rows.split("\n").filter(Boolean) : []);
 }
 
-function ensureHistoryTable(conn) {
-  psqlQuery(
-    conn,
+async function ensureHistoryTable(driver) {
+  await driver.query(
     `CREATE SCHEMA IF NOT EXISTS supabase_migrations;
      CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
        version text PRIMARY KEY,
        statements text[],
        name text
      );`,
-  );
-}
-
-function recordApplied(conn, m) {
-  psqlQuery(
-    conn,
-    `INSERT INTO supabase_migrations.schema_migrations (version, name)
-     VALUES ('${m.version}', '${m.name.replace(/'/g, "''")}')
-     ON CONFLICT (version) DO NOTHING`,
   );
 }
 
@@ -255,16 +335,20 @@ let totalPending = 0;
 
 for (const tenant of tenants) {
   console.log(`--- ${tenant.slug}: ${tenant.label} ---`);
-  const conn = connectionFor(tenant);
-  if (!conn) {
-    console.log(`  SKIPPED: no connection configured (set ${tenant.urlEnv})\n`);
+  const driver = driverFor(tenant);
+  if (!driver) {
+    console.log(
+      `  SKIPPED: no way in. Set ${tenant.urlEnv}, or ${tenant.fallback?.passwordEnv}, ` +
+        "or put SUPABASE_ACCESS_TOKEN in ~/.secrets/keys.env for the Management API route.\n",
+    );
     failures++;
     continue;
   }
+  console.log(`  via ${driver.kind}`);
 
   let applied;
   try {
-    applied = appliedVersions(conn);
+    applied = await appliedVersions(driver);
   } catch (err) {
     console.log(`  ERROR: could not read migration history: ${String(err.message).split("\n")[0]}\n`);
     failures++;
@@ -293,13 +377,12 @@ for (const tenant of tenants) {
   }
 
   try {
-    ensureHistoryTable(conn);
+    await ensureHistoryTable(driver);
     for (const m of pending) {
       process.stdout.write(`  applying ${m.file} ... `);
-      // -1 wraps the file in a single transaction; the history row goes in
-      // straight after, so a failed apply leaves nothing recorded.
-      psqlFile(conn, m.path);
-      recordApplied(conn, m);
+      // The migration runs in a transaction and the history row goes in with it,
+      // so a failed apply leaves nothing recorded.
+      await driver.applyMigration(m);
       console.log("ok");
     }
     console.log("");

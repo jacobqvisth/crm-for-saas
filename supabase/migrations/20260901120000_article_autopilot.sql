@@ -125,9 +125,19 @@ CREATE TRIGGER update_article_autopilot_settings_updated_at
 -- having an opinion about the market). Off by default plus a safe default scope
 -- is the posture; turning it on should not also be the moment you discover where
 -- it can post.
+--
+-- The workspace id is Wrenchlane's, and the categories are Wrenchlane's taxonomy
+-- (Diagnostics, Repair Data, Shop Tips). Guarded by SELECT rather than written as a
+-- literal VALUES row, because a bare INSERT of another tenant's workspace id fails the
+-- foreign key on every OTHER tenant's database and takes the whole migration down with
+-- it -- which is what it did on Animech, blocking five later migrations behind it.
+--
+-- A seed that belongs to one tenant must no-op on the others rather than error. On
+-- Wrenchlane this SELECT returns the same single row the VALUES did; everywhere else it
+-- returns none.
 INSERT INTO article_autopilot_settings (workspace_id, allowed_categories)
-VALUES (
-  'd946ea1f-74b4-492e-ae6a-d50f59ff04f0',
+SELECT
+  w.id,
   ARRAY[
     'Diagnostics',
     'Troubleshooting',
@@ -137,5 +147,6 @@ VALUES (
     'Predictive Maintenance',
     'Shop Operations'
   ]
-)
+FROM workspaces w
+WHERE w.id = 'd946ea1f-74b4-492e-ae6a-d50f59ff04f0'
 ON CONFLICT (workspace_id) DO NOTHING;
