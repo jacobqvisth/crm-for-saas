@@ -104,15 +104,60 @@ type Entry = {
   people: { email: string; name: string | null; title: string | null; role: string | null; priority: number }[];
 };
 
-// A company name, best source first. The harvested link text is usually the logo's alt
-// attribute and is the most reliable; the page title is a marketing sentence and needs
-// its tagline cut off; the domain is the floor.
+// A call to action, not a company. Roomle's case tiles link out as "Go to Website",
+// Expivi's as "View configurator", 3D Cloud's as "View Live App" and KEBA's as "JETZT
+// LIVE ANSEHEN" -- all of which arrived as company names on the first import and would
+// have been read by a human in the CRM as the company's actual name.
+//
+// The harvester already rejects the obvious ones, but it only ever sees one anchor at a
+// time. Here the whole row is available, so a name can also be checked against the
+// domain it belongs to, which is the test that actually settles it.
+const CTA_NAME =
+  /^(go|view|see|visit|open|discover|explore|read|watch|try|start|shop|buy|browse|check)\b|^(jetzt|hier|mehr|zur|zum|naar|bekijk|voir|scopri|ver|läs|se |gå )|\b(website|webseite|site|configurator|konfigurator|live app|demo|case study|more|link)$/i;
+
+// A real company name usually shares a stem with its own domain: "Rolf Benz" with
+// rolf-benz.com, "Biohort" with biohort.com. Used only to break a tie, never to reject a
+// name outright -- plenty of real companies trade under a name their domain does not
+// spell (Vendeco on framacph.com).
+function corroborates(name: string, domain: string): boolean {
+  const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+  const d = fold(domain.split(".")[0]);
+  return name.split(/\s+/).some((w) => w.length >= 4 && d.includes(fold(w)));
+}
+
+const decodeEntities = (s: string) =>
+  s.replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ").replace(/&auml;/g, "ä").replace(/&ouml;/g, "ö")
+    .replace(/&uuml;/g, "ü").replace(/&szlig;/g, "ß").replace(/&aring;/g, "å");
+
+/**
+ * A company name, best evidence first.
+ *
+ * The ordering matters more than it looks. Trying the page title before the domain
+ * produced "Fenster, Türen, Rollläden & Co. » Qualität Made in Germany" for heroal.de
+ * and "Innovative automation solutions" for keba.com: taglines that never say who the
+ * company is. So a title is only trusted when it actually contains the company's own
+ * name, and the domain wins over one that does not.
+ *
+ * The harvested name still outranks the domain when it survives the CTA filter, because
+ * some companies trade under a name their domain does not spell -- Vendeco sells on
+ * framacph.com, and "Framacph" would be wrong.
+ */
 function nameFor(p: Prospect): string {
-  if (p.name && p.name.length >= 2) return p.name;
-  const t = (p.page_title ?? "").split(/\s*[|–—\-·:]\s*/)[0]?.trim();
-  if (t && t.length >= 2 && t.length <= 60) return t;
-  const base = p.domain.split(".")[0];
-  return base.charAt(0).toUpperCase() + base.slice(1);
+  const title = decodeEntities(p.page_title ?? "").split(/\s*[|–—·:»]\s*/)[0]?.trim();
+  const base = p.domain.split(".")[0].replace(/-/g, " ");
+  const domainName = base.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+  const raw = p.name ? decodeEntities(p.name).trim() : "";
+  const harvested = raw.length >= 2 && !CTA_NAME.test(raw) && !/^https?:|^www\./i.test(raw) ? raw : null;
+  const fromTitle = title && title.length >= 2 && title.length <= 60 && !CTA_NAME.test(title) ? title : null;
+
+  if (harvested && corroborates(harvested, p.domain)) return harvested;
+  if (fromTitle && corroborates(fromTitle, p.domain)) return fromTitle;
+  if (harvested) return harvested;
+  return domainName;
 }
 
 function peopleFor(domain: string) {
@@ -133,12 +178,26 @@ function peopleFor(domain: string) {
     });
 }
 
+// A vendor's country sites are the vendor. cadenas.it and cadenas.de are different
+// registrable domains, so the phase B exclusion (which works on the exact domain) let
+// the Italian one through as a prospect -- CADENAS listed as a lead for a company that
+// sells the same thing. Matching on the second-level label catches every country
+// variant of every seeded vendor at once, rather than this one row.
+const vendorLabels = new Set(
+  vendors
+    .map((v) => {
+      try { return new URL(v.resolved_website ?? v.website).hostname.replace(/^www\./, "").split(".")[0]; }
+      catch { return null; }
+    })
+    .filter((s): s is string => !!s && s.length >= 4),
+);
+
 const entries: Entry[] = [];
 
 for (const p of prospects) {
   // An entry whose website never resolved is not shipped as if it were real.
   if (!p.verified && !p.blocked) continue;
-  const isVendor = p.is_vendor;
+  const isVendor = p.is_vendor || vendorLabels.has(p.domain.split(".")[0]);
   entries.push({
     key: `cfg:${slug(p.domain)}`,
     name: nameFor(p),

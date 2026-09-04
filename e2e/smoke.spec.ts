@@ -1,6 +1,8 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
+import { FEATURES } from '../src/config/features';
+import { getTenant } from '../src/config/tenants';
 
 test.describe('Smoke Tests — Public Pages', () => {
   test('login page loads without console errors', async ({ page }) => {
@@ -36,16 +38,42 @@ test.describe('Smoke Tests — Public Pages', () => {
     .filter((e) => e.isDirectory() && !e.name.startsWith('_'))
     .map((e) => e.name);
 
+  // Sections this tenant has switched off. They 404 rather than redirecting,
+  // which is not a leak -- it is the feature gate doing its job one step earlier
+  // than the auth gate. Before `configurators` (Animech only) every off-by-default
+  // feature happened to have no route of its own, so this case had never arisen
+  // and the test asserted "redirects" for all of them.
+  //
+  // Derived from the config rather than listed, so switching a feature on or off
+  // moves a section between the two groups without anyone editing this file.
+  const tenant = getTenant();
+  const gatedSections = new Set(
+    FEATURES.filter((f) => tenant.features[f.key] === false)
+      .flatMap((f) => f.routePrefixes)
+      .map((p) => p.split('/')[1])
+      .filter(Boolean),
+  );
+
   test('every dashboard section redirects to /login when signed out', async ({ page }) => {
     expect(dashboardSections.length).toBeGreaterThan(10);
     expect(dashboardSections).toContain('forums');
 
-    for (const section of dashboardSections) {
+    for (const section of dashboardSections.filter((s) => !gatedSections.has(s))) {
       await page.goto(`/${section}`);
       await page.waitForURL('**/login**', { timeout: 10_000 });
       expect(page.url(), `/${section} should redirect to login`).toContain('/login');
       // The destination is preserved so a shared deep link survives sign-in.
       expect(decodeURIComponent(page.url())).toContain(`next=/${section}`);
+    }
+  });
+
+  test('sections this tenant has switched off are not served at all', async ({ page }) => {
+    // The point of the check is the same as the one above: a signed-out visitor
+    // must never see dashboard content. A 404 satisfies that more strictly than a
+    // redirect does, but it has to be asserted, not assumed.
+    for (const section of dashboardSections.filter((s) => gatedSections.has(s))) {
+      const res = await page.goto(`/${section}`);
+      expect(res?.status(), `/${section} is gated off and must not be served`).toBe(404);
     }
   });
 
