@@ -166,6 +166,8 @@ export const animech: TenantConfig = {
     // The Swedish vehicle-education directory. Sweden-only and built for selling
     // diagnostics to schools, which is not Animech's market.
     schools: false,
+    // Automotive trade bodies and fairs. Not Animech's sector.
+    industry_orgs: false,
     // Product analytics and everything downstream of it measures a freemium
     // self-serve app with a Stripe funnel. Animech sell enterprise projects.
     product_analytics: false,

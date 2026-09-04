@@ -89,8 +89,10 @@ export function extractEmails(html) {
     .filter((e) => !EMAIL_JUNK.test(e) && !EMAIL_JUNK_DOMAIN.test(e) && e.length < 80);
 }
 
-// Swedish school job titles, longest-first so "biträdande rektor" wins over "rektor".
-const TITLES = [
+// Default title vocabulary: Swedish school roles. Callers in other domains pass
+// their own list to extractPeople (the European trade associations need role names
+// in a dozen languages, see scripts/orgs/lib_org_roles.mjs).
+export const SCHOOL_TITLES = [
   "biträdande rektor", "bitr. rektor", "bitr rektor", "tf rektor", "rektor",
   "studie- och yrkesvägledare", "studie och yrkesvägledare", "syv", "studievägledare",
   "programansvarig", "programrektor", "utbildningsledare", "utbildningschef",
@@ -99,10 +101,18 @@ const TITLES = [
   "skoladministratör", "administratör", "skolassistent", "expedition", "reception",
   "kurator", "specialpedagog", "mentor", "praktiksamordnare", "apl-samordnare",
 ];
-const TITLE_RE = new RegExp(`(${TITLES.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "i");
+export const titleRegex = (titles) =>
+  new RegExp(`(${titles.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "i");
 
 // A Swedish personal name: two or three capitalised words, allowing å/ä/ö and hyphens.
-const NAME_RE = /\b([A-ZÅÄÖ][a-zåäöéü]{1,20}(?:-[A-ZÅÄÖ][a-zåäöéü]{1,20})?)\s+([A-ZÅÄÖ][a-zåäöéü]{1,20}(?:-[A-ZÅÄÖ][a-zåäöéü]{1,20})?)(?:\s+([A-ZÅÄÖ][a-zåäöéü]{1,20}))?\b/g;
+// Latin letters across Europe, not just the Nordic three: these pages carry names
+// like Grégoire, Müller, Nuñez, Gonçalves, Køster, Wójcik, Škoda.
+const U = "A-ZÀ-ÖØ-Þ";
+const L = "a-zà-öø-ÿčďěľĺňŕřšťůžłśźżąęćńõşţğı";
+const NAME_RE = new RegExp(
+  `\\b([${U}][${L}]{1,20}(?:-[${U}][${L}]{1,20})?)\\s+([${U}][${L}]{1,20}(?:-[${U}][${L}]{1,20})?)(?:\\s+([${U}][${L}]{1,20}))?\\b`,
+  "g",
+);
 
 // Words that look like names by shape but never are, in this context.
 const NOT_A_NAME = /^(Vara|Våra|Till|Här|Mer|Läs|Om|För|Den|Det|Vi|Du|Alla|Sök|Kontakta|Kontakt|Mejl|Telefon|Besök|Postadress|Nästa|Före|Efter|Ansök|Anmäl|Skicka|Cookie|Cookies|Integritet|Nyheter|Aktuellt|Start|Hem|Meny|Stäng|Öppna|Läsår|Program|Gymnasiet|Gymnasieskolan|Skolan|Kommun|Kommunen|Utbildning|Elev|Elever|Lediga|Jobb|Personuppgifter|Behandling|Svenska|Engelska|Sidan|Denna|Detta|Andra|Samma|Norra|Södra|Västra|Östra)$/i;
@@ -154,7 +164,7 @@ export function nameMatchesEmail(name, email) {
 //   1. the link text itself, when it is a name ("<a href=mailto:..>Erika Östling</a>")
 //   2. a name in the tight surrounding window that the email local part corroborates
 // Anything else is left null and filled from the address at import time.
-export function extractPeople(html, pageUrl, contexts = null) {
+export function extractPeople(html, pageUrl, contexts = null, titles = SCHOOL_TITLES) {
   const people = new Map();
   const re = /<a[^>]*href\s*=\s*["']mailto:([^"'?>\s]+)[^>]*>([\s\S]{0,200}?)<\/a>|mailto:([^"'?>\s]+)/gi;
   let m;
@@ -208,7 +218,7 @@ export function extractPeople(html, pageUrl, contexts = null) {
     // Title: the closest title word to the link, within the tight window only.
     let title = null;
     let bestDist = Infinity;
-    for (const t of TITLES) {
+    for (const t of titles) {
       const i = ctx.toLowerCase().lastIndexOf(t);
       if (i === -1) continue;
       const dist = Math.abs(i - before.length);

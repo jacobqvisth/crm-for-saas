@@ -1,0 +1,1171 @@
+[
+ {
+  "name": "Transportföretagen",
+  "acronym": "TF",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "employer,transport,motor",
+  "website": "https://www.transportforetagen.se",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": "Employers' federation. Its Motorbranschens Arbetsgivareförbund (MAF) section covers workshops and dealers."
+ },
+ {
+  "name": "Motorbranschens Riksförbund",
+  "acronym": "MRF",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.mrf.se",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": "The main Swedish trade body for car dealers and authorised workshops."
+ },
+ {
+  "name": "Svenska Fordonsbranschen",
+  "acronym": "SFB",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "independent workshops,parts",
+  "website": "https://www.fordonsverkstader.se",
+  "umbrellas": [
+   "CECRA",
+   "FIGIEFA"
+  ],
+  "notes": "Sweden's CECRA and FIGIEFA member. Formerly SFVF, Sveriges Fordonsverkstäders Förening."
+ },
+ {
+  "name": "Däckspecialisternas Riksförbund",
+  "acronym": "DRF",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "tyres",
+  "website": "https://www.drf.se",
+  "umbrellas": [],
+  "notes": "Swedish tyre specialists."
+ },
+ {
+  "name": "Sveriges Bilåtervinnares Riksförbund",
+  "acronym": "SBR",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "recycling,dismantling",
+  "website": "https://www.sbrservice.se",
+  "umbrellas": [],
+  "notes": "Vehicle recyclers and dismantlers."
+ },
+ {
+  "name": "Mobility Sweden",
+  "acronym": "",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "manufacturers,importers",
+  "website": "https://mobilitysweden.se",
+  "umbrellas": [
+   "ACEA"
+  ],
+  "notes": "Vehicle manufacturers and importers. Formerly BIL Sweden."
+ },
+ {
+  "name": "Sveriges Åkeriföretag",
+  "acronym": "",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "haulage",
+  "website": "https://www.akeri.se",
+  "umbrellas": [],
+  "notes": "Swedish haulage companies, operators of large truck fleets."
+ },
+ {
+  "name": "Maskinentreprenörerna",
+  "acronym": "ME",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "plant machinery",
+  "website": "https://www.me.se",
+  "umbrellas": [],
+  "notes": "Contractors running construction machinery fleets."
+ },
+ {
+  "name": "Motorhistoriska Riksförbundet",
+  "acronym": "MHRF",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "classic vehicles",
+  "website": "https://mhrf.se",
+  "umbrellas": [
+   "FIVA"
+  ],
+  "notes": "Swedish historic vehicle federation."
+ },
+ {
+  "name": "Kungliga Automobil Klubben",
+  "acronym": "KAK",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.kak.se",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Motormännens Riksförbund",
+  "acronym": "M",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.motormannen.se",
+  "umbrellas": [
+   "FIA"
+  ],
+  "notes": "Swedish motorists' association.",
+  "blocked": true
+ },
+ {
+  "name": "Trafikförsäkringsföreningen",
+  "acronym": "TFF",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "insurance",
+  "website": "https://www.tff.se",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "SFVF Sveriges Fordonsverkstäders Förening",
+  "acronym": "SFVF",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "association",
+  "sector": "independent workshops",
+  "website": "https://www.sfvf.se",
+  "umbrellas": [],
+  "notes": "Check whether this has merged into Svenska Fordonsbranschen."
+ },
+ {
+  "name": "Norges Bilbransjeforbund",
+  "acronym": "NBF",
+  "country": "Norway",
+  "country_code": "NO",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.nbf.no",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Autobransjens Leverandørforening",
+  "acronym": "ABL",
+  "country": "Norway",
+  "country_code": "NO",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.autobransjen.no",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Norsk Petroleumsinstitutt / Drivkraft Norge",
+  "acronym": "",
+  "country": "Norway",
+  "country_code": "NO",
+  "org_type": "association",
+  "sector": "fuel,energy",
+  "website": "https://drivkraftnorge.no",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Bilimportørenes Landsforening",
+  "acronym": "BIL",
+  "country": "Norway",
+  "country_code": "NO",
+  "org_type": "association",
+  "sector": "importers",
+  "website": "https://www.bilimportorene.no",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Autobranchen Danmark",
+  "acronym": "",
+  "country": "Denmark",
+  "country_code": "DK",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.autobranchendanmark.dk",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": "CECRA lists this under daf.dk historically."
+ },
+ {
+  "name": "Bilbranchen (DI)",
+  "acronym": "",
+  "country": "Denmark",
+  "country_code": "DK",
+  "org_type": "association",
+  "sector": "dealers",
+  "website": "https://www.danskindustri.dk/brancher/di-bilbranchen/",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": "Sector association inside Dansk Industri."
+ },
+ {
+  "name": "AutoBranchens Handels- og Industriforening",
+  "acronym": "AUTIG",
+  "country": "Denmark",
+  "country_code": "DK",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.autig.dk",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Mobility Denmark",
+  "acronym": "DBI",
+  "country": "Denmark",
+  "country_code": "DK",
+  "org_type": "association",
+  "sector": "importers",
+  "website": "https://www.bilimp.dk",
+  "umbrellas": [],
+  "notes": "Formerly De Danske Bilimportører."
+ },
+ {
+  "name": "Autoalan Keskusliitto",
+  "acronym": "AKL",
+  "country": "Finland",
+  "country_code": "FI",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.akl.fi",
+  "umbrellas": [
+   "CECRA",
+   "AECDR"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Suomen Varaosakaupan Keskusliitto",
+  "acronym": "SVOK",
+  "country": "Finland",
+  "country_code": "FI",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://autonhuolto.fi",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Autotuojat ja -teollisuus",
+  "acronym": "",
+  "country": "Finland",
+  "country_code": "FI",
+  "org_type": "association",
+  "sector": "importers,manufacturers",
+  "website": "https://www.autotuojat.fi",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Bílgreinasambandið",
+  "acronym": "BGS",
+  "country": "Iceland",
+  "country_code": "IS",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.bgs.is",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Zentralverband Deutsches Kraftfahrzeuggewerbe",
+  "acronym": "ZDK",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.kfzgewerbe.de",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": "Represents 39,230 dealerships, body shops and master workshops."
+ },
+ {
+  "name": "Gesamtverband Autoteile-Handel",
+  "acronym": "GVA",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.gva.de",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Verband der Automobilindustrie",
+  "acronym": "VDA",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "manufacturers",
+  "website": "https://www.vda.de",
+  "umbrellas": [
+   "ACEA"
+  ],
+  "notes": "Also organises IAA Mobility and IAA Transportation."
+ },
+ {
+  "name": "Deutsche Automobil Treuhand",
+  "acronym": "DAT",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "data,valuation",
+  "website": "https://www.dat.de",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Zentralverband Karosserie- und Fahrzeugtechnik",
+  "acronym": "ZKF",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "body repair",
+  "website": "https://www.zkf.de",
+  "umbrellas": [
+   "AIRC"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Bundesverband Reifenhandel und Vulkaniseur-Handwerk",
+  "acronym": "BRV",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "tyres",
+  "website": "https://www.brv-bonn.de",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "ADAC",
+  "acronym": "ADAC",
+  "country": "Germany",
+  "country_code": "DE",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.adac.de",
+  "umbrellas": [
+   "FIA"
+  ],
+  "notes": "Europe's largest motoring club, ~21m members."
+ },
+ {
+  "name": "Bundesgremium des Fahrzeughandels (WKO)",
+  "acronym": "WKO",
+  "country": "Austria",
+  "country_code": "AT",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.wko.at/fahrzeughandel",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": "Section of the Austrian Chamber of Commerce."
+ },
+ {
+  "name": "Verband der freien Kfz-Teile-Fachhändler",
+  "acronym": "VFT",
+  "country": "Austria",
+  "country_code": "AT",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.vft.at",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "ÖAMTC",
+  "acronym": "ÖAMTC",
+  "country": "Austria",
+  "country_code": "AT",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.oeamtc.at",
+  "umbrellas": [
+   "FIA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Auto Gewerbe Verband Schweiz",
+  "acronym": "AGVS",
+  "country": "Switzerland",
+  "country_code": "CH",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.agvs-upsa.ch",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Swiss Automotive Aftermarket",
+  "acronym": "SAA",
+  "country": "Switzerland",
+  "country_code": "CH",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.aftermarket.ch",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Touring Club Schweiz",
+  "acronym": "TCS",
+  "country": "Switzerland",
+  "country_code": "CH",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.tcs.ch",
+  "umbrellas": [
+   "FIA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "BOVAG",
+  "acronym": "BOVAG",
+  "country": "Netherlands",
+  "country_code": "NL",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.bovag.nl",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": "~10,000 member businesses."
+ },
+ {
+  "name": "RAI Vereniging",
+  "acronym": "RAI",
+  "country": "Netherlands",
+  "country_code": "NL",
+  "org_type": "association",
+  "sector": "manufacturers,importers,parts",
+  "website": "https://www.raivereniging.nl",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": "",
+  "blocked": true
+ },
+ {
+  "name": "ANWB",
+  "acronym": "ANWB",
+  "country": "Netherlands",
+  "country_code": "NL",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.anwb.nl",
+  "umbrellas": [
+   "FIA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "TRAXIO",
+  "acronym": "TRAXIO",
+  "country": "Belgium",
+  "country_code": "BE",
+  "org_type": "association",
+  "sector": "dealers,workshops,parts",
+  "website": "https://www.traxio.be",
+  "umbrellas": [
+   "CECRA",
+   "FIGIEFA",
+   "AECDR"
+  ],
+  "notes": "Covers the whole Belgian vehicle trade."
+ },
+ {
+  "name": "FEBIAC",
+  "acronym": "FEBIAC",
+  "country": "Belgium",
+  "country_code": "BE",
+  "org_type": "association",
+  "sector": "manufacturers,importers",
+  "website": "https://www.febiac.be",
+  "umbrellas": [
+   "ACEA"
+  ],
+  "notes": "Also organises the Brussels Motor Show."
+ },
+ {
+  "name": "FEDAMO",
+  "acronym": "FEDAMO",
+  "country": "Luxembourg",
+  "country_code": "LU",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.fedamo.lu",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Mobilians",
+  "acronym": "",
+  "country": "France",
+  "country_code": "FR",
+  "org_type": "association",
+  "sector": "dealers,workshops,services",
+  "website": "https://www.mobilians.fr",
+  "umbrellas": [],
+  "notes": "Formerly CNPA. Represents 21 trades across distribution and vehicle services."
+ },
+ {
+  "name": "Fédération de la Distribution Automobile",
+  "acronym": "FEDA",
+  "country": "France",
+  "country_code": "FR",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.feda.fr",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Plateforme Automobile",
+  "acronym": "PFA",
+  "country": "France",
+  "country_code": "FR",
+  "org_type": "association",
+  "sector": "manufacturers,suppliers",
+  "website": "https://pfa-auto.fr",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Fédération Nationale de l'Automobile",
+  "acronym": "FNA",
+  "country": "France",
+  "country_code": "FR",
+  "org_type": "association",
+  "sector": "independent workshops",
+  "website": "https://www.fna.fr",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Federauto",
+  "acronym": "",
+  "country": "Italy",
+  "country_code": "IT",
+  "org_type": "association",
+  "sector": "dealers",
+  "website": "https://www.federauto.eu",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Confartigianato Autoriparazione",
+  "acronym": "",
+  "country": "Italy",
+  "country_code": "IT",
+  "org_type": "association",
+  "sector": "independent workshops",
+  "website": "https://www.confartigianato.it",
+  "umbrellas": [],
+  "notes": "Craft-trade federation covering vehicle repairers."
+ },
+ {
+  "name": "ANFIA",
+  "acronym": "ANFIA",
+  "country": "Italy",
+  "country_code": "IT",
+  "org_type": "association",
+  "sector": "manufacturers,suppliers",
+  "website": "https://www.anfia.it",
+  "umbrellas": [
+   "ACEA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Automobile Club d'Italia",
+  "acronym": "ACI",
+  "country": "Italy",
+  "country_code": "IT",
+  "org_type": "association",
+  "sector": "motoring club",
+  "website": "https://www.aci.it",
+  "umbrellas": [
+   "FIA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "CETRAA",
+  "acronym": "CETRAA",
+  "country": "Spain",
+  "country_code": "ES",
+  "org_type": "association",
+  "sector": "independent workshops",
+  "website": "https://www.cetraa.com",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": "Spanish confederation of vehicle repair workshops."
+ },
+ {
+  "name": "GANVAM",
+  "acronym": "GANVAM",
+  "country": "Spain",
+  "country_code": "ES",
+  "org_type": "association",
+  "sector": "dealers",
+  "website": "https://www.ganvam.es",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Faconauto",
+  "acronym": "",
+  "country": "Spain",
+  "country_code": "ES",
+  "org_type": "association",
+  "sector": "dealers",
+  "website": "https://www.faconauto.com",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "ANCERA",
+  "acronym": "ANCERA",
+  "country": "Spain",
+  "country_code": "ES",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.ancera.org",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "ANFAC",
+  "acronym": "ANFAC",
+  "country": "Spain",
+  "country_code": "ES",
+  "org_type": "association",
+  "sector": "manufacturers",
+  "website": "https://www.anfac.com",
+  "umbrellas": [
+   "ACEA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "SERNAUTO",
+  "acronym": "SERNAUTO",
+  "country": "Spain",
+  "country_code": "ES",
+  "org_type": "association",
+  "sector": "suppliers",
+  "website": "https://www.sernauto.es",
+  "umbrellas": [
+   "CLEPA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Associação do Comércio Automóvel de Portugal",
+  "acronym": "ACAP",
+  "country": "Portugal",
+  "country_code": "PT",
+  "org_type": "association",
+  "sector": "dealers,importers",
+  "website": "https://www.acap.pt",
+  "umbrellas": [
+   "CECRA",
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "ANECRA",
+  "acronym": "ANECRA",
+  "country": "Portugal",
+  "country_code": "PT",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.anecra.pt",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "ARAN",
+  "acronym": "ARAN",
+  "country": "Portugal",
+  "country_code": "PT",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://aran.pt",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "National Franchised Dealers Association",
+  "acronym": "NFDA",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "dealers",
+  "website": "https://www.nfda-uk.co.uk",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Independent Garage Association",
+  "acronym": "IGA",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "independent workshops",
+  "website": "https://www.independentgarageassociation.co.uk",
+  "umbrellas": [],
+  "notes": "Part of the Retail Motor Industry Federation."
+ },
+ {
+  "name": "Retail Motor Industry Federation",
+  "acronym": "RMI",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "retail motor",
+  "website": "https://www.rmif.co.uk",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Independent Automotive Aftermarket Federation",
+  "acronym": "IAAF",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "https://www.iaaf.co.uk",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Society of Motor Manufacturers and Traders",
+  "acronym": "SMMT",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "manufacturers,aftermarket",
+  "website": "https://www.smmt.co.uk",
+  "umbrellas": [
+   "ACEA",
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Institute of the Motor Industry",
+  "acronym": "IMI",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "skills,accreditation",
+  "website": "https://www.theimi.org.uk",
+  "umbrellas": [],
+  "notes": "Professional body for automotive technicians. Runs qualifications, directly relevant to training."
+ },
+ {
+  "name": "Scottish Motor Trade Association",
+  "acronym": "SMTA",
+  "country": "United Kingdom",
+  "country_code": "GB",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.smta.co.uk",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Society of the Irish Motor Industry",
+  "acronym": "SIMI",
+  "country": "Ireland",
+  "country_code": "IE",
+  "org_type": "association",
+  "sector": "dealers,workshops,parts",
+  "website": "https://www.simi.ie",
+  "umbrellas": [
+   "CECRA",
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Stowarzyszenie Dystrybutorów i Producentów Części Motoryzacyjnych",
+  "acronym": "SDCM",
+  "country": "Poland",
+  "country_code": "PL",
+  "org_type": "association",
+  "sector": "parts,suppliers",
+  "website": "https://sdcm.pl",
+  "umbrellas": [
+   "FIGIEFA",
+   "CLEPA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Polski Związek Przemysłu Motoryzacyjnego",
+  "acronym": "PZPM",
+  "country": "Poland",
+  "country_code": "PL",
+  "org_type": "association",
+  "sector": "manufacturers,importers",
+  "website": "https://www.pzpm.org.pl",
+  "umbrellas": [
+   "ACEA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Sdružení automobilového průmyslu",
+  "acronym": "AutoSAP",
+  "country": "Czech Republic",
+  "country_code": "CZ",
+  "org_type": "association",
+  "sector": "manufacturers,suppliers",
+  "website": "https://autosap.cz",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Svaz prodejců a opravářů motorových vozidel ČR",
+  "acronym": "SAČR",
+  "country": "Czech Republic",
+  "country_code": "CZ",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.sacr.cz",
+  "umbrellas": [
+   "AECDR"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Sdruzeni Importeru Soucasti Automobilu",
+  "acronym": "SISA",
+  "country": "Czech Republic",
+  "country_code": "CZ",
+  "org_type": "association",
+  "sector": "parts",
+  "website": "http://www.sisa.cz",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Cech predajcov a autoservisov SR",
+  "acronym": "CPA SR",
+  "country": "Slovakia",
+  "country_code": "SK",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.cpasr.eu",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "GEMOSZ",
+  "acronym": "GEMOSZ",
+  "country": "Hungary",
+  "country_code": "HU",
+  "org_type": "association",
+  "sector": "dealers,workshops",
+  "website": "https://www.gemosz.hu",
+  "umbrellas": [
+   "CECRA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Otomotiv Satış Sonrası Ürün ve Hizmetleri Derneği",
+  "acronym": "OSS",
+  "country": "Turkey",
+  "country_code": "TR",
+  "org_type": "association",
+  "sector": "aftermarket",
+  "website": "https://www.oss.org.tr",
+  "umbrellas": [
+   "FIGIEFA"
+  ],
+  "notes": ""
+ },
+ {
+  "name": "Otomotiv Distribütörleri ve Mobilite Derneği",
+  "acronym": "ODMD",
+  "country": "Turkey",
+  "country_code": "TR",
+  "org_type": "association",
+  "sector": "importers",
+  "website": "https://www.odmd.org.tr",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "CECRA",
+  "acronym": "CECRA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "dealers,workshops",
+  "website": "https://www.cecra.eu",
+  "umbrellas": [],
+  "notes": "European Council for Motor Trades and Repairs. Represents ~336,720 businesses."
+ },
+ {
+  "name": "Alliance of European Car Dealers and Repairers",
+  "acronym": "AECDR",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "dealers,workshops",
+  "website": "https://www.aecdr.eu",
+  "umbrellas": [],
+  "notes": "Founded 2019 as an alternative to CECRA. ZDK, MRF, Transportföretagen, NFDA, NBF are members."
+ },
+ {
+  "name": "FIGIEFA",
+  "acronym": "FIGIEFA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "parts distribution",
+  "website": "https://www.figiefa.eu",
+  "umbrellas": [],
+  "notes": "19 national associations and 6 international trading groups."
+ },
+ {
+  "name": "European Garage and Test Equipment Association",
+  "acronym": "EGEA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "garage equipment",
+  "website": "https://www.egea-association.eu",
+  "umbrellas": [],
+  "notes": "Diagnostic and garage equipment makers. Highly relevant to a diagnostics vendor."
+ },
+ {
+  "name": "Automotive Data Publishers Association",
+  "acronym": "ADPA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "technical data",
+  "website": "https://www.adpa.eu",
+  "umbrellas": [],
+  "notes": "Publishers of automotive technical information. Direct peers on repair data."
+ },
+ {
+  "name": "Alliance for the Freedom of Car Repair",
+  "acronym": "AFCAR",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "right to repair",
+  "website": "https://www.afcar.eu",
+  "umbrellas": [],
+  "notes": "Coalition campaigning for access to repair and maintenance information."
+ },
+ {
+  "name": "International Association of Vehicle Body Repairers",
+  "acronym": "AIRC",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "body repair",
+  "website": "https://airc-int.com",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "European Automobile Manufacturers Association",
+  "acronym": "ACEA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "manufacturers",
+  "website": "https://www.acea.auto",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "European Association of Automotive Suppliers",
+  "acronym": "CLEPA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "suppliers",
+  "website": "https://clepa.eu",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Tyres Europe (ETRMA)",
+  "acronym": "ETRMA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "tyres",
+  "website": "https://www.etrma.org",
+  "umbrellas": [],
+  "notes": "ETRMA rebranded to Tyres Europe."
+ },
+ {
+  "name": "European Tyre and Rim Technical Organisation",
+  "acronym": "ETRTO",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "tyres",
+  "website": "https://www.etrto.org",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "CITA International Motor Vehicle Inspection Committee",
+  "acronym": "CITA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "inspection",
+  "website": "https://citainsp.org",
+  "umbrellas": [],
+  "notes": "Periodic technical inspection bodies."
+ },
+ {
+  "name": "Fédération Internationale de l'Automobile Region I",
+  "acronym": "FIA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "motoring clubs",
+  "website": "https://www.fiaregion1.com",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Fédération Internationale des Véhicules Anciens",
+  "acronym": "FIVA",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "classic vehicles",
+  "website": "https://fiva.org",
+  "umbrellas": [],
+  "notes": ""
+ },
+ {
+  "name": "Leaseurope",
+  "acronym": "",
+  "country": "Europe",
+  "country_code": "EU",
+  "org_type": "umbrella",
+  "sector": "leasing,fleet",
+  "website": "https://www.leaseurope.org",
+  "umbrellas": [
+   "AFCAR"
+  ],
+  "notes": "European leasing and automotive rental federation, an AFCAR member. Fleets are a workshop's biggest customers."
+ },
+ {
+  "name": "Nordiske Mediehus",
+  "acronym": "",
+  "country": "Denmark",
+  "country_code": "DK",
+  "org_type": "media",
+  "sector": "trade press",
+  "website": "https://nordiskemediehus.dk",
+  "umbrellas": [],
+  "notes": "Publisher behind MotorMagasinet (SE) and Motor-Magasinet (DK). One owner for both Nordic trade titles."
+ },
+ {
+  "name": "Motorbranschen",
+  "acronym": "",
+  "country": "Sweden",
+  "country_code": "SE",
+  "org_type": "media",
+  "sector": "trade press",
+  "website": "https://motorbranschen.mrf.se",
+  "umbrellas": [],
+  "notes": "MRF's own magazine."
+ }
+]

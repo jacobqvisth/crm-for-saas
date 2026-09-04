@@ -265,6 +265,8 @@ export const spennare: TenantConfig = {
     // The Swedish vehicle-education directory. Built around Skolverket's register
     // and car workshops; Spennare sell large-format print.
     schools: false,
+    // Automotive trade bodies and fairs. Spennare sell large-format print.
+    industry_orgs: false,
     // Planned, not shipped. Phase 10A. A second pipeline for the direct
     // FaberExposize side is the eventual shape.
     deals: false,
