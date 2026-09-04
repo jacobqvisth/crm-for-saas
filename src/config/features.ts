@@ -42,6 +42,7 @@ export type FeatureKey =
   | "deals"
   | "dealer_network"
   | "schools"
+  | "industry_orgs"
   | "linkedin_steps";
 
 /**
@@ -360,6 +361,21 @@ export const FEATURES: readonly FeatureDefinition[] = [
       "Built for Spennare (phase 10C) and not yet shipped.",
     navHrefs: [],
     routePrefixes: [],
+    cronPaths: [],
+  },
+  {
+    key: "industry_orgs",
+    name: "Branschorganisationer",
+    category: "outbound",
+    description:
+      "Directory of European automotive trade associations, umbrella bodies, " +
+      "trade fairs and trade press, with their contacts.",
+    enabledByDefault: true,
+    appliesTo:
+      "Assumes the automotive sector: every body in it is an automotive trade " +
+      "association, fair or trade title.",
+    navHrefs: ["/organisations"],
+    routePrefixes: ["/organisations"],
     cronPaths: [],
   },
   {

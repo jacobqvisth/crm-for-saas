@@ -1,0 +1,5579 @@
+{
+  "updated_at": "2026-09-04T06:33:04.016Z",
+  "results": {
+    "https://www.fordonsverkstader.se": {
+      "website": "https://www.fordonsverkstader.se",
+      "name": "Svenska Fordonsbranschen",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [
+        {
+          "email": "info@svenskafordonsbranschen.se",
+          "name": null,
+          "title": "jurist",
+          "source_url": "https://www.svenskafordonsbranschen.se/kontakt",
+          "domain": "svenskafordonsbranschen.se"
+        },
+        {
+          "email": "lars.bergmark@svenskafordonsbranschen.se",
+          "name": "Lars Bergmark",
+          "title": "verkställande direktör",
+          "source_url": "https://www.svenskafordonsbranschen.se/kontakt",
+          "domain": "svenskafordonsbranschen.se"
+        },
+        {
+          "email": "michael.bergvall@svenskafordonsbranschen.se",
+          "name": "Michael Bergvall",
+          "title": "verkställande direktör",
+          "source_url": "https://www.svenskafordonsbranschen.se/kontakt",
+          "domain": "svenskafordonsbranschen.se"
+        },
+        {
+          "email": "jonna.jansson@svenskafordonsbranschen.se",
+          "name": "Jonna Jansson",
+          "title": "jurist",
+          "source_url": "https://www.svenskafordonsbranschen.se/kontakt",
+          "domain": "svenskafordonsbranschen.se"
+        },
+        {
+          "email": "sandra.norman@svenskafordonsbranschen.se",
+          "name": "Sandra Norman",
+          "title": "jurist",
+          "source_url": "https://www.svenskafordonsbranschen.se/kontakt",
+          "domain": "svenskafordonsbranschen.se"
+        },
+        {
+          "email": "alexander.clomen@svenskafordonsbranschen.se",
+          "name": "Alexander Clomén",
+          "title": "jurist",
+          "source_url": "https://www.svenskafordonsbranschen.se/kontakt",
+          "domain": "svenskafordonsbranschen.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@svenskafordonsbranschen.se",
+        "lars.bergmark@svenskafordonsbranschen.se",
+        "michael.bergvall@svenskafordonsbranschen.se",
+        "jonna.jansson@svenskafordonsbranschen.se",
+        "sandra.norman@svenskafordonsbranschen.se",
+        "alexander.clomen@svenskafordonsbranschen.se"
+      ],
+      "phones": [
+        "0000-00-00",
+        "2026-08-19",
+        "2026-08-25 12",
+        "2026-08-28 12",
+        "2026-09-08"
+      ],
+      "crawled_at": "2026-09-04T06:31:27.333Z"
+    },
+    "https://mobilitysweden.se": {
+      "website": "https://mobilitysweden.se",
+      "name": "Mobility Sweden",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "invoice@mobilitysweden.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://mobilitysweden.se/kontakt",
+          "domain": "mobilitysweden.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@mobilitysweden.se",
+        "invoice@mobilitysweden.se"
+      ],
+      "phones": [
+        "26173\n100 41"
+      ],
+      "crawled_at": "2026-09-04T06:31:27.588Z"
+    },
+    "https://www.sbrservice.se": {
+      "website": "https://www.sbrservice.se",
+      "name": "Sveriges Bilåtervinnares Riksförbund",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "info@sbrservice.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://sbrservice.se/",
+          "domain": "sbrservice.se"
+        },
+        {
+          "email": "utbildning@sbrservice.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://sbrservice.se/",
+          "domain": "sbrservice.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@sbrservice.se",
+        "utbildning@sbrservice.se",
+        "andreas.frossberg@sbrservice.se",
+        "u00a0info@sbrservice.se"
+      ],
+      "phones": [
+        "08-55 768 200"
+      ],
+      "crawled_at": "2026-09-04T06:31:27.760Z"
+    },
+    "https://www.mrf.se": {
+      "website": "https://www.mrf.se",
+      "name": "Motorbranschens Riksförbund",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "mrf@mrf.se",
+          "name": null,
+          "title": "presskontakt",
+          "source_url": "https://www.mrf.se/opinion/pressreleaser/",
+          "domain": "mrf.se"
+        },
+        {
+          "email": "anders.ostberg@mrf.se",
+          "name": null,
+          "title": "presskontakt",
+          "source_url": "https://www.mrf.se/opinion/pressreleaser/",
+          "domain": "mrf.se"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "martin.persson@bilbolaget.nu",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilbolaget.nu"
+        },
+        {
+          "email": "mattias.gustafsson@soderbergsbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "soderbergsbil.se"
+        },
+        {
+          "email": "rickard.wiberg@lagerstedtsfamiljen.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "lagerstedtsfamiljen.se"
+        },
+        {
+          "email": "anna@notos.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "notos.se"
+        },
+        {
+          "email": "johan.edgren@engstromsbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "engstromsbil.se"
+        },
+        {
+          "email": "mrf.orebro@yahoo.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "yahoo.com"
+        },
+        {
+          "email": "urban@kungsbryggan.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "kungsbryggan.com"
+        },
+        {
+          "email": "claes.jerveland@vw.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "vw.se"
+        },
+        {
+          "email": "lars.arasviken@gmail.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "gmail.com"
+        },
+        {
+          "email": "joachim.lind@bilia.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilia.se"
+        },
+        {
+          "email": "tommy.kay@torvallabil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "torvallabil.se"
+        },
+        {
+          "email": "jan.loov@bilkompaniet.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilkompaniet.se"
+        },
+        {
+          "email": "johan.ahlberg@ahlbergbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "ahlbergbil.se"
+        },
+        {
+          "email": "anders.lindqvist@lindqvistbil.nu",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "lindqvistbil.nu"
+        },
+        {
+          "email": "jonas.kervenhed@vehobil.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "vehobil.se"
+        },
+        {
+          "email": "philip.rasteby@berners.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "berners.se"
+        },
+        {
+          "email": "peter.jonasson@bilgalleri.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilgalleri.se"
+        },
+        {
+          "email": "david.svanborg@toyotaorebro.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "toyotaorebro.se"
+        },
+        {
+          "email": "jimmy.bysell@werksta.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "werksta.se"
+        },
+        {
+          "email": "gunnar.berggren@bilbolaget.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilbolaget.com"
+        },
+        {
+          "email": "vd@minbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "minbil.se"
+        },
+        {
+          "email": "viktor@biljouren.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "biljouren.se"
+        },
+        {
+          "email": "michael@gottes.nu",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "gottes.nu"
+        },
+        {
+          "email": "tonny.johansson@irs-group.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "irs-group.se"
+        },
+        {
+          "email": "rasmus.selander@volvocarretail.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "volvocarretail.se"
+        },
+        {
+          "email": "rikard.sahlgren@werksta.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "werksta.se"
+        },
+        {
+          "email": "niclas.lidvall@karosslack.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "karosslack.se"
+        },
+        {
+          "email": "marko@kreivi.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "kreivi.se"
+        },
+        {
+          "email": "mans.ljungmark@svw.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "svw.se"
+        },
+        {
+          "email": "toni.suikka@dinbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "dinbil.se"
+        },
+        {
+          "email": "bjorn.larsson@mlkab.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "mlkab.com"
+        },
+        {
+          "email": "mailto:christian.careland@bilia.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilia.se"
+        },
+        {
+          "email": "magnus.enochsson@rebil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "rebil.se"
+        },
+        {
+          "email": "bengt-ove.hedborg@we2u.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "we2u.se"
+        },
+        {
+          "email": "fredrik.lundstrom@scania.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "scania.com"
+        },
+        {
+          "email": "anders.oleandersson@vehobil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "vehobil.se"
+        },
+        {
+          "email": "christina.eriksson@vhf.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "vhf.se"
+        },
+        {
+          "email": "erik.brandt@brandtlv.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "brandtlv.com"
+        },
+        {
+          "email": "joacim.jager@borjessonsbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "borjessonsbil.se"
+        },
+        {
+          "email": "janne.autocentrum@gmail.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "gmail.com"
+        },
+        {
+          "email": "hans.eden@vhf.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "vhf.se"
+        },
+        {
+          "email": "jonas.olsson@thunbergsbil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "thunbergsbil.se"
+        },
+        {
+          "email": "bobby.sandberg@vehobil.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "vehobil.se"
+        },
+        {
+          "email": "ulrika.munro-jack@bilcenter.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "bilcenter.com"
+        },
+        {
+          "email": "per.ring@werksta.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.mrf.se/om-mrf/styrelser/",
+          "domain": "werksta.se"
+        }
+      ],
+      "emails": [
+        "mrf@mrf.se",
+        "anders.ostberg@mrf.se"
+      ],
+      "phones": [
+        "08-701 63 00"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.115Z"
+    },
+    "https://www.transportforetagen.se": {
+      "website": "https://www.transportforetagen.se",
+      "name": "Transportföretagen",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "info@transportforetagen.se",
+          "name": null,
+          "title": "branschchef",
+          "source_url": "https://www.transportforetagen.se/om-oss/transportforetagen-flyg/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "jour@transportforetagen.se",
+          "name": null,
+          "title": "jurist",
+          "source_url": "https://www.transportforetagen.se/kontakt/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "medlem@transportforetagen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "varvning@transportforetagen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "seth.orbrink@transportforetagen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/kontakt/press/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "remiss@transportforetagen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/kontakt/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "minna.rahko@transportforetagen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/kontakt/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "fredrik.kampfe@transportforetagen.se",
+          "name": null,
+          "title": "branschchef",
+          "source_url": "https://www.transportforetagen.se/om-oss/transportforetagen-flyg/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "marten.bergman@transportforetagen.se",
+          "name": null,
+          "title": "branschchef",
+          "source_url": "https://www.transportforetagen.se/om-oss/transportforetagen-flyg/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "monika.przedpelska.ostrom@transportforetagen.se",
+          "name": null,
+          "title": "branschchef",
+          "source_url": "https://www.transportforetagen.se/om-oss/transportforetagen-hamn/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "john.wahlstedt@transportforetagen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/om-oss/transportforetagen-sjofart/",
+          "domain": "transportforetagen.se"
+        },
+        {
+          "email": "fredrik.holmberg@transportforetagen.se",
+          "name": "Fredrik Holmberg",
+          "title": null,
+          "source_url": "https://www.transportforetagen.se/om-oss/transportforetagen-sjofart/",
+          "domain": "transportforetagen.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@transportforetagen.se",
+        "u003einfo@transportforetagen.se",
+        "jour@transportforetagen.se",
+        "u003ejour@transportforetagen.se",
+        "medlem@transportforetagen.se",
+        "u003emedlem@transportforetagen.se",
+        "varvning@transportforetagen.se",
+        "u003evarvning@transportforetagen.se",
+        "seth.orbrink@transportforetagen.se",
+        "remiss@transportforetagen.se",
+        "u003eremiss@transportforetagen.se",
+        "minna.rahko@transportforetagen.se",
+        "u003eminna.rahko@transportforetagen.se",
+        "fredrik.kampfe@transportforetagen.se",
+        "marten.bergman@transportforetagen.se",
+        "monika.przedpelska.ostrom@transportforetagen.se",
+        "john.wahlstedt@transportforetagen.se",
+        "fredrik.holmberg@transportforetagen.se"
+      ],
+      "phones": [
+        "08-7627100",
+        "08-7627171",
+        "08-7627199",
+        "08 762 71 99"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.095Z"
+    },
+    "https://www.akeri.se": {
+      "website": "https://www.akeri.se",
+      "name": "Sveriges Åkeriföretag",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "medlemsservice@akeri.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.akeri.se/om-oss/kontakt",
+          "domain": "akeri.se"
+        },
+        {
+          "email": "juridik@akeri.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.akeri.se/om-oss/kontakt",
+          "domain": "akeri.se"
+        },
+        {
+          "email": "info@akeri.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.akeri.se/om-oss/kontakt",
+          "domain": "akeri.se"
+        },
+        {
+          "email": "charlotta.sved@akeri.se",
+          "name": "Charlotta Sved",
+          "title": "kommunikationschef",
+          "source_url": "https://www.akeri.se/om-oss/kontakt",
+          "domain": "akeri.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "medlemsservice@akeri.se",
+        "juridik@akeri.se",
+        "info@akeri.se",
+        "efaktura@akeri.se",
+        "charlotta.sved@akeri.se"
+      ],
+      "phones": [
+        "2026-09-03",
+        "2026-09-02",
+        "2026-08-28",
+        "2026-08-21",
+        "2026-08-18"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.330Z"
+    },
+    "https://www.me.se": {
+      "website": "https://www.me.se",
+      "name": "Maskinentreprenörerna",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "radgivning@me.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.me.se/",
+          "domain": "me.se"
+        },
+        {
+          "email": "infome@me.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.me.se/om-me/kontakta-oss/",
+          "domain": "me.se"
+        },
+        {
+          "email": "jorgen.eriksson@me.se",
+          "name": "Jörgen Eriksson",
+          "title": "presskontakt",
+          "source_url": "https://press.me.se/",
+          "domain": "me.se"
+        },
+        {
+          "email": "veronica.sandstrom@me.se",
+          "name": null,
+          "title": "kommunikationschef",
+          "source_url": "https://press.me.se/",
+          "domain": "me.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "radgivning@me.se",
+        "infome@me.se",
+        "jorgen.eriksson@me.se",
+        "veronica.sandstrom@me.se",
+        "faktura.me@me.se",
+        "faktura@me.se",
+        "faktura.skolan@me.se",
+        "faktura.inkop@me.se",
+        "faktura.tidningen@me.se",
+        "faktura.fastighets@me.se"
+      ],
+      "phones": [
+        "010-256 99 99"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.145Z"
+    },
+    "https://www.sfvf.se": {
+      "website": "https://www.sfvf.se",
+      "name": "SFVF Sveriges Fordonsverkstäders Förening",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:28.298Z"
+    },
+    "https://www.tff.se": {
+      "website": "https://www.tff.se",
+      "name": "Trafikförsäkringsföreningen",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:28.805Z"
+    },
+    "https://www.drf.se": {
+      "website": "https://www.drf.se",
+      "name": "Däckspecialisternas Riksförbund",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "info@drf.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/",
+          "domain": "drf.se"
+        },
+        {
+          "email": "jonas.roupe@drf.se",
+          "name": "Jonas Roup",
+          "title": "vice vd",
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "drf.se"
+        },
+        {
+          "email": "minna.laurell.thorslund@drf.se",
+          "name": "Minna Laurell",
+          "title": "vice vd",
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "drf.se"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "anna.ljungdell@aperire.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "aperire.se"
+        },
+        {
+          "email": "jacob.lamberg@kransensgummi.se",
+          "name": "Jacob Lamberg",
+          "title": "ordförande",
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "kransensgummi.se"
+        },
+        {
+          "email": "anna.brunell@citira.com",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "citira.com"
+        },
+        {
+          "email": "par.eriksson@taljedackservice.se",
+          "name": null,
+          "title": "ordförande",
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "taljedackservice.se"
+        },
+        {
+          "email": "fredrik.kellstrom@vianor.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "vianor.com"
+        },
+        {
+          "email": "magnus.adel@euromaster.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "euromaster.com"
+        },
+        {
+          "email": "johan.hagstrom@colmec.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "colmec.se"
+        },
+        {
+          "email": "lasse@pellesdack.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "pellesdack.se"
+        },
+        {
+          "email": "langespv@kransensgummi.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "kransensgummi.se"
+        },
+        {
+          "email": "fredrik.stromqvist@euromaster.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "euromaster.com"
+        },
+        {
+          "email": "hakan.svensson@vianor.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "vianor.se"
+        },
+        {
+          "email": "martin@dackteam.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.drf.se/om-drf/styrelse",
+          "domain": "dackteam.se"
+        }
+      ],
+      "emails": [
+        "info@drf.se",
+        "jonas.roupe@drf.se",
+        "minna.laurell.thorslund@drf.se"
+      ],
+      "phones": [
+        "08-506 010 50"
+      ],
+      "crawled_at": "2026-09-04T06:31:27.581Z"
+    },
+    "https://www.autobransjen.no": {
+      "website": "https://www.autobransjen.no",
+      "name": "Autobransjens Leverandørforening",
+      "country_code": "NO",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "post@autobransjen.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autobransjen.no/",
+          "domain": "autobransjen.no"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "post@autobransjen.no"
+      ],
+      "phones": [
+        "907 74 601"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.660Z"
+    },
+    "https://drivkraftnorge.no": {
+      "website": "https://drivkraftnorge.no",
+      "name": "Norsk Petroleumsinstitutt / Drivkraft Norge",
+      "country_code": "NO",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "31.08.2026",
+        "20.08.2026",
+        "03.07.2026",
+        "960 498 704"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.746Z"
+    },
+    "https://www.autobranchendanmark.dk": {
+      "website": "https://www.autobranchendanmark.dk",
+      "name": "Autobranchen Danmark",
+      "country_code": "DK",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "info@abdk.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://autobranchendanmark.dk/",
+          "domain": "abdk.dk"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "33314555",
+        "33251433"
+      ],
+      "crawled_at": "2026-09-04T06:31:29.358Z"
+    },
+    "https://www.nbf.no": {
+      "website": "https://www.nbf.no",
+      "name": "Norges Bilbransjeforbund",
+      "country_code": "NO",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [
+        {
+          "email": "finn.aurbakken@nbf.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "joachim.berge-bang@nbf.no",
+          "name": "Joachim Berge-Bang",
+          "title": null,
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "knut.martin.breivik@nbf.no",
+          "name": "Knut Martin",
+          "title": null,
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "amanda.einstabland@nbf.no",
+          "name": null,
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "hans.tore.hagland@nbf.no",
+          "name": "Hans Tore",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "aina.kallak@nbf.no",
+          "name": null,
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "ida.krag@nbf.no",
+          "name": "Ida Krag",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "erl@nbf.no",
+          "name": null,
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "tore.lillemork@nbf.no",
+          "name": "Tore Lillemork",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "mia.lindstad@nbf.no",
+          "name": null,
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "heidi.lund@nbf.no",
+          "name": null,
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "knut.ole.magistad@nbf.no",
+          "name": "Knut Ole",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "marina.marcussen@nbf.no",
+          "name": "Marina Marcussen",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "ingrid.medland@nbf.no",
+          "name": "Ingrid Medland",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "stig.morten.nilsen@nbf.no",
+          "name": "Stig Morten",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "tore.rylander@nbf.no",
+          "name": "Tore Rylander",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "egil.steinsland@nbf.no",
+          "name": "Egil Steinsland",
+          "title": "kommunikasjonssjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "kitty.storsveen@nbf.no",
+          "name": "Kitty Storsveen",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "vidar.strande@nbf.no",
+          "name": "Vidar Strande",
+          "title": "fagsjef",
+          "source_url": "https://www.nbf.no/kontakt-oss/alle-ansatte/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "medlem@nbf.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.nbf.no/om-oss/arbeidsomrader/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "marked@nbf.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.nbf.no/om-oss/arbeidsomrader/",
+          "domain": "nbf.no"
+        },
+        {
+          "email": "firmapost@nbf.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.nbf.no/kontakt-oss/",
+          "domain": "nbf.no"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "finn.aurbakken@nbf.no",
+        "joachim.berge-bang@nbf.no",
+        "knut.martin.breivik@nbf.no",
+        "amanda.einstabland@nbf.no",
+        "hans.tore.hagland@nbf.no",
+        "aina.kallak@nbf.no",
+        "ida.krag@nbf.no",
+        "erl@nbf.no",
+        "tore.lillemork@nbf.no",
+        "mia.lindstad@nbf.no",
+        "heidi.lund@nbf.no",
+        "knut.ole.magistad@nbf.no",
+        "marina.marcussen@nbf.no",
+        "ingrid.medland@nbf.no",
+        "stig.morten.nilsen@nbf.no",
+        "tore.rylander@nbf.no",
+        "egil.steinsland@nbf.no",
+        "kitty.storsveen@nbf.no",
+        "vidar.strande@nbf.no",
+        "medlem@nbf.no",
+        "marked@nbf.no",
+        "firmapost@nbf.no"
+      ],
+      "phones": [
+        "03.09.2026",
+        "01.09.2026",
+        "984 469 403",
+        "22 54 21 00"
+      ],
+      "crawled_at": "2026-09-04T06:31:29.103Z"
+    },
+    "https://mhrf.se": {
+      "website": "https://mhrf.se",
+      "name": "Motorhistoriska Riksförbundet",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "kansli@mhrf.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://mhrf.se/om-mhrf/kontakt/",
+          "domain": "mhrf.se"
+        },
+        {
+          "email": "forsakring@mhrf.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://mhrf.se/om-mhrf/kontakt/",
+          "domain": "mhrf.se"
+        },
+        {
+          "email": "intyg@mhrf.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://mhrf.se/om-mhrf/kontakt/",
+          "domain": "mhrf.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "kansli@mhrf.se",
+        "forsakring@mhrf.se",
+        "intyg@mhrf.se"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:29.248Z"
+    },
+    "https://www.bilimportorene.no": {
+      "website": "https://www.bilimportorene.no",
+      "name": "Bilimportørenes Landsforening",
+      "country_code": "NO",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [
+        {
+          "email": "firmapost@bilimportorene.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bilimportorene.no/",
+          "domain": "bilimportorene.no"
+        },
+        {
+          "email": "harald@bilimportorene.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bilimportorene.no/om-oss/kontakt",
+          "domain": "bilimportorene.no"
+        },
+        {
+          "email": "trond@bilimportorene.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bilimportorene.no/om-oss/kontakt",
+          "domain": "bilimportorene.no"
+        },
+        {
+          "email": "anne-kathrine@bilimportorene.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bilimportorene.no/om-oss/kontakt",
+          "domain": "bilimportorene.no"
+        },
+        {
+          "email": "iman@bilimportorene.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bilimportorene.no/om-oss/kontakt",
+          "domain": "bilimportorene.no"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "firmapost@bilimportorene.no",
+        "harald@bilimportorene.no",
+        "trond@bilimportorene.no",
+        "anne-kathrine@bilimportorene.no",
+        "iman@bilimportorene.no"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:28.910Z"
+    },
+    "https://www.akl.fi": {
+      "website": "https://www.akl.fi",
+      "name": "Autoalan Keskusliitto",
+      "country_code": "FI",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [
+        {
+          "email": "tero.lausala@akl.fi",
+          "name": "Tero Lausala",
+          "title": "toimitusjohtaja",
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "timo.niemi@akl.fi",
+          "name": "Timo Niemi",
+          "title": "toimitusjohtaja",
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "asta.hinds@akl.fi",
+          "name": "Asta Hinds",
+          "title": "toimitusjohtaja",
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "merja.hokkanen@akl.fi",
+          "name": "Merja Hokkanen",
+          "title": "toimitusjohtaja",
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "mikko.jarvinen@akl.fi",
+          "name": "Mikko Järvinen",
+          "title": "toimitusjohtaja",
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "piritta.mikola@akl.fi",
+          "name": "Piritta Mikola",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "ville.mirsch@akl.fi",
+          "name": "Ville Mirsch",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "harri.saastamoinen@akl.fi",
+          "name": "Harri Saastamoinen",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "jouko.sohlberg@akl.fi",
+          "name": "Jouko Sohlberg",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "heidi.thurman-heinonen@akl.fi",
+          "name": "Heidi Thurman-Heinonen",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "jari.ketola@akl.fi",
+          "name": "Jari Ketola",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "tabea.schmidt@akl.fi",
+          "name": "Tabea Schmidt",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "anna.kouhia@akl.fi",
+          "name": "Anna Kouhia",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "juha-matti.lamsa@akl.fi",
+          "name": "Juha-Matti Lämsä",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        },
+        {
+          "email": "topi.ilvesniemi@akl.fi",
+          "name": "Topi Ilvesniemi",
+          "title": null,
+          "source_url": "https://akl.fi/yhteystiedot/",
+          "domain": "akl.fi"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "tero.lausala@akl.fi",
+        "timo.niemi@akl.fi",
+        "asta.hinds@akl.fi",
+        "merja.hokkanen@akl.fi",
+        "mikko.jarvinen@akl.fi",
+        "piritta.mikola@akl.fi",
+        "ville.mirsch@akl.fi",
+        "harri.saastamoinen@akl.fi",
+        "jouko.sohlberg@akl.fi",
+        "heidi.thurman-heinonen@akl.fi",
+        "jari.ketola@akl.fi",
+        "tabea.schmidt@akl.fi",
+        "anna.kouhia@akl.fi",
+        "juha-matti.lamsa@akl.fi",
+        "topi.ilvesniemi@akl.fi"
+      ],
+      "phones": [
+        "12.08.2026",
+        "04.08.2026",
+        "28.05.2026",
+        "22.10.2026",
+        "26.10.2026"
+      ],
+      "crawled_at": "2026-09-04T06:31:30.255Z"
+    },
+    "https://www.bilimp.dk": {
+      "website": "https://www.bilimp.dk",
+      "name": "Mobility Denmark",
+      "country_code": "DK",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "info@mobility.dk",
+          "name": null,
+          "title": "administrerende direktør",
+          "source_url": "https://mobility.dk/presse/",
+          "domain": "mobility.dk"
+        },
+        {
+          "email": "mr@mobility.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://mobility.dk/kontakt/",
+          "domain": "mobility.dk"
+        },
+        {
+          "email": "jshn@mobility.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://mobility.dk/kontakt/",
+          "domain": "mobility.dk"
+        },
+        {
+          "email": "kbv@mobility.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://mobility.dk/kontakt/",
+          "domain": "mobility.dk"
+        },
+        {
+          "email": "asc@mobility.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://mobility.dk/kontakt/",
+          "domain": "mobility.dk"
+        },
+        {
+          "email": "oki@mobility.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://mobility.dk/kontakt/",
+          "domain": "mobility.dk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@mobility.dk",
+        "mr@mobility.dk",
+        "jshn@mobility.dk",
+        "kbv@mobility.dk",
+        "asc@mobility.dk",
+        "oki@mobility.dk"
+      ],
+      "phones": [
+        "01-09-2026",
+        "14-08-2026",
+        "11-08-2026",
+        "01-08-2026",
+        "+45 39 16 23 23"
+      ],
+      "crawled_at": "2026-09-04T06:31:31.078Z"
+    },
+    "https://www.autotuojat.fi": {
+      "website": "https://www.autotuojat.fi",
+      "name": "Autotuojat ja -teollisuus",
+      "country_code": "FI",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:30.342Z"
+    },
+    "https://www.bgs.is": {
+      "website": "https://www.bgs.is",
+      "name": "Bílgreinasambandið",
+      "country_code": "IS",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [
+        {
+          "email": "bgs@bgs.is",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bgs.is/",
+          "domain": "bgs.is"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "bgs@bgs.is"
+      ],
+      "phones": [
+        "25.08.2026",
+        "11.08.2026",
+        "01.07.2026",
+        "440181-0159"
+      ],
+      "crawled_at": "2026-09-04T06:31:30.660Z"
+    },
+    "https://autonhuolto.fi": {
+      "website": "https://autonhuolto.fi",
+      "name": "Suomen Varaosakaupan Keskusliitto",
+      "country_code": "FI",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "info@svok.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autonhuolto.fi/",
+          "domain": "svok.org"
+        }
+      ],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:30.670Z"
+    },
+    "https://www.kfzgewerbe.de": {
+      "website": "https://www.kfzgewerbe.de",
+      "name": "Zentralverband Deutsches Kraftfahrzeuggewerbe",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "politik@kfzgewerbe.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.kfzgewerbe.de/",
+          "domain": "kfzgewerbe.de"
+        },
+        {
+          "email": "verwaltung@kfzgewerbe.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.kfzgewerbe.de/",
+          "domain": "kfzgewerbe.de"
+        },
+        {
+          "email": "briante@kfzgewerbe.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.kfzgewerbe.de/",
+          "domain": "kfzgewerbe.de"
+        },
+        {
+          "email": "cremer@kfzgewerbe.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.kfzgewerbe.de/",
+          "domain": "kfzgewerbe.de"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "politik@kfzgewerbe.de",
+        "verwaltung@kfzgewerbe.de",
+        "briante@kfzgewerbe.de",
+        "cremer@kfzgewerbe.de"
+      ],
+      "phones": [
+        "16.07.2026",
+        "26.06.2026",
+        "13.05.2026",
+        "07.05.2026",
+        "06.05.2026"
+      ],
+      "crawled_at": "2026-09-04T06:31:31.494Z"
+    },
+    "https://www.kak.se": {
+      "website": "https://www.kak.se",
+      "name": "Kungliga Automobil Klubben",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "kontakt@kak.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://kak.se/om-kak/kontakt/",
+          "domain": "kak.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "kontakt@kak.se"
+      ],
+      "phones": [
+        "802000-2336",
+        "+46 8 678 00 55"
+      ],
+      "crawled_at": "2026-09-04T06:31:28.432Z"
+    },
+    "https://www.dat.de": {
+      "website": "https://www.dat.de",
+      "name": "Deutsche Automobil Treuhand",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "martin.endlein@dat.de",
+          "name": "Martin Endlein",
+          "title": "journalist",
+          "source_url": "https://www.dat.de/presse/dat-pressekontakte/",
+          "domain": "dat.de"
+        },
+        {
+          "email": "uta.heller@dat.de",
+          "name": "Uta Heller",
+          "title": "referent",
+          "source_url": "https://www.dat.de/presse/dat-pressekontakte/",
+          "domain": "dat.de"
+        },
+        {
+          "email": "bernd.reich@dat.de",
+          "name": "Bernd Reich",
+          "title": "referent",
+          "source_url": "https://www.dat.de/presse/dat-pressekontakte/",
+          "domain": "dat.de"
+        },
+        {
+          "email": "karin.bayha@dat.de",
+          "name": "Karin Bayha",
+          "title": "referent",
+          "source_url": "https://www.dat.de/presse/dat-pressekontakte/",
+          "domain": "dat.de"
+        },
+        {
+          "email": "zentrale@dat.de",
+          "name": null,
+          "title": "geschäftsführer",
+          "source_url": "https://www.dat.de/unternehmen/impressum/",
+          "domain": "dat.de"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "martin.endlein@dat.de",
+        "uta.heller@dat.de",
+        "bernd.reich@dat.de",
+        "karin.bayha@dat.de",
+        "zentrale@dat.de"
+      ],
+      "phones": [
+        "+49 711 4503-130",
+        "08.09.2026",
+        "12.09.2026",
+        "17.09.2026",
+        "20.09.2026"
+      ],
+      "crawled_at": "2026-09-04T06:31:32.280Z"
+    },
+    "https://www.autig.dk": {
+      "website": "https://www.autig.dk",
+      "name": "AutoBranchens Handels- og Industriforening",
+      "country_code": "DK",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "autig@autig.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://autig.dk/",
+          "domain": "autig.dk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "autig@autig.dk"
+      ],
+      "phones": [
+        "+45 35 250 550",
+        "53280013"
+      ],
+      "crawled_at": "2026-09-04T06:31:33.145Z"
+    },
+    "https://www.brv-bonn.de": {
+      "website": "https://www.brv-bonn.de",
+      "name": "Bundesverband Reifenhandel und Vulkaniseur-Handwerk",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:32.432Z"
+    },
+    "https://www.zkf.de": {
+      "website": "https://www.zkf.de",
+      "name": "Zentralverband Karosserie- und Fahrzeugtechnik",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "info@zkf.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.zkf.de/",
+          "domain": "zkf.de"
+        },
+        {
+          "email": "gundlach@zkf.de",
+          "name": null,
+          "title": "geschäftsführer",
+          "source_url": "https://www.zkf.de/ueber-uns/gewerbespezifische-informationstransferstellen",
+          "domain": "zkf.de"
+        },
+        {
+          "email": "zierau@zkf.de",
+          "name": null,
+          "title": "geschäftsführer",
+          "source_url": "https://www.zkf.de/ueber-uns/gewerbespezifische-informationstransferstellen",
+          "domain": "zkf.de"
+        },
+        {
+          "email": "conrad@zkf.de",
+          "name": null,
+          "title": "geschäftsführer",
+          "source_url": "https://www.zkf.de/ueber-uns/gewerbespezifische-informationstransferstellen",
+          "domain": "zkf.de"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@zkf.de",
+        "gundlach@zkf.de",
+        "zierau@zkf.de",
+        "conrad@zkf.de"
+      ],
+      "phones": [
+        "06031-79479",
+        "06031-79479-10"
+      ],
+      "crawled_at": "2026-09-04T06:31:32.585Z"
+    },
+    "https://www.adac.de": {
+      "website": "https://www.adac.de",
+      "name": "ADAC",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "ambulance@adac.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.adac.de/der-adac/ueber-uns-se/ambulanceservice/",
+          "domain": "adac.de"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "ambulance@adac.de",
+        "20ambulance@adac.de"
+      ],
+      "phones": [
+        "15.10.2026",
+        "28.08.2026",
+        "06.09.2026",
+        "04.09.2026",
+        "13.09.2026"
+      ],
+      "crawled_at": "2026-09-04T06:31:33.391Z"
+    },
+    "https://www.wko.at/fahrzeughandel": {
+      "website": "https://www.wko.at/fahrzeughandel",
+      "name": "Bundesgremium des Fahrzeughandels (WKO)",
+      "country_code": "AT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:32.901Z"
+    },
+    "https://www.oeamtc.at": {
+      "website": "https://www.oeamtc.at",
+      "name": "ÖAMTC",
+      "country_code": "AT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "31.05.2028",
+        "15.12.2026 13",
+        "25.12.2028 15"
+      ],
+      "crawled_at": "2026-09-04T06:31:33.089Z"
+    },
+    "https://www.vft.at": {
+      "website": "https://www.vft.at",
+      "name": "Verband der freien Kfz-Teile-Fachhändler",
+      "country_code": "AT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "office@vft.at",
+          "name": null,
+          "title": "jurist",
+          "source_url": "https://www.vft.at/impressum",
+          "domain": "vft.at"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "mbrachmann@siems-klein.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "siems-klein.at"
+        },
+        {
+          "email": "office@birner.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "birner.at"
+        },
+        {
+          "email": "stefan.damianik@sag-austria.at",
+          "name": "Stefan Damianik",
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "sag-austria.at"
+        },
+        {
+          "email": "roland.zacha@exmanco-steyr.at",
+          "name": "Roland Zacha",
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "exmanco-steyr.at"
+        },
+        {
+          "email": "ringseis@kfz-ringseis.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "kfz-ringseis.at"
+        },
+        {
+          "email": "carsten.albath@mahle.com",
+          "name": "Carsten Albath",
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "mahle.com"
+        },
+        {
+          "email": "walter.birner@ps-automotive.eu",
+          "name": "Walter Birner",
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "ps-automotive.eu"
+        },
+        {
+          "email": "office@e-mobilitätszentrum.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "e-mobilitätszentrum.com"
+        },
+        {
+          "email": "zentralverwaltung@neimcke.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "neimcke.de"
+        },
+        {
+          "email": "andreas.inzinger@texa.com",
+          "name": "Andreas Inzinger",
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "texa.com"
+        },
+        {
+          "email": "manuela.ponesch@auditia.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vft.at/verband/das-team",
+          "domain": "auditia.at"
+        }
+      ],
+      "emails": [
+        "office@vft.at"
+      ],
+      "phones": [
+        "+43 664 158 56 06"
+      ],
+      "crawled_at": "2026-09-04T06:31:33.930Z"
+    },
+    "https://www.vda.de": {
+      "website": "https://www.vda.de",
+      "name": "Verband der Automobilindustrie",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "cvd@vda.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vda.de/de/presse",
+          "domain": "vda.de"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "eva.siegfried@vda.de",
+        "nico.ellmann@vda.de",
+        "felicia.fullbrecht@vda.de",
+        "katharina.sophie.bellstedt@vda.de",
+        "kathi.malon@vda.de",
+        "gabriele.tkotz@vda.de",
+        "cvd@vda.de"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:31.744Z"
+    },
+    "https://www.gva.de": {
+      "website": "https://www.gva.de",
+      "name": "Gesamtverband Autoteile-Handel",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "info@gva.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.gva.de/",
+          "domain": "gva.de"
+        },
+        {
+          "email": "b.richers@gva.de",
+          "name": null,
+          "title": "referent",
+          "source_url": "https://www.gva.de/mediencenter/presse/",
+          "domain": "gva.de"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@gva.de",
+        "b.richers@gva.de"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:35.454Z"
+    },
+    "https://www.bovag.nl": {
+      "website": "https://www.bovag.nl",
+      "name": "BOVAG",
+      "country_code": "NL",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "vergaderen@bovag.nl",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bovag.nl/contact",
+          "domain": "bovag.nl"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "vergaderen@bovag.nl"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:31:34.013Z"
+    },
+    "https://www.anwb.nl": {
+      "website": "https://www.anwb.nl",
+      "name": "ANWB",
+      "done": true,
+      "reachable": false,
+      "status": "ERR:deadline https://www.anwb.nl",
+      "people": [],
+      "emails": [],
+      "phones": []
+    },
+    "https://www.tcs.ch": {
+      "website": "https://www.tcs.ch",
+      "name": "Touring Club Schweiz",
+      "country_code": "CH",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [
+        {
+          "email": "info@tcs.ch",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.tcs.ch/de/",
+          "domain": "tcs.ch"
+        },
+        {
+          "email": "info.training-events@tcs.ch",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.tcs.ch/de/",
+          "domain": "tcs.ch"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@tcs.ch",
+        "info.training-events@tcs.ch"
+      ],
+      "phones": [
+        "01.09.2026",
+        "27.08.2026",
+        "25.08.2026",
+        "24.08.2026",
+        "21.08.2026"
+      ],
+      "crawled_at": "2026-09-04T06:31:35.434Z"
+    },
+    "https://www.aftermarket.ch": {
+      "website": "https://www.aftermarket.ch",
+      "name": "Swiss Automotive Aftermarket",
+      "country_code": "CH",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "info@saa.swiss",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.saa.swiss/",
+          "domain": "saa.swiss"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@saa.swiss"
+      ],
+      "phones": [
+        "+41 (0) 44 350 68 60",
+        "+41 (0)44 350 68 60",
+        "+41 (0)44 361 19 91"
+      ],
+      "crawled_at": "2026-09-04T06:32:03.998Z"
+    },
+    "https://www.agvs-upsa.ch": {
+      "website": "https://www.agvs-upsa.ch",
+      "name": "Auto Gewerbe Verband Schweiz",
+      "country_code": "CH",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "02.09.2026",
+        "03.09.2026",
+        "01.09.2026",
+        "28.08.2026",
+        "27.08.2026"
+      ],
+      "crawled_at": "2026-09-04T06:32:02.605Z"
+    },
+    "https://www.traxio.be": {
+      "website": "https://www.traxio.be",
+      "name": "TRAXIO",
+      "country_code": "BE",
+      "done": true,
+      "reachable": false,
+      "status": "ERR:TimeoutError",
+      "pages_crawled": 0,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:02.607Z"
+    },
+    "https://www.febiac.be": {
+      "website": "https://www.febiac.be",
+      "name": "FEBIAC",
+      "country_code": "BE",
+      "done": true,
+      "reachable": false,
+      "status": "ERR:TimeoutError",
+      "pages_crawled": 0,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:02.607Z"
+    },
+    "https://www.fedamo.lu": {
+      "website": "https://www.fedamo.lu",
+      "name": "FEDAMO",
+      "country_code": "LU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "f.lentz@fda.lu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.fedamo.lu/",
+          "domain": "fda.lu"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "+352) 42 45 11",
+        "+352) 42 45 25"
+      ],
+      "crawled_at": "2026-09-04T06:32:03.520Z"
+    },
+    "https://www.feda.fr": {
+      "website": "https://www.feda.fr",
+      "name": "Fédération de la Distribution Automobile",
+      "country_code": "FR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "infos@feda.fr",
+          "name": null,
+          "title": "editor",
+          "source_url": "https://www.feda.fr/mentions-legales",
+          "domain": "feda.fr"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "infos@feda.fr"
+      ],
+      "phones": [
+        "01 45 00 39 71"
+      ],
+      "crawled_at": "2026-09-04T06:32:02.926Z"
+    },
+    "https://www.federauto.eu": {
+      "website": "https://www.federauto.eu",
+      "name": "Federauto",
+      "country_code": "IT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "26.09.2025",
+        "97112720582",
+        "86.325.149-397"
+      ],
+      "crawled_at": "2026-09-04T06:32:04.913Z"
+    },
+    "https://www.fna.fr": {
+      "website": "https://www.fna.fr",
+      "name": "Fédération Nationale de l'Automobile",
+      "country_code": "FR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "matthieu.loko-bille@fna.fr",
+          "name": null,
+          "title": null,
+          "source_url": "https://fna.fr/",
+          "domain": "fna.fr"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "matthieu.loko-bille@fna.fr"
+      ],
+      "phones": [
+        "01 40 11 12 96"
+      ],
+      "crawled_at": "2026-09-04T06:32:04.978Z"
+    },
+    "https://www.confartigianato.it": {
+      "website": "https://www.confartigianato.it",
+      "name": "Confartigianato Autoriparazione",
+      "country_code": "IT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "80429270582"
+      ],
+      "crawled_at": "2026-09-04T06:32:05.440Z"
+    },
+    "https://www.anfia.it": {
+      "website": "https://www.anfia.it",
+      "name": "ANFIA",
+      "country_code": "IT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "anfia@anfia.it",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.anfia.it/it/",
+          "domain": "anfia.it"
+        },
+        {
+          "email": "anfia.roma@anfia.it",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.anfia.it/it/",
+          "domain": "anfia.it"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "anfia@anfia.it",
+        "anfia.roma@anfia.it"
+      ],
+      "phones": [
+        "+39 011 55 46 511",
+        "+39 06 54 22 14 93",
+        "80084590019"
+      ],
+      "crawled_at": "2026-09-04T06:32:06.509Z"
+    },
+    "https://pfa-auto.fr": {
+      "website": "https://pfa-auto.fr",
+      "name": "Plateforme Automobile",
+      "country_code": "FR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "+33 1 49 52 51 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:06.162Z"
+    },
+    "https://www.mobilians.fr": {
+      "website": "https://www.mobilians.fr",
+      "name": "Mobilians",
+      "country_code": "FR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "info.lavage@mobilians.fr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mobilians.fr/metier/lavage-haute-pression/",
+          "domain": "mobilians.fr"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "mediateur@mediateur-mobilians.fr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.mobilians.fr/juridique-fiscal/mediation-des-litiges-avec-les-consommateurs/",
+          "domain": "mediateur-mobilians.fr"
+        }
+      ],
+      "emails": [
+        "info.lavage@mobilians.fr",
+        "ldeverdun@mobilians.fr"
+      ],
+      "phones": [
+        "80016\n92197",
+        "01 40 99 55 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:05.818Z"
+    },
+    "https://www.faconauto.com": {
+      "website": "https://www.faconauto.com",
+      "name": "Faconauto",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "comunicacion@faconauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.faconauto.com/",
+          "domain": "faconauto.com"
+        },
+        {
+          "email": "mja@faconauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.faconauto.com/",
+          "domain": "faconauto.com"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "alicia@eolocomunicacion.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.faconauto.com/",
+          "domain": "eolocomunicacion.com"
+        },
+        {
+          "email": "lucia@eolocomunicacion.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.faconauto.com/",
+          "domain": "eolocomunicacion.com"
+        }
+      ],
+      "emails": [
+        "comunicacion@faconauto.com",
+        "mja@faconauto.com",
+        "alfonso.bello@faconauto.com"
+      ],
+      "phones": [
+        "91 350 26 06",
+        "91 350 39 08",
+        "627 95 28 56",
+        "689 811 002"
+      ],
+      "crawled_at": "2026-09-04T06:32:07.055Z"
+    },
+    "https://www.aci.it": {
+      "website": "https://www.aci.it",
+      "name": "Automobile Club d'Italia",
+      "country_code": "IT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "00907501001",
+        "800.183.434"
+      ],
+      "crawled_at": "2026-09-04T06:32:07.885Z"
+    },
+    "https://www.anfac.com": {
+      "website": "https://www.anfac.com",
+      "name": "ANFAC",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "prensa@anfac.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://anfac.com/",
+          "domain": "anfac.com"
+        },
+        {
+          "email": "felix.garcia@anfac.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://anfac.com/",
+          "domain": "anfac.com"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "prensa@anfac.com",
+        "felix.garcia@anfac.com"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:08.418Z"
+    },
+    "https://www.sernauto.es": {
+      "website": "https://www.sernauto.es",
+      "name": "SERNAUTO",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "comunicacion@sernauto.es",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.sernauto.es/contacto",
+          "domain": "sernauto.es"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "comunicacion@sernauto.es",
+        "fernando.ramos@sernauto.es",
+        "sernauto@sernauto.es"
+      ],
+      "phones": [
+        "91 562 10 41"
+      ],
+      "crawled_at": "2026-09-04T06:32:09.467Z"
+    },
+    "https://www.acap.pt": {
+      "website": "https://www.acap.pt",
+      "name": "Associação do Comércio Automóvel de Portugal",
+      "country_code": "PT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "mail@acap.pt",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.acap.pt/pt/home",
+          "domain": "acap.pt"
+        },
+        {
+          "email": "porto@acap.pt",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.acap.pt/pt/home",
+          "domain": "acap.pt"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "mail@acap.pt",
+        "porto@acap.pt"
+      ],
+      "phones": [
+        "29\n1400-342",
+        "+351 213 035 300",
+        "+351 222 005 606"
+      ],
+      "crawled_at": "2026-09-04T06:32:09.971Z"
+    },
+    "https://www.ganvam.es": {
+      "website": "https://www.ganvam.es",
+      "name": "GANVAM",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "ganvam@ganvam.es",
+          "name": null,
+          "title": null,
+          "source_url": "https://ganvam.es/contacto/",
+          "domain": "ganvam.es"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "ganvam@pablop34.sg-host.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://ganvam.es/",
+          "domain": "sg-host.com"
+        }
+      ],
+      "emails": [
+        "ganvam@ganvam.es"
+      ],
+      "phones": [
+        "914113663",
+        "914113745",
+        "2026-2030",
+        "2025-2030",
+        "91 563 90 81"
+      ],
+      "crawled_at": "2026-09-04T06:32:10.153Z"
+    },
+    "https://www.anecra.pt": {
+      "website": "https://www.anecra.pt",
+      "name": "ANECRA",
+      "country_code": "PT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "16.04.2013"
+      ],
+      "crawled_at": "2026-09-04T06:32:10.157Z"
+    },
+    "https://www.nfda-uk.co.uk": {
+      "website": "https://www.nfda-uk.co.uk",
+      "name": "National Franchised Dealers Association",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "nfda@rmif.co.uk",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://nfda-uk.co.uk/contact-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "sue.robinson@rmif.co.uk",
+          "name": "Sue Robinson",
+          "title": "chief executive",
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "stephen.latham@rmif.co.uk",
+          "name": "Stephen Latham",
+          "title": "chief executive",
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "lena.patel@rmif.co.uk",
+          "name": "Lena Patel",
+          "title": "communications manager",
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "ryan.child@rmif.co.uk",
+          "name": "Ryan Child",
+          "title": "communications manager",
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "james.price@rmif.co.uk",
+          "name": "James Price",
+          "title": "communications manager",
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "anna.miskiewicz@rmif.co.uk",
+          "name": "Anna Miskiewicz",
+          "title": null,
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "ed.buckley@rmif.co.uk",
+          "name": "Ed Buckley",
+          "title": null,
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "david.hammersley@rmif.co.uk",
+          "name": "David Hammersley",
+          "title": null,
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "symon.cook@rmif.co.uk",
+          "name": "Symon Cook",
+          "title": null,
+          "source_url": "https://nfda-uk.co.uk/about-us/",
+          "domain": "co.uk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "nfda@rmif.co.uk",
+        "sue.robinson@rmif.co.uk",
+        "stephen.latham@rmif.co.uk",
+        "lena.patel@rmif.co.uk",
+        "ryan.child@rmif.co.uk",
+        "james.price@rmif.co.uk",
+        "anna.miskiewicz@rmif.co.uk",
+        "ed.buckley@rmif.co.uk",
+        "david.hammersley@rmif.co.uk",
+        "symon.cook@rmif.co.uk"
+      ],
+      "phones": [
+        "0207 307 3597"
+      ],
+      "crawled_at": "2026-09-04T06:32:10.444Z"
+    },
+    "https://aran.pt": {
+      "website": "https://aran.pt",
+      "name": "ARAN",
+      "country_code": "PT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "geral@aran.pt",
+          "name": null,
+          "title": null,
+          "source_url": "https://aran.pt/pt/",
+          "domain": "aran.pt"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "geral@aran.pt"
+      ],
+      "phones": [
+        "+351) 225 091 053",
+        "+351) 225 090 646"
+      ],
+      "crawled_at": "2026-09-04T06:32:12.150Z"
+    },
+    "https://www.rmif.co.uk": {
+      "website": "https://www.rmif.co.uk",
+      "name": "Retail Motor Industry Federation",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [
+        {
+          "email": "nmda@rmif.co.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.rmif.co.uk/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "enquiries@rmif.co.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.rmif.co.uk/",
+          "domain": "co.uk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "nmda@rmif.co.uk",
+        "enquiries@rmif.co.uk"
+      ],
+      "phones": [
+        "01788 538399",
+        "01788 538303",
+        "020 7580 9122",
+        "020 7307 3406",
+        "01788 538 399"
+      ],
+      "crawled_at": "2026-09-04T06:32:12.312Z"
+    },
+    "https://www.ancera.org": {
+      "website": "https://www.ancera.org",
+      "name": "ANCERA",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "ancera@ancera.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://ancera.org/",
+          "domain": "ancera.org"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "ancera@ancera.org"
+      ],
+      "phones": [
+        "91 564 23 86"
+      ],
+      "crawled_at": "2026-09-04T06:32:13.386Z"
+    },
+    "https://www.iaaf.co.uk": {
+      "website": "https://www.iaaf.co.uk",
+      "name": "Independent Automotive Aftermarket Federation",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "info@iaaf.co.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://iaaf.co.uk/contact-us/",
+          "domain": "co.uk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@iaaf.co.uk"
+      ],
+      "phones": [
+        "+44 (0)121 748 4600"
+      ],
+      "crawled_at": "2026-09-04T06:32:12.797Z"
+    },
+    "https://www.theimi.org.uk": {
+      "website": "https://www.theimi.org.uk",
+      "name": "Institute of the Motor Industry",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [
+        {
+          "email": "enquiries@theimi.org.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.theimi.org.uk/about-imi/contact-us",
+          "domain": "org.uk"
+        },
+        {
+          "email": "jackg@theimi.org.uk",
+          "name": null,
+          "title": "marketing manager",
+          "source_url": "https://www.theimi.org.uk/about-imi/contact-us",
+          "domain": "org.uk"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "imiteam@harrisonsadler.com",
+          "name": null,
+          "title": "marketing manager",
+          "source_url": "https://www.theimi.org.uk/about-imi/contact-us",
+          "domain": "harrisonsadler.com"
+        }
+      ],
+      "emails": [
+        "enquiries@theimi.org.uk",
+        "jackg@theimi.org.uk"
+      ],
+      "phones": [
+        "+44 (0)1992 511521"
+      ],
+      "crawled_at": "2026-09-04T06:32:14.100Z"
+    },
+    "https://www.smmt.co.uk": {
+      "website": "https://www.smmt.co.uk",
+      "name": "Society of Motor Manufacturers and Traders",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "info@smmt.co.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.smmt.co.uk/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "asmythe@smmt.co.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.smmt.co.uk/",
+          "domain": "co.uk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@smmt.co.uk",
+        "asmythe@smmt.co.uk"
+      ],
+      "phones": [
+        "238893808"
+      ],
+      "crawled_at": "2026-09-04T06:32:13.756Z"
+    },
+    "https://www.simi.ie": {
+      "website": "https://www.simi.ie",
+      "name": "Society of the Irish Motor Industry",
+      "country_code": "IE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "info@simi.ie",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.simi.ie/en",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "bcooke@simi.ie",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "tcullen@simi.ie",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "emitchell@simi.ie",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "tnoone@simi.ie",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "crogers@simi.ie",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "cwalsh@simi.ie",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "yvonne@simi.ie",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "seamus@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "josullivan@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "sforsyth@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "afox@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "standards@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "smulligan@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        },
+        {
+          "email": "mhannan@simi.ie",
+          "name": null,
+          "title": "training manager",
+          "source_url": "https://www.simi.ie/en/about-us",
+          "domain": "simi.ie"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@simi.ie",
+        "bcooke@simi.ie",
+        "tcullen@simi.ie",
+        "emitchell@simi.ie",
+        "tnoone@simi.ie",
+        "crogers@simi.ie",
+        "cwalsh@simi.ie",
+        "yvonne@simi.ie",
+        "seamus@simi.ie",
+        "josullivan@simi.ie",
+        "sforsyth@simi.ie",
+        "afox@simi.ie",
+        "standards@simi.ie",
+        "smulligan@simi.ie",
+        "mhannan@simi.ie"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:15.378Z"
+    },
+    "https://www.smta.co.uk": {
+      "website": "https://www.smta.co.uk",
+      "name": "Scottish Motor Trade Association",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [
+        {
+          "email": "alan.gall@smta.co.uk",
+          "name": "Alan Gall",
+          "title": "chief executive",
+          "source_url": "https://smta.co.uk/our-people/",
+          "domain": "co.uk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "alan.gall@smta.co.uk"
+      ],
+      "phones": [
+        "0131 331 5510"
+      ],
+      "crawled_at": "2026-09-04T06:32:15.641Z"
+    },
+    "https://sdcm.pl": {
+      "website": "https://sdcm.pl",
+      "name": "Stowarzyszenie Dystrybutorów i Producentów Części Motoryzacyjnych",
+      "country_code": "PL",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "agnieszka.dudek@sdcm.pl",
+          "name": "Agnieszka Dudek",
+          "title": "public affairs",
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        },
+        {
+          "email": "tomasz.beben@sdcm.pl",
+          "name": null,
+          "title": "public affairs",
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        },
+        {
+          "email": "magdalena.pytkowska@sdcm.pl",
+          "name": "Magdalena Pytkowska",
+          "title": "public affairs",
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        },
+        {
+          "email": "nadia.rybczynska@sdcm.pl",
+          "name": null,
+          "title": "public affairs",
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        },
+        {
+          "email": "jadwiga.umel@sdcm.pl",
+          "name": "Jadwiga Umel",
+          "title": "public affairs",
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        },
+        {
+          "email": "pawel.misierewicz@sdcm.pl",
+          "name": "Paweł Misierewicz",
+          "title": null,
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        },
+        {
+          "email": "biuro@sdcm.pl",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.sdcm.pl/kontakt/",
+          "domain": "sdcm.pl"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "agnieszka.dudek@sdcm.pl",
+        "tomasz.beben@sdcm.pl",
+        "magdalena.pytkowska@sdcm.pl",
+        "nadia.rybczynska@sdcm.pl",
+        "jadwiga.umel@sdcm.pl",
+        "pawel.misierewicz@sdcm.pl",
+        "biuro@sdcm.pl"
+      ],
+      "phones": [
+        "524-255-11-20",
+        "140248378",
+        "0000239091"
+      ],
+      "crawled_at": "2026-09-04T06:32:16.082Z"
+    },
+    "https://autosap.cz": {
+      "website": "https://autosap.cz",
+      "name": "Sdružení automobilového průmyslu",
+      "country_code": "CZ",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [
+        {
+          "email": "autosap@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/",
+          "domain": "autosap.cz"
+        },
+        {
+          "email": "petzl@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/kontakty/",
+          "domain": "autosap.cz"
+        },
+        {
+          "email": "sapesner@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/kontakty/",
+          "domain": "autosap.cz"
+        },
+        {
+          "email": "jungwirth@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/kontakty/",
+          "domain": "autosap.cz"
+        },
+        {
+          "email": "boggian@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/kontakty/",
+          "domain": "autosap.cz"
+        },
+        {
+          "email": "tkadlecova@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/kontakty/",
+          "domain": "autosap.cz"
+        },
+        {
+          "email": "bautzova@autosap.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://autosap.cz/kontakty/",
+          "domain": "autosap.cz"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "autosap@autosap.cz",
+        "petzl@autosap.cz",
+        "sapesner@autosap.cz",
+        "jungwirth@autosap.cz",
+        "boggian@autosap.cz",
+        "tkadlecova@autosap.cz",
+        "bautzova@autosap.cz"
+      ],
+      "phones": [
+        "+420 604\n242 574",
+        "17048826"
+      ],
+      "crawled_at": "2026-09-04T06:32:16.682Z"
+    },
+    "https://www.sacr.cz": {
+      "website": "https://www.sacr.cz",
+      "name": "Svaz prodejců a opravářů motorových vozidel ČR",
+      "country_code": "CZ",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "sacr@sacr.cz",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.sacr.cz/",
+          "domain": "sacr.cz"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "sacr@sacr.cz"
+      ],
+      "phones": [
+        "+420 481 313 674"
+      ],
+      "crawled_at": "2026-09-04T06:32:16.944Z"
+    },
+    "http://www.sisa.cz": {
+      "website": "http://www.sisa.cz",
+      "name": "Sdruzeni Importeru Soucasti Automobilu",
+      "country_code": "CZ",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "sisa@sisa.cz",
+          "name": null,
+          "title": null,
+          "source_url": "http://www.sisa.cz/cs/kontaktni-udaje",
+          "domain": "sisa.cz"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "sisa@sisa.cz"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:17.315Z"
+    },
+    "https://www.pzpm.org.pl": {
+      "website": "https://www.pzpm.org.pl",
+      "name": "Polski Związek Przemysłu Motoryzacyjnego",
+      "country_code": "PL",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "10.06.2025",
+        "24.06.2025",
+        "13-14.07.2023",
+        "09.05.2023",
+        "26.05.2023 70"
+      ],
+      "crawled_at": "2026-09-04T06:32:17.331Z"
+    },
+    "https://www.gemosz.hu": {
+      "website": "https://www.gemosz.hu",
+      "name": "GEMOSZ",
+      "country_code": "HU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "mindiguton@gemosz.hu",
+          "name": null,
+          "title": null,
+          "source_url": "https://gemosz.hu/",
+          "domain": "gemosz.hu"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "mindiguton@gemosz.hu"
+      ],
+      "phones": [
+        "2006-2025"
+      ],
+      "crawled_at": "2026-09-04T06:32:17.841Z"
+    },
+    "https://www.cpasr.eu": {
+      "website": "https://www.cpasr.eu",
+      "name": "Cech predajcov a autoservisov SR",
+      "country_code": "SK",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [
+        {
+          "email": "info@cpasr.eu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.cpasr.eu/",
+          "domain": "cpasr.eu"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@cpasr.eu",
+        "jkasparova@cpasr.eu"
+      ],
+      "phones": [
+        "+421 911 422 006",
+        "2022-2026",
+        "42053331"
+      ],
+      "crawled_at": "2026-09-04T06:32:18.228Z"
+    },
+    "https://www.odmd.org.tr": {
+      "website": "https://www.odmd.org.tr",
+      "name": "Otomotiv Distribütörleri ve Mobilite Derneği",
+      "country_code": "TR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:18.783Z"
+    },
+    "https://www.cecra.eu": {
+      "website": "https://www.cecra.eu",
+      "name": "CECRA",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "mail@cecra.eu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.cecra.eu/contact",
+          "domain": "cecra.eu"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "mail@cecra.eu"
+      ],
+      "phones": [
+        "01042026"
+      ],
+      "crawled_at": "2026-09-04T06:32:18.564Z"
+    },
+    "https://www.independentgarageassociation.co.uk": {
+      "website": "https://www.independentgarageassociation.co.uk",
+      "name": "Independent Garage Association",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "enquiries@rmif.co.uk",
+          "name": null,
+          "title": null,
+          "source_url": "https://independentgarageassociation.co.uk/",
+          "domain": "co.uk"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "enquiries@rmif.co.uk"
+      ],
+      "phones": [
+        "01788 225 908"
+      ],
+      "crawled_at": "2026-09-04T06:32:17.543Z"
+    },
+    "https://www.oss.org.tr": {
+      "website": "https://www.oss.org.tr",
+      "name": "Otomotiv Satış Sonrası Ürün ve Hizmetleri Derneği",
+      "country_code": "TR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "info@oss.org.tr",
+          "name": null,
+          "title": "başkan",
+          "source_url": "https://www.oss.org.tr/",
+          "domain": "org.tr"
+        },
+        {
+          "email": "orcun.istanbulluoglu@oss.org.tr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.oss.org.tr/tr/iletisim",
+          "domain": "org.tr"
+        },
+        {
+          "email": "aylin.kazancioglu@oss.org.tr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.oss.org.tr/tr/iletisim",
+          "domain": "org.tr"
+        },
+        {
+          "email": "osman.kafkas@oss.org.tr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.oss.org.tr/tr/iletisim",
+          "domain": "org.tr"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@oss.org.tr",
+        "orcun.istanbulluoglu@oss.org.tr",
+        "aylin.kazancioglu@oss.org.tr",
+        "yasemin.cankaya@oss.org.tr",
+        "osman.kafkas@oss.org.tr"
+      ],
+      "phones": [
+        "90 (216) 663 61 05",
+        "90 (216) 663 61 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:19.303Z"
+    },
+    "https://www.figiefa.eu": {
+      "website": "https://www.figiefa.eu",
+      "name": "FIGIEFA",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "figiefa.secretariat@figiefa.eu",
+          "name": "figiefa.secretariat at",
+          "title": null,
+          "source_url": "https://www.figiefa.eu/en/contact.html",
+          "domain": "figiefa.eu"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "info@rss.community",
+          "name": null,
+          "title": "chief executive",
+          "source_url": "https://www.figiefa.eu/en/2026/press-release-new-brussels-based-remote-service-supplier-community-launched.html",
+          "domain": "rss.community"
+        }
+      ],
+      "emails": [
+        "figiefa.secretariat@figiefa.eu"
+      ],
+      "phones": [
+        "+32 2761 95 10"
+      ],
+      "crawled_at": "2026-09-04T06:32:19.412Z"
+    },
+    "https://www.egea-association.eu": {
+      "website": "https://www.egea-association.eu",
+      "name": "European Garage and Test Equipment Association",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [
+        {
+          "email": "sg@egea-association.eu",
+          "name": null,
+          "title": "secretary general",
+          "source_url": "https://www.egea-association.eu/about-us-egea/",
+          "domain": "egea-association.eu"
+        },
+        {
+          "email": "secretariat@egea-association.eu",
+          "name": null,
+          "title": "secretary general",
+          "source_url": "https://www.egea-association.eu/about-us-egea/",
+          "domain": "egea-association.eu"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "secretariat@egea-association.eu",
+        "sg@egea-association.eu"
+      ],
+      "phones": [
+        "15-23\n1050",
+        "+32499390459"
+      ],
+      "crawled_at": "2026-09-04T06:32:19.824Z"
+    },
+    "https://www.afcar.eu": {
+      "website": "https://www.afcar.eu",
+      "name": "Alliance for the Freedom of Car Repair",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:20.245Z"
+    },
+    "https://www.cetraa.com": {
+      "website": "https://www.cetraa.com",
+      "name": "CETRAA",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "(34) 91 590 09 72",
+        "91 562 55 90"
+      ],
+      "crawled_at": "2026-09-04T06:32:20.848Z"
+    },
+    "https://www.acea.auto": {
+      "website": "https://www.acea.auto",
+      "name": "European Automobile Manufacturers Association",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "info@acea.auto",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.acea.auto/",
+          "domain": "acea.auto"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@acea.auto"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:21.297Z"
+    },
+    "https://www.aecdr.eu": {
+      "website": "https://www.aecdr.eu",
+      "name": "Alliance of European Car Dealers and Repairers",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [
+        {
+          "email": "stuermer@aecdr.eu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.aecdr.eu/contact/",
+          "domain": "aecdr.eu"
+        },
+        {
+          "email": "artusi@aecdr.eu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.aecdr.eu/contact/",
+          "domain": "aecdr.eu"
+        },
+        {
+          "email": "briante@aecdr.eu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.aecdr.eu/contact/",
+          "domain": "aecdr.eu"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "gerardo.perez@faconauto.com",
+          "name": "Gerardo Pérez",
+          "title": null,
+          "source_url": "https://www.aecdr.eu/contact/",
+          "domain": "faconauto.com"
+        },
+        {
+          "email": "peter.byrdal@volvoforhandlerforeningen.dk",
+          "name": "Peter Byrdal",
+          "title": null,
+          "source_url": "https://www.aecdr.eu/contact/",
+          "domain": "volvoforhandlerforeningen.dk"
+        },
+        {
+          "email": "peter.byrddirezione@autocentribalduina.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.aecdr.eu/contact/",
+          "domain": "autocentribalduina.com"
+        }
+      ],
+      "emails": [
+        "brusselsstuermer@aecdr.eu",
+        "perez@aecdr.eu",
+        "stuermer@aecdr.eu",
+        "byrdal@aecdr.eu",
+        "cappella@aecdr.eu",
+        "artusi@aecdr.eu",
+        "briante@aecdr.eu"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:22.315Z"
+    },
+    "https://www.adpa.eu": {
+      "website": "https://www.adpa.eu",
+      "name": "Automotive Data Publishers Association",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "secretariat@adpa.eu",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.adpa.eu/",
+          "domain": "adpa.eu"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "secretariat@adpa.eu"
+      ],
+      "phones": [
+        "17.05.2024",
+        "16.05.2024",
+        "15.05.2024",
+        "14.05.2024",
+        "31 07 2026"
+      ],
+      "crawled_at": "2026-09-04T06:32:22.569Z"
+    },
+    "https://www.etrto.org": {
+      "website": "https://www.etrto.org",
+      "name": "European Tyre and Rim Technical Organisation",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [
+        {
+          "email": "info@etrto.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.etrto.org/",
+          "domain": "etrto.org"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@etrto.org"
+      ],
+      "phones": [
+        "+32.2.344.40.59",
+        "0850.204.307"
+      ],
+      "crawled_at": "2026-09-04T06:32:23.167Z"
+    },
+    "https://www.etrma.org": {
+      "website": "https://www.etrma.org",
+      "name": "Tyres Europe (ETRMA)",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [
+        {
+          "email": "info@tyreseurope.org",
+          "name": null,
+          "title": "secretary general",
+          "source_url": "https://tyreseurope.org/contact/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "a.mccarthy@tyreseurope.org",
+          "name": null,
+          "title": "secretary general",
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "m.conti@tyreseurope.org",
+          "name": null,
+          "title": "public affairs",
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "s.mathioudaki@tyreseurope.org",
+          "name": null,
+          "title": "public affairs",
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "f.gashi@tyreseurope.org",
+          "name": null,
+          "title": "public affairs",
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "v.sarno@tyreseurope.org",
+          "name": null,
+          "title": "public affairs",
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "a.vangelderen@tyreseurope.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "f.guidi@tyreseurope.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "a.verde@tyreseurope.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://tyreseurope.org/our-team/",
+          "domain": "tyreseurope.org"
+        },
+        {
+          "email": "communications@tyreseurope.org",
+          "name": null,
+          "title": "secretary general",
+          "source_url": "https://tyreseurope.org/contact/",
+          "domain": "tyreseurope.org"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "info@tyreseurope.org",
+        "a.mccarthy@tyreseurope.org",
+        "m.conti@tyreseurope.org",
+        "s.mathioudaki@tyreseurope.org",
+        "f.gashi@tyreseurope.org",
+        "v.sarno@tyreseurope.org",
+        "a.vangelderen@tyreseurope.org",
+        "f.guidi@tyreseurope.org",
+        "a.verde@tyreseurope.org",
+        "communications@tyreseurope.org",
+        "40info@tyreseurope.org"
+      ],
+      "phones": [
+        "+32 2 218 49 40"
+      ],
+      "crawled_at": "2026-09-04T06:32:23.873Z"
+    },
+    "https://clepa.eu": {
+      "website": "https://clepa.eu",
+      "name": "European Association of Automotive Suppliers",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:21.675Z"
+    },
+    "https://www.fiaregion1.com": {
+      "website": "https://www.fiaregion1.com",
+      "name": "Fédération Internationale de l'Automobile Region I",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "dpinto@fia.com",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "gsimcic@fia.com",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "jbeckmann@fia.com",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "lirakiza@fia.com",
+          "name": null,
+          "title": "director general",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "eferreira@fia.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "gmiotto@fia.com",
+          "name": null,
+          "title": "policy officer",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "sgoya@fia.com",
+          "name": null,
+          "title": "policy officer",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "igauduchon@fia.com",
+          "name": null,
+          "title": "policy officer",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "emagg@fia.com",
+          "name": null,
+          "title": "policy officer",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        },
+        {
+          "email": "rbtamanara@fia.com",
+          "name": null,
+          "title": "policy officer",
+          "source_url": "https://www.fiaregion1.com/about-us/contact-region-1/",
+          "domain": "fia.com"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "+32 2 280 07 58"
+      ],
+      "crawled_at": "2026-09-04T06:32:24.477Z"
+    },
+    "https://citainsp.org": {
+      "website": "https://citainsp.org",
+      "name": "CITA International Motor Vehicle Inspection Committee",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "jann.fehlauer@dekra.com",
+          "name": null,
+          "title": "chair",
+          "source_url": "https://citainsp.org/board-staff/",
+          "domain": "dekra.com"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "2026-09-03"
+      ],
+      "crawled_at": "2026-09-04T06:32:24.051Z"
+    },
+    "https://fiva.org": {
+      "website": "https://fiva.org",
+      "name": "Fédération Internationale des Véhicules Anciens",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "secretary@fiva.org",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.fiva.org/en",
+          "domain": "fiva.org"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "secretary@fiva.org"
+      ],
+      "phones": [
+        "+39-391 7259962"
+      ],
+      "crawled_at": "2026-09-04T06:32:25.433Z"
+    },
+    "https://www.leaseurope.org": {
+      "website": "https://www.leaseurope.org",
+      "name": "Leaseurope",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "03.09.2026",
+        "19.08.2026",
+        "+32 2 778 05 60"
+      ],
+      "crawled_at": "2026-09-04T06:32:24.674Z"
+    },
+    "https://motorbranschen.mrf.se": {
+      "website": "https://motorbranschen.mrf.se",
+      "name": "Motorbranschen",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 5,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "redaktionen@motorbranschen.se",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://motorbranschen.mrf.se/om-oss/var-vision/",
+          "domain": "motorbranschen.se"
+        },
+        {
+          "email": "nella@motorbranschen.se",
+          "name": null,
+          "title": "redaktör",
+          "source_url": "https://motorbranschen.mrf.se/om-oss/kontakt/",
+          "domain": "motorbranschen.se"
+        },
+        {
+          "email": "annika@motorbranschen.se",
+          "name": null,
+          "title": "redaktör",
+          "source_url": "https://motorbranschen.mrf.se/om-oss/kontakt/",
+          "domain": "motorbranschen.se"
+        },
+        {
+          "email": "matteo@adviser.se",
+          "name": null,
+          "title": "redaktör",
+          "source_url": "https://motorbranschen.mrf.se/om-oss/kontakt/",
+          "domain": "adviser.se"
+        },
+        {
+          "email": "marknad@motorbranschen.se",
+          "name": null,
+          "title": "redaktör",
+          "source_url": "https://motorbranschen.mrf.se/om-oss/kontakt/",
+          "domain": "motorbranschen.se"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "2026-09-03",
+        "2026-09-01",
+        "2026-08-31",
+        "2026-08-28",
+        "2026-08-27"
+      ],
+      "crawled_at": "2026-09-04T06:32:25.565Z"
+    },
+    "https://www.automassan.se": {
+      "website": "https://www.automassan.se",
+      "name": "Automässan",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "+46 (0)31-708 80 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:26.005Z"
+    },
+    "https://www.svenskamassan.se": {
+      "website": "https://www.svenskamassan.se",
+      "name": "Svenska Mässan",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "tickets@svenskamassan.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://svenskamassan.se/",
+          "domain": "svenskamassan.se"
+        },
+        {
+          "email": "jonas.ogvall@svenskamassan.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://svenskamassan.se/",
+          "domain": "svenskamassan.se"
+        },
+        {
+          "email": "farhad.kakavand@svenskamassan.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://svenskamassan.se/",
+          "domain": "svenskamassan.se"
+        },
+        {
+          "email": "ekonomiextern@svenskamassan.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://svenskamassan.se/",
+          "domain": "svenskamassan.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "tickets@svenskamassan.se",
+        "jonas.ogvall@svenskamassan.se",
+        "farhad.kakavand@svenskamassan.se",
+        "ekonomiextern@svenskamassan.se"
+      ],
+      "phones": [
+        "031-708 80 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:26.372Z"
+    },
+    "https://nordiskemediehus.dk": {
+      "website": "https://nordiskemediehus.dk",
+      "name": "Nordiske Mediehus",
+      "country_code": "DK",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "info@nordiskemedier.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://nordiskemediehus.dk/",
+          "domain": "nordiskemedier.dk"
+        },
+        {
+          "email": "abonnement@nordiskemedier.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://nordiskemediehus.dk/kontakt/",
+          "domain": "nordiskemedier.dk"
+        },
+        {
+          "email": "medlemskab@nordiskemedier.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://nordiskemediehus.dk/kontakt/",
+          "domain": "nordiskemedier.dk"
+        },
+        {
+          "email": "salg@nordiskemedier.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://nordiskemediehus.dk/kontakt/",
+          "domain": "nordiskemedier.dk"
+        },
+        {
+          "email": "abonnement@nordiskemedier.no",
+          "name": null,
+          "title": null,
+          "source_url": "https://nordiskemediehus.dk/kontakt/",
+          "domain": "nordiskemedier.no"
+        },
+        {
+          "email": "persondata@nordiskemedier.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://nordiskemediehus.dk/kontakt/handelsbetingelser-og-privatlivspolitik/",
+          "domain": "nordiskemedier.dk"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "+45 72 28 69 70",
+        "10150825"
+      ],
+      "crawled_at": "2026-09-04T06:32:27.038Z"
+    },
+    "https://www.elmia.se/lastbil/": {
+      "website": "https://www.elmia.se/lastbil/",
+      "name": "Elmia Lastbil",
+      "country_code": "SE",
+      "done": true,
+      "reachable": false,
+      "status": "403",
+      "pages_crawled": 0,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:26.806Z"
+    },
+    "https://www.motormagasinet.se": {
+      "website": "https://www.motormagasinet.se",
+      "name": "MotorMagasinet",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "redaktionen@motormagasinet.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.motormagasinet.se/",
+          "domain": "motormagasinet.se"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "oscar.lernstad@nordiskemedier.se",
+          "name": "Oscar Lernstad",
+          "title": null,
+          "source_url": "https://www.motormagasinet.se/article/view/1244056/polestar_okar_forsaljningen_men_usasmallen_pressar_resultatet",
+          "domain": "nordiskemedier.se"
+        },
+        {
+          "email": "marcus.nyberg@nordiskemedier.se",
+          "name": "Marcus Nyberg",
+          "title": null,
+          "source_url": "https://www.motormagasinet.se/article/view/1226285/kommentarnar_bilia_vaxer_med_kia_pressas_resten_av_marknaden",
+          "domain": "nordiskemedier.se"
+        }
+      ],
+      "emails": [
+        "redaktionen@motormagasinet.se"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:26.694Z"
+    },
+    "https://www.bilprovningen.se": {
+      "website": "https://www.bilprovningen.se",
+      "name": "Bilprovningen",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [
+        {
+          "email": "cecilia.blom.hesselgren@bilprovningen.se",
+          "name": null,
+          "title": "kommunikationschef",
+          "source_url": "https://www.bilprovningen.se/press-och-media",
+          "domain": "bilprovningen.se"
+        },
+        {
+          "email": "press@bilprovningen.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.bilprovningen.se/press-och-media",
+          "domain": "bilprovningen.se"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "cecilia.blom.hesselgren@bilprovningen.se",
+        "press@bilprovningen.se"
+      ],
+      "phones": [
+        "0771-600 600"
+      ],
+      "crawled_at": "2026-09-04T06:32:27.373Z"
+    },
+    "https://www.motordagen.se": {
+      "website": "https://www.motordagen.se",
+      "name": "Motordagen Live",
+      "country_code": "SE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "info@igelforsregna.se",
+          "name": null,
+          "title": null,
+          "source_url": "https://motordagen.se/kontakt/",
+          "domain": "igelforsregna.se"
+        }
+      ],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:27.056Z"
+    },
+    "https://www.messefrankfurt.com": {
+      "website": "https://www.messefrankfurt.com",
+      "name": "Messe Frankfurt",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "saleslocations@messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/location/contact-organisers.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "mpm@messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/services/media-package-manager.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "press@messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "markus.quint@messefrankfurt.com",
+          "name": "Markus Quint",
+          "title": "journalist",
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press/press-releases/2026/financial-year-2025.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "dominique.ewert@messefrankfurt.com",
+          "name": "Dominique Ewert",
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "erdmann.kilian@messefrankfurt.com",
+          "name": "Erdmann Kilian",
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "ann-katrin.klusak@messefrankfurt.com",
+          "name": "Ann-Katrin Klusak",
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "ivonne.seifert@messefrankfurt.com",
+          "name": "Ivonne Seifert",
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "walker.erwin@usa.messefrankfurt.com",
+          "name": "Walker Erwin",
+          "title": null,
+          "source_url": "https://www.messefrankfurt.com/frankfurt/en/press/press-releases/2026/messe-frankfurt-and-supima-introduce-prefab.html",
+          "domain": "messefrankfurt.com"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "saleslocations@messefrankfurt.com",
+        "mpm@messefrankfurt.com",
+        "press@messefrankfurt.com",
+        "markus.quint@messefrankfurt.com",
+        "dominique.ewert@messefrankfurt.com",
+        "erdmann.kilian@messefrankfurt.com",
+        "ann-katrin.klusak@messefrankfurt.com",
+        "ivonne.seifert@messefrankfurt.com",
+        "walker.erwin@usa.messefrankfurt.com"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:27.731Z"
+    },
+    "https://automechanika.messefrankfurt.com": {
+      "website": "https://automechanika.messefrankfurt.com",
+      "name": "Automechanika Frankfurt",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "mediapackage.automechanika@messefrankfurt.com",
+          "name": "Media Package",
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/exhibitor-services/media-package-manager.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "press.automechanika@messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "ann-katrin.klusak@messefrankfurt.com",
+          "name": "Ann-Katrin Klusak",
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "claudia.cermak@messefrankfurt.com",
+          "name": "Claudia Cermak",
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "marlene.doering@messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "lena.bruns@messefrankfurt.com",
+          "name": "Lena Bruns",
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "lisa.ludwig@messefrankfurt.com",
+          "name": "Lisa Ludwig",
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "sarah.gutermann@messefrankfurt.com",
+          "name": "Sarah Gutermann",
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "anja.koerner@messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/press.html",
+          "domain": "messefrankfurt.com"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "automechanika@mpmcontent-messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika.messefrankfurt.com/frankfurt/en/exhibitor-services/media-package-manager.html",
+          "domain": "mpmcontent-messefrankfurt.com"
+        }
+      ],
+      "emails": [
+        "mediapackage.automechanika@messefrankfurt.com",
+        "press.automechanika@messefrankfurt.com",
+        "ann-katrin.klusak@messefrankfurt.com",
+        "claudia.cermak@messefrankfurt.com",
+        "marlene.doering@messefrankfurt.com",
+        "lena.bruns@messefrankfurt.com",
+        "lisa.ludwig@messefrankfurt.com",
+        "sarah.gutermann@messefrankfurt.com",
+        "anja.koerner@messefrankfurt.com"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:27.680Z"
+    },
+    "https://www.iaa-mobility.com": {
+      "website": "https://www.iaa-mobility.com",
+      "name": "IAA Mobility",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:27.894Z"
+    },
+    "https://www.thetirecologne.de": {
+      "website": "https://www.thetirecologne.de",
+      "name": "The Tire Cologne",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "tirecologne@visitor.koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "services@exhibitor.koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "i.riedeberger@koelnmesse.de",
+          "name": null,
+          "title": "sales manager",
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "m.stoehr@koelnmesse.de",
+          "name": null,
+          "title": "sales manager",
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "p.truong@koelnmesse.de",
+          "name": null,
+          "title": "sales manager",
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "c.eschweiler@koelnmesse.de",
+          "name": null,
+          "title": "sales manager",
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "l.stickan@koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "logistik@koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "acceptance@koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "m.majerus@koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "a.grafe@koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.thetire-cologne.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "accreditation@press.koelnmesse.de",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.thetire-cologne.de/presse/teilnahme-fuer-medienvertreter/akkreditierung-fuer-journalisten/",
+          "domain": "koelnmesse.de"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "30.05 01.06.2028",
+        "01.06.2028"
+      ],
+      "crawled_at": "2026-09-04T06:32:28.398Z"
+    },
+    "https://www.koelnmesse.de": {
+      "website": "https://www.koelnmesse.de",
+      "name": "Koelnmesse",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "services@exhibitor.koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.koelnmesse.de/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "info@koelnmesse.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.koelnmesse.de/kontakt/",
+          "domain": "koelnmesse.de"
+        },
+        {
+          "email": "accreditation@press.koelnmesse.de",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.koelnmesse.de/press-office/fuer-medienvertreter/akkreditierung-und-medien-service/",
+          "domain": "koelnmesse.de"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "vanessa.grom@hellofootage.com",
+          "name": "Vanessa Grom",
+          "title": null,
+          "source_url": "https://www.koelnmesse.de/press-office/fuer-medienvertreter/journalistenservice/",
+          "domain": "hellofootage.com"
+        },
+        {
+          "email": "h.schoenfelder@dhd-news.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.koelnmesse.de/press-office/fuer-medienvertreter/journalistenservice/",
+          "domain": "dhd-news.de"
+        }
+      ],
+      "emails": [
+        "services@exhibitor.koelnmesse.de",
+        "info@koelnmesse.de",
+        "accreditation@press.koelnmesse.de"
+      ],
+      "phones": [
+        "10.09.2026",
+        "17.09.2026",
+        "24.09.2026",
+        "15.10.2026",
+        "30.10.2026"
+      ],
+      "crawled_at": "2026-09-04T06:32:29.160Z"
+    },
+    "https://www.kfz-betrieb.vogel.de": {
+      "website": "https://www.kfz-betrieb.vogel.de",
+      "name": "kfz-betrieb",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "info@vogel.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vogel.de/ueber-uns/unternehmensgruppe/",
+          "domain": "vogel.de"
+        },
+        {
+          "email": "personal@vogel.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vogel.de/ueber-uns/unternehmensgruppe/",
+          "domain": "vogel.de"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "info@win-verlag.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vogel.de/ueber-uns/unternehmensgruppe/",
+          "domain": "win-verlag.de"
+        },
+        {
+          "email": "info@wiadok.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.vogel.de/ueber-uns/unternehmensgruppe/",
+          "domain": "wiadok.de"
+        }
+      ],
+      "emails": [
+        "info@vogel.de",
+        "personal@vogel.de"
+      ],
+      "phones": [
+        "08.12.2025",
+        "09.10.2026",
+        "12.10.2026",
+        "18.11.2026",
+        "02.02.2027"
+      ],
+      "crawled_at": "2026-09-04T06:32:29.275Z"
+    },
+    "https://www.autohaus.de": {
+      "website": "https://www.autohaus.de",
+      "name": "AUTOHAUS",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "04.09.2026",
+        "03.09.2026",
+        "25.08.2025",
+        "28.08.2026",
+        "27.07.2026"
+      ],
+      "crawled_at": "2026-09-04T06:32:29.745Z"
+    },
+    "https://www.amz.de": {
+      "website": "https://www.amz.de",
+      "name": "amz Auto Motor Zubehör",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "juergen.doelling@schluetersche.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://amz.de/media-rates",
+          "domain": "schluetersche.de"
+        },
+        {
+          "email": "info@schluetersche.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://amz.de/impressum",
+          "domain": "schluetersche.de"
+        },
+        {
+          "email": "lizenzen@schluetersche.de",
+          "name": null,
+          "title": null,
+          "source_url": "https://amz.de/impressum",
+          "domain": "schluetersche.de"
+        }
+      ],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:29.470Z"
+    },
+    "https://www.autopromotec.com": {
+      "website": "https://www.autopromotec.com",
+      "name": "Autopromotec",
+      "country_code": "IT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "info@autopromotec.it",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autopromotec.com/it/index.php",
+          "domain": "autopromotec.it"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "051 6424000",
+        "00536491202"
+      ],
+      "crawled_at": "2026-09-04T06:32:30.283Z"
+    },
+    "https://www.mecspe.com": {
+      "website": "https://www.mecspe.com",
+      "name": "MECSPE",
+      "country_code": "IT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "+39 02 332039470"
+      ],
+      "crawled_at": "2026-09-04T06:32:30.029Z"
+    },
+    "https://www.iaa-transportation.com": {
+      "website": "https://www.iaa-transportation.com",
+      "name": "IAA Transportation",
+      "country_code": "DE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:28.384Z"
+    },
+    "https://www.journalauto.com": {
+      "website": "https://www.journalauto.com",
+      "name": "Le Journal de l'Automobile",
+      "country_code": "FR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 7,
+      "people": [
+        {
+          "email": "pub@journalauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://journalauto.com/",
+          "domain": "journalauto.com"
+        },
+        {
+          "email": "redaction@journalauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://journalauto.com/",
+          "domain": "journalauto.com"
+        },
+        {
+          "email": "abo@journalauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://journalauto.com/",
+          "domain": "journalauto.com"
+        },
+        {
+          "email": "sandra.huet@journalauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://journalauto.com/",
+          "domain": "journalauto.com"
+        },
+        {
+          "email": "contact@journalauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://journalauto.com/",
+          "domain": "journalauto.com"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "pub@journalauto.com",
+        "redaction@journalauto.com",
+        "abo@journalauto.com",
+        "sandra.huet@journalauto.com",
+        "contact@journalauto.com"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:30.451Z"
+    },
+    "https://www.ifema.es/motortec": {
+      "website": "https://www.ifema.es/motortec",
+      "name": "Motortec Madrid",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 2,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:30.499Z"
+    },
+    "https://www.ifema.es": {
+      "website": "https://www.ifema.es",
+      "name": "IFEMA Madrid",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:30.767Z"
+    },
+    "https://www.equipauto.com": {
+      "website": "https://www.equipauto.com",
+      "name": "Equip Auto",
+      "country_code": "FR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 8,
+      "people": [
+        {
+          "email": "victor.spahn@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "sebastien.guenee@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "orchiday.ngowhani@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "francine.brossard@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "aurelie.jouve@equipauto.com",
+          "name": "Aurélie Jouve",
+          "title": "président",
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "bianca.dutertre@equipauto.com",
+          "name": null,
+          "title": "responsable communication",
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "amelie.huvelin@equipauto.com",
+          "name": null,
+          "title": "responsable communication",
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "celia.etienne@equipauto.com",
+          "name": null,
+          "title": "responsable communication",
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "ekaterina.svetlakova@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "juliette.maffeis@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "lou.marion@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        },
+        {
+          "email": "technique@equipauto.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "equipauto.com"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "contact@the-extra-mile.fr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.equipauto.com/",
+          "domain": "the-extra-mile.fr"
+        },
+        {
+          "email": "algeria@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "apilkauskaite@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "kjambou@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "louislu@promosalons-china.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons-china.com"
+        },
+        {
+          "email": "sekim@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "fgattini@promosalons.es",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.es"
+        },
+        {
+          "email": "naggarwal@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "dfioravanti@salonifrancesi.it",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "salonifrancesi.it"
+        },
+        {
+          "email": "cbennis@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "pstiemer@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "abereda@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "tslizkova@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "kmartel@promosalons.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "promosalons.com"
+        },
+        {
+          "email": "panya.chen@udngroup.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "udngroup.com"
+        },
+        {
+          "email": "nathalie.zribi@ccitf.tn",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "ccitf.tn"
+        },
+        {
+          "email": "onur@promosalons.com.tr",
+          "name": null,
+          "title": "président",
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "com.tr"
+        },
+        {
+          "email": "bquynh.nguyendac@ccifv.org",
+          "name": null,
+          "title": "président",
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "ccifv.org"
+        },
+        {
+          "email": "nicolas.mougin@comexposium.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://paris.equipauto.com/contact-exposants/",
+          "domain": "comexposium.com"
+        },
+        {
+          "email": "equipauto@yucatan.fr",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.equipauto.com/fr/communiques-de-presse/equip-auto-lyon-2023-pari-reussi",
+          "domain": "yucatan.fr"
+        }
+      ],
+      "emails": [
+        "victor.spahn@equipauto.com",
+        "sebastien.guenee@equipauto.com",
+        "orchiday.ngowhani@equipauto.com",
+        "francine.brossard@equipauto.com",
+        "aurelie.jouve@equipauto.com",
+        "bianca.dutertre@equipauto.com",
+        "amelie.huvelin@equipauto.com",
+        "celia.etienne@equipauto.com",
+        "ekaterina.svetlakova@equipauto.com",
+        "juliette.maffeis@equipauto.com",
+        "lou.marion@equipauto.com",
+        "technique@equipauto.com"
+      ],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:31.398Z"
+    },
+    "https://www.autozum.at": {
+      "website": "https://www.autozum.at",
+      "name": "AutoZum",
+      "country_code": "AT",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "autozum@mzs.at",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.autozum.at/de/presse/akkreditierung/",
+          "domain": "mzs.at"
+        },
+        {
+          "email": "sauer@mzs.at",
+          "name": null,
+          "title": "pressekontakt",
+          "source_url": "https://www.autozum.at/de/kontakt-anreise/ansprechpartner/",
+          "domain": "mzs.at"
+        },
+        {
+          "email": "herger@mzs.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autozum.at/de/kontakt-anreise/ansprechpartner/",
+          "domain": "mzs.at"
+        },
+        {
+          "email": "glarcher@mzs.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autozum.at/de/kontakt-anreise/ansprechpartner/",
+          "domain": "mzs.at"
+        },
+        {
+          "email": "emeder@mzs.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autozum.at/de/kontakt-anreise/ansprechpartner/",
+          "domain": "mzs.at"
+        },
+        {
+          "email": "wechselberger@mzs.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autozum.at/de/kontakt-anreise/ansprechpartner/",
+          "domain": "mzs.at"
+        },
+        {
+          "email": "parken@mzs.at",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.autozum.at/de/kontakt-anreise/anfahrt-parken/",
+          "domain": "mzs.at"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "+43 662 24 04 74"
+      ],
+      "crawled_at": "2026-09-04T06:32:31.505Z"
+    },
+    "https://www.catmag.co.uk": {
+      "website": "https://www.catmag.co.uk",
+      "name": "CAT Magazine",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "will.rimell@haymarket.com",
+          "name": null,
+          "title": "editor",
+          "source_url": "https://www.catmag.co.uk/about",
+          "domain": "haymarket.com"
+        }
+      ],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:31.072Z"
+    },
+    "https://www.autosalon.be": {
+      "website": "https://www.autosalon.be",
+      "name": "Brussels Motor Show",
+      "country_code": "BE",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 1,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "2026-01-09",
+        "+32 (0) 2 778 64 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:31.549Z"
+    },
+    "https://aftermarketonline.net": {
+      "website": "https://aftermarketonline.net",
+      "name": "Aftermarket Magazine",
+      "country_code": "GB",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "chris@aftermarket.co.uk",
+          "name": null,
+          "title": "editor",
+          "source_url": "https://aftermarketonline.net/contact-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "angela@aftermarket.co.uk",
+          "name": null,
+          "title": "marketing manager",
+          "source_url": "https://aftermarketonline.net/contact-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "hope.jepson@dfamedia.co.uk",
+          "name": null,
+          "title": "managing director",
+          "source_url": "https://aftermarketonline.net/contact-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "ryan.fuller@dfamedia.co.uk",
+          "name": null,
+          "title": "managing director",
+          "source_url": "https://aftermarketonline.net/contact-us/",
+          "domain": "co.uk"
+        },
+        {
+          "email": "info@aftermarket.co.uk",
+          "name": null,
+          "title": "managing director",
+          "source_url": "https://aftermarketonline.net/contact-us/",
+          "domain": "co.uk"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "1999-2026"
+      ],
+      "crawled_at": "2026-09-04T06:32:31.410Z"
+    },
+    "https://www.bilbransje24.no": {
+      "website": "https://www.bilbransje24.no",
+      "name": "Bilbransje24",
+      "country_code": "NO",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 3,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "trygve.larsen@bb24.no",
+          "name": "Trygve Larsen",
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bb24.no"
+        },
+        {
+          "email": "odd.erik@bb24.no",
+          "name": "Odd Erik",
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bb24.no"
+        },
+        {
+          "email": "per.morten@bb24.no",
+          "name": "Per Morten",
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bb24.no"
+        },
+        {
+          "email": "daniel@bjorgu.no",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bjorgu.no"
+        },
+        {
+          "email": "redaksjon@bb24.no",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bb24.no"
+        },
+        {
+          "email": "abo@bb24.no",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bb24.no"
+        },
+        {
+          "email": "annonse@bb24.no",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/",
+          "domain": "bb24.no"
+        },
+        {
+          "email": "daniel@bb24.no",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.bilbransje24.no/kontakt",
+          "domain": "bb24.no"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "23.07.2026",
+        "09.07.2026",
+        "07.07.2026",
+        "01.07.2026",
+        "921 399 731"
+      ],
+      "crawled_at": "2026-09-04T06:32:31.600Z"
+    },
+    "https://www.posventa.com": {
+      "website": "https://www.posventa.com",
+      "name": "Posventa de Automoción",
+      "country_code": "ES",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 4,
+      "people": [
+        {
+          "email": "info@posventa.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.posventa.com/",
+          "domain": "posventa.com"
+        },
+        {
+          "email": "mailto:juan.franco@posventa.com",
+          "name": null,
+          "title": "editor",
+          "source_url": "https://www.posventa.com/estatica/contacto",
+          "domain": "posventa.com"
+        },
+        {
+          "email": "mailto:eusebio.albert@posventa.com",
+          "name": "Eusebio Albert",
+          "title": "editor",
+          "source_url": "https://www.posventa.com/estatica/contacto",
+          "domain": "posventa.com"
+        },
+        {
+          "email": "mailto:begona.cantalejo@posventa.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.posventa.com/estatica/contacto",
+          "domain": "posventa.com"
+        }
+      ],
+      "affiliated": [
+        {
+          "email": "administracion@versysediciones.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.posventa.com/estatica/contacto",
+          "domain": "versysediciones.com"
+        }
+      ],
+      "emails": [
+        "info@posventa.com",
+        "juan.franco@posventa.com",
+        "eusebio.albert@posventa.com",
+        "begona.cantalejo@posventa.com"
+      ],
+      "phones": [
+        "91 297 20 00"
+      ],
+      "crawled_at": "2026-09-04T06:32:31.479Z"
+    },
+    "https://automechanika-istanbul.tr.messefrankfurt.com": {
+      "website": "https://automechanika-istanbul.tr.messefrankfurt.com",
+      "name": "Automechanika Istanbul",
+      "country_code": "TR",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [
+        {
+          "email": "can.yumer@turkey.messefrankfurt.com",
+          "name": "Can Yumer",
+          "title": "communications manager",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "melisa.bileke@turkey.messefrankfurt.com",
+          "name": null,
+          "title": "communications manager",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "melis.kotil@turkey.messefrankfurt.com",
+          "name": "Melis Kotil",
+          "title": "communications manager",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/press.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "can.berki@turkey.messefrankfurt.com",
+          "name": "Can Berki",
+          "title": "sales manager",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/contact.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "burak.ayvaz@turkey.messefrankfurt.com",
+          "name": "Burak Ayvaz",
+          "title": "sales manager",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/contact.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "zeynep.yuksel@turkey.messefrankfurt.com",
+          "name": "Zeynep Yuksel",
+          "title": "sales manager",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/contact.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "efehan.kecoglu@turkey.messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/contact.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "hakan.ispir@turkey.messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/contact.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "ali.rusen@turkey.messefrankfurt.com",
+          "name": null,
+          "title": null,
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/contact.html",
+          "domain": "messefrankfurt.com"
+        },
+        {
+          "email": "info@turkey.messefrankfurt.com",
+          "name": null,
+          "title": "editor",
+          "source_url": "https://automechanika-istanbul.tr.messefrankfurt.com/istanbul/en/imprint.html",
+          "domain": "messefrankfurt.com"
+        }
+      ],
+      "affiliated": [],
+      "emails": [
+        "can.yumer@turkey.messefrankfurt.com",
+        "melisa.bileke@turkey.messefrankfurt.com",
+        "melis.kotil@turkey.messefrankfurt.com",
+        "can.berki@turkey.messefrankfurt.com",
+        "burak.ayvaz@turkey.messefrankfurt.com",
+        "zeynep.yuksel@turkey.messefrankfurt.com",
+        "efehan.kecoglu@turkey.messefrankfurt.com",
+        "hakan.ispir@turkey.messefrankfurt.com",
+        "ali.rusen@turkey.messefrankfurt.com",
+        "info@turkey.messefrankfurt.com"
+      ],
+      "phones": [
+        "27.03.2027"
+      ],
+      "crawled_at": "2026-09-04T06:32:31.839Z"
+    },
+    "https://www.ttm.mtp.pl": {
+      "website": "https://www.ttm.mtp.pl",
+      "name": "Targi Techniki Motoryzacyjnej",
+      "country_code": "PL",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [
+        "23-26.04.2026"
+      ],
+      "crawled_at": "2026-09-04T06:32:32.883Z"
+    },
+    "https://www.danskindustri.dk/brancher/di-bilbranchen/": {
+      "website": "https://www.danskindustri.dk/brancher/di-bilbranchen/",
+      "name": "Bilbranchen (DI)",
+      "country_code": "DK",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 9,
+      "people": [],
+      "affiliated": [
+        {
+          "email": "di@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "slan@di.dk",
+          "name": null,
+          "title": "journalist",
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "larb@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "boh@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "nipk@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "benr@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "cawe@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "saru@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "mrm@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "lmfc@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        },
+        {
+          "email": "lojc@di.dk",
+          "name": null,
+          "title": null,
+          "source_url": "https://www.danskindustri.dk/om-di/kontakt-os/presse/",
+          "domain": "di.dk"
+        }
+      ],
+      "emails": [],
+      "phones": [
+        "16077593",
+        "5749958415-41",
+        "+45 3377 3377"
+      ],
+      "crawled_at": "2026-09-04T06:31:32.772Z"
+    },
+    "https://airc-int.com": {
+      "website": "https://airc-int.com",
+      "name": "International Association of Vehicle Body Repairers",
+      "country_code": "EU",
+      "done": true,
+      "reachable": true,
+      "status": "200",
+      "pages_crawled": 6,
+      "people": [],
+      "affiliated": [],
+      "emails": [],
+      "phones": [],
+      "crawled_at": "2026-09-04T06:32:28.144Z"
+    }
+  }
+}

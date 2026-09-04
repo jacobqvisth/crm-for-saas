@@ -4590,6 +4590,108 @@ export type Database = {
           },
         ]
       }
+      industry_orgs: {
+        Row: {
+          acronym: string | null
+          affiliated_contacts: Json | null
+          blocked: boolean
+          company_id: string | null
+          contact_count: number
+          country: string | null
+          country_code: string | null
+          created_at: string | null
+          email: string | null
+          external_key: string
+          http_status: string | null
+          id: string
+          name: string
+          notes: string | null
+          org_type: string
+          page_title: string | null
+          phone: string | null
+          raw: Json | null
+          resolved_website: string | null
+          sector: string | null
+          source: string | null
+          umbrellas: string[]
+          updated_at: string | null
+          verified: boolean
+          website: string | null
+          workspace_id: string
+        }
+        Insert: {
+          acronym?: string | null
+          affiliated_contacts?: Json | null
+          blocked?: boolean
+          company_id?: string | null
+          contact_count?: number
+          country?: string | null
+          country_code?: string | null
+          created_at?: string | null
+          email?: string | null
+          external_key: string
+          http_status?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          org_type: string
+          page_title?: string | null
+          phone?: string | null
+          raw?: Json | null
+          resolved_website?: string | null
+          sector?: string | null
+          source?: string | null
+          umbrellas?: string[]
+          updated_at?: string | null
+          verified?: boolean
+          website?: string | null
+          workspace_id: string
+        }
+        Update: {
+          acronym?: string | null
+          affiliated_contacts?: Json | null
+          blocked?: boolean
+          company_id?: string | null
+          contact_count?: number
+          country?: string | null
+          country_code?: string | null
+          created_at?: string | null
+          email?: string | null
+          external_key?: string
+          http_status?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          org_type?: string
+          page_title?: string | null
+          phone?: string | null
+          raw?: Json | null
+          resolved_website?: string | null
+          sector?: string | null
+          source?: string | null
+          umbrellas?: string[]
+          updated_at?: string | null
+          verified?: boolean
+          website?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "industry_orgs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "industry_orgs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_messages: {
         Row: {
           body_html: string | null
